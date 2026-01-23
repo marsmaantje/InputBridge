@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=InputBridge
+Comment=Input bridge for cross-platform controller support
+Exec=InputBridge
+Icon=inputbridge
+Categories=Utility;Game;
+Terminal=false

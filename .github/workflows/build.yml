@@ -1,0 +1,57 @@
+name: Multi-platform Release Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Using ubuntu-22.04 ensures better glibc compatibility for the AppImage
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure CMake
+      # We set the CMAKE_BUILD_TYPE to Release for optimized binaries
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    # Linux-specific: Create the "Universal" AppImage
+    - name: Create AppImage (Linux Only)
+      if: matrix.os == 'ubuntu-22.04'
+      run: |
+        # Download linuxdeploy
+        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        chmod +x linuxdeploy-x86_64.AppImage
+        
+        # Install the project to a temporary AppDir
+        DESTDIR=AppDir cmake --install build
+        
+        # Build the AppImage
+        # Note: We use the --output appimage flag to bundle everything
+        ./linuxdeploy-x86_64.AppImage --appdir AppDir \
+          -e AppDir/usr/local/bin/InputBridge \
+          -d resources/inputbridge.desktop \
+          -i resources/inputbridge.png \
+          --output appimage
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: InputBridge-${{ matrix.os }}
+        path: |
+          *.AppImage
+          build/output/InputBridge
+          build/output/Release/InputBridge.exe
+          build/output/InputBridge.app
