@@ -13,12 +13,11 @@
       "MIMode": "gdb",
       // Default path for Linux (CachyOS)
       "miDebuggerPath": "/usr/bin/gdb",
-      
       // Windows-specific overrides
       "windows": {
-          "program": "${workspaceFolder}/build/output/Release/InputBridge.exe",
-          "MIMode": "gdb", 
-          "miDebuggerPath": "C:\\msys64\\ucrt64\\bin\\gdb.exe" 
+        "program": "${workspaceFolder}/build/output/InputBridge.exe",
+        "MIMode": "gdb",
+        "miDebuggerPath": "C:\\programs\\msys2\\ucrt64\\bin\\gdb.exe"
       },
       "setupCommands": [
         {
@@ -27,7 +26,6 @@
           "ignoreFailures": true
         }
       ],
-      
       "preLaunchTask": "CMake: build"
     }
   ]
