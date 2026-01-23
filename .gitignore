@@ -39,3 +39,27 @@
 
 # debug information files
 *.dwo
+
+# CMake build directories
+/build/
+/build_*/
+/out/
+/output/
+
+# IDE specific folders
+.vscode/
+.idea/
+.vs/
+
+# Compiled Binaries and Objects
+*.o
+*.a
+*.exe
+*.out
+*.app
+/AppDir/
+*.AppImage
+
+# OS generated files
+.DS_Store
+Thumbs.db
