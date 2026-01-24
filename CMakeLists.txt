@@ -33,3 +33,12 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 # InputBridge Executable
 add_executable(InputBridge src/main.cpp)
 target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3)
+
+# Copy SDL3.dll to the output directory on Windows
+if(WIN32)
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:SDL3::SDL3>
+        $<TARGET_FILE_DIR:InputBridge>
+    )
+endif()
