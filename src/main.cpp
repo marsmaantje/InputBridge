@@ -229,7 +229,12 @@ int main(int argc, char* argv[]) {
     }
 
     bool done = false;
+    bool vsync = true;
+    int framerate_limit = 60;
+    SDL_SetRenderVSync(renderer, 1);
+
     while (!done) {
+        Uint64 frame_start_time = SDL_GetTicks();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL3_ProcessEvent(&event);
@@ -255,6 +260,12 @@ int main(int argc, char* argv[]) {
         ImGui::Begin("InputBridge Status");
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
         
+        if (ImGui::Checkbox("VSync", &vsync)) {
+            SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
+        }
+        ImGui::InputInt("Framerate Limit", &framerate_limit);
+        if (framerate_limit < 0) framerate_limit = 0;
+        
         ImGui::Separator();
         ImGui::Text("Connected Devices: %d", (int)g_Devices.size());
         
@@ -279,6 +290,15 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
+
+        if (!vsync && framerate_limit > 0) {
+            Uint64 frame_end_time = SDL_GetTicks();
+            Uint64 frame_duration = frame_end_time - frame_start_time;
+            Uint64 target_duration = 1000 / framerate_limit;
+            if (frame_duration < target_duration) {
+                SDL_Delay((Uint32)(target_duration - frame_duration));
+            }
+        }
     }
 
     // Cleanup
