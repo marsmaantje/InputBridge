@@ -45,6 +45,7 @@
 /build_*/
 /out/
 /output/
+.cache
 
 # IDE specific folders
 .vscode/
