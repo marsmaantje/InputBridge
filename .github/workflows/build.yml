@@ -28,24 +28,46 @@ jobs:
   build:
     name: ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
+    container: ${{ matrix.platform.container }}
     strategy:
       fail-fast: false
       matrix:
         platform:
           - { name: Windows, os: windows-latest }
-          - { name: Linux,   os: ubuntu-latest }
+          - { name: Linux (Ubuntu), os: ubuntu-latest }
+          - { name: Linux (Fedora), os: ubuntu-latest, container: 'fedora:latest' }
+          - { name: Linux (Arch),   os: ubuntu-latest, container: 'archlinux:latest' }
           - { name: macOS,   os: macos-latest }
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev
+        if [ -f /etc/os-release ]; then
+          . /etc/os-release
+        fi
+        
+        SUDO=""
+        if command -v sudo >/dev/null 2>&1; then
+          SUDO="sudo"
+        fi
+        
+        case "$ID" in
+          ubuntu|debian|pop)
+            $SUDO apt-get update
+            $SUDO apt-get install -y build-essential git cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev
+            ;;
+          fedora)
+            $SUDO dnf install -y git gcc-c++ make cmake libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel libxkbcommon-devel wayland-devel systemd-devel alsa-lib-devel pulseaudio-libs-devel libXScrnSaver-devel libXext-devel libXfixes-devel libXinerama-devel libXxf86vm-devel dbus-devel libdrm-devel mesa-libgbm-devel libusb1-devel libsamplerate-devel libdecor-devel
+            ;;
+          arch)
+            $SUDO pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libgbm libusb libsamplerate libdecor
+            ;;
+        esac
+
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release
