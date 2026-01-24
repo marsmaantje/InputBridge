@@ -13,7 +13,7 @@
 #include "SteeringWheelVisualizer.h"
 #include "FlightStickVisualizer.h"
 
-// Note: For SDL3, ensure you link against SDL3_net if you use it.
+// Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
 
 std::vector<DeviceState> g_Devices;

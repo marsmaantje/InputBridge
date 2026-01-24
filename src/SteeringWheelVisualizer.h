@@ -6,7 +6,6 @@
 #include "imgui.h"
 #include <SDL3/SDL.h>
 #include <cmath>
-#include <string>
 
 class SteeringWheelVisualizer : public DeviceVisualizer {
 public:
