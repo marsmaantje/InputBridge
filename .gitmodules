@@ -5,3 +5,6 @@
 	path = lib/imgui
 	url = https://github.com/ocornut/imgui.git
 	branch = docking
+[submodule "lib/uWebSockets"]
+	path = lib/uWebSockets
+	url = https://github.com/uNetworking/uWebSockets.git
