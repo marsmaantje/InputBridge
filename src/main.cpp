@@ -7,14 +7,14 @@
 #include <vector>
 #include <string>
 
-#include "DeviceState.h"
-#include "GamepadVisualizer.h"
-#include "GenericVisualizer.h"
-#include "SteeringWheelVisualizer.h"
-#include "FlightStickVisualizer.h"
-#include "DeviceManager.h"
-#include "Preferences.h"
-#include "InputMapper.h"
+#include "Devices/DeviceState.h"
+#include "Visualizers/GamepadVisualizer.h"
+#include "Visualizers/GenericVisualizer.h"
+#include "Visualizers/SteeringWheelVisualizer.h"
+#include "Visualizers/FlightStickVisualizer.h"
+#include "Devices/DeviceManager.h"
+#include "Preferences/Preferences.h"
+#include "Mappers/InputMapper.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>

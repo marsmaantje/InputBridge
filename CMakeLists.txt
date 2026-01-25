@@ -34,16 +34,17 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 add_executable(InputBridge
     # ... put source files here ...
     src/main.cpp
-    src/DeviceManager.cpp
-    src/Preferences.cpp
-    src/GenericVisualizer.cpp
-    src/GamepadVisualizer.cpp
-    src/FlightStickVisualizer.cpp
-    src/SteeringWheelVisualizer.cpp
-    src/InputMapper.cpp
-    src/OSCGenerator.cpp
+    src/Devices/DeviceManager.cpp
+    src/Preferences/Preferences.cpp
+    src/Visualizers/GenericVisualizer.cpp
+    src/Visualizers/GamepadVisualizer.cpp
+    src/Visualizers/FlightStickVisualizer.cpp
+    src/Visualizers/SteeringWheelVisualizer.cpp
+    src/Mappers/InputMapper.cpp
+    src/Mappers/OSCGenerator.cpp
 )
 
+target_include_directories(InputBridge PRIVATE src)
 target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3)
 
 # Copy SDL3.dll to the output directory on Windows

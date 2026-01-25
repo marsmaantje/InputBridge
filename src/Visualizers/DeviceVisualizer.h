@@ -1,5 +1,5 @@
 #pragma once
-#include "DeviceState.h"
+#include "Devices/DeviceState.h"
 
 class DeviceVisualizer {
 public:

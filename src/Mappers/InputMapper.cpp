@@ -1,5 +1,5 @@
 #include "InputMapper.h"
-#include "DeviceManager.h"
+#include "Devices/DeviceManager.h"
 #include "OSCGenerator.h"
 #include "imgui.h"
 #include <sstream>
