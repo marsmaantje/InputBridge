@@ -74,3 +74,25 @@ jobs:
 
     - name: Build
       run: cmake --build build --config Release
+
+    - name: Prepare Artifacts
+      shell: bash
+      run: |
+        mkdir -p dist
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          if [ -d "build/output/Release" ]; then
+            cp build/output/Release/InputBridge.exe dist/
+            cp build/output/Release/*.dll dist/
+          else
+            cp build/output/InputBridge.exe dist/
+            cp build/output/*.dll dist/
+          fi
+        else
+          cp build/output/InputBridge dist/
+        fi
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: InputBridge-${{ matrix.platform.name }}
+        path: dist/
