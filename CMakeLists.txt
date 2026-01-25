@@ -33,6 +33,16 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 # Add uWebSockets
 include(FetchContent)
 
+# Libuv (Required for uSockets on Windows)
+if(WIN32)
+    FetchContent_Declare(
+        libuv
+        GIT_REPOSITORY https://github.com/libuv/libuv.git
+        GIT_TAG        v1.48.0
+    )
+    FetchContent_MakeAvailable(libuv)
+endif()
+
 # uSockets
 FetchContent_Declare(
     usockets_lib
@@ -54,7 +64,7 @@ set(USOCKETS_SOURCES
 )
 
 if(WIN32)
-    list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/windows.c)
+    list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/libuv.c)
 else()
     list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/epoll_kqueue.c)
 endif()
@@ -77,7 +87,8 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(uSockets PUBLIC ws2_32)
+    target_compile_definitions(uSockets PUBLIC LIBUS_USE_LIBUV)
+    target_link_libraries(uSockets PUBLIC uv_a ws2_32)
 endif()
 
 # uWebSockets
