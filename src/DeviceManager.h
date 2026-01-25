@@ -4,9 +4,17 @@
 #include <SDL3/SDL.h>
 #include "DeviceState.h"
 
-extern std::vector<DeviceState> g_Devices;
+class DeviceManager {
+public:
+    ~DeviceManager();
 
-std::string GetDeviceGUIDString(const DeviceState& dev);
-void HandleDeviceAdded(SDL_JoystickID instance_id);
-void HandleDeviceRemoved(SDL_JoystickID instance_id);
-void CloseAllDevices();
+    void HandleDeviceAdded(SDL_JoystickID instance_id);
+    void HandleDeviceRemoved(SDL_JoystickID instance_id);
+    void CloseAllDevices();
+
+    const std::vector<DeviceState>& GetDevices() const;
+    static std::string GetDeviceGUIDString(const DeviceState& dev);
+
+private:
+    std::vector<DeviceState> m_Devices;
+};

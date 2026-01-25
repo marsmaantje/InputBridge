@@ -14,6 +14,7 @@
 #include "FlightStickVisualizer.h"
 #include "DeviceManager.h"
 #include "Preferences.h"
+#include "InputMapper.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
@@ -55,17 +56,22 @@ int main(int argc, char* argv[]) {
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 
+    DeviceManager deviceManager;
+    PreferencesManager preferencesManager;
+
     // Initial device scan
     int count = 0;
     SDL_JoystickID* joysticks = SDL_GetJoysticks(&count);
     if (joysticks) {
         for (int i = 0; i < count; i++) {
-            HandleDeviceAdded(joysticks[i]);
+            deviceManager.HandleDeviceAdded(joysticks[i]);
         }
         SDL_free(joysticks);
     }
 
-    LoadPreferences();
+    preferencesManager.Load();
+    
+    InputMapper inputMapper(deviceManager);
 
     bool done = false;
     bool vsync = true;
@@ -84,10 +90,11 @@ int main(int argc, char* argv[]) {
             
             // Handle hot-plugging
             if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
-                HandleDeviceAdded(event.jdevice.which);
+                deviceManager.HandleDeviceAdded(event.jdevice.which);
             }
             if (event.type == SDL_EVENT_JOYSTICK_REMOVED) {
-                HandleDeviceRemoved(event.jdevice.which);
+                deviceManager.HandleDeviceRemoved(event.jdevice.which);
+                preferencesManager.ClearAppliedPreference(event.jdevice.which);
             }
         }
 
@@ -106,9 +113,10 @@ int main(int argc, char* argv[]) {
         if (framerate_limit < 0) framerate_limit = 0;
         
         ImGui::Separator();
-        ImGui::Text("Connected Devices: %d", (int)g_Devices.size());
+        const auto& devices = deviceManager.GetDevices();
+        ImGui::Text("Connected Devices: %d", (int)devices.size());
         
-        for (const auto& dev : g_Devices) {
+        for (const auto& dev : devices) {
             ImGui::PushID((int)dev.instance_id);
             if (ImGui::CollapsingHeader((dev.name + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)")).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Indent();
@@ -118,12 +126,12 @@ int main(int argc, char* argv[]) {
                 static SteeringWheelVisualizer wheel_viz;
                 static FlightStickVisualizer flight_stick_viz;
 
-                std::string guid = GetDeviceGUIDString(dev);
-                bool apply_pref = (g_AppliedPreferences.find(dev.instance_id) == g_AppliedPreferences.end());
-                std::string preferred_viz = g_DeviceVisualizerPrefs[guid];
+                std::string guid = DeviceManager::GetDeviceGUIDString(dev);
+                bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
+                std::string preferred_viz = preferencesManager.GetVisualizerPreference(guid);
                 
                 if (apply_pref) {
-                    g_AppliedPreferences.insert(dev.instance_id);
+                    preferencesManager.MarkPreferenceApplied(dev.instance_id);
                 }
 
                 auto TabItem = [&](const char* label, DeviceVisualizer& visualizer) {
@@ -134,9 +142,9 @@ int main(int argc, char* argv[]) {
                     
                     if (ImGui::BeginTabItem(label, nullptr, flags)) {
                         visualizer.Draw(dev);
-                        if (g_DeviceVisualizerPrefs[guid] != label) {
-                            g_DeviceVisualizerPrefs[guid] = label;
-                            SavePreferences();
+                        if (preferencesManager.GetVisualizerPreference(guid) != label) {
+                            preferencesManager.SetVisualizerPreference(guid, label);
+                            preferencesManager.Save();
                         }
                         ImGui::EndTabItem();
                     }
@@ -163,6 +171,8 @@ int main(int argc, char* argv[]) {
             }
             ImGui::PopID();
         }
+
+        inputMapper.DrawUI();
 
         if (ImGui::Button("Exit")) done = true;
         ImGui::End();
@@ -196,8 +206,6 @@ int main(int argc, char* argv[]) {
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
-    
-    CloseAllDevices();
     
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

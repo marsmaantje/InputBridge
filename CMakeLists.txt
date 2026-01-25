@@ -40,6 +40,8 @@ add_executable(InputBridge
     src/GamepadVisualizer.cpp
     src/FlightStickVisualizer.cpp
     src/SteeringWheelVisualizer.cpp
+    src/InputMapper.cpp
+    src/OSCGenerator.cpp
 )
 
 target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3)

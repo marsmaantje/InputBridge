@@ -1,16 +1,22 @@
 #include "DeviceManager.h"
-#include "Preferences.h"
+#include <algorithm>
 
-std::vector<DeviceState> g_Devices;
+DeviceManager::~DeviceManager() {
+    CloseAllDevices();
+}
 
-std::string GetDeviceGUIDString(const DeviceState& dev) {
+const std::vector<DeviceState>& DeviceManager::GetDevices() const {
+    return m_Devices;
+}
+
+std::string DeviceManager::GetDeviceGUIDString(const DeviceState& dev) {
     SDL_GUID guid = SDL_GetJoystickGUID(dev.joystick);
     char guidStr[33];
     SDL_GUIDToString(guid, guidStr, sizeof(guidStr));
     return std::string(guidStr);
 }
 
-void HandleDeviceAdded(SDL_JoystickID instance_id) {
+void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     if (SDL_IsGamepad(instance_id)) {
         SDL_Gamepad* gamepad = SDL_OpenGamepad(instance_id);
         if (gamepad) {
@@ -23,7 +29,7 @@ void HandleDeviceAdded(SDL_JoystickID instance_id) {
             dev.num_axes = SDL_GetNumJoystickAxes(dev.joystick);
             dev.num_buttons = SDL_GetNumJoystickButtons(dev.joystick);
             dev.num_hats = SDL_GetNumJoystickHats(dev.joystick);
-            g_Devices.push_back(dev);
+            m_Devices.push_back(dev);
         }
     } else {
         SDL_Joystick* joystick = SDL_OpenJoystick(instance_id);
@@ -37,27 +43,30 @@ void HandleDeviceAdded(SDL_JoystickID instance_id) {
             dev.num_axes = SDL_GetNumJoystickAxes(joystick);
             dev.num_buttons = SDL_GetNumJoystickButtons(joystick);
             dev.num_hats = SDL_GetNumJoystickHats(joystick);
-            g_Devices.push_back(dev);
+            m_Devices.push_back(dev);
         }
     }
 }
 
-void HandleDeviceRemoved(SDL_JoystickID instance_id) {
-    for (auto it = g_Devices.begin(); it != g_Devices.end(); ++it) {
-        if (it->instance_id == instance_id) {
-            if (it->gamepad) SDL_CloseGamepad(it->gamepad);
-            else if (it->joystick) SDL_CloseJoystick(it->joystick);
-            g_AppliedPreferences.erase(instance_id);
-            g_Devices.erase(it);
-            break;
+void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
+    auto it = std::remove_if(m_Devices.begin(), m_Devices.end(), [instance_id](const DeviceState& dev) {
+        if (dev.instance_id == instance_id) {
+            if (dev.gamepad) SDL_CloseGamepad(dev.gamepad);
+            else if (dev.joystick) SDL_CloseJoystick(dev.joystick);
+            return true;
         }
+        return false;
+    });
+
+    if (it != m_Devices.end()) {
+        m_Devices.erase(it, m_Devices.end());
     }
 }
 
-void CloseAllDevices() {
-    for (auto& dev : g_Devices) {
+void DeviceManager::CloseAllDevices() {
+    for (auto& dev : m_Devices) {
         if (dev.gamepad) SDL_CloseGamepad(dev.gamepad);
         else if (dev.joystick) SDL_CloseJoystick(dev.joystick);
     }
-    g_Devices.clear();
+    m_Devices.clear();
 }

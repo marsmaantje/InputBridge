@@ -1,7 +1,6 @@
 #include "GenericVisualizer.h"
 #include "imgui.h"
 #include <SDL3/SDL.h>
-#include <cstdio>
 
 void GenericVisualizer::Draw(const DeviceState& dev) {
     ImGui::Text("Generic Device Visualizer");
