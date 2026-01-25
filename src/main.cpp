@@ -12,54 +12,11 @@
 #include "GenericVisualizer.h"
 #include "SteeringWheelVisualizer.h"
 #include "FlightStickVisualizer.h"
+#include "DeviceManager.h"
+#include "Preferences.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
-
-std::vector<DeviceState> g_Devices;
-
-void HandleDeviceAdded(SDL_JoystickID instance_id) {
-    if (SDL_IsGamepad(instance_id)) {
-        SDL_Gamepad* gamepad = SDL_OpenGamepad(instance_id);
-        if (gamepad) {
-            DeviceState dev;
-            dev.instance_id = instance_id;
-            dev.name = SDL_GetGamepadName(gamepad);
-            dev.is_gamepad = true;
-            dev.gamepad = gamepad;
-            dev.joystick = SDL_GetGamepadJoystick(gamepad);
-            dev.num_axes = SDL_GetNumJoystickAxes(dev.joystick);
-            dev.num_buttons = SDL_GetNumJoystickButtons(dev.joystick);
-            dev.num_hats = SDL_GetNumJoystickHats(dev.joystick);
-            g_Devices.push_back(dev);
-        }
-    } else {
-        SDL_Joystick* joystick = SDL_OpenJoystick(instance_id);
-        if (joystick) {
-            DeviceState dev;
-            dev.instance_id = instance_id;
-            dev.name = SDL_GetJoystickName(joystick);
-            dev.is_gamepad = false;
-            dev.gamepad = nullptr;
-            dev.joystick = joystick;
-            dev.num_axes = SDL_GetNumJoystickAxes(joystick);
-            dev.num_buttons = SDL_GetNumJoystickButtons(joystick);
-            dev.num_hats = SDL_GetNumJoystickHats(joystick);
-            g_Devices.push_back(dev);
-        }
-    }
-}
-
-void HandleDeviceRemoved(SDL_JoystickID instance_id) {
-    for (auto it = g_Devices.begin(); it != g_Devices.end(); ++it) {
-        if (it->instance_id == instance_id) {
-            if (it->gamepad) SDL_CloseGamepad(it->gamepad);
-            else if (it->joystick) SDL_CloseJoystick(it->joystick);
-            g_Devices.erase(it);
-            break;
-        }
-    }
-}
 
 int main(int argc, char* argv[]) {
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -107,6 +64,8 @@ int main(int argc, char* argv[]) {
         }
         SDL_free(joysticks);
     }
+
+    LoadPreferences();
 
     bool done = false;
     bool vsync = true;
@@ -159,32 +118,41 @@ int main(int argc, char* argv[]) {
                 static SteeringWheelVisualizer wheel_viz;
                 static FlightStickVisualizer flight_stick_viz;
 
+                std::string guid = GetDeviceGUIDString(dev);
+                bool apply_pref = (g_AppliedPreferences.find(dev.instance_id) == g_AppliedPreferences.end());
+                std::string preferred_viz = g_DeviceVisualizerPrefs[guid];
+                
+                if (apply_pref) {
+                    g_AppliedPreferences.insert(dev.instance_id);
+                }
+
+                auto TabItem = [&](const char* label, DeviceVisualizer& visualizer) {
+                    ImGuiTabItemFlags flags = 0;
+                    if (apply_pref && preferred_viz == label) {
+                        flags |= ImGuiTabItemFlags_SetSelected;
+                    }
+                    
+                    if (ImGui::BeginTabItem(label, nullptr, flags)) {
+                        visualizer.Draw(dev);
+                        if (g_DeviceVisualizerPrefs[guid] != label) {
+                            g_DeviceVisualizerPrefs[guid] = label;
+                            SavePreferences();
+                        }
+                        ImGui::EndTabItem();
+                    }
+                };
+
                 if (dev.is_gamepad) {
                     if (ImGui::BeginTabBar("DeviceMode")) {
-                        if (ImGui::BeginTabItem("Standard Layout")) {
-                            gamepad_viz.Draw(dev);
-                            ImGui::EndTabItem();
-                        }
-                        if (ImGui::BeginTabItem("Raw Inputs")) {
-                            generic_viz.Draw(dev);
-                            ImGui::EndTabItem();
-                        }
+                        TabItem("Standard Layout", gamepad_viz);
+                        TabItem("Raw Inputs", generic_viz);
                         ImGui::EndTabBar();
                     }
                 } else {
                     if (ImGui::BeginTabBar("DeviceMode")) {
-                        if (ImGui::BeginTabItem("Raw Inputs")) {
-                            generic_viz.Draw(dev);
-                            ImGui::EndTabItem();
-                        }
-                        if (ImGui::BeginTabItem("Steering Wheel")) {
-                            wheel_viz.Draw(dev);
-                            ImGui::EndTabItem();
-                        }
-                        if (ImGui::BeginTabItem("Flight Stick")) {
-                            flight_stick_viz.Draw(dev);
-                            ImGui::EndTabItem();
-                        }
+                        TabItem("Raw Inputs", generic_viz);
+                        TabItem("Steering Wheel", wheel_viz);
+                        TabItem("Flight Stick", flight_stick_viz);
                         ImGui::EndTabBar();
                     }
                 }
@@ -229,11 +197,7 @@ int main(int argc, char* argv[]) {
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
     
-    // Close all devices
-    for (auto& dev : g_Devices) {
-        if (dev.gamepad) SDL_CloseGamepad(dev.gamepad);
-        else if (dev.joystick) SDL_CloseJoystick(dev.joystick);
-    }
+    CloseAllDevices();
     
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
