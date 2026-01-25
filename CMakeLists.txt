@@ -30,6 +30,79 @@ add_library(imgui STATIC
 target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
+# Add uWebSockets
+include(FetchContent)
+
+# uSockets
+FetchContent_Declare(
+    usockets_lib
+    GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
+    GIT_TAG        master
+)
+FetchContent_GetProperties(usockets_lib)
+if(NOT usockets_lib_POPULATED)
+    FetchContent_Populate(usockets_lib)
+endif()
+
+# Define uSockets library manually
+set(USOCKETS_SOURCES
+    ${usockets_lib_SOURCE_DIR}/src/bsd.c
+    ${usockets_lib_SOURCE_DIR}/src/context.c
+    ${usockets_lib_SOURCE_DIR}/src/loop.c
+    ${usockets_lib_SOURCE_DIR}/src/socket.c
+    ${usockets_lib_SOURCE_DIR}/src/udp.c
+)
+
+if(WIN32)
+    list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/windows.c)
+else()
+    list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/epoll_kqueue.c)
+endif()
+
+find_package(OpenSSL)
+if(OpenSSL_FOUND)
+    list(APPEND USOCKETS_SOURCES
+        ${usockets_lib_SOURCE_DIR}/src/crypto/openssl.c
+        ${usockets_lib_SOURCE_DIR}/src/crypto/sni_tree.cpp
+    )
+endif()
+
+add_library(uSockets STATIC ${USOCKETS_SOURCES})
+target_include_directories(uSockets PUBLIC ${usockets_lib_SOURCE_DIR}/src)
+
+if(OpenSSL_FOUND)
+    target_link_libraries(uSockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+else()
+    target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL)
+endif()
+
+if(WIN32)
+    target_link_libraries(uSockets PUBLIC ws2_32)
+endif()
+
+# uWebSockets
+FetchContent_Declare(
+    uwebsockets_lib
+    GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
+    GIT_TAG        master
+)
+FetchContent_GetProperties(uwebsockets_lib)
+if(NOT uwebsockets_lib_POPULATED)
+    FetchContent_Populate(uwebsockets_lib)
+endif()
+
+add_library(uWebSockets INTERFACE)
+target_include_directories(uWebSockets INTERFACE ${uwebsockets_lib_SOURCE_DIR}/src)
+target_link_libraries(uWebSockets INTERFACE uSockets)
+
+# ZLIB is required for uWebSockets
+find_package(ZLIB)
+if(ZLIB_FOUND)
+    target_link_libraries(uWebSockets INTERFACE ZLIB::ZLIB)
+else()
+    target_compile_definitions(uWebSockets INTERFACE UWS_NO_ZLIB)
+endif()
+
 # InputBridge Executable
 add_executable(InputBridge
     # ... put source files here ...
@@ -45,7 +118,7 @@ add_executable(InputBridge
 )
 
 target_include_directories(InputBridge PRIVATE src)
-target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3)
+target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3 uWebSockets)
 
 # Copy SDL3.dll to the output directory on Windows
 if(WIN32)
