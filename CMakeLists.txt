@@ -32,10 +32,14 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 # InputBridge Executable
 add_executable(InputBridge
+    # ... put source files here ...
     src/main.cpp
     src/DeviceManager.cpp
     src/Preferences.cpp
-    # ... other source files ...
+    src/GenericVisualizer.cpp
+    src/GamepadVisualizer.cpp
+    src/FlightStickVisualizer.cpp
+    src/SteeringWheelVisualizer.cpp
 )
 
 target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3)
