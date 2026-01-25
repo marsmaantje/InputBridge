@@ -1,5 +1,6 @@
 #include "InputMapper.h"
 #include "Devices/DeviceManager.h"
+#include "Preferences/Preferences.h"
 #include "OSCGenerator.h"
 #include "imgui.h"
 #include <sstream>
@@ -155,4 +156,59 @@ std::string InputMapper::GenerateMessage() {
         msg += OSCGenerator::Message("/wheel/buttons", buttons_mask);
         return msg;
     }
+}
+
+void InputMapper::LoadConfig(const PreferencesManager& prefs) {
+    m_OutputFormat = (OutputFormat)prefs.GetInt("InputMapper.OutputFormat", (int)OutputFormat::JSON);
+
+    std::string deviceGUID = prefs.GetString("InputMapper.DeviceGUID");
+    if (!deviceGUID.empty()) {
+        const auto& devices = m_DeviceManager.GetDevices();
+        for (const auto& dev : devices) {
+            if (DeviceManager::GetDeviceGUIDString(dev) == deviceGUID) {
+                m_SelectedDeviceID = dev.instance_id;
+                break;
+            }
+        }
+    }
+
+    auto LoadAxis = [&](const char* prefix, AxisConfig& config) {
+        config.axisIndex = prefs.GetInt(std::string(prefix) + ".Axis", -1);
+        config.invert = prefs.GetBool(std::string(prefix) + ".Invert", false);
+        config.deadzone = prefs.GetFloat(std::string(prefix) + ".Deadzone", 0.05f);
+    };
+
+    LoadAxis("InputMapper.Steering", m_Steering);
+    LoadAxis("InputMapper.Throttle", m_Throttle);
+    LoadAxis("InputMapper.Brake", m_Brake);
+    LoadAxis("InputMapper.Clutch", m_Clutch);
+    LoadAxis("InputMapper.Handbrake", m_Handbrake);
+}
+
+void InputMapper::SaveConfig(PreferencesManager& prefs) const {
+    prefs.SetInt("InputMapper.OutputFormat", (int)m_OutputFormat);
+
+    if (m_SelectedDeviceID != 0) {
+        const auto& devices = m_DeviceManager.GetDevices();
+        for (const auto& dev : devices) {
+            if (dev.instance_id == m_SelectedDeviceID) {
+                prefs.SetString("InputMapper.DeviceGUID", DeviceManager::GetDeviceGUIDString(dev));
+                break;
+            }
+        }
+    } else {
+        prefs.SetString("InputMapper.DeviceGUID", "");
+    }
+
+    auto SaveAxis = [&](const char* prefix, const AxisConfig& config) {
+        prefs.SetInt(std::string(prefix) + ".Axis", config.axisIndex);
+        prefs.SetBool(std::string(prefix) + ".Invert", config.invert);
+        prefs.SetFloat(std::string(prefix) + ".Deadzone", config.deadzone);
+    };
+
+    SaveAxis("InputMapper.Steering", m_Steering);
+    SaveAxis("InputMapper.Throttle", m_Throttle);
+    SaveAxis("InputMapper.Brake", m_Brake);
+    SaveAxis("InputMapper.Clutch", m_Clutch);
+    SaveAxis("InputMapper.Handbrake", m_Handbrake);
 }

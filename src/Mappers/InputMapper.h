@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 class DeviceManager;
+class PreferencesManager;
 
 class InputMapper {
 public:
@@ -24,6 +25,9 @@ public:
 
     void DrawUI();
     std::string GenerateMessage();
+
+    void LoadConfig(const PreferencesManager& prefs);
+    void SaveConfig(PreferencesManager& prefs) const;
 
 private:
     const DeviceManager& m_DeviceManager;

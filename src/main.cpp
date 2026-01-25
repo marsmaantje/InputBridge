@@ -72,6 +72,7 @@ int main(int argc, char* argv[]) {
     preferencesManager.Load();
     
     InputMapper inputMapper(deviceManager);
+    inputMapper.LoadConfig(preferencesManager);
 
     bool done = false;
     bool vsync = true;
@@ -90,7 +91,16 @@ int main(int argc, char* argv[]) {
             
             // Handle hot-plugging
             if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
-                deviceManager.HandleDeviceAdded(event.jdevice.which);
+                bool is_connected = false;
+                for (const auto& dev : deviceManager.GetDevices()) {
+                    if (dev.instance_id == event.jdevice.which) {
+                        is_connected = true;
+                        break;
+                    }
+                }
+                if (!is_connected) {
+                    deviceManager.HandleDeviceAdded(event.jdevice.which);
+                }
             }
             if (event.type == SDL_EVENT_JOYSTICK_REMOVED) {
                 deviceManager.HandleDeviceRemoved(event.jdevice.which);
@@ -207,6 +217,9 @@ int main(int argc, char* argv[]) {
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
     
+    inputMapper.SaveConfig(preferencesManager);
+    preferencesManager.Save();
+
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
