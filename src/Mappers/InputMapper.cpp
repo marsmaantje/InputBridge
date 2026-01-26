@@ -27,6 +27,10 @@ static void DrawAxisConfig(const char* label, InputMapper::AxisConfig& config, i
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     ImGui::SliderFloat("Deadzone", &config.deadzone, 0.0f, 0.5f);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    const char* ranges[] = { "-1..1", "0..1", "-1..0" };
+    ImGui::Combo("Range", &config.outputRange, ranges, IM_ARRAYSIZE(ranges));
     ImGui::PopID();
 }
 
@@ -102,9 +106,15 @@ float InputMapper::ProcessAxis(SDL_Joystick* joystick, const AxisConfig& config)
     
     if (config.invert) norm = -norm;
     
-    if (std::abs(norm) < config.deadzone) return 0.0f;
+    if (std::abs(norm) < config.deadzone) norm = 0.0f;
     
-    return std::clamp(norm, -1.0f, 1.0f);
+    float result = std::clamp(norm, -1.0f, 1.0f);
+    if (config.outputRange == 1) { // 0 to 1
+        result = (result + 1.0f) * 0.5f;
+    } else if (config.outputRange == 2) { // -1 to 0
+        result = (result - 1.0f) * 0.5f;
+    }
+    return result;
 }
 
 std::string InputMapper::GenerateMessage() {
@@ -176,6 +186,7 @@ void InputMapper::LoadConfig(const PreferencesManager& prefs) {
         config.axisIndex = prefs.GetInt(std::string(prefix) + ".Axis", -1);
         config.invert = prefs.GetBool(std::string(prefix) + ".Invert", false);
         config.deadzone = prefs.GetFloat(std::string(prefix) + ".Deadzone", 0.05f);
+        config.outputRange = prefs.GetInt(std::string(prefix) + ".Range", 0);
     };
 
     LoadAxis("InputMapper.Steering", m_Steering);
@@ -204,6 +215,7 @@ void InputMapper::SaveConfig(PreferencesManager& prefs) const {
         prefs.SetInt(std::string(prefix) + ".Axis", config.axisIndex);
         prefs.SetBool(std::string(prefix) + ".Invert", config.invert);
         prefs.SetFloat(std::string(prefix) + ".Deadzone", config.deadzone);
+        prefs.SetInt(std::string(prefix) + ".Range", config.outputRange);
     };
 
     SaveAxis("InputMapper.Steering", m_Steering);

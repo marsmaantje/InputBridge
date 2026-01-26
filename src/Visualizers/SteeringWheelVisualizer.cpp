@@ -33,7 +33,7 @@ void SteeringWheelVisualizer::Draw(const DeviceState& dev) {
         draw_list->AddLine(center, marker_end, color_active, 4.0f);
         
         ImGui::SetCursorScreenPos(ImVec2(p.x + 40, p.y + 140));
-        ImGui::Text("Steering: %d", steering);
+        ImGui::Text("Steering (Axis 0): %d", steering);
     }
 
     // Pedals (Axis 1, 2, 3)
@@ -52,7 +52,7 @@ void SteeringWheelVisualizer::Draw(const DeviceState& dev) {
             float fill_h = h * norm;
             draw_list->AddRectFilled(ImVec2(r_min.x, r_max.y - fill_h), r_max, color_active);
             ImGui::SetCursorScreenPos(ImVec2(r_min.x, r_max.y + 5));
-            ImGui::Text("%s", labels[i]);
+            ImGui::Text("%s (Axis %d)", labels[i], i + 1);
         }
     }
 }

@@ -169,8 +169,14 @@ int main(int argc, char* argv[]) {
                 } else {
                     if (ImGui::BeginTabBar("DeviceMode")) {
                         TabItem("Raw Inputs", generic_viz);
-                        TabItem("Steering Wheel", wheel_viz);
-                        TabItem("Flight Stick", flight_stick_viz);
+
+                        SDL_JoystickType type = SDL_GetJoystickType(dev.joystick);
+                        if (type == SDL_JOYSTICK_TYPE_WHEEL || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
+                            TabItem("Steering Wheel", wheel_viz);
+                        }
+                        if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK || type == SDL_JOYSTICK_TYPE_THROTTLE || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
+                            TabItem("Flight Stick", flight_stick_viz);
+                        }
                         ImGui::EndTabBar();
                     }
                 }

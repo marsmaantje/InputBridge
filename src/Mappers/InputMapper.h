@@ -17,8 +17,7 @@ public:
         int axisIndex = -1;
         bool invert = false;
         float deadzone = 0.05f;
-        float minVal = -1.0f; // For remapping range
-        float maxVal = 1.0f;
+        int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0
     };
 
     InputMapper(const DeviceManager& deviceManager);
@@ -28,6 +27,7 @@ public:
 
     void LoadConfig(const PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs) const;
+    
 
 private:
     const DeviceManager& m_DeviceManager;
