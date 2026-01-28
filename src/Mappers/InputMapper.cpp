@@ -6,98 +6,13 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
-#include <thread>
-#include <mutex>
 #include <iostream>
-#include "App.h"
-
-#ifdef ENABLE_WEBSOCKETS
-struct us_listen_socket_t;
-struct WebSocketServerState {
-    std::thread* thread = nullptr;
-    uWS::App* app = nullptr;
-    uWS::Loop* loop = nullptr;
-    struct us_listen_socket_t* listen_socket = nullptr;
-    std::mutex mutex;
-    int port = 9001;
-    bool running = false;
-};
-
-static WebSocketServerState g_WsServer;
-
-static void StartWebSocketServer(int port) {
-    std::lock_guard<std::mutex> lock(g_WsServer.mutex);
-    if (g_WsServer.running) return;
-
-    g_WsServer.port = port;
-    g_WsServer.running = true;
-
-    if (g_WsServer.thread) {
-        delete g_WsServer.thread;
-        g_WsServer.thread = nullptr;
-    }
-
-    g_WsServer.thread = new std::thread([port]() {
-        uWS::App app;
-        {
-            std::lock_guard<std::mutex> lock(g_WsServer.mutex);
-            g_WsServer.app = &app;
-            g_WsServer.loop = uWS::Loop::get();
-        }
-        
-        app.ws<int>("/*", {
-            .open = [](auto *ws) { ws->subscribe("broadcast"); },
-            .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {
-                std::cout << "FFB Data: " << message << std::endl;
-            }
-        }).listen(port, [](auto *listen_socket) {
-            std::lock_guard<std::mutex> lock(g_WsServer.mutex);
-            if (listen_socket) {
-                std::cout << "WebSocket server listening on port " << g_WsServer.port << std::endl;
-                g_WsServer.listen_socket = (struct us_listen_socket_t*)listen_socket;
-            } else {
-                std::cout << "Failed to listen on port " << g_WsServer.port << std::endl;
-                g_WsServer.running = false;
-            }
-        }).run();
-
-        {
-            std::lock_guard<std::mutex> lock(g_WsServer.mutex);
-            g_WsServer.app = nullptr;
-            g_WsServer.loop = nullptr;
-            g_WsServer.listen_socket = nullptr;
-            g_WsServer.running = false;
-        }
-    });
-    g_WsServer.thread->detach();
-}
-
-static void StopWebSocketServer() {
-    std::lock_guard<std::mutex> lock(g_WsServer.mutex);
-    if (g_WsServer.loop && g_WsServer.listen_socket) {
-        struct us_listen_socket_t* socket = g_WsServer.listen_socket;
-        g_WsServer.loop->defer([socket]() {
-            us_listen_socket_close(0, socket);
-        });
-    }
-}
-#endif
-
-static void BroadcastMessage(const std::string& msg, uWS::OpCode opCode) {
-#ifdef ENABLE_WEBSOCKETS
-    std::lock_guard<std::mutex> lock(g_WsServer.mutex);
-    if (g_WsServer.loop) {
-        g_WsServer.loop->defer([msg, opCode]() {
-            if (g_WsServer.app) g_WsServer.app->publish("broadcast", msg, opCode);
-        });
-    }
-#endif
-}
+#include "../Network/WebSocketServer.h"
 
 InputMapper::InputMapper(const DeviceManager& deviceManager)
     : m_DeviceManager(deviceManager) {
 #ifdef ENABLE_WEBSOCKETS
-    StartWebSocketServer(9001);
+    WebSocketServer::GetInstance().Start(9001);
 #else
     std::cout << "WebSocket server disabled. Define ENABLE_WEBSOCKETS to enable." << std::endl;
 #endif
@@ -143,13 +58,6 @@ void InputMapper::DrawUI() {
         }
     }
 
-    if (ImGui::BeginCombo("Output Format", m_OutputFormat == OutputFormat::JSON ? "JSON" : (m_OutputFormat == OutputFormat::WebsocketWheel ? "WebsocketWheel" : "OSC Resonite"))) {
-        if (ImGui::Selectable("JSON", m_OutputFormat == OutputFormat::JSON)) m_OutputFormat = OutputFormat::JSON;
-        if (ImGui::Selectable("WebsocketWheel", m_OutputFormat == OutputFormat::WebsocketWheel)) m_OutputFormat = OutputFormat::WebsocketWheel;
-        if (ImGui::Selectable("OSC Resonite", m_OutputFormat == OutputFormat::OSC_Resonite)) m_OutputFormat = OutputFormat::OSC_Resonite;
-        ImGui::EndCombo();
-    }
-
     if (ImGui::BeginCombo("Source Device", currentDeviceName.c_str())) {
         if (ImGui::Selectable("None", m_SelectedDeviceID == 0)) m_SelectedDeviceID = 0;
         for (const auto& dev : devices) {
@@ -160,6 +68,13 @@ void InputMapper::DrawUI() {
             }
             if (isSelected) ImGui::SetItemDefaultFocus();
         }
+        ImGui::EndCombo();
+    }
+
+    if (ImGui::BeginCombo("Output Format", m_OutputFormat == OutputFormat::JSON ? "JSON" : (m_OutputFormat == OutputFormat::WebsocketWheel ? "WebsocketWheel" : "OSC Resonite"))) {
+        if (ImGui::Selectable("JSON", m_OutputFormat == OutputFormat::JSON)) m_OutputFormat = OutputFormat::JSON;
+        if (ImGui::Selectable("WebsocketWheel", m_OutputFormat == OutputFormat::WebsocketWheel)) m_OutputFormat = OutputFormat::WebsocketWheel;
+        if (ImGui::Selectable("OSC Resonite", m_OutputFormat == OutputFormat::OSC_Resonite)) m_OutputFormat = OutputFormat::OSC_Resonite;
         ImGui::EndCombo();
     }
 
@@ -184,38 +99,13 @@ void InputMapper::DrawUI() {
     }
 
     ImGui::Separator();
-    ImGui::Text("WebSocket Server");
-#ifdef ENABLE_WEBSOCKETS
-    static int port = 9001;
-    ImGui::InputInt("Port", &port);
-    
-    bool isRunning = false;
-    int currentPort = 0;
-    {
-        std::lock_guard<std::mutex> lock(g_WsServer.mutex);
-        isRunning = g_WsServer.running;
-        currentPort = g_WsServer.port;
-    }
-
-    if (isRunning) {
-        ImGui::TextColored(ImVec4(0, 1, 0, 1), "Running on port %d", currentPort);
-        ImGui::SameLine();
-        if (ImGui::Button("Stop")) StopWebSocketServer();
-    } else {
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Stopped");
-        ImGui::SameLine();
-        if (ImGui::Button("Start")) StartWebSocketServer(port);
-    }
-#else
-    ImGui::TextDisabled("Not available (ENABLE_WEBSOCKETS missing)");
-#endif
-    
-    ImGui::Separator();
     ImGui::Text("Output Preview:");
     std::string json = GenerateMessage();
     ImGui::TextWrapped("%s", json.c_str());
 
     ImGui::End();
+    
+    WebSocketServer::GetInstance().DrawUI();
 }
 
 float InputMapper::ProcessAxis(SDL_Joystick* joystick, const AxisConfig& config) {
@@ -251,7 +141,7 @@ std::string InputMapper::GenerateMessage() {
 
     if (m_OutputFormat == OutputFormat::JSON) {
         if (!joystick) {
-            BroadcastMessage("{}", uWS::OpCode::TEXT);
+            WebSocketServer::GetInstance().Broadcast("{}", uWS::OpCode::TEXT);
             return "{}";
         }
 
@@ -264,11 +154,11 @@ std::string InputMapper::GenerateMessage() {
         ss << "\"handbrake\":" << ProcessAxis(joystick, m_Handbrake);
         ss << "}";
         std::string msg = ss.str();
-        BroadcastMessage(msg, uWS::OpCode::TEXT);
+        WebSocketServer::GetInstance().Broadcast(msg, uWS::OpCode::TEXT);
         return msg;
     } else if (m_OutputFormat == OutputFormat::WebsocketWheel) {
         if (!joystick) {
-            BroadcastMessage("", uWS::OpCode::BINARY);
+            WebSocketServer::GetInstance().Broadcast("", uWS::OpCode::BINARY);
             return "";
         }
         std::stringstream ss;
@@ -277,11 +167,11 @@ std::string InputMapper::GenerateMessage() {
         ss << "\x02" << ProcessAxis(joystick, m_Brake) << ";";
         ss << "\x03" << ProcessAxis(joystick, m_Throttle) << ";";
         std::string msg = ss.str();
-        BroadcastMessage(msg, uWS::OpCode::BINARY);
+        WebSocketServer::GetInstance().Broadcast(msg, uWS::OpCode::BINARY);
         return msg;
     } else {
         if (!joystick) {
-            BroadcastMessage("", uWS::OpCode::BINARY);
+            WebSocketServer::GetInstance().Broadcast("", uWS::OpCode::BINARY);
             return "";
         }
         std::string msg;
@@ -297,7 +187,7 @@ std::string InputMapper::GenerateMessage() {
             if (SDL_GetJoystickButton(joystick, i)) buttons_mask |= (1 << i);
         }
         msg += OSCGenerator::Message("/wheel/buttons", buttons_mask);
-        BroadcastMessage(msg, uWS::OpCode::BINARY);
+        WebSocketServer::GetInstance().Broadcast(msg, uWS::OpCode::BINARY);
         return msg;
     }
 }
@@ -328,6 +218,14 @@ void InputMapper::LoadConfig(const PreferencesManager& prefs) {
     LoadAxis("InputMapper.Brake", m_Brake);
     LoadAxis("InputMapper.Clutch", m_Clutch);
     LoadAxis("InputMapper.Handbrake", m_Handbrake);
+
+#ifdef ENABLE_WEBSOCKETS
+    int wsPort = prefs.GetInt("WebSocketServer.Port", 9001);
+    if (WebSocketServer::GetInstance().GetPort() != wsPort) {
+        WebSocketServer::GetInstance().Stop();
+        WebSocketServer::GetInstance().Start(wsPort);
+    }
+#endif
 }
 
 void InputMapper::SaveConfig(PreferencesManager& prefs) const {
@@ -357,4 +255,8 @@ void InputMapper::SaveConfig(PreferencesManager& prefs) const {
     SaveAxis("InputMapper.Brake", m_Brake);
     SaveAxis("InputMapper.Clutch", m_Clutch);
     SaveAxis("InputMapper.Handbrake", m_Handbrake);
+
+#ifdef ENABLE_WEBSOCKETS
+    prefs.SetInt("WebSocketServer.Port", WebSocketServer::GetInstance().GetPort());
+#endif
 }

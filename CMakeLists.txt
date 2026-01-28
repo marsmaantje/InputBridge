@@ -130,6 +130,7 @@ add_executable(InputBridge
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Mappers/InputMapper.cpp
     src/Mappers/OSCGenerator.cpp
+    src/Network/WebSocketServer.cpp
 )
 
 target_include_directories(InputBridge PRIVATE src)
