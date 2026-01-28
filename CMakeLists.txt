@@ -82,6 +82,7 @@ target_include_directories(uSockets PUBLIC ${usockets_lib_SOURCE_DIR}/src)
 
 if(OpenSSL_FOUND)
     target_link_libraries(uSockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(uSockets PUBLIC LIBUS_USE_OPENSSL)
 else()
     target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL)
 endif()
@@ -114,6 +115,9 @@ else()
     target_compile_definitions(uWebSockets INTERFACE UWS_NO_ZLIB)
 endif()
 
+# Find Threads (required for std::thread)
+find_package(Threads REQUIRED)
+
 # InputBridge Executable
 add_executable(InputBridge
     # ... put source files here ...
@@ -129,7 +133,8 @@ add_executable(InputBridge
 )
 
 target_include_directories(InputBridge PRIVATE src)
-target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3 uWebSockets)
+target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3 uWebSockets Threads::Threads)
+target_compile_definitions(InputBridge PRIVATE ENABLE_WEBSOCKETS)
 
 # Copy SDL3.dll to the output directory on Windows
 if(WIN32)
