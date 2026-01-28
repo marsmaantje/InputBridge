@@ -1,13 +1,13 @@
 #include "InputMapper.h"
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
+#include "Network/WebSocketServer.h"
 #include "OSCGenerator.h"
 #include "imgui.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include "../Network/WebSocketServer.h"
 
 InputMapper::InputMapper(const DeviceManager& deviceManager)
     : m_DeviceManager(deviceManager) {
@@ -167,7 +167,12 @@ std::string InputMapper::GenerateMessage() {
         ss << "\x02" << ProcessAxis(joystick, m_Brake) << ";";
         ss << "\x03" << ProcessAxis(joystick, m_Throttle) << ";";
         std::string msg = ss.str();
-        WebSocketServer::GetInstance().Broadcast(msg, uWS::OpCode::BINARY);
+        //WebSocketServer::GetInstance().BroadcastWheelStatus(msg, uWS::OpCode::BINARY);
+        WebSocketServer::GetInstance().BroadcastWheelStatus(
+            ProcessAxis(joystick, m_Steering), 
+            ProcessAxis(joystick, m_Brake), 
+            ProcessAxis(joystick, m_Throttle)
+        );
         return msg;
     } else {
         if (!joystick) {
