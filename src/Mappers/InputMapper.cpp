@@ -11,9 +11,7 @@
 
 InputMapper::InputMapper(const DeviceManager& deviceManager)
     : m_DeviceManager(deviceManager) {
-#ifdef ENABLE_WEBSOCKETS
-    WebSocketServer::GetInstance().Start(9001);
-#else
+#ifndef ENABLE_WEBSOCKETS
     std::cout << "WebSocket server disabled. Define ENABLE_WEBSOCKETS to enable." << std::endl;
 #endif
 }
@@ -226,7 +224,7 @@ void InputMapper::LoadConfig(const PreferencesManager& prefs) {
 
 #ifdef ENABLE_WEBSOCKETS
     int wsPort = prefs.GetInt("WebSocketServer.Port", 9001);
-    if (WebSocketServer::GetInstance().GetPort() != wsPort) {
+    if (!WebSocketServer::GetInstance().IsRunning() || WebSocketServer::GetInstance().GetPort() != wsPort) {
         WebSocketServer::GetInstance().Stop();
         WebSocketServer::GetInstance().Start(wsPort);
     }
