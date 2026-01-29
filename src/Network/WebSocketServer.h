@@ -1,10 +1,9 @@
 #pragma once
 
 #include <string>
-#include <memory>
 
 #ifdef ENABLE_WEBSOCKETS
-#include "App.h"
+#include <App.h>
 #endif
 
 class IProtocol;

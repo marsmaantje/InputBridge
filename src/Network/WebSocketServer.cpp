@@ -5,10 +5,8 @@
 #include <deque>
 #include <map>
 #include <memory>
-#include <iostream>
 #include "Protocols/WebSocketProtocol.h"
 #include "Protocols/ProtocolManager.h"
-#include "Protocols/OSCProtocol.h"
 
 
 #ifdef ENABLE_WEBSOCKETS

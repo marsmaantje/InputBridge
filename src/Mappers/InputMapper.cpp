@@ -2,7 +2,6 @@
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
 #include "Network/WebSocketServer.h"
-#include "Protocols/ProtocolManager.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
