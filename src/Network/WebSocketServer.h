@@ -1,18 +1,13 @@
 #pragma once
 
 #include <string>
+#include <memory>
 
 #ifdef ENABLE_WEBSOCKETS
 #include "App.h"
-#else
-// Define dummy OpCode if uWS is not available to avoid compilation errors in consumers
-namespace uWS {
-    enum OpCode {
-        TEXT = 1,
-        BINARY = 2
-    };
-}
 #endif
+
+class IProtocol;
 
 class WebSocketServer {
 public:
@@ -25,8 +20,21 @@ public:
     void SetPort(int port);
     int GetClientCount() const;
 
+#ifdef ENABLE_WEBSOCKETS
+    void Broadcast(const std::string& address, float value);
+    void Broadcast(const std::string& address, int value);
+    void Broadcast(const std::string& address, const std::string& value);
+    void Broadcast_wheel(float wheel, float brake, float throttle);
     void Broadcast(const std::string& msg, uWS::OpCode opCode);
-    void BroadcastWheelStatus(float wheel, float brake, float throttle);
+#else
+    // Provide a dummy implementation or an alternative signature when websockets are disabled
+    void Broadcast(const std::string& address, float value) {}
+    void Broadcast(const std::string& address, int value) {}
+    void Broadcast(const std::string& address, const std::string& value) {}
+    void Broadcast_wheel(float wheel, float brake, float throttle) {}
+    void Broadcast(const std::string& msg, int opCode = 0) {}
+#endif
+
     void DrawUI();
 
 private:

@@ -2,19 +2,28 @@
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
 #include "Network/WebSocketServer.h"
-#include "OSCGenerator.h"
+#include "Protocols/ProtocolManager.h"
 #include "imgui.h"
-#include <sstream>
 #include <algorithm>
 #include <cmath>
-#include <iostream>
+
+namespace { // Anonymous namespace for private helper functions
+
+SDL_Joystick* GetSelectedJoystick(SDL_JoystickID selectedId, const DeviceManager& deviceManager) {
+    if (selectedId == 0) {
+        return nullptr;
+    }
+    const auto& devices = deviceManager.GetDevices();
+    auto it = std::find_if(devices.begin(), devices.end(), 
+        [selectedId](const DeviceState& dev) { return dev.instance_id == selectedId; });
+    
+    return (it != devices.end()) ? it->joystick : nullptr;
+}
+
+} // namespace
 
 InputMapper::InputMapper(const DeviceManager& deviceManager)
-    : m_DeviceManager(deviceManager) {
-#ifndef ENABLE_WEBSOCKETS
-    std::cout << "WebSocket server disabled. Define ENABLE_WEBSOCKETS to enable." << std::endl;
-#endif
-}
+    : m_DeviceManager(deviceManager) {}
 
 static void DrawAxisConfig(const char* label, InputMapper::AxisConfig& config, int numAxes) {
     ImGui::PushID(label);
@@ -44,62 +53,49 @@ void InputMapper::DrawUI() {
     ImGui::Begin("Input Mapper");
     
     const auto& devices = m_DeviceManager.GetDevices();
+    const DeviceState* selectedDeviceState = nullptr;
 
     // Device Selector
-    std::string currentDeviceName = "None";
+    const char* currentDeviceName = "None";
     if (m_SelectedDeviceID != 0) {
-        for (const auto& dev : devices) {
-            if (dev.instance_id == m_SelectedDeviceID) {
-                currentDeviceName = dev.name;
-                break;
-            }
+        auto it = std::find_if(devices.begin(), devices.end(), 
+            [this](const DeviceState& dev) { return dev.instance_id == m_SelectedDeviceID; });
+        if (it != devices.end()) {
+            selectedDeviceState = &*it;
+            currentDeviceName = selectedDeviceState->name.c_str();
+        } else {
+            m_SelectedDeviceID = 0; // Device was disconnected
         }
     }
 
-    if (ImGui::BeginCombo("Source Device", currentDeviceName.c_str())) {
+    if (ImGui::BeginCombo("Source Device", currentDeviceName)) {
         if (ImGui::Selectable("None", m_SelectedDeviceID == 0)) m_SelectedDeviceID = 0;
         for (const auto& dev : devices) {
             bool isSelected = (m_SelectedDeviceID == dev.instance_id);
             std::string label = dev.name + "##" + std::to_string(dev.instance_id);
             if (ImGui::Selectable(label.c_str(), isSelected)) {
                 m_SelectedDeviceID = dev.instance_id;
+                selectedDeviceState = &dev;
             }
             if (isSelected) ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
     }
 
-    if (ImGui::BeginCombo("Output Format", m_OutputFormat == OutputFormat::JSON ? "JSON" : (m_OutputFormat == OutputFormat::WebsocketWheel ? "WebsocketWheel" : "OSC Resonite"))) {
-        if (ImGui::Selectable("JSON", m_OutputFormat == OutputFormat::JSON)) m_OutputFormat = OutputFormat::JSON;
-        if (ImGui::Selectable("WebsocketWheel", m_OutputFormat == OutputFormat::WebsocketWheel)) m_OutputFormat = OutputFormat::WebsocketWheel;
-        if (ImGui::Selectable("OSC Resonite", m_OutputFormat == OutputFormat::OSC_Resonite)) m_OutputFormat = OutputFormat::OSC_Resonite;
-        ImGui::EndCombo();
-    }
-
-    if (m_SelectedDeviceID != 0) {
-        const DeviceState* devState = nullptr;
-        for (const auto& dev : devices) {
-            if (dev.instance_id == m_SelectedDeviceID) {
-                devState = &dev;
-                break;
-            }
-        }
-
-        if (devState) {
-            ImGui::Separator();
-            ImGui::Text("Axis Mapping");
-            DrawAxisConfig("Steering", m_Steering, devState->num_axes);
-            DrawAxisConfig("Throttle", m_Throttle, devState->num_axes);
-            DrawAxisConfig("Brake", m_Brake, devState->num_axes);
-            DrawAxisConfig("Clutch", m_Clutch, devState->num_axes);
-            DrawAxisConfig("Handbrake", m_Handbrake, devState->num_axes);
-        }
+    if (selectedDeviceState) {
+        ImGui::Separator();
+        ImGui::Text("Axis Mapping");
+        DrawAxisConfig("Steering", m_Steering, selectedDeviceState->num_axes);
+        DrawAxisConfig("Throttle", m_Throttle, selectedDeviceState->num_axes);
+        DrawAxisConfig("Brake", m_Brake, selectedDeviceState->num_axes);
+        DrawAxisConfig("Clutch", m_Clutch, selectedDeviceState->num_axes);
+        DrawAxisConfig("Handbrake", m_Handbrake, selectedDeviceState->num_axes);
     }
 
     ImGui::Separator();
     ImGui::Text("Output Preview:");
-    std::string json = GenerateMessage();
-    ImGui::TextWrapped("%s", json.c_str());
+    std::string outputPreview = UpdateAndBroadcastMessage();
+    ImGui::TextWrapped("%s", outputPreview.c_str());
 
     ImGui::End();
     
@@ -110,7 +106,12 @@ float InputMapper::ProcessAxis(SDL_Joystick* joystick, const AxisConfig& config)
     if (config.axisIndex < 0) return 0.0f;
     
     Sint16 val = SDL_GetJoystickAxis(joystick, config.axisIndex);
-    float norm = (float)val / 32768.0f; // -1.0 to 1.0 approx
+    float norm;
+    if (val < 0) {
+        norm = static_cast<float>(val) / 32768.0f;
+    } else {
+        norm = static_cast<float>(val) / 32767.0f;
+    }
     
     if (config.invert) norm = -norm;
     
@@ -125,79 +126,37 @@ float InputMapper::ProcessAxis(SDL_Joystick* joystick, const AxisConfig& config)
     return result;
 }
 
-std::string InputMapper::GenerateMessage() {
-    SDL_Joystick* joystick = nullptr;
-    if (m_SelectedDeviceID != 0) {
-        const auto& devices = m_DeviceManager.GetDevices();
-        for (const auto& dev : devices) {
-            if (dev.instance_id == m_SelectedDeviceID) {
-                joystick = dev.joystick;
-                break;
-            }
-        }
-    }
+std::string InputMapper::UpdateAndBroadcastMessage() {
+    SDL_Joystick* joystick = GetSelectedJoystick(m_SelectedDeviceID, m_DeviceManager);
 
-    if (m_OutputFormat == OutputFormat::JSON) {
-        if (!joystick) {
-            WebSocketServer::GetInstance().Broadcast("{}", uWS::OpCode::TEXT);
-            return "{}";
-        }
+    if (!joystick) return "";
 
-        std::stringstream ss;
-        ss << "{";
-        ss << "\"steering\":" << ProcessAxis(joystick, m_Steering) << ",";
-        ss << "\"throttle\":" << ProcessAxis(joystick, m_Throttle) << ",";
-        ss << "\"brake\":" << ProcessAxis(joystick, m_Brake) << ",";
-        ss << "\"clutch\":" << ProcessAxis(joystick, m_Clutch) << ",";
-        ss << "\"handbrake\":" << ProcessAxis(joystick, m_Handbrake);
-        ss << "}";
-        std::string msg = ss.str();
-        WebSocketServer::GetInstance().Broadcast(msg, uWS::OpCode::TEXT);
-        return msg;
-    } else if (m_OutputFormat == OutputFormat::WebsocketWheel) {
-        if (!joystick) {
-            WebSocketServer::GetInstance().Broadcast("", uWS::OpCode::BINARY);
-            return "";
-        }
-        std::stringstream ss;
-        // Format: \x01<Steering>;\x02<Brake>;\x03<Throttle>;
-        ss << "\x01" << ProcessAxis(joystick, m_Steering) << ";";
-        ss << "\x02" << ProcessAxis(joystick, m_Brake) << ";";
-        ss << "\x03" << ProcessAxis(joystick, m_Throttle) << ";";
-        std::string msg = ss.str();
-        //WebSocketServer::GetInstance().BroadcastWheelStatus(msg, uWS::OpCode::BINARY);
-        WebSocketServer::GetInstance().BroadcastWheelStatus(
-            ProcessAxis(joystick, m_Steering), 
-            ProcessAxis(joystick, m_Brake), 
-            ProcessAxis(joystick, m_Throttle)
-        );
-        return msg;
-    } else {
-        if (!joystick) {
-            WebSocketServer::GetInstance().Broadcast("", uWS::OpCode::BINARY);
-            return "";
-        }
-        std::string msg;
-        msg += OSCGenerator::Message("/wheel/steer", ProcessAxis(joystick, m_Steering));
-        msg += OSCGenerator::Message("/wheel/throttle", ProcessAxis(joystick, m_Throttle));
-        msg += OSCGenerator::Message("/wheel/brake", ProcessAxis(joystick, m_Brake));
-        if (m_Clutch.axisIndex != -1) {
-            msg += OSCGenerator::Message("/wheel/clutch", ProcessAxis(joystick, m_Clutch));
-        }
-        int buttons_mask = 0;
-        int num_buttons = SDL_GetNumJoystickButtons(joystick);
-        for (int i = 0; i < num_buttons && i < 32; ++i) {
-            if (SDL_GetJoystickButton(joystick, i)) buttons_mask |= (1 << i);
-        }
-        msg += OSCGenerator::Message("/wheel/buttons", buttons_mask);
-        WebSocketServer::GetInstance().Broadcast(msg, uWS::OpCode::BINARY);
-        return msg;
+    float steering = ProcessAxis(joystick, m_Steering);
+    float throttle = ProcessAxis(joystick, m_Throttle);
+    float brake = ProcessAxis(joystick, m_Brake);
+    float clutch = ProcessAxis(joystick, m_Clutch);
+    float handbrake = ProcessAxis(joystick, m_Handbrake);
+
+    auto& server = WebSocketServer::GetInstance();
+    server.Broadcast_wheel(steering, brake, throttle);
+
+    server.Broadcast("/wheel/steer", steering);
+    server.Broadcast("/wheel/throttle", throttle);
+    server.Broadcast("/wheel/brake", brake);
+    if (m_Clutch.axisIndex != -1) server.Broadcast("/wheel/clutch", clutch);
+    server.Broadcast("/wheel/handbrake", handbrake);
+
+    int buttons_mask = 0;
+    int num_buttons = SDL_GetNumJoystickButtons(joystick);
+    for (int i = 0; i < num_buttons && i < 32; ++i) {
+        if (SDL_GetJoystickButton(joystick, i)) buttons_mask |= (1 << i);
     }
+    server.Broadcast("/wheel/buttons", buttons_mask);
+
+    return "Broadcasting...";
 }
 
 void InputMapper::LoadConfig(const PreferencesManager& prefs) {
-    m_OutputFormat = (OutputFormat)prefs.GetInt("InputMapper.OutputFormat", (int)OutputFormat::JSON);
-
     std::string deviceGUID = prefs.GetString("InputMapper.DeviceGUID");
     if (!deviceGUID.empty()) {
         const auto& devices = m_DeviceManager.GetDevices();
@@ -232,8 +191,6 @@ void InputMapper::LoadConfig(const PreferencesManager& prefs) {
 }
 
 void InputMapper::SaveConfig(PreferencesManager& prefs) const {
-    prefs.SetInt("InputMapper.OutputFormat", (int)m_OutputFormat);
-
     if (m_SelectedDeviceID != 0) {
         const auto& devices = m_DeviceManager.GetDevices();
         for (const auto& dev : devices) {

@@ -7,12 +7,6 @@ class PreferencesManager;
 
 class InputMapper {
 public:
-    enum class OutputFormat {
-        JSON,
-        WebsocketWheel,
-        OSC_Resonite
-    };
-
     struct AxisConfig {
         int axisIndex = -1;
         bool invert = false;
@@ -23,7 +17,7 @@ public:
     InputMapper(const DeviceManager& deviceManager);
 
     void DrawUI();
-    std::string GenerateMessage();
+    std::string UpdateAndBroadcastMessage();
 
     void LoadConfig(const PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs) const;
@@ -32,7 +26,6 @@ public:
 private:
     const DeviceManager& m_DeviceManager;
     SDL_JoystickID m_SelectedDeviceID = 0;
-    OutputFormat m_OutputFormat = OutputFormat::JSON;
     
     AxisConfig m_Steering;
     AxisConfig m_Throttle;

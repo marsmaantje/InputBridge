@@ -4,8 +4,12 @@
 #include <mutex>
 #include <deque>
 #include <map>
-#include <cstdio>
-#include <algorithm>
+#include <memory>
+#include <iostream>
+#include "Protocols/WebSocketProtocol.h"
+#include "Protocols/ProtocolManager.h"
+#include "Protocols/OSCProtocol.h"
+
 
 #ifdef ENABLE_WEBSOCKETS
 struct us_listen_socket_t;
@@ -21,6 +25,8 @@ struct WebSocketServer::Impl {
     std::mutex mutex;
     std::deque<std::string> logs;
     std::map<void*, std::string> clients;
+    std::shared_ptr<IProtocol> protocol;
+    std::string selectedProtocol;
     
 #ifdef ENABLE_WEBSOCKETS
     std::thread* thread = nullptr;
@@ -36,6 +42,13 @@ WebSocketServer& WebSocketServer::GetInstance() {
 }
 
 WebSocketServer::WebSocketServer() : m_Impl(new Impl) {
+    m_Impl->protocol = ProtocolManager::GetInstance().GetProtocol("WebSocket");
+    if(!m_Impl->protocol)
+    {
+        m_Impl->protocol = std::make_shared<WebSocketProtocol>();
+        ProtocolManager::GetInstance().RegisterProtocol(m_Impl->protocol);
+    }
+    m_Impl->selectedProtocol = m_Impl->protocol->getProtocolName();
 }
 
 WebSocketServer::~WebSocketServer() {
@@ -169,7 +182,7 @@ void WebSocketServer::Broadcast(const std::string& msg, uWS::OpCode opCode) {
         }
 
         // Move the actual sending into the uWS Thread via defer
-        m_Impl->loop->defer([targets, msg, opCode]() {
+        m_Impl->loop->defer([targets, msg, opCode, this]() {
             for (void* ptr : targets) {
                 // Cast back to the specific WebSocket type used in Start()
                 auto* ws = (uWS::WebSocket<false, true, int>*)ptr;
@@ -182,34 +195,65 @@ void WebSocketServer::Broadcast(const std::string& msg, uWS::OpCode opCode) {
 #endif
 }
 
-void WebSocketServer::BroadcastWheelStatus(float wheel, float brake, float throttle) {
+void WebSocketServer::Broadcast(const std::string& address, float value) {
 #ifdef ENABLE_WEBSOCKETS
-    // 1. Prepare the message once
-    auto formatFloat = [](float val, int precision) {
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%.*f", precision, val);
-        std::string s(buf);
-        std::replace(s.begin(), s.end(), ',', '.');
-        s.erase(s.find_last_not_of('0') + 1);
-        if (s.back() == '.') s.pop_back();
-        return s;
-    };
+    std::shared_ptr<IProtocol> protocol;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        protocol = m_Impl->protocol;
+    }
+    if (protocol) {
+        std::string msg = protocol->format(address, value);
+        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+        Broadcast(msg, opCode);
+    }
+#endif
+}
 
-    std::string msg;
-    msg.reserve(64);
-    
-    // Using marsmaantje custom protocol (ID + Value + Separator)
-    //msg += (char)1; msg += formatFloat(wheel, 4);    msg += ";";
-    //msg += (char)2; msg += formatFloat(brake, 3);    msg += ";";
-    //msg += (char)3; msg += formatFloat(throttle, 3); msg += ";";
+void WebSocketServer::Broadcast(const std::string& address, int value) {
+#ifdef ENABLE_WEBSOCKETS
+    std::shared_ptr<IProtocol> protocol;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        protocol = m_Impl->protocol;
+    }
+    if (protocol) {
+        std::string msg = protocol->format(address, value);
+        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+        Broadcast(msg, opCode);
+    }
+#endif
+}
 
-    msg += "a"; msg += formatFloat(wheel, 4);    msg += ";";
-    msg += "b"; msg += formatFloat(brake, 3);    msg += ";";
-    msg += "c"; msg += formatFloat(throttle, 3); msg += ";";
+void WebSocketServer::Broadcast(const std::string& address, const std::string& value) {
+#ifdef ENABLE_WEBSOCKETS
+    std::shared_ptr<IProtocol> protocol;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        protocol = m_Impl->protocol;
+    }
+    if (protocol) {
+        std::string msg = protocol->format(address, value);
+        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+        Broadcast(msg, opCode);
+    }
+#endif
+}
 
-    // 2. Dispatch via the Direct method
-    // This calls the logic that loops through m_Impl->clients
-    Broadcast(msg, uWS::OpCode::TEXT);
+void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle) {
+#ifdef ENABLE_WEBSOCKETS
+    std::shared_ptr<IProtocol> protocol;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        protocol = m_Impl->protocol;
+    }
+    if (protocol) {
+        std::string msg = protocol->format_wheel(wheel, brake, throttle);
+        if (!msg.empty()) {
+            uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+            Broadcast(msg, opCode);
+        }
+    }
 #endif
 }
 
@@ -254,6 +298,28 @@ void WebSocketServer::DrawUI() {
         if (ImGui::InputInt("Port", &portInput)) {
             SetPort(portInput);
         }
+
+        // Protocol selection dropdown
+        {
+            std::lock_guard<std::mutex> lock(m_Impl->mutex);
+            auto availableProtocols = ProtocolManager::GetInstance().GetAvailableProtocols();
+            if (ImGui::BeginCombo("Protocol", m_Impl->selectedProtocol.c_str()))
+            {
+                for (const auto& protoName : availableProtocols)
+                {
+                    bool is_selected = (m_Impl->selectedProtocol == protoName);
+                    if (ImGui::Selectable(protoName.c_str(), is_selected))
+                    {
+                        m_Impl->selectedProtocol = protoName;
+                        m_Impl->protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
+                    }
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+        }
+
 
         if (running) {
             ImGui::TextColored(ImVec4(0, 1, 0, 1), "Status: Running (Port %d)", runningPort);

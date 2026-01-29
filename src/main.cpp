@@ -15,11 +15,18 @@
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
 #include "Mappers/InputMapper.h"
+#include "Protocols/ProtocolManager.h"
+#include "Protocols/OSCProtocol.h"
+#include "Protocols/WebSocketProtocol.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
 
 int main(int argc, char* argv[]) {
+    // Register protocols
+    ProtocolManager::GetInstance().RegisterProtocol(std::make_shared<OSCProtocol>());
+    ProtocolManager::GetInstance().RegisterProtocol(std::make_shared<WebSocketProtocol>());
+
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 
     // Setup SDL3 with Joystick and Gamepad support

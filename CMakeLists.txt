@@ -129,8 +129,10 @@ add_executable(InputBridge
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Mappers/InputMapper.cpp
-    src/Mappers/OSCGenerator.cpp
     src/Network/WebSocketServer.cpp
+    src/Protocols/OSCProtocol.cpp
+    src/Protocols/WebSocketProtocol.cpp
+    src/Protocols/ProtocolManager.cpp
 )
 
 target_include_directories(InputBridge PRIVATE src)
