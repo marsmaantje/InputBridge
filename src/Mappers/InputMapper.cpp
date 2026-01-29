@@ -89,11 +89,20 @@ void InputMapper::DrawUI() {
             if (ImGui::Selectable(label.c_str(), isSelected)) {
                 m_SelectedDeviceID = dev.instance_id;
                 selectedDeviceState = &dev;
+                ApplyExclusiveMode();
             }
             if (isSelected)
                 ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
+    }
+
+    if (ImGui::Checkbox("Exclusive Mode (Hide from other apps)", &m_ExclusiveMode)) {
+        ApplyExclusiveMode();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Attempts to prevent other applications from receiving input from this device.\n"
+                          "Note: This is platform dependent and may require administrative privileges.");
     }
 
     if (selectedDeviceState) {
@@ -203,6 +212,7 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
     LoadAxis("InputMapper.Brake", m_Brake);
     LoadAxis("InputMapper.Clutch", m_Clutch);
     LoadAxis("InputMapper.Handbrake", m_Handbrake);
+    m_ExclusiveMode = prefs.GetBool("InputMapper.ExclusiveMode", false);
 
 #ifdef ENABLE_WEBSOCKETS
     int wsPort = prefs.GetInt("WebSocketServer.Port", 9001);
@@ -212,6 +222,8 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
         WebSocketServer::GetInstance().Start(wsPort);
     }
 #endif
+
+    ApplyExclusiveMode();
 }
 
 void InputMapper::SaveConfig(PreferencesManager &prefs) const {
@@ -240,9 +252,20 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
     SaveAxis("InputMapper.Brake", m_Brake);
     SaveAxis("InputMapper.Clutch", m_Clutch);
     SaveAxis("InputMapper.Handbrake", m_Handbrake);
+    prefs.SetBool("InputMapper.ExclusiveMode", m_ExclusiveMode);
 
 #ifdef ENABLE_WEBSOCKETS
     prefs.SetInt("WebSocketServer.Port",
                  WebSocketServer::GetInstance().GetPort());
 #endif
+}
+
+void InputMapper::ApplyExclusiveMode() {
+    SDL_Joystick *joystick = GetSelectedJoystick(m_SelectedDeviceID, m_DeviceManager);
+    if (joystick) {
+        // Platform-specific implementation required.
+        // On Linux: ioctl(fd, EVIOCGRAB, m_ExclusiveMode ? 1 : 0) on the device node.
+        // On Windows: Requires external tools like HidHide or a custom filter driver.
+        SDL_Log("Exclusive mode for device %d set to %d (Not fully implemented)", m_SelectedDeviceID, m_ExclusiveMode);
+    }
 }

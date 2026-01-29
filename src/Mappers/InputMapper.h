@@ -25,6 +25,7 @@ class InputMapper {
   private:
     const DeviceManager &m_DeviceManager;
     SDL_JoystickID m_SelectedDeviceID = 0;
+    bool m_ExclusiveMode = false;
 
     AxisConfig m_Steering;
     AxisConfig m_Throttle;
@@ -33,4 +34,5 @@ class InputMapper {
     AxisConfig m_Handbrake;
 
     float ProcessAxis(SDL_Joystick *joystick, const AxisConfig &config);
+    void ApplyExclusiveMode();
 };
