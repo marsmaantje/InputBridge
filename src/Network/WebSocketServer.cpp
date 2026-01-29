@@ -1,10 +1,8 @@
 #include "WebSocketServer.h"
-#include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/WebSocketProtocol.h"
 #include "imgui.h"
 #include <deque>
-#include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -325,25 +323,20 @@ void WebSocketServer::DrawUI() {
             SetPort(portInput);
         }
 
-        // Protocol selection dropdown
+        // WebSocket Format selection
         {
             std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            auto availableProtocols =
-                ProtocolManager::GetInstance().GetAvailableProtocols();
-            if (ImGui::BeginCombo("Protocol",
-                                  m_Impl->selectedProtocol.c_str())) {
-                for (const auto &protoName : availableProtocols) {
-                    bool is_selected = (m_Impl->selectedProtocol == protoName);
-                    if (ImGui::Selectable(protoName.c_str(), is_selected)) {
-                        m_Impl->selectedProtocol = protoName;
-                        m_Impl->protocol =
-                            ProtocolManager::GetInstance().GetProtocol(
-                                protoName);
-                    }
-                    if (is_selected)
-                        ImGui::SetItemDefaultFocus();
+            auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
+            if (wsProtocol) {
+                int currentFormat = (int)wsProtocol->getWheelProtocolVersion();
+                if (ImGui::Combo("Format", &currentFormat,
+                                 [](void *, int idx, const char **out_text) {
+                                     *out_text = WebSocketProtocol::GetVersionLabel(idx);
+                                     return true;
+                                 },
+                                 nullptr, WebSocketProtocol::GetVersionCount())) {
+                    wsProtocol->setWheelProtocolVersion((WebSocketProtocol::WheelProtocolVersion)currentFormat);
                 }
-                ImGui::EndCombo();
             }
         }
 

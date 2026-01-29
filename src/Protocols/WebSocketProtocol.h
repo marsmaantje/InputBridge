@@ -20,6 +20,9 @@ class WebSocketProtocol : public IProtocol {
 
     std::string format_wheel(float wheel, float brake, float throttle) override;
 
+    static const char *GetVersionLabel(int index);
+    static int GetVersionCount();
+
   private:
     WheelProtocolVersion m_version;
 };

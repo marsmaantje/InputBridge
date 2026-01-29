@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <string>
 
 #ifdef ENABLE_WEBSOCKETS

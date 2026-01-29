@@ -77,3 +77,15 @@ std::string WebSocketProtocol::format_wheel(float wheel, float brake,
 
     return msg;
 }
+
+const char *WebSocketProtocol::GetVersionLabel(int index) {
+    switch (static_cast<WheelProtocolVersion>(index)) {
+    case WheelProtocolVersion::MarsmaantjeOld:
+        return "Marsmaantje (Old)";
+    case WheelProtocolVersion::MarsmaantjeNew:
+        return "Marsmaantje (New)";
+    }
+    return "Unknown";
+}
+
+int WebSocketProtocol::GetVersionCount() { return 2; }

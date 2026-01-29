@@ -1,5 +1,4 @@
 #include "ProtocolManager.h"
-#include <algorithm>
 #include <map>
 
 struct ProtocolManager::Impl {
