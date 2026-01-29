@@ -1,6 +1,6 @@
 #include "OSCProtocol.h"
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 
 static bool IsBigEndian() {
     union {
@@ -15,7 +15,7 @@ static uint32_t Swap32(uint32_t val) {
            ((val >> 8) & 0xff00) | ((val << 24) & 0xff000000);
 }
 
-static void AppendString(std::string& buf, const std::string& str) {
+static void AppendString(std::string &buf, const std::string &str) {
     buf.append(str);
     buf.push_back('\0');
     while (buf.size() % 4 != 0) {
@@ -23,29 +23,27 @@ static void AppendString(std::string& buf, const std::string& str) {
     }
 }
 
-static void AppendFloat(std::string& buf, float f) {
+static void AppendFloat(std::string &buf, float f) {
     uint32_t val;
     std::memcpy(&val, &f, 4);
     if (!IsBigEndian()) {
         val = Swap32(val);
     }
-    buf.append(reinterpret_cast<const char*>(&val), 4);
+    buf.append(reinterpret_cast<const char *>(&val), 4);
 }
 
-static void AppendInt(std::string& buf, int i) {
+static void AppendInt(std::string &buf, int i) {
     uint32_t val;
     std::memcpy(&val, &i, 4);
     if (!IsBigEndian()) {
         val = Swap32(val);
     }
-    buf.append(reinterpret_cast<const char*>(&val), 4);
+    buf.append(reinterpret_cast<const char *>(&val), 4);
 }
 
-std::string OSCProtocol::getProtocolName() const {
-    return "OSC";
-}
+std::string OSCProtocol::getProtocolName() const { return "OSC"; }
 
-std::string OSCProtocol::format(const std::string& address, float value) {
+std::string OSCProtocol::format(const std::string &address, float value) {
     std::string msg;
     AppendString(msg, address);
     AppendString(msg, ",f");
@@ -53,7 +51,7 @@ std::string OSCProtocol::format(const std::string& address, float value) {
     return msg;
 }
 
-std::string OSCProtocol::format(const std::string& address, int value) {
+std::string OSCProtocol::format(const std::string &address, int value) {
     std::string msg;
     AppendString(msg, address);
     AppendString(msg, ",i");
@@ -61,7 +59,8 @@ std::string OSCProtocol::format(const std::string& address, int value) {
     return msg;
 }
 
-std::string OSCProtocol::format(const std::string& address, const std::string& value) {
+std::string OSCProtocol::format(const std::string &address,
+                                const std::string &value) {
     std::string msg;
     AppendString(msg, address);
     AppendString(msg, ",s");
@@ -69,7 +68,8 @@ std::string OSCProtocol::format(const std::string& address, const std::string& v
     return msg;
 }
 
-std::string OSCProtocol::format_wheel(float wheel, float brake, float throttle) {
+std::string OSCProtocol::format_wheel(float wheel, float brake,
+                                      float throttle) {
     // Not applicable for generic OSC, but could be implemented as a bundle
     return "";
 }

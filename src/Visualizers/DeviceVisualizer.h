@@ -2,7 +2,7 @@
 #include "Devices/DeviceState.h"
 
 class DeviceVisualizer {
-public:
+  public:
     virtual ~DeviceVisualizer() = default;
-    virtual void Draw(const DeviceState& dev) = 0;
+    virtual void Draw(const DeviceState &dev) = 0;
 };

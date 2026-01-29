@@ -4,28 +4,30 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include <stdio.h>
-#include <vector>
 #include <string>
+#include <vector>
 
+#include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
+#include "Mappers/InputMapper.h"
+#include "Preferences/Preferences.h"
+#include "Protocols/OSCProtocol.h"
+#include "Protocols/ProtocolManager.h"
+#include "Protocols/WebSocketProtocol.h"
+#include "Visualizers/FlightStickVisualizer.h"
 #include "Visualizers/GamepadVisualizer.h"
 #include "Visualizers/GenericVisualizer.h"
 #include "Visualizers/SteeringWheelVisualizer.h"
-#include "Visualizers/FlightStickVisualizer.h"
-#include "Devices/DeviceManager.h"
-#include "Preferences/Preferences.h"
-#include "Mappers/InputMapper.h"
-#include "Protocols/ProtocolManager.h"
-#include "Protocols/OSCProtocol.h"
-#include "Protocols/WebSocketProtocol.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     // Register protocols
-    ProtocolManager::GetInstance().RegisterProtocol(std::make_shared<OSCProtocol>());
-    ProtocolManager::GetInstance().RegisterProtocol(std::make_shared<WebSocketProtocol>());
+    ProtocolManager::GetInstance().RegisterProtocol(
+        std::make_shared<OSCProtocol>());
+    ProtocolManager::GetInstance().RegisterProtocol(
+        std::make_shared<WebSocketProtocol>());
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 
@@ -37,14 +39,15 @@ int main(int argc, char* argv[]) {
 
     // Create window with SDL3 flags
     Uint32 window_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    SDL_Window* window = SDL_CreateWindow("InputBridge Debugger (SDL3)", 1280, 720, window_flags);
+    SDL_Window *window = SDL_CreateWindow("InputBridge Debugger (SDL3)", 1280,
+                                          720, window_flags);
     if (!window) {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
         return -1;
     }
 
     // Create SDL_Renderer3 (The SDL3 version of the renderer)
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
     if (!renderer) {
         printf("Error: SDL_CreateRenderer(): %s\n", SDL_GetError());
         return -1;
@@ -53,9 +56,12 @@ int main(int argc, char* argv[]) {
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |=
+        ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad
+    // Controls
 
     ImGui::StyleColorsDark();
 
@@ -68,7 +74,7 @@ int main(int argc, char* argv[]) {
 
     // Initial device scan
     int count = 0;
-    SDL_JoystickID* joysticks = SDL_GetJoysticks(&count);
+    SDL_JoystickID *joysticks = SDL_GetJoysticks(&count);
     if (joysticks) {
         for (int i = 0; i < count; i++) {
             deviceManager.HandleDeviceAdded(joysticks[i]);
@@ -77,7 +83,7 @@ int main(int argc, char* argv[]) {
     }
 
     preferencesManager.Load();
-    
+
     InputMapper inputMapper(deviceManager);
     inputMapper.LoadConfig(preferencesManager);
 
@@ -93,13 +99,14 @@ int main(int argc, char* argv[]) {
             ImGui_ImplSDL3_ProcessEvent(&event);
             if (event.type == SDL_EVENT_QUIT)
                 done = true;
-            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))
+            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
+                event.window.windowID == SDL_GetWindowID(window))
                 done = true;
-            
+
             // Handle hot-plugging
             if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
                 bool is_connected = false;
-                for (const auto& dev : deviceManager.GetDevices()) {
+                for (const auto &dev : deviceManager.GetDevices()) {
                     if (dev.instance_id == event.jdevice.which) {
                         is_connected = true;
                         break;
@@ -121,46 +128,56 @@ int main(int argc, char* argv[]) {
         ImGui::NewFrame();
 
         ImGui::Begin("InputBridge Status");
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-        
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+                    1000.0f / io.Framerate, io.Framerate);
+
         if (ImGui::Checkbox("VSync", &vsync)) {
             SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
         }
         ImGui::InputInt("Framerate Limit", &framerate_limit);
-        if (framerate_limit < 0) framerate_limit = 0;
-        
+        if (framerate_limit < 0)
+            framerate_limit = 0;
+
         ImGui::Separator();
-        const auto& devices = deviceManager.GetDevices();
+        const auto &devices = deviceManager.GetDevices();
         ImGui::Text("Connected Devices: %d", (int)devices.size());
-        
-        for (const auto& dev : devices) {
+
+        for (const auto &dev : devices) {
             ImGui::PushID((int)dev.instance_id);
-            if (ImGui::CollapsingHeader((dev.name + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)")).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader(
+                    (dev.name + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)"))
+                        .c_str(),
+                    ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Indent();
-                
+
                 static GamepadVisualizer gamepad_viz;
                 static GenericVisualizer generic_viz;
                 static SteeringWheelVisualizer wheel_viz;
                 static FlightStickVisualizer flight_stick_viz;
 
                 std::string guid = DeviceManager::GetDeviceGUIDString(dev);
-                bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
-                std::string preferred_viz = preferencesManager.GetVisualizerPreference(guid);
-                
+                bool apply_pref =
+                    !preferencesManager.IsPreferenceApplied(dev.instance_id);
+                std::string preferred_viz =
+                    preferencesManager.GetVisualizerPreference(guid);
+
                 if (apply_pref) {
                     preferencesManager.MarkPreferenceApplied(dev.instance_id);
                 }
 
-                auto TabItem = [&](const char* label, DeviceVisualizer& visualizer) {
+                auto TabItem = [&](const char *label,
+                                   DeviceVisualizer &visualizer) {
                     ImGuiTabItemFlags flags = 0;
                     if (apply_pref && preferred_viz == label) {
                         flags |= ImGuiTabItemFlags_SetSelected;
                     }
-                    
+
                     if (ImGui::BeginTabItem(label, nullptr, flags)) {
                         visualizer.Draw(dev);
-                        if (preferencesManager.GetVisualizerPreference(guid) != label) {
-                            preferencesManager.SetVisualizerPreference(guid, label);
+                        if (preferencesManager.GetVisualizerPreference(guid) !=
+                            label) {
+                            preferencesManager.SetVisualizerPreference(guid,
+                                                                       label);
                             preferencesManager.Save();
                         }
                         ImGui::EndTabItem();
@@ -177,18 +194,23 @@ int main(int argc, char* argv[]) {
                     if (ImGui::BeginTabBar("DeviceMode")) {
                         TabItem("Raw Inputs", generic_viz);
 
-                        SDL_JoystickType type = SDL_GetJoystickType(dev.joystick);
-                        if (type == SDL_JOYSTICK_TYPE_WHEEL || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
+                        SDL_JoystickType type =
+                            SDL_GetJoystickType(dev.joystick);
+                        if (type == SDL_JOYSTICK_TYPE_WHEEL ||
+                            type == SDL_JOYSTICK_TYPE_UNKNOWN) {
                             TabItem("Steering Wheel", wheel_viz);
                         }
-                        if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK || type == SDL_JOYSTICK_TYPE_THROTTLE || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
+                        if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK ||
+                            type == SDL_JOYSTICK_TYPE_THROTTLE ||
+                            type == SDL_JOYSTICK_TYPE_UNKNOWN) {
                             TabItem("Flight Stick", flight_stick_viz);
                         }
                         ImGui::EndTabBar();
                     }
                 }
-                
-                // TODO: Serialize dev.axes and dev.buttons here and send via OSC/Websocket
+
+                // TODO: Serialize dev.axes and dev.buttons here and send via
+                // OSC/Websocket
 
                 ImGui::Unindent();
             }
@@ -197,7 +219,8 @@ int main(int argc, char* argv[]) {
 
         inputMapper.DrawUI();
 
-        if (ImGui::Button("Exit")) done = true;
+        if (ImGui::Button("Exit"))
+            done = true;
         ImGui::End();
 
         // Rendering
@@ -229,7 +252,7 @@ int main(int argc, char* argv[]) {
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
-    
+
     inputMapper.SaveConfig(preferencesManager);
     preferencesManager.Save();
 

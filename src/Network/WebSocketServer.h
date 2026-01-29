@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #ifdef ENABLE_WEBSOCKETS
@@ -9,8 +10,8 @@
 class IProtocol;
 
 class WebSocketServer {
-public:
-    static WebSocketServer& GetInstance();
+  public:
+    static WebSocketServer &GetInstance();
 
     void Start(int port);
     void Stop();
@@ -20,29 +21,30 @@ public:
     int GetClientCount() const;
 
 #ifdef ENABLE_WEBSOCKETS
-    void Broadcast(const std::string& address, float value);
-    void Broadcast(const std::string& address, int value);
-    void Broadcast(const std::string& address, const std::string& value);
+    void Broadcast(const std::string &address, float value);
+    void Broadcast(const std::string &address, int value);
+    void Broadcast(const std::string &address, const std::string &value);
     void Broadcast_wheel(float wheel, float brake, float throttle);
-    void Broadcast(const std::string& msg, uWS::OpCode opCode);
+    void Broadcast(const std::string &msg, uWS::OpCode opCode);
 #else
-    // Provide a dummy implementation or an alternative signature when websockets are disabled
-    void Broadcast(const std::string& address, float value) {}
-    void Broadcast(const std::string& address, int value) {}
-    void Broadcast(const std::string& address, const std::string& value) {}
+    // Provide a dummy implementation or an alternative signature when
+    // websockets are disabled
+    void Broadcast(const std::string &address, float value) {}
+    void Broadcast(const std::string &address, int value) {}
+    void Broadcast(const std::string &address, const std::string &value) {}
     void Broadcast_wheel(float wheel, float brake, float throttle) {}
-    void Broadcast(const std::string& msg, int opCode = 0) {}
+    void Broadcast(const std::string &msg, int opCode = 0) {}
 #endif
 
     void DrawUI();
 
-private:
+  private:
     WebSocketServer();
     ~WebSocketServer();
-    
-    WebSocketServer(const WebSocketServer&) = delete;
-    WebSocketServer& operator=(const WebSocketServer&) = delete;
+
+    WebSocketServer(const WebSocketServer &) = delete;
+    WebSocketServer &operator=(const WebSocketServer &) = delete;
 
     struct Impl;
-    Impl* m_Impl;
+    Impl *m_Impl;
 };

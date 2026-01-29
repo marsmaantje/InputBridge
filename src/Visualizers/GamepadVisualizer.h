@@ -2,6 +2,6 @@
 #include "DeviceVisualizer.h"
 
 class GamepadVisualizer : public DeviceVisualizer {
-public:
-    void Draw(const DeviceState& dev) override;
+  public:
+    void Draw(const DeviceState &dev) override;
 };

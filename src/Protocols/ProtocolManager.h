@@ -1,24 +1,24 @@
 #pragma once
 #include "IProtocol.h"
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 class ProtocolManager {
-public:
-    static ProtocolManager& GetInstance();
+  public:
+    static ProtocolManager &GetInstance();
 
     void RegisterProtocol(std::shared_ptr<IProtocol> protocol);
-    std::shared_ptr<IProtocol> GetProtocol(const std::string& name) const;
+    std::shared_ptr<IProtocol> GetProtocol(const std::string &name) const;
     std::vector<std::string> GetAvailableProtocols() const;
 
-private:
+  private:
     ProtocolManager();
     ~ProtocolManager();
-    
-    ProtocolManager(const ProtocolManager&) = delete;
-    ProtocolManager& operator=(const ProtocolManager&) = delete;
+
+    ProtocolManager(const ProtocolManager &) = delete;
+    ProtocolManager &operator=(const ProtocolManager &) = delete;
 
     struct Impl;
-    Impl* m_Impl;
+    Impl *m_Impl;
 };
