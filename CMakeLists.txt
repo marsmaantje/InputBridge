@@ -22,6 +22,15 @@ endif()
 add_library(nlohmann_json INTERFACE)
 target_include_directories(nlohmann_json INTERFACE lib/nlohmann_json/include)
 
+# Add liblo
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/liblo/CMakeLists.txt")
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "Disable liblo examples" FORCE)
+    set(BUILD_TESTS OFF CACHE BOOL "Disable liblo tests" FORCE)
+    set(BUILD_UTILITIES OFF CACHE BOOL "Disable liblo utilities" FORCE)
+    add_subdirectory(lib/liblo)
+endif()
+
 # Add ImGui
 # ImGui does not have a root CMakeLists.txt, so we define the library here.
 set(IMGUI_DIR lib/imgui)
@@ -213,6 +222,10 @@ if(ENABLE_WEBSOCKETS)
 endif()
 
 # Platform-specific libs for exclusive device access
+if(TARGET lo)
+    target_link_libraries(InputBridge PRIVATE lo)
+endif()
+
 if(WIN32)
     if(ENABLE_EXCLUSIVE_INPUT)
         # Link in correct order: dinput8 -> dxguid
