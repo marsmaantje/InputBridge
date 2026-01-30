@@ -32,6 +32,10 @@
 #include <IOKit/hid/IOHIDManager.h>
 #include <IOKit/IOKitLib.h>
 #include <CoreFoundation/CoreFoundation.h>
+
+#ifndef kIOMainPortDefault
+#define kIOMainPortDefault kIOMasterPortDefault
+#endif
 #endif
 
 namespace { // Anonymous namespace for private helper functions
@@ -524,7 +528,7 @@ void InputMapper::ApplyExclusiveModeWindows(SDL_Joystick *joystick) {
         // We need to acquire the device in exclusive mode using DirectInput
         // This requires getting the device GUID from SDL
         
-        SDL_JoystickGUID guid = SDL_GetJoystickGUID(joystick);
+        SDL_GUID guid = SDL_GetJoystickGUID(joystick);
         char guid_str[64];
         SDL_GetJoystickGUIDString(guid, guid_str, sizeof(guid_str));
         
@@ -622,12 +626,11 @@ void InputMapper::ApplyExclusiveModeWindows(SDL_Joystick *joystick) {
 }
 
 // Helper function to convert SDL GUID to DirectInput GUID
-bool InputMapper::ConvertSDLGUIDToDirectInputGUID(SDL_JoystickGUID sdl_guid, GUID* di_guid) {
+bool InputMapper::ConvertSDLGUIDToDirectInputGUID(SDL_GUID sdl_guid, GUID* di_guid) {
     // SDL GUIDs for DirectInput devices on Windows have a specific format
     // The GUID is stored in the first 16 bytes
     
     Uint8 data[16];
-    SDL_GetJoystickGUIDInfo(sdl_guid, nullptr, nullptr, nullptr, nullptr);
     
     // Get raw GUID data
     memcpy(data, sdl_guid.data, 16);

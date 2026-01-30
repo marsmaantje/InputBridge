@@ -40,7 +40,7 @@ class InputMapper {
     LPDIRECTINPUTDEVICE8 m_WindowsDIDevice = nullptr;
     LPDIRECTINPUT8 m_WindowsDIInterface = nullptr;
     
-    bool ConvertSDLGUIDToDirectInputGUID(SDL_JoystickGUID sdl_guid, GUID* di_guid);
+    bool ConvertSDLGUIDToDirectInputGUID(SDL_GUID sdl_guid, GUID* di_guid);
     void ApplyExclusiveModeWindows(SDL_Joystick *joystick);
 #endif
 

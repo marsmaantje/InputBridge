@@ -139,6 +139,17 @@ target_include_directories(InputBridge PRIVATE src)
 target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3 uWebSockets Threads::Threads)
 target_compile_definitions(InputBridge PRIVATE ENABLE_WEBSOCKETS)
 
+# Libs for exclusive device access
+if(WIN32)
+    target_link_libraries(InputBridge PRIVATE dinput8 dxguid)
+endif()
+
+if(APPLE)
+    find_library(IOKIT_LIB IOKit)
+    find_library(COREFOUNDATION_LIB CoreFoundation)
+    target_link_libraries(InputBridge PRIVATE ${IOKIT_LIB} ${COREFOUNDATION_LIB})
+endif()
+
 # Copy SDL3.dll to the output directory on Windows
 if(WIN32)
     add_custom_command(TARGET InputBridge POST_BUILD
