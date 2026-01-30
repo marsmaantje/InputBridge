@@ -277,7 +277,7 @@ void InputExclusiveMode::ApplyWindows(SDL_Joystick *joystick) {
     if (m_Enabled) {
         SDL_GUID guid = SDL_GetJoystickGUID(joystick);
         char guid_str[64];
-        SDL_GetJoystickGUIDString(guid, guid_str, sizeof(guid_str));
+        SDL_GUIDToString(guid, guid_str, sizeof(guid_str));
         
         SDL_Log("Attempting to set exclusive mode for device: %s", SDL_GetJoystickName(joystick));
         SDL_Log("Device GUID: %s", guid_str);
