@@ -72,7 +72,7 @@ void InputMapper::DrawUI() {
         if (ImGui::Selectable("None", m_SelectedDeviceID == 0)) {
             m_SelectedDeviceID = 0;
         }
-        
+
         for (const auto &dev : devices) {
             bool isSelected = (m_SelectedDeviceID == dev.instance_id);
             std::string label = dev.name + "##" + std::to_string(dev.instance_id);
@@ -169,20 +169,20 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
     auto &server = WebSocketServer::GetInstance();
     server.Broadcast_wheel(steering, brake, throttle, pitch, roll);
 
-    server.Broadcast("/wheel/steer", steering);
-    server.Broadcast("/wheel/throttle", throttle);
-    server.Broadcast("/wheel/brake", brake);
-    if (m_Clutch.axisIndex != -1)
-        server.Broadcast("/wheel/clutch", clutch);
-    server.Broadcast("/wheel/handbrake", handbrake);
+    // server.Broadcast("/wheel/steer", steering);
+    // server.Broadcast("/wheel/throttle", throttle);
+    // server.Broadcast("/wheel/brake", brake);
+    // if (m_Clutch.axisIndex != -1)
+    //     server.Broadcast("/wheel/clutch", clutch);
+    // server.Broadcast("/wheel/handbrake", handbrake);
 
-    int buttons_mask = 0;
-    int num_buttons = SDL_GetNumJoystickButtons(joystick);
-    for (int i = 0; i < num_buttons && i < 32; ++i) {
-        if (SDL_GetJoystickButton(joystick, i))
-            buttons_mask |= (1 << i);
-    }
-    server.Broadcast("/wheel/buttons", buttons_mask);
+    // int buttons_mask = 0;
+    // int num_buttons = SDL_GetNumJoystickButtons(joystick);
+    // for (int i = 0; i < num_buttons && i < 32; ++i) {
+    //     if (SDL_GetJoystickButton(joystick, i))
+    //         buttons_mask |= (1 << i);
+    // }
+    // server.Broadcast("/wheel/buttons", buttons_mask);
 
     return "Broadcasting...";
 }
