@@ -13,7 +13,9 @@
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolManager.h"
+#if ENABLE_WEBSOCKETS
 #include "Protocols/WebSocketProtocol.h"
+#endif
 #include "Visualizers/FlightStickVisualizer.h"
 #include "Visualizers/GamepadVisualizer.h"
 #include "Visualizers/GenericVisualizer.h"
@@ -26,8 +28,10 @@ int main(int argc, char *argv[]) {
     // Register protocols
     ProtocolManager::GetInstance().RegisterProtocol(
         std::make_shared<OSCProtocol>());
+#if ENABLE_WEBSOCKETS
     ProtocolManager::GetInstance().RegisterProtocol(
         std::make_shared<WebSocketProtocol>());
+#endif
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 

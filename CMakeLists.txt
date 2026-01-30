@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
+set(ENABLE_EXCLUSIVE_INPUT OFF CACHE BOOL "Enable exclusive input mode support" FORCE)
+set(ENABLE_WEBSOCKETS ON CACHE BOOL "Enable WebSocket server support" FORCE)
+
 # Add SDL3
 # We assume lib/sdl contains the SDL3 source code.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl/CMakeLists.txt")
@@ -31,7 +34,9 @@ target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 # Add uWebSockets
+if(ENABLE_WEBSOCKETS)
 include(FetchContent)
+
 
 # Libuv (Required for uSockets on Windows)
 if(WIN32)
@@ -127,6 +132,8 @@ else()
     target_compile_definitions(uWebSockets INTERFACE UWS_NO_ZLIB)
 endif()
 
+endif() # if(ENABLE_WEBSOCKETS)
+
 # Find Threads (required for std::thread)
 find_package(Threads REQUIRED)
 
@@ -140,42 +147,73 @@ add_executable(InputBridge
     src/Visualizers/GamepadVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
-    src/Mappers/InputExclusiveMode.cpp
     src/Mappers/InputMapper.cpp
-    src/Network/WebSocketServer.cpp
     src/Protocols/OSCProtocol.cpp
-    src/Protocols/WebSocketProtocol.cpp
     src/Protocols/ProtocolManager.cpp
 )
 
+if(ENABLE_WEBSOCKETS)
+    target_sources(InputBridge PRIVATE
+        src/Network/WebSocketServer.cpp
+        src/Protocols/WebSocketProtocol.cpp
+    )
+endif()
+
 target_include_directories(InputBridge PRIVATE src)
+
+if(ENABLE_EXCLUSIVE_INPUT)
+    target_sources(InputBridge PRIVATE
+        src/Mappers/InputExclusiveMode.cpp
+        src/Mappers/LinuxExclusiveMode.cpp
+        src/Mappers/MacOSExclusiveMode.cpp
+        src/Mappers/WindowsExclusiveMode.cpp
+    )
+endif()
 
 # Add compile definitions to InputBridge
 if(WIN32)
     target_compile_definitions(InputBridge PRIVATE 
         WIN32_LEAN_AND_MEAN
         NOMINMAX
-        ENABLE_WEBSOCKETS
     )
+endif()
+
+# CRITICAL: Apply the preprocessor definitions based on CMake options
+if(ENABLE_EXCLUSIVE_INPUT)
+    target_compile_definitions(InputBridge PRIVATE ENABLE_EXCLUSIVE_INPUT)
+    message(STATUS "Exclusive input mode: ENABLED")
 else()
+    message(STATUS "Exclusive input mode: DISABLED")
+endif()
+
+if(ENABLE_WEBSOCKETS)
     target_compile_definitions(InputBridge PRIVATE ENABLE_WEBSOCKETS)
+    message(STATUS "WebSocket support: ENABLED")
+else()
+    message(STATUS "WebSocket support: DISABLED")
 endif()
 
 # Link libraries - order matters on Windows!
 target_link_libraries(InputBridge PRIVATE 
     imgui 
     SDL3::SDL3 
-    uWebSockets 
     Threads::Threads
 )
 
-# Platform-specific libs for exclusive device access
-if(WIN32)
-    # Link in correct order: dinput8 -> dxguid -> ws2_32
-    target_link_libraries(InputBridge PRIVATE dinput8 dxguid ws2_32)
+if(ENABLE_WEBSOCKETS)
+    target_link_libraries(InputBridge PRIVATE uWebSockets)
 endif()
 
-if(APPLE)
+# Platform-specific libs for exclusive device access
+if(WIN32)
+    if(ENABLE_EXCLUSIVE_INPUT)
+        # Link in correct order: dinput8 -> dxguid
+        target_link_libraries(InputBridge PRIVATE dinput8 dxguid)
+    endif()
+    target_link_libraries(InputBridge PRIVATE ws2_32)
+endif()
+
+if(APPLE AND ENABLE_EXCLUSIVE_INPUT)
     find_library(IOKIT_LIB IOKit)
     find_library(COREFOUNDATION_LIB CoreFoundation)
     target_link_libraries(InputBridge PRIVATE ${IOKIT_LIB} ${COREFOUNDATION_LIB})

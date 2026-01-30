@@ -1,6 +1,8 @@
 #pragma once
 
+#ifdef ENABLE_EXCLUSIVE_INPUT
 #include "InputExclusiveMode.h"
+#endif
 #include <SDL3/SDL.h>
 #include <string>
 
@@ -29,7 +31,9 @@ class InputMapper {
     const DeviceManager &m_DeviceManager;
     SDL_JoystickID m_SelectedDeviceID = 0;
 
+#ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_ExclusiveModeHandler;
+#endif
 
     AxisConfig m_Steering;
     AxisConfig m_Throttle;
@@ -40,5 +44,7 @@ class InputMapper {
     AxisConfig m_Roll;
 
     float ProcessAxis(SDL_Joystick *joystick, const AxisConfig &config);
+#ifdef ENABLE_EXCLUSIVE_INPUT
     void ApplyExclusiveMode();
+#endif
 };
