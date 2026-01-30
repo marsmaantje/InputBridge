@@ -9,8 +9,6 @@
 #include <cerrno>
 
 #ifdef _WIN32
-#define DIRECTINPUT_VERSION 0x0800
-#include <dinput.h>
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
 #endif
@@ -28,7 +26,6 @@
 #endif
 
 #ifdef __APPLE__
-#include <IOKit/hid/IOHIDDevice.h>
 #include <IOKit/hid/IOHIDManager.h>
 #include <IOKit/IOKitLib.h>
 #include <CoreFoundation/CoreFoundation.h>

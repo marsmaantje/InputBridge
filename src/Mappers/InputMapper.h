@@ -6,6 +6,18 @@
 class DeviceManager;
 class PreferencesManager;
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define DIRECTINPUT_VERSION 0x0800
+#include <dinput.h>
+#endif
+
+#ifdef __APPLE__
+#include <IOKit/hid/IOHIDDevice.h>
+#endif
+
 class InputMapper {
   public:
     struct AxisConfig {
