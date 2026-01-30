@@ -16,4 +16,3 @@ class IProtocol {
     virtual std::string format_wheel(float wheel, float brake, float throttle, float pitch, float roll) = 0;
     virtual void parse(const std::string& message) = 0;
 };
-d
