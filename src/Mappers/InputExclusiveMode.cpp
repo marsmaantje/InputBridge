@@ -37,9 +37,7 @@ void InputExclusiveMode::SetEnabled(bool enabled) {
     m_Enabled = enabled;
 }
 
-bool InputExclusiveMode::IsEnabled() const {
-    return m_Enabled;
-}
+bool InputExclusiveMode::IsEnabled() const { return m_Enabled; }
 
 void InputExclusiveMode::Apply(SDL_Joystick* joystick) {
     if (m_Impl) {
