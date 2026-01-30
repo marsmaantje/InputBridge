@@ -39,6 +39,7 @@ if(WIN32)
         libuv
         GIT_REPOSITORY https://github.com/libuv/libuv.git
         GIT_TAG        v1.48.0
+        GIT_SUBMODULES ""
     )
     FetchContent_MakeAvailable(libuv)
 endif()
@@ -48,6 +49,7 @@ FetchContent_Declare(
     usockets_lib
     GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
     GIT_TAG        master
+    GIT_SUBMODULES ""
 )
 FetchContent_GetProperties(usockets_lib)
 if(NOT usockets_lib_POPULATED)
@@ -97,6 +99,7 @@ FetchContent_Declare(
     uwebsockets_lib
     GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
     GIT_TAG        master
+    GIT_SUBMODULES ""
 )
 FetchContent_GetProperties(uwebsockets_lib)
 if(NOT uwebsockets_lib_POPULATED)
