@@ -1,9 +1,13 @@
 #include "InputExclusiveMode.h"
 #include "InputExclusiveModeImpl.h"
 #ifdef ENABLE_EXCLUSIVE_INPUT
+#ifdef _WIN32
 #include "WindowsExclusiveMode.h"
+#elif defined(__linux__)
 #include "LinuxExclusiveMode.h"
+#elif defined(__APPLE__)
 #include "MacOSExclusiveMode.h"
+#endif
 #endif
 
 class DummyExclusiveMode : public InputExclusiveModeImpl {
