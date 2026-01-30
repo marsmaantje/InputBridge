@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <string>
+#include <vector>
 
 class DeviceManager;
 class PreferencesManager;
@@ -15,6 +16,7 @@ class InputMapper {
     };
 
     InputMapper(const DeviceManager &deviceManager);
+    ~InputMapper();
 
     void DrawUI();
     std::string UpdateAndBroadcastMessage();
@@ -25,7 +27,31 @@ class InputMapper {
   private:
     const DeviceManager &m_DeviceManager;
     SDL_JoystickID m_SelectedDeviceID = 0;
+
     bool m_ExclusiveMode = false;
+    int m_GrabbedDeviceFd = -1;
+    std::string m_GrabbedDevicePath;
+    
+#ifdef __linux__
+    std::vector<std::pair<int, std::string>> m_GrabbedDeviceFds;
+#endif
+
+#ifdef _WIN32
+    LPDIRECTINPUTDEVICE8 m_WindowsDIDevice = nullptr;
+    LPDIRECTINPUT8 m_WindowsDIInterface = nullptr;
+    
+    bool ConvertSDLGUIDToDirectInputGUID(SDL_JoystickGUID sdl_guid, GUID* di_guid);
+    void ApplyExclusiveModeWindows(SDL_Joystick *joystick);
+#endif
+
+#ifdef __APPLE__
+    IOHIDDeviceRef m_MacOSHIDDevice = nullptr;
+    void ApplyExclusiveModeMacOS(SDL_Joystick *joystick);
+#endif
+
+#ifdef __linux__
+    void ApplyExclusiveModeLinux(SDL_Joystick *joystick);
+#endif
 
     AxisConfig m_Steering;
     AxisConfig m_Throttle;
