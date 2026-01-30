@@ -10,6 +10,10 @@ class PreferencesManager;
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
 #define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
 #endif
