@@ -18,6 +18,10 @@ else()
     find_package(SDL3 REQUIRED)
 endif()
 
+# Add nlohmann_json
+add_library(nlohmann_json INTERFACE)
+target_include_directories(nlohmann_json INTERFACE lib/nlohmann_json/include)
+
 # Add ImGui
 # ImGui does not have a root CMakeLists.txt, so we define the library here.
 set(IMGUI_DIR lib/imgui)
@@ -142,6 +146,9 @@ add_executable(InputBridge
     # ... put source files here ...
     src/main.cpp
     src/Devices/DeviceManager.cpp
+    src/Haptics/HapticDevice.cpp
+    src/Haptics/GamepadHaptics.cpp
+    src/Haptics/SteeringWheelHaptics.cpp
     src/Preferences/Preferences.cpp
     src/Visualizers/GenericVisualizer.cpp
     src/Visualizers/GamepadVisualizer.cpp
@@ -198,6 +205,7 @@ target_link_libraries(InputBridge PRIVATE
     imgui 
     SDL3::SDL3 
     Threads::Threads
+    nlohmann_json
 )
 
 if(ENABLE_WEBSOCKETS)

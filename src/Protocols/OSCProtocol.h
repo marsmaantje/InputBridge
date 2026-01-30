@@ -12,4 +12,6 @@ class OSCProtocol : public IProtocol {
 
     // This is not applicable to OSC, so it will return an empty string.
     std::string format_wheel(float wheel, float brake, float throttle) override;
+
+    void parse(const std::string& message) override;
 };

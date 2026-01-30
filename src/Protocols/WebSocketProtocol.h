@@ -1,5 +1,6 @@
 #pragma once
 #include "IProtocol.h"
+#include <nlohmann/json.hpp>
 
 class WebSocketProtocol : public IProtocol {
   public:
@@ -19,6 +20,8 @@ class WebSocketProtocol : public IProtocol {
                        const std::string &value) override;
 
     std::string format_wheel(float wheel, float brake, float throttle) override;
+
+    void parse(const std::string& message) override;
 
     static const char *GetVersionLabel(int index);
     static int GetVersionCount();

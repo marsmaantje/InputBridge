@@ -1,6 +1,12 @@
 #include "DeviceManager.h"
 #include <algorithm>
 
+DeviceManager& DeviceManager::GetInstance() {
+    static DeviceManager instance;
+    return instance;
+}
+
+DeviceManager::DeviceManager() {}
 DeviceManager::~DeviceManager() { CloseAllDevices(); }
 
 const std::vector<DeviceState> &DeviceManager::GetDevices() const {
@@ -28,6 +34,17 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
             dev.num_buttons = SDL_GetNumJoystickButtons(dev.joystick);
             dev.num_hats = SDL_GetNumJoystickHats(dev.joystick);
             m_Devices.push_back(dev);
+
+            if (SDL_IsJoystickHaptic(dev.joystick)) {
+                 if (dev.name.find("wheel") != std::string::npos) {
+                    m_HapticDevices[instance_id] = std::make_unique<SteeringWheelHaptics>(dev.joystick);
+                } else {
+                    m_HapticDevices[instance_id] = std::make_unique<GamepadHaptics>(dev.joystick);
+                }
+                if (m_HapticDevices[instance_id]) {
+                    m_HapticDevices[instance_id]->Init();
+                }
+            }
         }
     } else {
         SDL_Joystick *joystick = SDL_OpenJoystick(instance_id);
@@ -42,11 +59,23 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
             dev.num_buttons = SDL_GetNumJoystickButtons(joystick);
             dev.num_hats = SDL_GetNumJoystickHats(joystick);
             m_Devices.push_back(dev);
+
+            if (SDL_IsJoystickHaptic(joystick)) {
+                if (dev.name.find("wheel") != std::string::npos) {
+                    m_HapticDevices[instance_id] = std::make_unique<SteeringWheelHaptics>(joystick);
+                } else {
+                    m_HapticDevices[instance_id] = std::make_unique<GamepadHaptics>(joystick);
+                }
+                if (m_HapticDevices[instance_id]) {
+                    m_HapticDevices[instance_id]->Init();
+                }
+            }
         }
     }
 }
 
 void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
+    m_HapticDevices.erase(instance_id);
     auto it = std::remove_if(m_Devices.begin(), m_Devices.end(),
                              [instance_id](const DeviceState &dev) {
                                  if (dev.instance_id == instance_id) {
@@ -72,4 +101,13 @@ void DeviceManager::CloseAllDevices() {
             SDL_CloseJoystick(dev.joystick);
     }
     m_Devices.clear();
+    m_HapticDevices.clear();
+}
+
+HapticDevice* DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) {
+    auto it = m_HapticDevices.find(instance_id);
+    if (it != m_HapticDevices.end()) {
+        return it->second.get();
+    }
+    return nullptr;
 }

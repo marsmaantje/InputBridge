@@ -1,0 +1,138 @@
+#include "HapticDevice.h"
+#include <algorithm>
+
+HapticDevice::HapticDevice(SDL_Joystick* joystick) : m_joystick(joystick) {}
+
+HapticDevice::~HapticDevice() {
+    Close();
+}
+
+bool HapticDevice::Init() {
+    if (!m_joystick) return false;
+
+    if (SDL_IsJoystickHaptic(m_joystick)) {
+        m_haptic = SDL_OpenHapticFromJoystick(m_joystick);
+        if (m_haptic) {
+            SDL_SetHapticGain(m_haptic, 100);
+            SDL_SetHapticAutocenter(m_haptic, 0);
+            return true;
+        }
+    }
+    return false;
+}
+
+void HapticDevice::Close() {
+    if (m_haptic) {
+        StopAll();
+        SDL_CloseHaptic(m_haptic);
+        m_haptic = nullptr;
+    }
+    m_constantEffectId = -1;
+    m_periodicEffectId = -1;
+    m_rumbleEffectId = -1;
+    m_conditionEffects.clear();
+}
+
+SDL_HapticEffectID HapticDevice::UploadEffect(SDL_HapticEffect& effect, SDL_HapticEffectID existingId) {
+    if (!m_haptic) return -1;
+
+    if (existingId != -1) {
+        if (SDL_UpdateHapticEffect(m_haptic, existingId, &effect) == 0) {
+            return existingId;
+        } else {
+            // If update fails (e.g. type mismatch), destroy and recreate
+            SDL_DestroyHapticEffect(m_haptic, existingId);
+        }
+    }
+
+    return SDL_CreateHapticEffect(m_haptic, &effect);
+}
+
+void HapticDevice::SetConstantForce(float level, float direction) {
+    if (!m_haptic) return;
+
+    SDL_HapticEffect effect;
+    SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
+    effect.type = SDL_HAPTIC_CONSTANT;
+    effect.constant.direction.type = SDL_HAPTIC_POLAR;
+    effect.constant.direction.dir[0] = (Sint32)(direction * 100.0f);
+    effect.constant.length = SDL_HAPTIC_INFINITY;
+    effect.constant.level = (Sint16)(std::clamp(level, -1.0f, 1.0f) * 32767.0f);
+
+    m_constantEffectId = UploadEffect(effect, m_constantEffectId);
+    if (m_constantEffectId != -1) {
+        SDL_RunHapticEffect(m_haptic, m_constantEffectId, 1);
+    }
+}
+
+void HapticDevice::SetPeriodic(Uint16 type, float magnitude, int period, float direction) {
+    if (!m_haptic) return;
+
+    SDL_HapticEffect effect;
+    SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
+    effect.type = type;
+    effect.periodic.direction.type = SDL_HAPTIC_POLAR;
+    effect.periodic.direction.dir[0] = (Sint32)(direction * 100.0f);
+    effect.periodic.length = SDL_HAPTIC_INFINITY;
+    effect.periodic.period = (Uint16)period;
+    effect.periodic.magnitude = (Sint16)(std::clamp(magnitude, 0.0f, 1.0f) * 32767.0f);
+
+    m_periodicEffectId = UploadEffect(effect, m_periodicEffectId);
+    if (m_periodicEffectId != -1) {
+        SDL_RunHapticEffect(m_haptic, m_periodicEffectId, 1);
+    }
+}
+
+void HapticDevice::SetCondition(Uint16 type, float saturation, float coefficient, float deadband, float center) {
+    if (!m_haptic) return;
+
+    SDL_HapticEffect effect;
+    SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
+    effect.type = type;
+    effect.condition.length = SDL_HAPTIC_INFINITY;
+    
+    Uint16 sat = (Uint16)(std::clamp(saturation, 0.0f, 1.0f) * 0xFFFF);
+    Sint16 coeff = (Sint16)(std::clamp(coefficient, 0.0f, 1.0f) * 32767.0f);
+    Uint16 db = (Uint16)(std::clamp(deadband, 0.0f, 1.0f) * 0xFFFF);
+    Sint16 ctr = (Sint16)(std::clamp(center, -1.0f, 1.0f) * 32767.0f);
+
+    effect.condition.right_sat[0] = sat;
+    effect.condition.left_sat[0] = sat;
+    effect.condition.right_coeff[0] = coeff;
+    effect.condition.left_coeff[0] = coeff;
+    effect.condition.deadband[0] = db;
+    effect.condition.center[0] = ctr;
+
+    SDL_HapticEffectID existingId = -1;
+    if (m_conditionEffects.count(type)) {
+        existingId = m_conditionEffects[type];
+    }
+
+    SDL_HapticEffectID newId = UploadEffect(effect, existingId);
+    if (newId != -1) {
+        m_conditionEffects[type] = newId;
+        SDL_RunHapticEffect(m_haptic, newId, 1);
+    }
+}
+
+void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
+    if (!m_haptic) return;
+
+    SDL_HapticEffect effect;
+    SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
+    effect.type = SDL_HAPTIC_LEFTRIGHT;
+    effect.leftright.length = duration;
+    effect.leftright.large_magnitude = (Uint16)(std::clamp(low_freq, 0.0f, 1.0f) * 0xFFFF);
+    effect.leftright.small_magnitude = (Uint16)(std::clamp(high_freq, 0.0f, 1.0f) * 0xFFFF);
+
+    m_rumbleEffectId = UploadEffect(effect, m_rumbleEffectId);
+    if (m_rumbleEffectId != -1) {
+        SDL_RunHapticEffect(m_haptic, m_rumbleEffectId, 1);
+    }
+}
+
+void HapticDevice::StopAll() {
+    if (m_haptic) {
+        SDL_StopHapticEffects(m_haptic);
+    }
+}
