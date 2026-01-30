@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
-option(ENABLE_EXCLUSIVE_INPUT "Enable exclusive input mode support" OFF)
-option(ENABLE_WEBSOCKETS "Enable WebSocket server support" ON)
+set(ENABLE_EXCLUSIVE_INPUT OFF CACHE BOOL "Enable exclusive input mode support" FORCE)
+set(ENABLE_WEBSOCKETS ON CACHE BOOL "Enable WebSocket server support" FORCE)
 
 # Add SDL3
 # We assume lib/sdl contains the SDL3 source code.
@@ -168,7 +168,6 @@ if(ENABLE_EXCLUSIVE_INPUT)
         src/Mappers/MacOSExclusiveMode.cpp
         src/Mappers/WindowsExclusiveMode.cpp
     )
-    target_compile_definitions(InputBridge PRIVATE ENABLE_EXCLUSIVE_INPUT)
 endif()
 
 # Add compile definitions to InputBridge
@@ -179,8 +178,19 @@ if(WIN32)
     )
 endif()
 
+# CRITICAL: Apply the preprocessor definitions based on CMake options
+if(ENABLE_EXCLUSIVE_INPUT)
+    target_compile_definitions(InputBridge PRIVATE ENABLE_EXCLUSIVE_INPUT)
+    message(STATUS "Exclusive input mode: ENABLED")
+else()
+    message(STATUS "Exclusive input mode: DISABLED")
+endif()
+
 if(ENABLE_WEBSOCKETS)
     target_compile_definitions(InputBridge PRIVATE ENABLE_WEBSOCKETS)
+    message(STATUS "WebSocket support: ENABLED")
+else()
+    message(STATUS "WebSocket support: DISABLED")
 endif()
 
 # Link libraries - order matters on Windows!

@@ -1,4 +1,7 @@
 #include "WebSocketServer.h"
+
+#if ENABLE_WEBSOCKETS
+
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/WebSocketProtocol.h"
 #include "imgui.h"
@@ -8,9 +11,7 @@
 #include <mutex>
 #include <thread>
 
-#ifdef ENABLE_WEBSOCKETS
 struct us_listen_socket_t;
-#endif
 
 struct WebSocketServer::Impl {
     int port = 9001;
@@ -25,12 +26,10 @@ struct WebSocketServer::Impl {
     std::shared_ptr<IProtocol> protocol;
     std::string selectedProtocol;
 
-#ifdef ENABLE_WEBSOCKETS
     std::thread *thread = nullptr;
     uWS::App *app = nullptr;
     uWS::Loop *loop = nullptr;
     struct us_listen_socket_t *listen_socket = nullptr;
-#endif
 };
 
 WebSocketServer &WebSocketServer::GetInstance() {
@@ -53,7 +52,6 @@ WebSocketServer::~WebSocketServer() {
 }
 
 void WebSocketServer::Start(int port) {
-#ifdef ENABLE_WEBSOCKETS
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     if (m_Impl->running)
         return;
@@ -144,22 +142,15 @@ void WebSocketServer::Start(int port) {
         }
     });
     m_Impl->thread->detach();
-#else
-    std::cout
-        << "WebSocket server disabled. Define ENABLE_WEBSOCKETS to enable."
-        << std::endl;
-#endif
 }
 
 void WebSocketServer::Stop() {
-#ifdef ENABLE_WEBSOCKETS
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     m_Impl->restartPending = false;
     if (m_Impl->loop && m_Impl->listen_socket) {
         struct us_listen_socket_t *socket = m_Impl->listen_socket;
         m_Impl->loop->defer([socket]() { us_listen_socket_close(0, socket); });
     }
-#endif
 }
 
 bool WebSocketServer::IsRunning() const {
@@ -183,7 +174,6 @@ int WebSocketServer::GetClientCount() const {
 }
 
 void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
-#ifdef ENABLE_WEBSOCKETS
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
 
     // Ensure the event loop is active
@@ -206,11 +196,9 @@ void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
             }
         });
     }
-#endif
 }
 
 void WebSocketServer::Broadcast(const std::string &address, float value) {
-#ifdef ENABLE_WEBSOCKETS
     std::shared_ptr<IProtocol> protocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -223,11 +211,9 @@ void WebSocketServer::Broadcast(const std::string &address, float value) {
                                  : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
-#endif
 }
 
 void WebSocketServer::Broadcast(const std::string &address, int value) {
-#ifdef ENABLE_WEBSOCKETS
     std::shared_ptr<IProtocol> protocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -240,12 +226,10 @@ void WebSocketServer::Broadcast(const std::string &address, int value) {
                                  : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
-#endif
 }
 
 void WebSocketServer::Broadcast(const std::string &address,
                                 const std::string &value) {
-#ifdef ENABLE_WEBSOCKETS
     std::shared_ptr<IProtocol> protocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -258,12 +242,10 @@ void WebSocketServer::Broadcast(const std::string &address,
                                  : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
-#endif
 }
 
 void WebSocketServer::Broadcast_wheel(float wheel, float brake,
                                       float throttle) {
-#ifdef ENABLE_WEBSOCKETS
     std::shared_ptr<IProtocol> protocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -278,13 +260,10 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake,
             Broadcast(msg, opCode);
         }
     }
-#endif
 }
 
 void WebSocketServer::DrawUI() {
     if (ImGui::Begin("WebSocket Server")) {
-#ifdef ENABLE_WEBSOCKETS
-
         bool doRestart = false;
         int restartPort = 0;
         {
@@ -385,10 +364,8 @@ void WebSocketServer::DrawUI() {
                 ImGui::SetScrollHereY(1.0f);
         }
         ImGui::EndChild();
-#else
-        ImGui::TextDisabled(
-            "WebSocket support not compiled (ENABLE_WEBSOCKETS missing)");
-#endif
     }
     ImGui::End();
 }
+
+#endif // ENABLE_WEBSOCKETS
