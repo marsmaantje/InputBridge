@@ -11,3 +11,6 @@
 [submodule "lib/nlohmann_json"]
 	path = lib/nlohmann_json
 	url = https://github.com/nlohmann/json.git
+[submodule "lib/liblo"]
+	path = lib/liblo
+	url = https://github.com/radarsat1/liblo
