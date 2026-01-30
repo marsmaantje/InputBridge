@@ -8,3 +8,6 @@
 [submodule "lib/uWebSockets"]
 	path = lib/uWebSockets
 	url = https://github.com/uNetworking/uWebSockets.git
+[submodule "lib/nlohmann_json"]
+	path = lib/nlohmann_json
+	url = https://github.com/nlohmann/json.git
