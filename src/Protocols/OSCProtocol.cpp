@@ -10,10 +10,7 @@ static bool IsBigEndian() {
     return bint.c[0] == 1;
 }
 
-static uint32_t Swap32(uint32_t val) {
-    return ((val >> 24) & 0xff) | ((val << 8) & 0xff0000) |
-           ((val >> 8) & 0xff00) | ((val << 24) & 0xff000000);
-}
+static uint32_t Swap32(uint32_t val) { return ((val >> 24) & 0xff) | ((val << 8) & 0xff0000) | ((val >> 8) & 0xff00) | ((val << 24) & 0xff000000); }
 
 static void AppendString(std::string &buf, const std::string &str) {
     buf.append(str);
@@ -59,8 +56,7 @@ std::string OSCProtocol::format(const std::string &address, int value) {
     return msg;
 }
 
-std::string OSCProtocol::format(const std::string &address,
-                                const std::string &value) {
+std::string OSCProtocol::format(const std::string &address, const std::string &value) {
     std::string msg;
     AppendString(msg, address);
     AppendString(msg, ",s");
@@ -68,8 +64,7 @@ std::string OSCProtocol::format(const std::string &address,
     return msg;
 }
 
-std::string OSCProtocol::format_wheel(float wheel, float brake,
-                                      float throttle) {
+std::string OSCProtocol::format_wheel(float wheel, float brake, float throttle, float pitch, float roll) {
     // Not applicable for generic OSC, but could be implemented as a bundle
     return "";
 }

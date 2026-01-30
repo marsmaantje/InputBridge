@@ -36,6 +36,8 @@ class InputMapper {
     AxisConfig m_Brake;
     AxisConfig m_Clutch;
     AxisConfig m_Handbrake;
+    AxisConfig m_Pitch;
+    AxisConfig m_Roll;
 
     float ProcessAxis(SDL_Joystick *joystick, const AxisConfig &config);
     void ApplyExclusiveMode();

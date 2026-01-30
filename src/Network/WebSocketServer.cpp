@@ -76,57 +76,47 @@ void WebSocketServer::Start(int port) {
             m_Impl->clients.clear();
         }
 
-        app.ws<int>("/*",
-                    {/* Settings */
-                     .compression = uWS::SHARED_COMPRESSOR,
-                     .maxPayloadLength = 16 * 1024 * 1024,
-                     .idleTimeout = 16,
+        app.ws<int>("/*", {/* Settings */
+                           .compression = uWS::SHARED_COMPRESSOR,
+                           .maxPayloadLength = 16 * 1024 * 1024,
+                           .idleTimeout = 16,
 
-                     .open =
-                         [this](auto *ws) {
-                             std::string ip(ws->getRemoteAddressAsText());
-                             std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                             m_Impl->clientCount++;
-                             m_Impl->clients[ws] = ip;
-                             m_Impl->logs.push_back("Client connected: " + ip);
-                             if (m_Impl->logs.size() > 100)
-                                 m_Impl->logs.pop_front();
-                         },
-                     .message =
-                         [this](auto *ws, std::string_view message,
-                                uWS::OpCode opCode) {
-                             std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                             m_Impl->logs.push_back("Client data: " +
-                                                    std::string(message));
-                             // Echo the message back to C#
-                             ws->send(message, opCode);
-                         },
-                     .close =
-                         [this](auto *ws, int code, std::string_view message) {
-                             std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                             if (m_Impl->clients.count(ws)) {
-                                 m_Impl->logs.push_back(
-                                     "Client disconnected: " +
-                                     m_Impl->clients[ws]);
-                                 if (m_Impl->logs.size() > 100)
-                                     m_Impl->logs.pop_front();
-                                 m_Impl->clients.erase(ws);
-                             }
-                             m_Impl->clientCount--;
-                         }})
+                           .open =
+                               [this](auto *ws) {
+                                   std::string ip(ws->getRemoteAddressAsText());
+                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                   m_Impl->clientCount++;
+                                   m_Impl->clients[ws] = ip;
+                                   m_Impl->logs.push_back("Client connected: " + ip);
+                                   if (m_Impl->logs.size() > 100)
+                                       m_Impl->logs.pop_front();
+                               },
+                           .message =
+                               [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
+                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                   m_Impl->logs.push_back("Client data: " + std::string(message));
+                                   // Echo the message back to C#
+                                   ws->send(message, opCode);
+                               },
+                           .close =
+                               [this](auto *ws, int code, std::string_view message) {
+                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                   if (m_Impl->clients.count(ws)) {
+                                       m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
+                                       if (m_Impl->logs.size() > 100)
+                                           m_Impl->logs.pop_front();
+                                       m_Impl->clients.erase(ws);
+                                   }
+                                   m_Impl->clientCount--;
+                               }})
             .listen(port,
                     [this](auto *listen_socket) {
                         std::lock_guard<std::mutex> lock(m_Impl->mutex);
                         if (listen_socket) {
-                            m_Impl->logs.push_back(
-                                "WebSocket server listening on port " +
-                                std::to_string(m_Impl->port));
-                            m_Impl->listen_socket =
-                                (struct us_listen_socket_t *)listen_socket;
+                            m_Impl->logs.push_back("WebSocket server listening on port " + std::to_string(m_Impl->port));
+                            m_Impl->listen_socket = (struct us_listen_socket_t *)listen_socket;
                         } else {
-                            m_Impl->logs.push_back(
-                                "Failed to listen on port " +
-                                std::to_string(m_Impl->port));
+                            m_Impl->logs.push_back("Failed to listen on port " + std::to_string(m_Impl->port));
                             m_Impl->running = false;
                         }
                         if (m_Impl->logs.size() > 100)
@@ -145,9 +135,7 @@ void WebSocketServer::Start(int port) {
     });
     m_Impl->thread->detach();
 #else
-    std::cout
-        << "WebSocket server disabled. Define ENABLE_WEBSOCKETS to enable."
-        << std::endl;
+    std::cout << "WebSocket server disabled. Define ENABLE_WEBSOCKETS to enable." << std::endl;
 #endif
 }
 
@@ -218,9 +206,7 @@ void WebSocketServer::Broadcast(const std::string &address, float value) {
     }
     if (protocol) {
         std::string msg = protocol->format(address, value);
-        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC")
-                                 ? uWS::OpCode::BINARY
-                                 : uWS::OpCode::TEXT;
+        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
 #endif
@@ -235,16 +221,13 @@ void WebSocketServer::Broadcast(const std::string &address, int value) {
     }
     if (protocol) {
         std::string msg = protocol->format(address, value);
-        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC")
-                                 ? uWS::OpCode::BINARY
-                                 : uWS::OpCode::TEXT;
+        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
 #endif
 }
 
-void WebSocketServer::Broadcast(const std::string &address,
-                                const std::string &value) {
+void WebSocketServer::Broadcast(const std::string &address, const std::string &value) {
 #ifdef ENABLE_WEBSOCKETS
     std::shared_ptr<IProtocol> protocol;
     {
@@ -253,16 +236,13 @@ void WebSocketServer::Broadcast(const std::string &address,
     }
     if (protocol) {
         std::string msg = protocol->format(address, value);
-        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC")
-                                 ? uWS::OpCode::BINARY
-                                 : uWS::OpCode::TEXT;
+        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
 #endif
 }
 
-void WebSocketServer::Broadcast_wheel(float wheel, float brake,
-                                      float throttle) {
+void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll) {
 #ifdef ENABLE_WEBSOCKETS
     std::shared_ptr<IProtocol> protocol;
     {
@@ -270,11 +250,9 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake,
         protocol = m_Impl->protocol;
     }
     if (protocol) {
-        std::string msg = protocol->format_wheel(wheel, brake, throttle);
+        std::string msg = protocol->format_wheel(wheel, brake, throttle, pitch, roll);
         if (!msg.empty()) {
-            uWS::OpCode opCode = (protocol->getProtocolName() == "OSC")
-                                     ? uWS::OpCode::BINARY
-                                     : uWS::OpCode::TEXT;
+            uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
             Broadcast(msg, opCode);
         }
     }
@@ -329,20 +307,20 @@ void WebSocketServer::DrawUI() {
             auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
             if (wsProtocol) {
                 int currentFormat = (int)wsProtocol->getWheelProtocolVersion();
-                if (ImGui::Combo("Format", &currentFormat,
-                                 [](void *, int idx, const char **out_text) {
-                                     *out_text = WebSocketProtocol::GetVersionLabel(idx);
-                                     return true;
-                                 },
-                                 nullptr, WebSocketProtocol::GetVersionCount())) {
+                if (ImGui::Combo(
+                        "Format", &currentFormat,
+                        [](void *, int idx, const char **out_text) {
+                            *out_text = WebSocketProtocol::GetVersionLabel(idx);
+                            return true;
+                        },
+                        nullptr, WebSocketProtocol::GetVersionCount())) {
                     wsProtocol->setWheelProtocolVersion((WebSocketProtocol::WheelProtocolVersion)currentFormat);
                 }
             }
         }
 
         if (running) {
-            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Status: Running (Port %d)",
-                               runningPort);
+            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Status: Running (Port %d)", runningPort);
             if (runningPort != currentPort) {
                 ImGui::SameLine();
                 if (restartPending) {
@@ -386,8 +364,7 @@ void WebSocketServer::DrawUI() {
         }
         ImGui::EndChild();
 #else
-        ImGui::TextDisabled(
-            "WebSocket support not compiled (ENABLE_WEBSOCKETS missing)");
+        ImGui::TextDisabled("WebSocket support not compiled (ENABLE_WEBSOCKETS missing)");
 #endif
     }
     ImGui::End();
