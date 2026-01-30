@@ -1,27 +1,8 @@
 #pragma once
 
-// Platform-specific includes MUST come before SDL on Windows to avoid winsock conflicts
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <winsock2.h>
-#include <windows.h>
-#define DIRECTINPUT_VERSION 0x0800
-#include <dinput.h>
-#endif
-
-#ifdef __APPLE__
-#include <IOKit/hid/IOHIDDevice.h>
-#endif
-
-// Now include SDL and standard library headers
+#include "InputExclusiveMode.h"
 #include <SDL3/SDL.h>
 #include <string>
-#include <vector>
 
 class DeviceManager;
 class PreferencesManager;
@@ -48,28 +29,7 @@ class InputMapper {
     const DeviceManager &m_DeviceManager;
     SDL_JoystickID m_SelectedDeviceID = 0;
 
-    bool m_ExclusiveMode = false;
-    
-#ifdef __linux__
-    std::vector<std::pair<int, std::string>> m_GrabbedDeviceFds;
-#endif
-
-#ifdef _WIN32
-    LPDIRECTINPUTDEVICE8 m_WindowsDIDevice = nullptr;
-    LPDIRECTINPUT8 m_WindowsDIInterface = nullptr;
-    
-    bool ConvertSDLGUIDToDirectInputGUID(SDL_GUID sdl_guid, GUID* di_guid);
-    void ApplyExclusiveModeWindows(SDL_Joystick *joystick);
-#endif
-
-#ifdef __APPLE__
-    IOHIDDeviceRef m_MacOSHIDDevice = nullptr;
-    void ApplyExclusiveModeMacOS(SDL_Joystick *joystick);
-#endif
-
-#ifdef __linux__
-    void ApplyExclusiveModeLinux(SDL_Joystick *joystick);
-#endif
+    InputExclusiveMode m_ExclusiveModeHandler;
 
     AxisConfig m_Steering;
     AxisConfig m_Throttle;

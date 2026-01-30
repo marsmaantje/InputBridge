@@ -140,6 +140,7 @@ add_executable(InputBridge
     src/Visualizers/GamepadVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
+    src/Mappers/InputExclusiveMode.cpp
     src/Mappers/InputMapper.cpp
     src/Network/WebSocketServer.cpp
     src/Protocols/OSCProtocol.cpp
