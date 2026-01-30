@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <cctype>
 #ifndef HIDIOCGRAB
 #define HIDIOCGRAB _IOW('H', 0x0C, int)
 #endif

@@ -1,11 +1,6 @@
 #pragma once
-#include <SDL3/SDL.h>
-#include <string>
-#include <vector>
 
-class DeviceManager;
-class PreferencesManager;
-
+// Platform-specific includes MUST come before SDL on Windows to avoid winsock conflicts
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -14,6 +9,7 @@ class PreferencesManager;
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
+#include <windows.h>
 #define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
 #endif
@@ -21,6 +17,14 @@ class PreferencesManager;
 #ifdef __APPLE__
 #include <IOKit/hid/IOHIDDevice.h>
 #endif
+
+// Now include SDL and standard library headers
+#include <SDL3/SDL.h>
+#include <string>
+#include <vector>
+
+class DeviceManager;
+class PreferencesManager;
 
 class InputMapper {
   public:
@@ -45,8 +49,6 @@ class InputMapper {
     SDL_JoystickID m_SelectedDeviceID = 0;
 
     bool m_ExclusiveMode = false;
-    int m_GrabbedDeviceFd = -1;
-    std::string m_GrabbedDevicePath;
     
 #ifdef __linux__
     std::vector<std::pair<int, std::string>> m_GrabbedDeviceFds;

@@ -82,6 +82,15 @@ endif()
 add_library(uSockets STATIC ${USOCKETS_SOURCES})
 target_include_directories(uSockets PUBLIC ${usockets_lib_SOURCE_DIR}/src)
 
+# Add compile definitions to prevent winsock conflicts
+if(WIN32)
+    target_compile_definitions(uSockets PUBLIC 
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+        _WINSOCK_DEPRECATED_NO_WARNINGS
+    )
+endif()
+
 if(OpenSSL_FOUND)
     target_link_libraries(uSockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
     target_compile_definitions(uSockets PUBLIC LIBUS_USE_OPENSSL)
@@ -139,12 +148,30 @@ add_executable(InputBridge
 )
 
 target_include_directories(InputBridge PRIVATE src)
-target_link_libraries(InputBridge PRIVATE imgui SDL3::SDL3 uWebSockets Threads::Threads)
-target_compile_definitions(InputBridge PRIVATE ENABLE_WEBSOCKETS)
 
-# Libs for exclusive device access
+# Add compile definitions to InputBridge
 if(WIN32)
-    target_link_libraries(InputBridge PRIVATE dinput8 dxguid)
+    target_compile_definitions(InputBridge PRIVATE 
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+        ENABLE_WEBSOCKETS
+    )
+else()
+    target_compile_definitions(InputBridge PRIVATE ENABLE_WEBSOCKETS)
+endif()
+
+# Link libraries - order matters on Windows!
+target_link_libraries(InputBridge PRIVATE 
+    imgui 
+    SDL3::SDL3 
+    uWebSockets 
+    Threads::Threads
+)
+
+# Platform-specific libs for exclusive device access
+if(WIN32)
+    # Link in correct order: dinput8 -> dxguid -> ws2_32
+    target_link_libraries(InputBridge PRIVATE dinput8 dxguid ws2_32)
 endif()
 
 if(APPLE)
