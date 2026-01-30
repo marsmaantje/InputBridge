@@ -6,8 +6,7 @@ class WebSocketProtocol : public IProtocol {
   public:
     enum class WheelProtocolVersion { MarsmaantjeOld, MarsmaantjeNew };
 
-    WebSocketProtocol(
-        WheelProtocolVersion version = WheelProtocolVersion::MarsmaantjeNew);
+    WebSocketProtocol(WheelProtocolVersion version = WheelProtocolVersion::MarsmaantjeNew);
 
     void setWheelProtocolVersion(WheelProtocolVersion version);
     WheelProtocolVersion getWheelProtocolVersion() const;
@@ -16,10 +15,9 @@ class WebSocketProtocol : public IProtocol {
 
     std::string format(const std::string &address, float value) override;
     std::string format(const std::string &address, int value) override;
-    std::string format(const std::string &address,
-                       const std::string &value) override;
+    std::string format(const std::string &address, const std::string &value) override;
 
-    std::string format_wheel(float wheel, float brake, float throttle) override;
+    std::string format_wheel(float wheel, float brake, float throttle, float pitch, float roll) override;
 
     void parse(const std::string& message) override;
 

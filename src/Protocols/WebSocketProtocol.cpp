@@ -18,17 +18,11 @@ static std::string formatFloat(float val, int precision) {
     return s;
 }
 
-WebSocketProtocol::WebSocketProtocol(WheelProtocolVersion version)
-    : m_version(version) {}
+WebSocketProtocol::WebSocketProtocol(WheelProtocolVersion version) : m_version(version) {}
 
-void WebSocketProtocol::setWheelProtocolVersion(WheelProtocolVersion version) {
-    m_version = version;
-}
+void WebSocketProtocol::setWheelProtocolVersion(WheelProtocolVersion version) { m_version = version; }
 
-WebSocketProtocol::WheelProtocolVersion
-WebSocketProtocol::getWheelProtocolVersion() const {
-    return m_version;
-}
+WebSocketProtocol::WheelProtocolVersion WebSocketProtocol::getWheelProtocolVersion() const { return m_version; }
 
 std::string WebSocketProtocol::getProtocolName() const { return "WebSocket"; }
 
@@ -42,14 +36,12 @@ std::string WebSocketProtocol::format(const std::string &address, int value) {
     return address + ":" + std::to_string(value);
 }
 
-std::string WebSocketProtocol::format(const std::string &address,
-                                      const std::string &value) {
+std::string WebSocketProtocol::format(const std::string &address, const std::string &value) {
     // A simple example format: "address:value"
     return address + ":" + value;
 }
 
-std::string WebSocketProtocol::format_wheel(float wheel, float brake,
-                                            float throttle) {
+std::string WebSocketProtocol::format_wheel(float wheel, float brake, float throttle, float pitch, float roll) {
     std::string msg;
     msg.reserve(64);
 
@@ -66,14 +58,20 @@ std::string WebSocketProtocol::format_wheel(float wheel, float brake,
         msg += ";";
         break;
     case WheelProtocolVersion::MarsmaantjeNew:
-        msg += "a";
-        msg += formatFloat(wheel, 4);
+        msg += "y";
+        msg += formatFloat(wheel, 8);
         msg += ";";
         msg += "b";
-        msg += formatFloat(brake, 3);
+        msg += formatFloat(brake, 5);
         msg += ";";
-        msg += "c";
-        msg += formatFloat(throttle, 3);
+        msg += "t";
+        msg += formatFloat(throttle, 5);
+        msg += ";";
+        msg += "p";
+        msg += formatFloat(pitch, 8);
+        msg += ";";
+        msg += "r";
+        msg += formatFloat(roll, 8);
         msg += ";";
         break;
     }

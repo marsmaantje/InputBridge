@@ -23,12 +23,15 @@ class WebSocketServer {
     void Broadcast(const std::string &address, float value);
     void Broadcast(const std::string &address, int value);
     void Broadcast(const std::string &address, const std::string &value);
-    void Broadcast_wheel(float wheel, float brake, float throttle);
+    void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll);
     void Broadcast(const std::string &msg, uWS::OpCode opCode);
 
     void DrawUI();
 #else
-    static WebSocketServer &GetInstance() { static WebSocketServer i; return i; }
+    static WebSocketServer &GetInstance() {
+        static WebSocketServer i;
+        return i;
+    }
 
     void Start(int port) {}
     void Stop() {}
@@ -40,7 +43,7 @@ class WebSocketServer {
     void Broadcast(const std::string &address, float value) {}
     void Broadcast(const std::string &address, int value) {}
     void Broadcast(const std::string &address, const std::string &value) {}
-    void Broadcast_wheel(float wheel, float brake, float throttle) {}
+    void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll) {}
 
     void DrawUI() {}
 #endif

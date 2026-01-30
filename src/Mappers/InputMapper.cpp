@@ -8,40 +8,30 @@
 
 namespace { // Anonymous namespace for private helper functions
 
-SDL_Joystick *GetSelectedJoystick(SDL_JoystickID selectedId,
-                                  const DeviceManager &deviceManager) {
+SDL_Joystick *GetSelectedJoystick(SDL_JoystickID selectedId, const DeviceManager &deviceManager) {
     if (selectedId == 0) {
         return nullptr;
     }
     const auto &devices = deviceManager.GetDevices();
-    auto it = std::find_if(devices.begin(), devices.end(),
-                           [selectedId](const DeviceState &dev) {
-                               return dev.instance_id == selectedId;
-                           });
+    auto it = std::find_if(devices.begin(), devices.end(), [selectedId](const DeviceState &dev) { return dev.instance_id == selectedId; });
 
     return (it != devices.end()) ? it->joystick : nullptr;
 }
 
 } // namespace
 
-InputMapper::InputMapper(const DeviceManager &deviceManager)
-    : m_DeviceManager(deviceManager) {}
+InputMapper::InputMapper(const DeviceManager &deviceManager) : m_DeviceManager(deviceManager) {}
 
-static void DrawAxisConfig(const char *label, InputMapper::AxisConfig &config,
-                           int numAxes) {
+static void DrawAxisConfig(const char *label, InputMapper::AxisConfig &config, int numAxes) {
     ImGui::PushID(label);
     ImGui::Text("%s", label);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
-    if (ImGui::BeginCombo("##axis",
-                          config.axisIndex == -1
-                              ? "None"
-                              : std::to_string(config.axisIndex).c_str())) {
+    if (ImGui::BeginCombo("##axis", config.axisIndex == -1 ? "None" : std::to_string(config.axisIndex).c_str())) {
         if (ImGui::Selectable("None", config.axisIndex == -1))
             config.axisIndex = -1;
         for (int i = 0; i < numAxes; i++) {
-            if (ImGui::Selectable(std::to_string(i).c_str(),
-                                  config.axisIndex == i))
+            if (ImGui::Selectable(std::to_string(i).c_str(), config.axisIndex == i))
                 config.axisIndex = i;
         }
         ImGui::EndCombo();
@@ -58,8 +48,7 @@ static void DrawAxisConfig(const char *label, InputMapper::AxisConfig &config,
     ImGui::PopID();
 }
 
-InputMapper::~InputMapper() {
-}
+InputMapper::~InputMapper() {}
 
 void InputMapper::DrawUI() {
     ImGui::Begin("Input Mapper");
@@ -70,10 +59,7 @@ void InputMapper::DrawUI() {
     // Device Selector
     const char *currentDeviceName = "None";
     if (m_SelectedDeviceID != 0) {
-        auto it = std::find_if(devices.begin(), devices.end(),
-                               [this](const DeviceState &dev) {
-                                   return dev.instance_id == m_SelectedDeviceID;
-                               });
+        auto it = std::find_if(devices.begin(), devices.end(), [this](const DeviceState &dev) { return dev.instance_id == m_SelectedDeviceID; });
         if (it != devices.end()) {
             selectedDeviceState = &*it;
             currentDeviceName = selectedDeviceState->name.c_str();
@@ -125,6 +111,8 @@ void InputMapper::DrawUI() {
         DrawAxisConfig("Brake", m_Brake, selectedDeviceState->num_axes);
         DrawAxisConfig("Clutch", m_Clutch, selectedDeviceState->num_axes);
         DrawAxisConfig("Handbrake", m_Handbrake, selectedDeviceState->num_axes);
+        DrawAxisConfig("Pitch", m_Pitch, selectedDeviceState->num_axes);
+        DrawAxisConfig("Roll", m_Roll, selectedDeviceState->num_axes);
     }
 
     ImGui::Separator();
@@ -137,8 +125,7 @@ void InputMapper::DrawUI() {
     WebSocketServer::GetInstance().DrawUI();
 }
 
-float InputMapper::ProcessAxis(SDL_Joystick *joystick,
-                               const AxisConfig &config) {
+float InputMapper::ProcessAxis(SDL_Joystick *joystick, const AxisConfig &config) {
     if (config.axisIndex < 0)
         return 0.0f;
 
@@ -166,8 +153,7 @@ float InputMapper::ProcessAxis(SDL_Joystick *joystick,
 }
 
 std::string InputMapper::UpdateAndBroadcastMessage() {
-    SDL_Joystick *joystick =
-        GetSelectedJoystick(m_SelectedDeviceID, m_DeviceManager);
+    SDL_Joystick *joystick = GetSelectedJoystick(m_SelectedDeviceID, m_DeviceManager);
 
     if (!joystick)
         return "";
@@ -177,9 +163,11 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
     float brake = ProcessAxis(joystick, m_Brake);
     float clutch = ProcessAxis(joystick, m_Clutch);
     float handbrake = ProcessAxis(joystick, m_Handbrake);
+    float pitch = ProcessAxis(joystick, m_Pitch);
+    float roll = ProcessAxis(joystick, m_Roll);
 
     auto &server = WebSocketServer::GetInstance();
-    server.Broadcast_wheel(steering, brake, throttle);
+    server.Broadcast_wheel(steering, brake, throttle, pitch, roll);
 
     server.Broadcast("/wheel/steer", steering);
     server.Broadcast("/wheel/throttle", throttle);
@@ -214,8 +202,7 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
     auto LoadAxis = [&](const char *prefix, AxisConfig &config) {
         config.axisIndex = prefs.GetInt(std::string(prefix) + ".Axis", -1);
         config.invert = prefs.GetBool(std::string(prefix) + ".Invert", false);
-        config.deadzone =
-            prefs.GetFloat(std::string(prefix) + ".Deadzone", 0.05f);
+        config.deadzone = prefs.GetFloat(std::string(prefix) + ".Deadzone", 0.05f);
         config.outputRange = prefs.GetInt(std::string(prefix) + ".Range", 0);
     };
 
@@ -230,8 +217,7 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
 
 #ifdef ENABLE_WEBSOCKETS
     int wsPort = prefs.GetInt("WebSocketServer.Port", 9001);
-    if (!WebSocketServer::GetInstance().IsRunning() ||
-        WebSocketServer::GetInstance().GetPort() != wsPort) {
+    if (!WebSocketServer::GetInstance().IsRunning() || WebSocketServer::GetInstance().GetPort() != wsPort) {
         WebSocketServer::GetInstance().Stop();
         WebSocketServer::GetInstance().Start(wsPort);
     }
@@ -247,8 +233,7 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
         const auto &devices = m_DeviceManager.GetDevices();
         for (const auto &dev : devices) {
             if (dev.instance_id == m_SelectedDeviceID) {
-                prefs.SetString("InputMapper.DeviceGUID",
-                                DeviceManager::GetDeviceGUIDString(dev));
+                prefs.SetString("InputMapper.DeviceGUID", DeviceManager::GetDeviceGUIDString(dev));
                 break;
             }
         }
