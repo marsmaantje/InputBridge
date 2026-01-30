@@ -83,23 +83,29 @@ void InputMapper::DrawUI() {
     }
 
     if (ImGui::BeginCombo("Source Device", currentDeviceName)) {
-        if (ImGui::Selectable("None", m_SelectedDeviceID == 0))
+        if (ImGui::Selectable("None", m_SelectedDeviceID == 0)) {
             m_SelectedDeviceID = 0;
+        }
+        
         for (const auto &dev : devices) {
             bool isSelected = (m_SelectedDeviceID == dev.instance_id);
-            std::string label =
-                dev.name + "##" + std::to_string(dev.instance_id);
+            std::string label = dev.name + "##" + std::to_string(dev.instance_id);
             if (ImGui::Selectable(label.c_str(), isSelected)) {
                 m_SelectedDeviceID = dev.instance_id;
                 selectedDeviceState = &dev;
+#ifdef ENABLE_EXCLUSIVE_INPUT
                 ApplyExclusiveMode();
+#endif
             }
-            if (isSelected)
+            if (isSelected) {
                 ImGui::SetItemDefaultFocus();
+            }
         }
+
         ImGui::EndCombo();
     }
 
+#ifdef ENABLE_EXCLUSIVE_INPUT
     bool exclusive = m_ExclusiveModeHandler.IsEnabled();
     if (ImGui::Checkbox("Exclusive Mode (Hide from other apps)", &exclusive)) {
         m_ExclusiveModeHandler.SetEnabled(exclusive);
@@ -109,6 +115,7 @@ void InputMapper::DrawUI() {
         ImGui::SetTooltip("Attempts to prevent other applications from receiving input from this device.\n"
                           "Note: This is platform dependent and may require administrative privileges.");
     }
+#endif
 
     if (selectedDeviceState) {
         ImGui::Separator();
@@ -217,7 +224,9 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
     LoadAxis("InputMapper.Brake", m_Brake);
     LoadAxis("InputMapper.Clutch", m_Clutch);
     LoadAxis("InputMapper.Handbrake", m_Handbrake);
+#ifdef ENABLE_EXCLUSIVE_INPUT
     m_ExclusiveModeHandler.SetEnabled(prefs.GetBool("InputMapper.ExclusiveMode", false));
+#endif
 
 #ifdef ENABLE_WEBSOCKETS
     int wsPort = prefs.GetInt("WebSocketServer.Port", 9001);
@@ -228,7 +237,9 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
     }
 #endif
 
+#ifdef ENABLE_EXCLUSIVE_INPUT
     ApplyExclusiveMode();
+#endif
 }
 
 void InputMapper::SaveConfig(PreferencesManager &prefs) const {
@@ -257,14 +268,16 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
     SaveAxis("InputMapper.Brake", m_Brake);
     SaveAxis("InputMapper.Clutch", m_Clutch);
     SaveAxis("InputMapper.Handbrake", m_Handbrake);
+#ifdef ENABLE_EXCLUSIVE_INPUT
     prefs.SetBool("InputMapper.ExclusiveMode", m_ExclusiveModeHandler.IsEnabled());
+#endif
 
 #ifdef ENABLE_WEBSOCKETS
-    prefs.SetInt("WebSocketServer.Port",
-                 WebSocketServer::GetInstance().GetPort());
+    prefs.SetInt("WebSocketServer.Port", WebSocketServer::GetInstance().GetPort());
 #endif
 }
 
+#ifdef ENABLE_EXCLUSIVE_INPUT
 void InputMapper::ApplyExclusiveMode() {
     SDL_Joystick *joystick = GetSelectedJoystick(m_SelectedDeviceID, m_DeviceManager);
     if (!joystick)
@@ -272,3 +285,4 @@ void InputMapper::ApplyExclusiveMode() {
 
     m_ExclusiveModeHandler.Apply(joystick);
 }
+#endif
