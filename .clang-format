@@ -1,3 +1,4 @@
 # 'Attach' means braces stay on the same line as the statement
 BreakBeforeBraces: Attach
 IndentWidth: 4
+ColumnLimit: 1000

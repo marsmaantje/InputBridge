@@ -16,7 +16,15 @@
     {
       "name": "Win32",
       "compileCommands": "${workspaceFolder}/build/compile_commands.json",
-      "intelliSenseMode": "windows-gcc-x64"
+      "intelliSenseMode": "windows-gcc-x64",
+      "includePath": [
+        "${workspaceFolder}/**"
+      ],
+      "cStandard": "${default}",
+      "cppStandard": "${default}",
+      "compilerArgs": [
+        ""
+      ]
     }
   ],
   "version": 4
