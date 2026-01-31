@@ -10,6 +10,8 @@ HapticDevice::~HapticDevice() {
 bool HapticDevice::Init() {
     if (!m_joystick) return false;
 
+    auto joystickID = SDL_GetJoystickID(m_joystick);
+
     if (SDL_IsJoystickHaptic(m_joystick)) {
         m_haptic = SDL_OpenHapticFromJoystick(m_joystick);
         if (m_haptic) {
@@ -24,6 +26,10 @@ bool HapticDevice::Init() {
         } else {
             SDL_Log("Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
         }
+    } else if (SDL_IsGamepad(joystickID)) {
+        m_running = true;
+        m_thread = std::thread(&HapticDevice::ThreadLoop, this);
+        return true;
     }
     return false;
 }

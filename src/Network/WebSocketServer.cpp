@@ -97,7 +97,7 @@ void WebSocketServer::Start(int port) {
                                        m_Impl->protocol->parse(std::string(message));
                                    }
                                    // Echo the message back to C#
-                                   ws->send(message, opCode);
+                                   ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
                                },
                            .close =
                                [this](auto *ws, int code, std::string_view message) {
