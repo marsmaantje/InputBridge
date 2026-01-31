@@ -135,15 +135,15 @@ int main(int argc, char *argv[]) {
         ImGui::NewFrame();
 
         ImGui::Begin("InputBridge Status");
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-                    1000.0f / io.Framerate, io.Framerate);
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
         if (ImGui::Checkbox("VSync", &vsync)) {
             SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
         }
         ImGui::InputInt("Framerate Limit", &framerate_limit);
-        if (framerate_limit < 0)
+        if (framerate_limit < 0) {
             framerate_limit = 0;
+        }
 
         ImGui::Separator();
         const auto &devices = deviceManager.GetDevices();
@@ -174,17 +174,14 @@ int main(int argc, char *argv[]) {
                 static FlightStickVisualizer flight_stick_viz;
 
                 std::string guid = DeviceManager::GetDeviceGUIDString(dev);
-                bool apply_pref =
-                    !preferencesManager.IsPreferenceApplied(dev.instance_id);
-                std::string preferred_viz =
-                    preferencesManager.GetVisualizerPreference(guid);
+                bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
+                std::string preferred_viz = preferencesManager.GetVisualizerPreference(guid);
 
                 if (apply_pref) {
                     preferencesManager.MarkPreferenceApplied(dev.instance_id);
                 }
 
-                auto TabItem = [&](const char *label,
-                                   DeviceVisualizer &visualizer) {
+                auto TabItem = [&](const char *label, DeviceVisualizer &visualizer) {
                     ImGuiTabItemFlags flags = 0;
                     if (apply_pref && preferred_viz == label) {
                         flags |= ImGuiTabItemFlags_SetSelected;
@@ -192,10 +189,8 @@ int main(int argc, char *argv[]) {
 
                     if (ImGui::BeginTabItem(label, nullptr, flags)) {
                         visualizer.Draw(dev);
-                        if (preferencesManager.GetVisualizerPreference(guid) !=
-                            label) {
-                            preferencesManager.SetVisualizerPreference(guid,
-                                                                       label);
+                        if (preferencesManager.GetVisualizerPreference(guid) != label) {
+                            preferencesManager.SetVisualizerPreference(guid, label);
                             preferencesManager.Save();
                         }
                         ImGui::EndTabItem();
