@@ -11,6 +11,7 @@
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
 #include "Haptics/GamepadHaptics.h"
+#include "Haptics/SteeringWheelHaptics.h"
 #include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
@@ -241,6 +242,71 @@ int main(int argc, char *argv[]) {
                             TabItem("Flight Stick", flight_stick_viz);
                         }
                         ImGui::EndTabBar();
+                    }
+
+                    if (SDL_GetJoystickType(dev.joystick) == SDL_JOYSTICK_TYPE_WHEEL) {
+                        ImGui::Separator();
+                        ImGui::Text("Haptics Test");
+
+                        HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
+                        if (auto *wheelHaptics = dynamic_cast<SteeringWheelHaptics *>(haptic)) {
+                            if (ImGui::TreeNode("Constant Force")) {
+                                static float strength = 0.5f;
+                                static int duration = 1000;
+                                ImGui::SliderFloat("Strength", &strength, -1.0f, 1.0f);
+                                ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
+                                if (ImGui::Button("Play Constant")) {
+                                    wheelHaptics->PlayConstant(strength, (uint32_t)duration);
+                                }
+                                ImGui::TreePop();
+                            }
+
+                            if (ImGui::TreeNode("Periodic (Sine)")) {
+                                static float strength = 1.0f;
+                                static int period = 1000;
+                                static float magnitude = 0.5f;
+                                static float offset = 0.0f;
+                                static int phase = 0;
+                                static int duration = 1000;
+
+                                ImGui::SliderFloat("Strength", &strength, 0.0f, 1.0f);
+                                ImGui::SliderInt("Period (ms)", &period, 1, 5000);
+                                ImGui::SliderFloat("Magnitude", &magnitude, 0.0f, 1.0f);
+                                ImGui::SliderFloat("Offset", &offset, -1.0f, 1.0f);
+                                ImGui::SliderInt("Phase", &phase, 0, 36000);
+                                ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
+
+                                if (ImGui::Button("Play Periodic")) {
+                                    wheelHaptics->PlayPeriodic(strength, (uint32_t)period, magnitude, offset, (uint32_t)phase, (uint32_t)duration);
+                                }
+                                ImGui::TreePop();
+                            }
+
+                            if (ImGui::TreeNode("Condition (Spring)")) {
+                                static float right_sat = 1.0f;
+                                static float left_sat = 1.0f;
+                                static float right_coeff = 0.5f;
+                                static float left_coeff = 0.5f;
+                                static float deadband = 0.1f;
+                                static float center = 0.0f;
+                                static int duration = 5000;
+
+                                ImGui::SliderFloat("Right Sat", &right_sat, 0.0f, 1.0f);
+                                ImGui::SliderFloat("Left Sat", &left_sat, 0.0f, 1.0f);
+                                ImGui::SliderFloat("Right Coeff", &right_coeff, -1.0f, 1.0f);
+                                ImGui::SliderFloat("Left Coeff", &left_coeff, -1.0f, 1.0f);
+                                ImGui::SliderFloat("Deadband", &deadband, 0.0f, 1.0f);
+                                ImGui::SliderFloat("Center", &center, -1.0f, 1.0f);
+                                ImGui::SliderInt("Duration (ms)", &duration, 0, 10000);
+
+                                if (ImGui::Button("Play Spring")) {
+                                    wheelHaptics->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, (uint32_t)duration);
+                                }
+                                ImGui::TreePop();
+                            }
+                        } else {
+                            ImGui::TextDisabled("Haptics not available");
+                        }
                     }
                 }
 

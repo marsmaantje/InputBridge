@@ -15,8 +15,10 @@ bool HapticDevice::Init() {
     if (SDL_IsJoystickHaptic(m_joystick)) {
         m_haptic = SDL_OpenHapticFromJoystick(m_joystick);
         if (m_haptic) {
-            if (!SDL_InitHapticRumble(m_haptic)) {
-                SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+            if (SDL_HapticRumbleSupported(m_haptic)) {
+                if (!SDL_InitHapticRumble(m_haptic)) {
+                    SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+                }
             }
             SDL_SetHapticGain(m_haptic, 100);
             SDL_SetHapticAutocenter(m_haptic, 0);
@@ -26,11 +28,14 @@ bool HapticDevice::Init() {
         } else {
             SDL_Log("Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
         }
-    } else if (SDL_IsGamepad(joystickID)) {
+    }
+
+    if (m_haptic || SDL_IsGamepad(joystickID)) {
         m_running = true;
         m_thread = std::thread(&HapticDevice::ThreadLoop, this);
         return true;
     }
+
     return false;
 }
 
