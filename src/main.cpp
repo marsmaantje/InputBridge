@@ -148,9 +148,9 @@ int main(int argc, char *argv[]) {
 
         for (const auto &dev : devices) {
             ImGui::PushID((int)dev.instance_id);
+            std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
             if (ImGui::CollapsingHeader(
-                    (dev.name + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)"))
-                        .c_str(),
+                    label.c_str(),
                     ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Indent();
 
