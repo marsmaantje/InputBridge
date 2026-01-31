@@ -10,6 +10,7 @@
 
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
+#include "Haptics/GamepadHaptics.h"
 #include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
@@ -193,6 +194,24 @@ int main(int argc, char *argv[]) {
                         TabItem("Standard Layout", gamepad_viz);
                         TabItem("Raw Inputs", generic_viz);
                         ImGui::EndTabBar();
+                    }
+
+                    ImGui::Separator();
+                    ImGui::Text("Haptics Test");
+                    static float low_freq = 0.5f;
+                    static float high_freq = 0.5f;
+                    static int duration = 1000;
+                    ImGui::SliderFloat("Low Freq", &low_freq, 0.0f, 1.0f);
+                    ImGui::SliderFloat("High Freq", &high_freq, 0.0f, 1.0f);
+                    ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
+
+                    if (ImGui::Button("Play Rumble")) {
+                        HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
+                        if (haptic) {
+                            if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
+                                gamepadHaptics->PlayLeftRight(low_freq, high_freq, (uint32_t)duration);
+                            }
+                        }
                     }
                 } else {
                     if (ImGui::BeginTabBar("DeviceMode")) {

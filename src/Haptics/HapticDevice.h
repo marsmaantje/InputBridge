@@ -2,6 +2,11 @@
 
 #include <SDL3/SDL.h>
 #include <map>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <functional>
 
 class HapticDevice {
 public:
@@ -46,4 +51,13 @@ protected:
     std::map<Uint16, SDL_HapticEffectID> m_conditionEffects;
 
     SDL_HapticEffectID UploadEffect(SDL_HapticEffect& effect, SDL_HapticEffectID existingId);
+    void RunAsync(std::function<void()> task);
+
+private:
+    std::thread m_thread;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    std::queue<std::function<void()>> m_tasks;
+    bool m_running = false;
+    void ThreadLoop();
 };

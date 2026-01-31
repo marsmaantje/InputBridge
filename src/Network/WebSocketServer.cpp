@@ -93,6 +93,9 @@ void WebSocketServer::Start(int port) {
                                [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
                                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
                                    m_Impl->logs.push_back("Client data: " + std::string(message));
+                                   if (m_Impl->protocol) {
+                                       m_Impl->protocol->parse(std::string(message));
+                                   }
                                    // Echo the message back to C#
                                    ws->send(message, opCode);
                                },
