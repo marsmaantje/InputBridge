@@ -36,9 +36,10 @@ int main(int argc, char *argv[]) {
 #endif
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "1");
 
     // Setup SDL3 with Joystick and Gamepad support
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC)) {
         printf("Error: SDL_Init(): %s\n", SDL_GetError());
         return -1;
     }
@@ -154,6 +155,17 @@ int main(int argc, char *argv[]) {
                     label.c_str(),
                     ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Indent();
+
+                HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
+                if (haptic) {
+                    if (haptic->IsReady()) {
+                        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Haptics: Ready");
+                    } else {
+                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Haptics: Not Available");
+                    }
+                } else {
+                    ImGui::TextDisabled("Haptics: Not Supported");
+                }
 
                 static GamepadVisualizer gamepad_viz;
                 static GenericVisualizer generic_viz;

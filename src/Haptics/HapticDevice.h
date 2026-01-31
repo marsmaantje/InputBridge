@@ -15,6 +15,7 @@ public:
 
     bool Init();
     void Close();
+    virtual bool IsReady() const;
 
     // Steering Wheel Effects
     // level: -1.0 to 1.0

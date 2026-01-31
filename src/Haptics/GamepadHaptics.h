@@ -6,6 +6,8 @@ class GamepadHaptics : public HapticDevice {
 public:
     using HapticDevice::HapticDevice;
 
+    bool IsReady() const override;
+
     // Play the left/right rumble effect.
     // large_magnitude: 0-1 range for the large motor
     // small_magnitude: 0-1 range for the small motor

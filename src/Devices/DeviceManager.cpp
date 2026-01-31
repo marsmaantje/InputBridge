@@ -35,9 +35,12 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
             dev.num_hats = SDL_GetNumJoystickHats(dev.joystick);
             m_Devices.push_back(dev);
 
-            if (SDL_IsJoystickHaptic(dev.joystick)) {
+            bool is_haptic = SDL_IsJoystickHaptic(dev.joystick);
+            if (is_haptic || dev.is_gamepad) {
                  if (dev.name.find("wheel") != std::string::npos) {
-                    m_HapticDevices[instance_id] = std::make_unique<SteeringWheelHaptics>(dev.joystick);
+                    if (is_haptic) {
+                        m_HapticDevices[instance_id] = std::make_unique<SteeringWheelHaptics>(dev.joystick);
+                    }
                 } else {
                     m_HapticDevices[instance_id] = std::make_unique<GamepadHaptics>(dev.joystick);
                 }
