@@ -100,7 +100,7 @@ void WebSocketProtocol::parse(const std::string& message) {
                 float large_magnitude = params.at("large_magnitude");
                 float small_magnitude = params.at("small_magnitude");
                 uint32_t duration_ms = params.at("duration_ms");
-                gamepad_haptics->PlayLeftRight(large_magnitude, small_magnitude, duration_ms);
+                gamepad_haptics->Rumble(large_magnitude, small_magnitude, duration_ms);
             }
         } else if (type == "steering_wheel") {
             if (auto* wheel_haptics = dynamic_cast<SteeringWheelHaptics*>(haptic_device)) {

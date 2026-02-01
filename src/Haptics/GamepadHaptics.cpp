@@ -15,7 +15,7 @@ bool GamepadHaptics::IsReady() const {
     return false;
 }
 
-int GamepadHaptics::PlayLeftRight(float large_magnitude, float small_magnitude, uint32_t duration_ms) {
+int GamepadHaptics::Rumble(float large_magnitude, float small_magnitude, uint32_t duration_ms) {
     RunAsync([this, large_magnitude, small_magnitude, duration_ms]() {
         if (!m_haptic) {
             // Fallback for Gamepads that don't support SDL_Haptic but support Rumble

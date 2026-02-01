@@ -148,7 +148,7 @@ void OSCProtocol::parse(const std::string& message) {
         if (arg_idx < typeTags.size()) duration = (int)getNextArg(typeTags[arg_idx++]);
 
         if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_device)) {
-            gamepad->PlayLeftRight(large, small, duration);
+            gamepad->Rumble(large, small, duration);
         }
     } else if (address == "/haptic/wheel/constant") {
         float strength = 0.0f;

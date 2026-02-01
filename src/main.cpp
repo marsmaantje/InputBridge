@@ -217,7 +217,7 @@ int main(int argc, char *argv[]) {
                         HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
                         if (haptic) {
                             if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
-                                gamepadHaptics->PlayLeftRight(low_freq, high_freq, (uint32_t)duration);
+                                gamepadHaptics->Rumble(low_freq, high_freq, (uint32_t)duration);
                             }
                         }
                     }
