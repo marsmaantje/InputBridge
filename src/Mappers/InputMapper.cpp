@@ -121,8 +121,6 @@ void InputMapper::DrawUI() {
     ImGui::TextWrapped("%s", outputPreview.c_str());
 
     ImGui::End();
-
-    WebSocketServer::GetInstance().DrawUI();
 }
 
 float InputMapper::ProcessAxis(SDL_Joystick *joystick, const AxisConfig &config) {

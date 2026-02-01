@@ -75,41 +75,41 @@ void WebSocketServer::Start(int port) {
         }
 
         app.ws<int>("/*", {/* Settings */
-                           .compression = uWS::SHARED_COMPRESSOR,
-                           .maxPayloadLength = 16 * 1024 * 1024,
-                           .idleTimeout = 16,
+                    .compression = uWS::SHARED_COMPRESSOR,
+                    .maxPayloadLength = 16 * 1024 * 1024,
+                    .idleTimeout = 16,
 
-                           .open =
-                               [this](auto *ws) {
-                                   std::string ip(ws->getRemoteAddressAsText());
-                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                                   m_Impl->clientCount++;
-                                   m_Impl->clients[ws] = ip;
-                                   m_Impl->logs.push_back("Client connected: " + ip);
-                                   if (m_Impl->logs.size() > 100)
-                                       m_Impl->logs.pop_front();
-                               },
-                           .message =
-                               [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
-                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                                   m_Impl->logs.push_back("Client data: " + std::string(message));
-                                   if (m_Impl->protocol) {
-                                       m_Impl->protocol->parse(std::string(message));
-                                   }
-                                   // Echo the message back to C#
-                                   ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
-                               },
-                           .close =
-                               [this](auto *ws, int code, std::string_view message) {
-                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                                   if (m_Impl->clients.count(ws)) {
-                                       m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
-                                       if (m_Impl->logs.size() > 100)
-                                           m_Impl->logs.pop_front();
-                                       m_Impl->clients.erase(ws);
-                                   }
-                                   m_Impl->clientCount--;
-                               }})
+                    .open =
+                        [this](auto *ws) {
+                            std::string ip(ws->getRemoteAddressAsText());
+                            std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                            m_Impl->clientCount++;
+                            m_Impl->clients[ws] = ip;
+                            m_Impl->logs.push_back("Client connected: " + ip);
+                            if (m_Impl->logs.size() > 100)
+                                m_Impl->logs.pop_front();
+                        },
+                    .message =
+                        [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
+                            std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                            m_Impl->logs.push_back("Client data: " + std::string(message));
+                            if (m_Impl->protocol) {
+                                m_Impl->protocol->parse(std::string(message));
+                            }
+                            // Echo the message back to C#
+                            ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
+                        },
+                    .close =
+                        [this](auto *ws, int code, std::string_view message) {
+                            std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                            if (m_Impl->clients.count(ws)) {
+                                m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
+                                if (m_Impl->logs.size() > 100)
+                                    m_Impl->logs.pop_front();
+                                m_Impl->clients.erase(ws);
+                            }
+                            m_Impl->clientCount--;
+                        }})
             .listen(port,
                     [this](auto *listen_socket) {
                         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -245,8 +245,7 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
     }
 }
 
-void WebSocketServer::DrawUI() {
-    if (ImGui::Begin("WebSocket Server")) {
+void WebSocketServer::DrawContent() {
         bool doRestart = false;
         int restartPort = 0;
         {
@@ -290,7 +289,7 @@ void WebSocketServer::DrawUI() {
             std::lock_guard<std::mutex> lock(m_Impl->mutex);
             auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
             if (wsProtocol) {
-                int currentFormat = (int)wsProtocol->getWheelProtocolVersion();
+                int currentFormat = (int)wsProtocol->getProtocolVersion();
                 if (ImGui::Combo(
                         "Format", &currentFormat,
                         [](void *, int idx, const char **out_text) {
@@ -298,7 +297,7 @@ void WebSocketServer::DrawUI() {
                             return true;
                         },
                         nullptr, WebSocketProtocol::GetVersionCount())) {
-                    wsProtocol->setWheelProtocolVersion((WebSocketProtocol::WheelProtocolVersion)currentFormat);
+                    wsProtocol->setProtocolVersion((WebSocketProtocol::ProtocolVersion)currentFormat);
                 }
             }
         }
@@ -347,7 +346,5 @@ void WebSocketServer::DrawUI() {
                 ImGui::SetScrollHereY(1.0f);
         }
         ImGui::EndChild();
-    }
-    ImGui::End();
 }
 #endif

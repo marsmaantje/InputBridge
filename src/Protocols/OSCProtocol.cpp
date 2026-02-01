@@ -13,6 +13,14 @@ static bool IsBigEndian() {
     return bint.c[0] == 1;
 }
 
+OSCProtocol::OSCProtocol(ProtocolVersion version) : m_version(version) {}
+
+void OSCProtocol::setProtocolVersion(ProtocolVersion version) { m_version = version; }
+
+OSCProtocol::ProtocolVersion OSCProtocol::getProtocolVersion() const { return m_version; }
+
+std::string OSCProtocol::getProtocolName() const { return "OSC"; }
+
 static uint32_t Swap32(uint32_t val) { return ((val >> 24) & 0xff) | ((val << 8) & 0xff0000) | ((val >> 8) & 0xff00) | ((val << 24) & 0xff000000); }
 
 static void AppendString(std::string &buf, const std::string &str) {
@@ -76,7 +84,6 @@ static float ReadFloat(const std::string &buf, size_t &pos) {
     return f;
 }
 
-std::string OSCProtocol::getProtocolName() const { return "OSC"; }
 
 std::string OSCProtocol::format(const std::string &address, float value) {
     std::string msg;

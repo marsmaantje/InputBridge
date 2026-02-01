@@ -4,12 +4,12 @@
 
 class WebSocketProtocol : public IProtocol {
   public:
-    enum class WheelProtocolVersion { MarsmaantjeOld, MarsmaantjeNew };
+    enum class ProtocolVersion { MarsmaantjeOld, MarsmaantjeNew };
 
-    WebSocketProtocol(WheelProtocolVersion version = WheelProtocolVersion::MarsmaantjeNew);
+    WebSocketProtocol(ProtocolVersion version = ProtocolVersion::MarsmaantjeNew);
 
-    void setWheelProtocolVersion(WheelProtocolVersion version);
-    WheelProtocolVersion getWheelProtocolVersion() const;
+    void setProtocolVersion(ProtocolVersion version);
+    ProtocolVersion getProtocolVersion() const;
 
     std::string getProtocolName() const override;
 
@@ -25,5 +25,5 @@ class WebSocketProtocol : public IProtocol {
     static int GetVersionCount();
 
   private:
-    WheelProtocolVersion m_version;
+    ProtocolVersion m_version;
 };

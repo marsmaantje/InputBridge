@@ -26,7 +26,7 @@ class WebSocketServer {
     void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll);
     void Broadcast(const std::string &msg, uWS::OpCode opCode);
 
-    void DrawUI();
+    void DrawContent();
 #else
     static WebSocketServer &GetInstance() {
         static WebSocketServer i;
@@ -45,7 +45,7 @@ class WebSocketServer {
     void Broadcast(const std::string &address, const std::string &value) {}
     void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll) {}
 
-    void DrawUI() {}
+    void DrawContent() {}
 #endif
 
   private:

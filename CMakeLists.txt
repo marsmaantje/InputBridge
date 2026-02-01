@@ -57,7 +57,6 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 if(ENABLE_WEBSOCKETS)
 include(FetchContent)
 
-
 # Libuv (Required for uSockets on Windows)
 if(WIN32)
     FetchContent_Declare(
@@ -175,6 +174,7 @@ add_executable(InputBridge
     src/Visualizers/GamepadVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
+    src/Network/NetworkStatusWindow.cpp
     src/Mappers/InputMapper.cpp
     src/Protocols/OSCProtocol.cpp
     src/Protocols/ProtocolManager.cpp

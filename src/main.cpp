@@ -13,6 +13,7 @@
 #include "Haptics/GamepadHaptics.h"
 #include "Haptics/SteeringWheelHaptics.h"
 #include "Mappers/InputMapper.h"
+#include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolManager.h"
@@ -318,6 +319,8 @@ int main(int argc, char *argv[]) {
         if (ImGui::Button("Exit"))
             done = true;
         ImGui::End();
+
+        NetworkStatusWindow::Draw();
 
         // Rendering
         ImGui::Render();

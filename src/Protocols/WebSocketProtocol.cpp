@@ -18,11 +18,11 @@ static std::string formatFloat(float val, int precision) {
     return s;
 }
 
-WebSocketProtocol::WebSocketProtocol(WheelProtocolVersion version) : m_version(version) {}
+WebSocketProtocol::WebSocketProtocol(ProtocolVersion version) : m_version(version) {}
 
-void WebSocketProtocol::setWheelProtocolVersion(WheelProtocolVersion version) { m_version = version; }
+void WebSocketProtocol::setProtocolVersion(ProtocolVersion version) { m_version = version; }
 
-WebSocketProtocol::WheelProtocolVersion WebSocketProtocol::getWheelProtocolVersion() const { return m_version; }
+WebSocketProtocol::ProtocolVersion WebSocketProtocol::getProtocolVersion() const { return m_version; }
 
 std::string WebSocketProtocol::getProtocolName() const { return "WebSocket"; }
 
@@ -46,7 +46,7 @@ std::string WebSocketProtocol::format_wheel(float wheel, float brake, float thro
     msg.reserve(64);
 
     switch (m_version) {
-    case WheelProtocolVersion::MarsmaantjeOld:
+    case ProtocolVersion::MarsmaantjeOld:
         msg += (char)1;
         msg += formatFloat(wheel, 4);
         msg += ";";
@@ -57,7 +57,7 @@ std::string WebSocketProtocol::format_wheel(float wheel, float brake, float thro
         msg += formatFloat(throttle, 3);
         msg += ";";
         break;
-    case WheelProtocolVersion::MarsmaantjeNew:
+    case ProtocolVersion::MarsmaantjeNew:
         msg += "y";
         msg += formatFloat(wheel, 8);
         msg += ";";
@@ -134,10 +134,10 @@ void WebSocketProtocol::parse(const std::string& message) {
 }
 
 const char *WebSocketProtocol::GetVersionLabel(int index) {
-    switch (static_cast<WheelProtocolVersion>(index)) {
-    case WheelProtocolVersion::MarsmaantjeOld:
+    switch (static_cast<ProtocolVersion>(index)) {
+    case ProtocolVersion::MarsmaantjeOld:
         return "Marsmaantje (Old)";
-    case WheelProtocolVersion::MarsmaantjeNew:
+    case ProtocolVersion::MarsmaantjeNew:
         return "Marsmaantje (New)";
     }
     return "Unknown";

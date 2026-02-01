@@ -3,6 +3,7 @@
 #if ENABLE_OSC
 
 #include "Protocols/ProtocolManager.h"
+#include "Protocols/OSCProtocol.h"
 #include "imgui.h"
 #include <lo/lo.h>
 #include <deque>
@@ -211,8 +212,15 @@ void OSCServer::Broadcast_wheel(float wheel, float brake, float throttle, float 
     }
 }
 
-void OSCServer::DrawUI() {
-    if (ImGui::Begin("OSC Server")) {
+int OSCProtocol::GetVersionCount() {
+    return 1;
+}
+
+const char* OSCProtocol::GetVersionLabel(int idx) {
+    return "Water Py";
+}
+
+void OSCServer::DrawContent() {
         bool doRestart = false;
         int restartPort = 0;
         {
@@ -249,6 +257,24 @@ void OSCServer::DrawUI() {
         int portInput = currentPort;
         if (ImGui::InputInt("Port", &portInput)) {
             SetPort(portInput);
+        }
+
+        // OSC Format selection
+        {
+            std::lock_guard<std::mutex> lock(m_Impl->mutex);
+            auto oscProtocol = std::dynamic_pointer_cast<OSCProtocol>(m_Impl->protocol);
+            if (oscProtocol) {
+                int currentFormat = (int)oscProtocol->getProtocolVersion();
+                if (ImGui::Combo(
+                        "Format", &currentFormat,
+                        [](void *, int idx, const char **out_text) {
+                            *out_text = OSCProtocol::GetVersionLabel(idx);
+                            return true;
+                        },
+                        nullptr, OSCProtocol::GetVersionCount())) {
+                    oscProtocol->setProtocolVersion((OSCProtocol::ProtocolVersion)currentFormat);
+                }
+            }
         }
 
         if (running) {
@@ -295,7 +321,5 @@ void OSCServer::DrawUI() {
                 ImGui::SetScrollHereY(1.0f);
         }
         ImGui::EndChild();
-    }
-    ImGui::End();
 }
 #endif
