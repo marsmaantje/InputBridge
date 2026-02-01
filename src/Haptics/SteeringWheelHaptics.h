@@ -8,7 +8,10 @@ public:
 
     int SetGain(int gain);
 
-    int PlayConstant(float strength, uint32_t duration_ms);
+    int PlayConstant(
+        float strength, 
+        uint32_t duration_ms
+    );
 
     int PlayPeriodic(
         float strength, 

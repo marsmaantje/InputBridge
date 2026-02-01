@@ -8,6 +8,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
 set(ENABLE_EXCLUSIVE_INPUT OFF CACHE BOOL "Enable exclusive input mode support" FORCE)
 set(ENABLE_WEBSOCKETS ON CACHE BOOL "Enable WebSocket server support" FORCE)
+set(ENABLE_OSC ON CACHE BOOL "Enable WebSocket server support" FORCE)
 
 # Add SDL3
 # We assume lib/sdl contains the SDL3 source code.
@@ -23,13 +24,19 @@ add_library(nlohmann_json INTERFACE)
 target_include_directories(nlohmann_json INTERFACE lib/nlohmann_json/include)
 
 # Add liblo
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/liblo/CMakeLists.txt")
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
-    set(BUILD_EXAMPLES OFF CACHE BOOL "Disable liblo examples" FORCE)
-    set(BUILD_TESTS OFF CACHE BOOL "Disable liblo tests" FORCE)
-    set(BUILD_UTILITIES OFF CACHE BOOL "Disable liblo utilities" FORCE)
-    add_subdirectory(lib/liblo)
-endif()
+# Configure liblo options to minimize build targets and enforce static linking
+set(WITH_TOOLS OFF CACHE BOOL "Disable liblo tools" FORCE)
+set(WITH_TESTS OFF CACHE BOOL "Disable liblo tests" FORCE)
+set(WITH_EXAMPLES OFF CACHE BOOL "Disable liblo examples" FORCE)
+set(WITH_CPP_TESTS OFF CACHE BOOL "Disable liblo C++ tests" FORCE)
+set(WITH_STATIC ON CACHE BOOL "Enable liblo static lib" FORCE)
+
+# liblo's CMakeLists.txt is located in the 'cmake' subdirectory
+add_subdirectory(lib/liblo/cmake lib/liblo)
+
+# Create an alias 'lo' to the static library target 'liblo_static'
+# This ensures compatibility with the rest of the project that links against 'lo'
+add_library(lo ALIAS liblo_static)
 
 # Add ImGui
 # ImGui does not have a root CMakeLists.txt, so we define the library here.
@@ -150,6 +157,11 @@ endif() # if(ENABLE_WEBSOCKETS)
 # Find Threads (required for std::thread)
 find_package(Threads REQUIRED)
 
+#if(ENABLE_OSC AND NOT TARGET lo)
+#    message(WARNING "liblo not found. Disabling OSC support.")
+#    set(ENABLE_OSC OFF)
+#endif()
+
 # InputBridge Executable
 add_executable(InputBridge
     # ... put source files here ...
@@ -172,6 +184,13 @@ if(ENABLE_WEBSOCKETS)
     target_sources(InputBridge PRIVATE
         src/Network/WebSocketServer.cpp
         src/Protocols/WebSocketProtocol.cpp
+    )
+endif()
+
+if(ENABLE_OSC)
+    target_sources(InputBridge PRIVATE
+        src/Network/OSCServer.cpp
+        src/Protocols/OSCProtocol.cpp
     )
 endif()
 
@@ -209,6 +228,13 @@ else()
     message(STATUS "WebSocket support: DISABLED")
 endif()
 
+if(ENABLE_OSC)
+    target_compile_definitions(InputBridge PRIVATE ENABLE_OSC)
+    message(STATUS "OSC support: ENABLED")
+else()
+    message(STATUS "OSC support: DISABLED")
+endif()
+
 # Link libraries - order matters on Windows!
 target_link_libraries(InputBridge PRIVATE 
     imgui 
@@ -224,6 +250,8 @@ endif()
 # Platform-specific libs for exclusive device access
 if(TARGET lo)
     target_link_libraries(InputBridge PRIVATE lo)
+    # Explicitly add liblo include directories
+    target_include_directories(InputBridge PRIVATE lib/liblo ${CMAKE_BINARY_DIR}/lib/liblo)
 endif()
 
 if(WIN32)
