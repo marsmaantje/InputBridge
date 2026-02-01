@@ -167,6 +167,55 @@ void OSCProtocol::parse(const std::string& message) {
         if (auto* wheel = dynamic_cast<SteeringWheelHaptics*>(haptic_device)) {
             wheel->PlayConstant(strength, duration);
         }
+    } else if (address == "/haptic/wheel/periodic") {
+        float strength = 0.0f;
+        int period = 0;
+        float magnitude = 0.0f;
+        float offset = 0.0f;
+        int phase = 0;
+        int duration = 0;
+
+        if (arg_idx < typeTags.size()) strength = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) period = (int)getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) magnitude = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) offset = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) phase = (int)getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) duration = (int)getNextArg(typeTags[arg_idx++]);
+
+        if (auto* wheel = dynamic_cast<SteeringWheelHaptics*>(haptic_device)) {
+            wheel->PlayPeriodic(strength, period, magnitude, offset, phase, duration);
+        }
+    } else if (address == "/haptic/wheel/condition") {
+        float right_sat = 0.0f;
+        float left_sat = 0.0f;
+        float right_coeff = 0.0f;
+        float left_coeff = 0.0f;
+        float deadband = 0.0f;
+        float center = 0.0f;
+        int duration = 0;
+
+        if (arg_idx < typeTags.size()) right_sat = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) left_sat = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) right_coeff = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) left_coeff = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) deadband = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) center = getNextArg(typeTags[arg_idx++]);
+        if (arg_idx < typeTags.size()) duration = (int)getNextArg(typeTags[arg_idx++]);
+
+        if (auto* wheel = dynamic_cast<SteeringWheelHaptics*>(haptic_device)) {
+            wheel->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration);
+        }
     }
-    // Add other effects as needed
+}
+
+const char *OSCProtocol::GetVersionLabel(int index) {
+    switch (static_cast<ProtocolVersion>(index)) {
+    case ProtocolVersion::WaterSteeringWheelPy:
+        return "Water SteeringWheel Py";
+    }
+    return "Unknown";
+}
+
+int OSCProtocol::GetVersionCount() { 
+    return 2; 
 }

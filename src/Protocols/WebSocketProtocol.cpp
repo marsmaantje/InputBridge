@@ -143,4 +143,6 @@ const char *WebSocketProtocol::GetVersionLabel(int index) {
     return "Unknown";
 }
 
-int WebSocketProtocol::GetVersionCount() { return 2; }
+int WebSocketProtocol::GetVersionCount() { 
+    return 2; 
+}

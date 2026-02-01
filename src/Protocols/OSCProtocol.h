@@ -3,9 +3,9 @@
 
 class OSCProtocol : public IProtocol {
   public:
-    enum class ProtocolVersion { WaterPy };
+    enum class ProtocolVersion { WaterSteeringWheelPy };
 
-    OSCProtocol(ProtocolVersion version = ProtocolVersion::WaterPy);
+    OSCProtocol(ProtocolVersion version = ProtocolVersion::WaterSteeringWheelPy);
 
     void setProtocolVersion(ProtocolVersion version);
     ProtocolVersion getProtocolVersion() const;

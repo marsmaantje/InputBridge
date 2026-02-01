@@ -212,14 +212,6 @@ void OSCServer::Broadcast_wheel(float wheel, float brake, float throttle, float 
     }
 }
 
-int OSCProtocol::GetVersionCount() {
-    return 1;
-}
-
-const char* OSCProtocol::GetVersionLabel(int idx) {
-    return "Water Py";
-}
-
 void OSCServer::DrawContent() {
         bool doRestart = false;
         int restartPort = 0;
