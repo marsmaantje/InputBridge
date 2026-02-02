@@ -125,6 +125,9 @@ void WebSocketProtocol::parse(const std::string &message) {
                     float center = params.at("center");
                     uint32_t duration_ms = params.at("duration_ms");
                     wheel_haptics->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms);
+                } else if (effect == "gain") {
+                    int value = params.at("value");
+                    wheel_haptics->SetGain(value);
                 }
             }
         }

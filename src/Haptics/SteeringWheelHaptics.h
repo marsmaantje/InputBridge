@@ -30,8 +30,4 @@ public:
         float center,
         uint32_t duration_ms
     );
-
-private:
-    int CreateAndRunEffect(SDL_HapticEffect& effect, uint32_t duration_ms);
-    void UpdateEffect(int effect_id, SDL_HapticEffect& effect);
 };

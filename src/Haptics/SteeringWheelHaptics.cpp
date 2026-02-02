@@ -26,7 +26,10 @@ int SteeringWheelHaptics::PlayConstant(float strength, uint32_t duration_ms) {
         effect.constant.level = static_cast<Sint16>(strength * 32767.0f);
         effect.constant.length = duration_ms;
 
-        CreateAndRunEffect(effect, duration_ms);
+        m_constantEffectId = UploadEffect(effect, m_constantEffectId);
+        if (m_constantEffectId != -1) {
+            SDL_RunHapticEffect(m_haptic, m_constantEffectId, 1);
+        }
     });
     return 0;
 }
@@ -55,7 +58,10 @@ int SteeringWheelHaptics::PlayPeriodic(
         effect.periodic.phase = phase;
         effect.periodic.length = duration_ms;
 
-        CreateAndRunEffect(effect, duration_ms);
+        m_periodicEffectId = UploadEffect(effect, m_periodicEffectId);
+        if (m_periodicEffectId != -1) {
+            SDL_RunHapticEffect(m_haptic, m_periodicEffectId, 1);
+        }
     });
     return 0;
 }
@@ -90,34 +96,16 @@ int SteeringWheelHaptics::PlayCondition(
         effect.condition.center[0] = static_cast<Sint16>(center * 32767.0f);
         effect.condition.length = duration_ms;
 
-        CreateAndRunEffect(effect, duration_ms);
+        SDL_HapticEffectID existingId = -1;
+        if (m_conditionEffects.count(effect.type)) {
+            existingId = m_conditionEffects[effect.type];
+        }
+
+        SDL_HapticEffectID newId = UploadEffect(effect, existingId);
+        if (newId != -1) {
+            m_conditionEffects[effect.type] = newId;
+            SDL_RunHapticEffect(m_haptic, newId, 1);
+        }
     });
     return 0;
-}
-
-int SteeringWheelHaptics::CreateAndRunEffect(SDL_HapticEffect& effect, uint32_t duration_ms) {
-    // Length is already set in specific effect structs
-    int effect_id = SDL_CreateHapticEffect(m_haptic, &effect);
-    if (effect_id < 0) {
-        // Handle error
-        return effect_id;
-    }
-
-    if (!SDL_RunHapticEffect(m_haptic, effect_id, 1)) {
-        // Handle error
-        return -1;
-    }
-    
-    // The effect can be destroyed after it has been run
-    SDL_Delay(duration_ms);
-    SDL_DestroyHapticEffect(m_haptic, effect_id);
-
-    return effect_id;
-}
-
-void SteeringWheelHaptics::UpdateEffect(int effect_id, SDL_HapticEffect& effect)
-{
-    if (!SDL_UpdateHapticEffect(m_haptic, effect_id, &effect)) {
-        // Handle error
-    }
 }
