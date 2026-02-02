@@ -174,13 +174,18 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
     if (osc_server.IsRunning()) {
         osc_server.SendWheel(steering, brake, throttle, pitch, roll);
         
-        int buttons_mask = 0;
+        std::vector<uint32_t> buttons;
         int num_buttons = SDL_GetNumJoystickButtons(joystick);
-        for (int i = 0; i < num_buttons && i < 32; ++i) {
-            if (SDL_GetJoystickButton(joystick, i))
-                buttons_mask |= (1 << i);
+        for (int i = 0; i < 4; ++i) {
+            uint32_t mask = 0;
+            for (int j = 0; j < 32; ++j) {
+                int btn = i * 32 + j;
+                if (btn < num_buttons && SDL_GetJoystickButton(joystick, btn))
+                    mask |= (1U << j);
+            }
+            buttons.push_back(mask);
         }
-        osc_server.SendButtons(buttons_mask);
+        osc_server.SendButtons(buttons);
     }
 
     return "Broadcasting...";

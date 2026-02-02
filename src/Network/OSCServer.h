@@ -7,6 +7,7 @@
 #include <mutex>
 #include <deque>
 #include <set>
+#include <vector>
 
 // Callback for incoming OSC messages
 using OSCHandler = std::function<void(const char* path, const char* types, lo_arg** argv, int argc)>;
@@ -32,7 +33,7 @@ public:
 
     void Send(const std::string& path, const char* types, ...);
     void SendWheel(float steer, float brake, float throttle, float pitch, float roll);
-    void SendButtons(int buttons);
+    void SendButtons(const std::vector<uint32_t>& buttons);
 
     void SetHandler(OSCHandler handler);
     
@@ -48,6 +49,7 @@ private:
     lo_server_thread m_server_thread = nullptr;
 
     std::atomic<bool> m_running = false;
+    std::atomic<bool> m_isConnected = false;
     
     // UI State
     char m_send_host[128] = "127.0.0.1";

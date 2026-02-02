@@ -46,6 +46,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     lo_server_thread_start(m_server_thread);
 
     m_running = true;
+    m_isConnected = true;
     std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
               << ", Listening on port " << recv_port << std::endl;
     
@@ -62,6 +63,7 @@ void OSCServer::Stop() {
     }
 
     m_running = false;
+    m_isConnected = false;
 
     if (m_server_thread) {
         lo_server_thread_stop(m_server_thread);
@@ -91,8 +93,11 @@ void OSCServer::Send(const std::string& path, const char* types, ...) {
     va_list ap;
     va_start(ap, types);
     lo_message msg = lo_message_new();
-    lo_message_add_varargs(msg, types, ap);
-    lo_send_message(m_send_address, path.c_str(), msg);
+    // Append "$$" to types to bypass liblo's LO_MARKER check, which fails when wrapping varargs
+    std::string types_str = (types ? types : "") + std::string("$$");
+    lo_message_add_varargs(msg, types_str.c_str(), ap);
+    int result = lo_send_message(m_send_address, path.c_str(), msg);
+    m_isConnected = (result != -1);
     lo_message_free(msg);
     va_end(ap);
 }
@@ -130,13 +135,27 @@ void OSCServer::SendWheel(float steer, float brake, float throttle, float pitch,
     }
 }
 
-void OSCServer::SendButtons(int buttons) {
+void OSCServer::SendButtons(const std::vector<uint32_t>& buttons) {
+    int b0 = buttons.size() > 0 ? static_cast<int>(buttons[0]) : 0;
+    int b1 = buttons.size() > 1 ? static_cast<int>(buttons[1]) : 0;
+    int b2 = buttons.size() > 2 ? static_cast<int>(buttons[2]) : 0;
+    int b3 = buttons.size() > 3 ? static_cast<int>(buttons[3]) : 0;
+
     if (m_protocolVersion == ProtocolVersion::Default) {
-        Send("/wheel/buttons", "i", buttons);
+        Send("/wheel/buttons/0", "i", b0);
+        Send("/wheel/buttons/1", "i", b1);
+        Send("/wheel/buttons/2", "i", b2);
+        Send("/wheel/buttons/3", "i", b3);
     } else if (m_protocolVersion == ProtocolVersion::WaterSteeringWheelPy) {
-        Send("/wheel/buttons", "i", buttons);
+        Send("/wheel/buttons/0", "i", b0);
+        Send("/wheel/buttons/1", "i", b1);
+        Send("/wheel/buttons/2", "i", b2);
+        Send("/wheel/buttons/3", "i", b3);
     } else if (m_protocolVersion == ProtocolVersion::MarsmaantjeNew) {
-        Send("/wheel/buttons", "i", buttons);
+        Send("/wheel/buttons/0", "i", b0);
+        Send("/wheel/buttons/1", "i", b1);
+        Send("/wheel/buttons/2", "i", b2);
+        Send("/wheel/buttons/3", "i", b3);
     }
 }
 
@@ -195,6 +214,12 @@ void OSCServer::DrawContent() {
         }
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0, 1, 0, 1), "Running");
+        ImGui::SameLine();
+        if (m_isConnected) {
+            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Connected");
+        } else {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Send Error");
+        }
     } else {
         if (ImGui::Button("Start OSC")) {
             Start(m_send_host, m_send_port, m_recv_port);
