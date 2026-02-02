@@ -2,7 +2,6 @@
 
 #include <string>
 #include <functional>
-#include <thread>
 #include <atomic>
 #include <lo/lo.h>
 #include <mutex>

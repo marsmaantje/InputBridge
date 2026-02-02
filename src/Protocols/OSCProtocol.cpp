@@ -2,7 +2,6 @@
 #include "Devices/DeviceManager.h"
 #include "Haptics/GamepadHaptics.h"
 #include "Haptics/SteeringWheelHaptics.h"
-#include <iostream>
 #include <string_view>
 #include <cstring>
 
