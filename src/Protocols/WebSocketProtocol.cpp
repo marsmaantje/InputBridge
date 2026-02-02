@@ -1,5 +1,7 @@
 #include "WebSocketProtocol.h"
 #include "Devices/DeviceManager.h"
+#include "Haptics/GamepadHaptics.h"
+#include "Haptics/SteeringWheelHaptics.h"
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -99,23 +101,23 @@ void WebSocketProtocol::parse(const std::string &message) {
             if (auto *gamepad_haptics = dynamic_cast<GamepadHaptics *>(haptic_device)) {
                 float large_magnitude = params.at("large_magnitude");
                 float small_magnitude = params.at("small_magnitude");
-                uint32_t duration_ms = params.at("duration_ms");
-                gamepad_haptics->Rumble(large_magnitude, small_magnitude, duration_ms);
+                int duration_ms = params.at("duration_ms");
+                gamepad_haptics->Rumble(large_magnitude, small_magnitude, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
             }
         } else if (type == "steering_wheel") {
             if (auto *wheel_haptics = dynamic_cast<SteeringWheelHaptics *>(haptic_device)) {
                 if (effect == "constant") {
                     float strength = params.at("strength");
-                    uint32_t duration_ms = params.at("duration_ms");
-                    wheel_haptics->PlayConstant(strength, duration_ms);
+                    int duration_ms = params.at("duration_ms");
+                    wheel_haptics->PlayConstant(strength, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
                 } else if (effect == "periodic") {
                     float strength = params.at("strength");
                     uint32_t period = params.at("period");
                     float magnitude = params.at("magnitude");
                     float offset = params.at("offset");
                     uint32_t phase = params.at("phase");
-                    uint32_t duration_ms = params.at("duration_ms");
-                    wheel_haptics->PlayPeriodic(strength, period, magnitude, offset, phase, duration_ms);
+                    int duration_int = params.at("duration_ms");
+                    wheel_haptics->PlayPeriodic(strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
                 } else if (effect == "condition") {
                     float right_sat = params.at("right_sat");
                     float left_sat = params.at("left_sat");
@@ -123,8 +125,8 @@ void WebSocketProtocol::parse(const std::string &message) {
                     float left_coeff = params.at("left_coeff");
                     float deadband = params.at("deadband");
                     float center = params.at("center");
-                    uint32_t duration_ms = params.at("duration_ms");
-                    wheel_haptics->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms);
+                    int duration_int = params.at("duration_ms");
+                    wheel_haptics->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
                 } else if (effect == "gain") {
                     int value = params.at("value");
                     wheel_haptics->SetGain(value);

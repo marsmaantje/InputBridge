@@ -36,7 +36,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
         if (haptic_dev) {
             if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
-                gamepad->Rumble(low_freq, high_freq, duration_ms);
+                gamepad->Rumble(low_freq, high_freq, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
             }
         }
     }
@@ -44,13 +44,13 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     else if (path_sv == "/inputbridge/haptics/force" && std::strcmp(types, "ifi") == 0 && argc == 3) {
         int deviceId = argv[0]->i;
         float strength = argv[1]->f;
-        int duration_ms = argv[2]->i;
+        int duration_int = argv[2]->i;
 
         auto& deviceManager = DeviceManager::GetInstance();
         HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
         if (haptic_dev) {
              if (auto* wheel = dynamic_cast<SteeringWheelHaptics*>(haptic_dev)) {
-                wheel->PlayConstant(strength, duration_ms);
+                wheel->PlayConstant(strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
             }
         }
     }
@@ -62,13 +62,13 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         float magnitude = argv[3]->f;
         float offset = argv[4]->f;
         int phase = argv[5]->i;
-        int duration_ms = argv[6]->i;
+        int duration_int = argv[6]->i;
 
         auto& deviceManager = DeviceManager::GetInstance();
         HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
         if (haptic_dev) {
              if (auto* wheel = dynamic_cast<SteeringWheelHaptics*>(haptic_dev)) {
-                wheel->PlayPeriodic(strength, period, magnitude, offset, phase, duration_ms);
+                wheel->PlayPeriodic(strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
             }
         }
     }
@@ -81,13 +81,13 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         float left_coeff = argv[4]->f;
         float deadband = argv[5]->f;
         float center = argv[6]->f;
-        int duration_ms = argv[7]->i;
+        int duration_int = argv[7]->i;
 
         auto& deviceManager = DeviceManager::GetInstance();
         HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
         if (haptic_dev) {
              if (auto* wheel = dynamic_cast<SteeringWheelHaptics*>(haptic_dev)) {
-                wheel->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms);
+                wheel->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
             }
         }
     }
