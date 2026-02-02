@@ -59,9 +59,5 @@
   "makefile.compileCommandsPath": ".vscode/compile_commands.json",
   "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "ms-vscode.cpptools",
-  "C_Cpp.clang_format_style": "file",
-  "[csharp]": {
-    "editor.defaultFormatter": "ms-dotnettools.csharp"
-  }
+  "C_Cpp.clang_format_style": "file"
 }
