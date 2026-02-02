@@ -1,317 +1,261 @@
-#include "OSCServer.h"
-
-#if ENABLE_OSC
-
-#include "Protocols/ProtocolManager.h"
-#include "Protocols/OSCProtocol.h"
+#include "Network/OSCServer.h"
 #include "imgui.h"
-#include <lo/lo.h>
-#include <deque>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <thread>
+#include <iostream>
+#include <string>
+#include <cstdarg>
+#include <algorithm>
+#include <cstdio>
 
-struct OSCServer::Impl {
-    int port = 9000;
-    bool running = false;
-    int clientCount = 0;
-    int runningPort = 0;
-    bool restartPending = false;
-    int restartPort = 0;
-    std::mutex mutex;
-    std::deque<std::string> logs;
-    
-    // Clients: URL string -> lo_address
-    std::map<std::string, lo_address> clients;
-    
-    std::shared_ptr<IProtocol> protocol;
-    std::string selectedProtocol;
-
-    std::thread *thread = nullptr;
-    lo_server server = nullptr;
-};
-
-OSCServer &OSCServer::GetInstance() {
+OSCServer& OSCServer::GetInstance() {
     static OSCServer instance;
     return instance;
 }
 
-OSCServer::OSCServer() : m_Impl(new Impl) {
-    m_Impl->protocol = ProtocolManager::GetInstance().GetProtocol("OSC");
-    if (m_Impl->protocol) {
-        m_Impl->selectedProtocol = m_Impl->protocol->getProtocolName();
-    } else {
-        m_Impl->selectedProtocol = "OSC (Built-in)";
-    }
-}
+OSCServer::OSCServer() = default;
 
 OSCServer::~OSCServer() {
     Stop();
-    if (m_Impl->thread) {
-        if (m_Impl->thread->joinable()) m_Impl->thread->join();
-        delete m_Impl->thread;
-    }
-    for (auto& kv : m_Impl->clients) {
-        lo_address_free(kv.second);
-    }
-    m_Impl->clients.clear();
-    delete m_Impl;
 }
 
-static int osc_handler(const char *path, const char *types, lo_arg **argv,
-                       int argc, lo_message msg, void *user_data) {
-    // We need to access the Impl members. Since this is a static helper, 
-    // we can cast it to the struct pointer because it's defined in this translation unit.
-    auto* serverImpl = static_cast<OSCServer::Impl*>(user_data);
-    std::lock_guard<std::mutex> lock(serverImpl->mutex);
+bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_running) {
+        return true;
+    }
     
-    // Get source address
-    lo_address src = lo_message_get_source(msg);
-    if (src) {
-        char *url = lo_address_get_url(src);
-        if (url) {
-            std::string urlStr(url);
-            if (serverImpl->clients.find(urlStr) == serverImpl->clients.end()) {
-                // New client
-                lo_address newAddr = lo_address_new_from_url(url);
-                if (newAddr) {
-                    serverImpl->clients[urlStr] = newAddr;
-                    serverImpl->clientCount++;
-                    serverImpl->logs.push_back("Client connected: " + urlStr);
-                    if (serverImpl->logs.size() > 100) serverImpl->logs.pop_front();
-                }
-            }
-            free(url);
-        }
+    m_clients.clear();
+
+    // Setup sending address
+    m_send_address = lo_address_new(send_host.c_str(), std::to_string(send_port).c_str());
+    if (!m_send_address) {
+        std::cerr << "OSC Error: Could not create send address " << send_host << ":" << send_port << std::endl;
+        return false;
     }
 
-    // Log message
-    std::string logMsg = "OSC Recv: " + std::string(path) + " " + (types ? types : "");
-    serverImpl->logs.push_back(logMsg);
-    if (serverImpl->logs.size() > 100) serverImpl->logs.pop_front();
+    // Setup receiving server
+    std::string recv_port_str = std::to_string(recv_port);
+    m_server_thread = lo_server_thread_new_with_proto(recv_port_str.c_str(), LO_UDP, nullptr);
+    if (!m_server_thread) {
+        std::cerr << "OSC Error: Could not create server on port " << recv_port << std::endl;
+        lo_address_free(m_send_address);
+        m_send_address = nullptr;
+        return false;
+    }
+
+    lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
+    lo_server_thread_start(m_server_thread);
+
+    m_running = true;
+    m_isConnected = true;
+    std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
+              << ", Listening on port " << recv_port << std::endl;
     
-    return 0;
-}
+    m_logs.push_back("OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port));
+    if (m_logs.size() > 100) m_logs.pop_front();
 
-static void osc_error(int num, const char *msg, const char *path) {
-    // Handle error
-}
-
-void OSCServer::Start(int port) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    if (m_Impl->running)
-        return;
-
-    m_Impl->port = port;
-    m_Impl->running = true;
-    m_Impl->runningPort = port;
-
-    if (m_Impl->thread) {
-        if (m_Impl->thread->joinable()) m_Impl->thread->join();
-        delete m_Impl->thread;
-    }
-
-    m_Impl->thread = new std::thread([this, port]() {
-        char portStr[16];
-        snprintf(portStr, sizeof(portStr), "%d", port);
-        
-        lo_server server = lo_server_new(portStr, osc_error);
-        
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            if (!server) {
-                m_Impl->logs.push_back("Failed to start OSC server on port " + std::to_string(port));
-                m_Impl->running = false;
-                return;
-            }
-            m_Impl->server = server;
-            m_Impl->logs.push_back("OSC server listening on port " + std::to_string(port));
-            m_Impl->clientCount = 0;
-            for(auto& kv : m_Impl->clients) {
-                lo_address_free(kv.second);
-            }
-            m_Impl->clients.clear();
-        }
-
-        lo_server_add_method(server, NULL, NULL, osc_handler, m_Impl);
-
-        while (true) {
-            bool running;
-            {
-                std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                running = m_Impl->running;
-            }
-            if (!running) break;
-
-            lo_server_recv_noblock(server, 10);
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            lo_server_free(m_Impl->server);
-            m_Impl->server = nullptr;
-            m_Impl->running = false;
-            m_Impl->runningPort = 0;
-        }
-    });
+    return true;
 }
 
 void OSCServer::Stop() {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    m_Impl->running = false;
-    m_Impl->restartPending = false;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_running) {
+        return;
+    }
+
+    m_running = false;
+    m_isConnected = false;
+
+    if (m_server_thread) {
+        lo_server_thread_stop(m_server_thread);
+        lo_server_thread_free(m_server_thread);
+        m_server_thread = nullptr;
+    }
+
+    if (m_send_address) {
+        lo_address_free(m_send_address);
+        m_send_address = nullptr;
+    }
+    std::cout << "OSC server stopped." << std::endl;
+    m_logs.push_back("OSC server stopped.");
+    if (m_logs.size() > 100) m_logs.pop_front();
 }
 
 bool OSCServer::IsRunning() const {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    return m_Impl->running;
+    return m_running;
 }
 
-int OSCServer::GetPort() const {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    return m_Impl->port;
+void OSCServer::Send(const std::string& path, const char* types, ...) {
+    if (!m_running) return;
+    // Note: We assume Stop() is not called concurrently with Send() for simplicity,
+    // or that m_send_address access is safe enough for this context.
+    if (!m_send_address) return;
+
+    va_list ap;
+    va_start(ap, types);
+    lo_message msg = lo_message_new();
+    // Append "$$" to types to bypass liblo's LO_MARKER check, which fails when wrapping varargs
+    std::string types_str = (types ? types : "") + std::string("$$");
+    lo_message_add_varargs(msg, types_str.c_str(), ap);
+    int result = lo_send_message(m_send_address, path.c_str(), msg);
+    m_isConnected = (result != -1);
+    lo_message_free(msg);
+    va_end(ap);
 }
 
-void OSCServer::SetPort(int port) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    m_Impl->port = port;
+static std::string formatFloat(float val, int precision) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%.*f", precision, val);
+    std::string s(buf);
+    std::replace(s.begin(), s.end(), ',', '.');
+    s.erase(s.find_last_not_of('0') + 1);
+    if (s.back() == '.')
+        s.pop_back();
+    return s;
 }
 
-int OSCServer::GetClientCount() const {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    return m_Impl->clientCount;
-}
-
-void OSCServer::Broadcast(const std::string &address, float value) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    for (auto const &[url, addr] : m_Impl->clients) {
-        lo_send(addr, address.c_str(), "f", value);
+void OSCServer::SendWheel(float steer, float brake, float throttle, float pitch, float roll) {
+    if (m_protocolVersion == ProtocolVersion::Default) {
+        Send("/wheel/steer", "f", steer);
+        Send("/wheel/brake", "f", brake);
+        Send("/wheel/throttle", "f", throttle);
+        Send("/wheel/pitch", "f", pitch);
+        Send("/wheel/roll", "f", roll);
+    } else if (m_protocolVersion == ProtocolVersion::WaterSteeringWheelPy) {
+        Send("/wheel/steer", "f", steer);
+        Send("/wheel/brake", "f", brake);
+        Send("/wheel/throttle", "f", throttle);
+        Send("/wheel/pitch", "f", pitch);
+        Send("/wheel/roll", "f", roll);
+    } else if (m_protocolVersion == ProtocolVersion::MarsmaantjeNew) {
+        Send("/wheel/steer", "f", steer);
+        Send("/wheel/brake", "f", brake);
+        Send("/wheel/throttle", "f", throttle);
+        Send("/wheel/pitch", "f", pitch);
+        Send("/wheel/roll", "f", roll);
     }
 }
 
-void OSCServer::Broadcast(const std::string &address, int value) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    for (auto const &[url, addr] : m_Impl->clients) {
-        lo_send(addr, address.c_str(), "i", value);
+void OSCServer::SendButtons(const std::vector<uint32_t>& buttons) {
+    int b0 = buttons.size() > 0 ? static_cast<int>(buttons[0]) : 0;
+    int b1 = buttons.size() > 1 ? static_cast<int>(buttons[1]) : 0;
+    int b2 = buttons.size() > 2 ? static_cast<int>(buttons[2]) : 0;
+    int b3 = buttons.size() > 3 ? static_cast<int>(buttons[3]) : 0;
+
+    if (m_protocolVersion == ProtocolVersion::Default) {
+        Send("/wheel/buttons/0", "i", b0);
+        Send("/wheel/buttons/1", "i", b1);
+        Send("/wheel/buttons/2", "i", b2);
+        Send("/wheel/buttons/3", "i", b3);
+    } else if (m_protocolVersion == ProtocolVersion::WaterSteeringWheelPy) {
+        Send("/wheel/buttons/0", "i", b0);
+        Send("/wheel/buttons/1", "i", b1);
+        Send("/wheel/buttons/2", "i", b2);
+        Send("/wheel/buttons/3", "i", b3);
+    } else if (m_protocolVersion == ProtocolVersion::MarsmaantjeNew) {
+        Send("/wheel/buttons/0", "i", b0);
+        Send("/wheel/buttons/1", "i", b1);
+        Send("/wheel/buttons/2", "i", b2);
+        Send("/wheel/buttons/3", "i", b3);
     }
 }
 
-void OSCServer::Broadcast(const std::string &address, const std::string &value) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    for (auto const &[url, addr] : m_Impl->clients) {
-        lo_send(addr, address.c_str(), "s", value.c_str());
-    }
+void OSCServer::SetHandler(OSCHandler handler) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_handler = std::move(handler);
 }
 
-void OSCServer::Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    for (auto const &[url, addr] : m_Impl->clients) {
-        lo_send(addr, "/wheel", "fffff", wheel, brake, throttle, pitch, roll);
+int OSCServer::generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data) {
+    auto* server = static_cast<OSCServer*>(user_data);
+    if (server) {
+        std::lock_guard<std::mutex> lock(server->m_mutex);
+        
+        lo_address src = lo_message_get_source(msg);
+        if (src) {
+            const char* hostname = lo_address_get_hostname(src);
+            const char* port = lo_address_get_port(src);
+            if (hostname && port) {
+                std::string client = std::string(hostname) + ":" + std::string(port);
+                server->m_clients.insert(client);
+            }
+        }
+        
+        server->m_logs.push_back("Recv: " + std::string(path));
+        if (server->m_logs.size() > 100) server->m_logs.pop_front();
+
+        if (server->m_handler) {
+            server->m_handler(path, types, argv, argc);
+        }
     }
+    return 0;
+}
+
+void OSCServer::SetProtocolVersion(ProtocolVersion version) {
+    m_protocolVersion = version;
+}
+
+OSCServer::ProtocolVersion OSCServer::GetProtocolVersion() const {
+    return m_protocolVersion;
 }
 
 void OSCServer::DrawContent() {
-        bool doRestart = false;
-        int restartPort = 0;
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            if (m_Impl->restartPending && !m_Impl->running) {
-                doRestart = true;
-                restartPort = m_Impl->restartPort;
-                m_Impl->restartPending = false;
-            }
+    ImGui::InputText("Send Host", m_send_host, sizeof(m_send_host));
+    ImGui::InputInt("Send Port", &m_send_port);
+    ImGui::InputInt("Receive Port", &m_recv_port);
+
+    int currentProtocol = (int)m_protocolVersion;
+    const char* protocols[] = { "Default", "Water SteeringWheel Py", "Marsmaantje (new)" };
+    if (ImGui::Combo("Protocol", &currentProtocol, protocols, IM_ARRAYSIZE(protocols))) {
+        m_protocolVersion = (ProtocolVersion)currentProtocol;
+    }
+
+    if (IsRunning()) {
+        if (ImGui::Button("Stop OSC")) {
+            Stop();
         }
-
-        if (doRestart) {
-            Start(restartPort);
-        }
-
-        bool running;
-        int currentPort;
-        int clientCount;
-        int runningPort;
-        bool restartPending;
-        std::deque<std::string> logs;
-        std::map<std::string, lo_address> clients;
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            running = m_Impl->running;
-            currentPort = m_Impl->port;
-            clientCount = m_Impl->clientCount;
-            runningPort = m_Impl->runningPort;
-            restartPending = m_Impl->restartPending;
-            logs = m_Impl->logs;
-            clients = m_Impl->clients;
-        }
-
-        int portInput = currentPort;
-        if (ImGui::InputInt("Port", &portInput)) {
-            SetPort(portInput);
-        }
-
-        // OSC Format selection
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            auto oscProtocol = std::dynamic_pointer_cast<OSCProtocol>(m_Impl->protocol);
-            if (oscProtocol) {
-                int currentFormat = (int)oscProtocol->getProtocolVersion();
-                if (ImGui::Combo(
-                        "Format", &currentFormat,
-                        [](void *, int idx, const char **out_text) {
-                            *out_text = OSCProtocol::GetVersionLabel(idx);
-                            return true;
-                        },
-                        nullptr, OSCProtocol::GetVersionCount())) {
-                    oscProtocol->setProtocolVersion((OSCProtocol::ProtocolVersion)currentFormat);
-                }
-            }
-        }
-
-        if (running) {
-            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Status: Running (Port %d)", runningPort);
-            if (runningPort != currentPort) {
-                ImGui::SameLine();
-                if (restartPending) {
-                    ImGui::TextDisabled("(Restarting...)");
-                } else if (ImGui::Button("Restart to apply")) {
-                    Stop();
-                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                    m_Impl->restartPending = true;
-                    m_Impl->restartPort = currentPort;
-                }
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Stop"))
-                Stop();
-            ImGui::Text("Connected Clients: %d", clientCount);
-
-            if (ImGui::TreeNode("Client List")) {
-                if (ImGui::BeginChild("Clients", ImVec2(0, 100), true)) {
-                    for (const auto &pair : clients) {
-                        ImGui::TextUnformatted(pair.first.c_str());
-                    }
-                }
-                ImGui::EndChild();
-                ImGui::TreePop();
-            }
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0, 1, 0, 1), "Running");
+        ImGui::SameLine();
+        if (m_isConnected) {
+            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Connected");
         } else {
-            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Status: Stopped");
-            ImGui::SameLine();
-            if (ImGui::Button("Start"))
-                Start(portInput);
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Send Error");
         }
+    } else {
+        if (ImGui::Button("Start OSC")) {
+            Start(m_send_host, m_send_port, m_recv_port);
+        }
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Stopped");
+    }
 
-        ImGui::Separator();
-        ImGui::Text("Log");
-        if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
-            for (const auto &log : logs) {
-                ImGui::TextUnformatted(log.c_str());
+    std::deque<std::string> logs;
+    std::set<std::string> clients;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        logs = m_logs;
+        clients = m_clients;
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Known Clients (Sources): %d", (int)clients.size());
+    if (ImGui::TreeNode("Client List")) {
+        if (ImGui::BeginChild("Clients", ImVec2(0, 100), true)) {
+            for (const auto &client : clients) {
+                ImGui::TextUnformatted(client.c_str());
             }
-            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-                ImGui::SetScrollHereY(1.0f);
         }
         ImGui::EndChild();
+        ImGui::TreePop();
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Log");
+    if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
+        for (const auto &log : logs) {
+            ImGui::TextUnformatted(log.c_str());
+        }
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f);
+    }
+    ImGui::EndChild();
 }
-#endif

@@ -47,13 +47,13 @@ std::string WebSocketProtocol::format_wheel(float wheel, float brake, float thro
 
     switch (m_version) {
     case ProtocolVersion::MarsmaantjeOld:
-        msg += (char)1;
+        msg += 0x01;
         msg += formatFloat(wheel, 4);
         msg += ";";
-        msg += (char)2;
+        msg += 0x02;
         msg += formatFloat(brake, 3);
         msg += ";";
-        msg += (char)3;
+        msg += 0x03;
         msg += formatFloat(throttle, 3);
         msg += ";";
         break;
@@ -79,7 +79,7 @@ std::string WebSocketProtocol::format_wheel(float wheel, float brake, float thro
     return msg;
 }
 
-void WebSocketProtocol::parse(const std::string& message) {
+void WebSocketProtocol::parse(const std::string &message) {
     try {
         json data = json::parse(message);
 
@@ -88,22 +88,22 @@ void WebSocketProtocol::parse(const std::string& message) {
         std::string effect = data.at("effect");
         json params = data.at("params");
 
-        auto& deviceManager = DeviceManager::GetInstance();
-        HapticDevice* haptic_device = deviceManager.GetHapticDevice(instance_id);
+        auto &deviceManager = DeviceManager::GetInstance();
+        HapticDevice *haptic_device = deviceManager.GetHapticDevice(instance_id);
 
         if (!haptic_device) {
             return;
         }
 
         if (type == "gamepad" && effect == "rumble") {
-            if (auto* gamepad_haptics = dynamic_cast<GamepadHaptics*>(haptic_device)) {
+            if (auto *gamepad_haptics = dynamic_cast<GamepadHaptics *>(haptic_device)) {
                 float large_magnitude = params.at("large_magnitude");
                 float small_magnitude = params.at("small_magnitude");
                 uint32_t duration_ms = params.at("duration_ms");
                 gamepad_haptics->Rumble(large_magnitude, small_magnitude, duration_ms);
             }
         } else if (type == "steering_wheel") {
-            if (auto* wheel_haptics = dynamic_cast<SteeringWheelHaptics*>(haptic_device)) {
+            if (auto *wheel_haptics = dynamic_cast<SteeringWheelHaptics *>(haptic_device)) {
                 if (effect == "constant") {
                     float strength = params.at("strength");
                     uint32_t duration_ms = params.at("duration_ms");
@@ -128,7 +128,7 @@ void WebSocketProtocol::parse(const std::string& message) {
                 }
             }
         }
-    } catch (const json::exception& e) {
+    } catch (const json::exception &e) {
         // Not a valid haptic message, ignore
     }
 }
@@ -143,6 +143,4 @@ const char *WebSocketProtocol::GetVersionLabel(int index) {
     return "Unknown";
 }
 
-int WebSocketProtocol::GetVersionCount() { 
-    return 2; 
-}
+int WebSocketProtocol::GetVersionCount() { return 2; }
