@@ -82,6 +82,29 @@ std::string WebSocketProtocol::format_wheel(float wheel, float brake, float thro
 }
 
 void WebSocketProtocol::parse(const std::string &message) {
+    // try parse a single float
+    try {
+        // replace comma with dot for float parsing
+        std::string msg = message;
+        std::replace(msg.begin(), msg.end(), ',', '.');
+        float value = -std::stof(msg);
+
+        auto &deviceManager = DeviceManager::GetInstance();
+        HapticDevice *haptic_device = deviceManager.GetHapticDevice(4);
+
+        if (!haptic_device) {
+            return;
+        }
+
+        // Just a float value received, ignore for now
+        if (auto *wheel_haptics = dynamic_cast<SteeringWheelHaptics *>(haptic_device)) {
+            wheel_haptics->PlayConstant(value * 50, SDL_HAPTIC_INFINITY);
+        }
+
+    } catch (const std::exception &e) {
+        // Not a valid float message, ignore
+    }
+
     try {
         json data = json::parse(message);
 
