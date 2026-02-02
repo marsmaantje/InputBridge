@@ -1,28 +1,22 @@
 #pragma once
-#include "IProtocol.h"
+
+#include "Protocols/IProtocol.h"
+#include "Network/OSCServer.h"
 
 class OSCProtocol : public IProtocol {
-  public:
-    enum class ProtocolVersion { WaterSteeringWheelPy };
+public:
+    OSCProtocol();
+    ~OSCProtocol() override;
 
-    OSCProtocol(ProtocolVersion version = ProtocolVersion::WaterSteeringWheelPy);
+    std::string getProtocolName() const override { return "OSC"; }
 
-    void setProtocolVersion(ProtocolVersion version);
-    ProtocolVersion getProtocolVersion() const;
-    
-    std::string getProtocolName() const override;
-
+    // IProtocol implementation (mostly unused as OSCServer handles sending directly)
     std::string format(const std::string &address, float value) override;
     std::string format(const std::string &address, int value) override;
     std::string format(const std::string &address, const std::string &value) override;
-
     std::string format_wheel(float wheel, float brake, float throttle, float pitch, float roll) override;
-
     void parse(const std::string& message) override;
 
-    static const char *GetVersionLabel(int index);
-    static int GetVersionCount();
-
-    private:
-      ProtocolVersion m_version;
+private:
+    void handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc);
 };

@@ -1,6 +1,7 @@
 #include "InputMapper.h"
 #include "Devices/DeviceManager.h"
 #include "Network/WebSocketServer.h"
+#include "Network/OSCServer.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include <algorithm>
@@ -164,23 +165,23 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
     float pitch = ProcessAxis(joystick, m_Pitch);
     float roll = ProcessAxis(joystick, m_Roll);
 
-    auto &server = WebSocketServer::GetInstance();
-    server.Broadcast_wheel(steering, brake, throttle, pitch, roll);
+    auto &websocket_server = WebSocketServer::GetInstance();
+    if (websocket_server.IsRunning()) {
+        websocket_server.Broadcast_wheel(steering, brake, throttle, pitch, roll);
+    }
 
-    // server.Broadcast("/wheel/steer", steering);
-    // server.Broadcast("/wheel/throttle", throttle);
-    // server.Broadcast("/wheel/brake", brake);
-    // if (m_Clutch.axisIndex != -1)
-    //     server.Broadcast("/wheel/clutch", clutch);
-    // server.Broadcast("/wheel/handbrake", handbrake);
-
-    // int buttons_mask = 0;
-    // int num_buttons = SDL_GetNumJoystickButtons(joystick);
-    // for (int i = 0; i < num_buttons && i < 32; ++i) {
-    //     if (SDL_GetJoystickButton(joystick, i))
-    //         buttons_mask |= (1 << i);
-    // }
-    // server.Broadcast("/wheel/buttons", buttons_mask);
+    auto &osc_server = OSCServer::GetInstance();
+    if (osc_server.IsRunning()) {
+        osc_server.SendWheel(steering, brake, throttle, pitch, roll);
+        
+        int buttons_mask = 0;
+        int num_buttons = SDL_GetNumJoystickButtons(joystick);
+        for (int i = 0; i < num_buttons && i < 32; ++i) {
+            if (SDL_GetJoystickButton(joystick, i))
+                buttons_mask |= (1 << i);
+        }
+        osc_server.SendButtons(buttons_mask);
+    }
 
     return "Broadcasting...";
 }
