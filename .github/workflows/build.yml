@@ -1,70 +1,39 @@
-name: Cross-platform building test
+name: Build and Package
 
 on:
-#  push:
-#    branches: [ "main" ]
-#  pull_request:
-#    branches: [ "main" ]
-  workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
-        type: choice
-        options:
-        - info
-        - warning
-        - debug
-#      tags:
-#        description: 'Test scenario tags'
-#        required: false
-#        type: boolean
-#      environment:
-#        description: 'Environment to run tests against'
-#        type: environment
-#        required: true
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
 jobs:
-  build:
-    name: ${{ matrix.platform.name }}
-    runs-on: ${{ matrix.platform.os }}
-    container: ${{ matrix.platform.container }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - { name: Windows, os: windows-latest }
-          - { name: Linux (Ubuntu), os: ubuntu-latest }
-          - { name: Linux (Fedora), os: ubuntu-latest, container: 'fedora:latest' }
-          - { name: Linux (Arch),   os: ubuntu-latest, container: 'archlinux:latest' }
-          - { name: macOS,   os: macos-latest }
-
+  build-windows:
+    runs-on: windows-latest
     steps:
-    - name: Install Linux Dependencies
-      if: runner.os == 'Linux'
-      run: |
-        if [ -f /etc/os-release ]; then
-          . /etc/os-release
-        fi
-        
-        SUDO=""
-        if command -v sudo >/dev/null 2>&1; then
-          SUDO="sudo"
-        fi
-        
-        case "$ID" in
-          ubuntu|debian|pop)
-            $SUDO apt-get update
-            $SUDO apt-get install -y build-essential git cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev
-            ;;
-          fedora)
-            $SUDO dnf install -y git gcc-c++ make cmake libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel libxkbcommon-devel wayland-devel systemd-devel alsa-lib-devel pulseaudio-libs-devel libXScrnSaver-devel libXext-devel libXfixes-devel libXinerama-devel libXxf86vm-devel dbus-devel libdrm-devel mesa-libgbm-devel libusb1-devel libsamplerate-devel libdecor-devel libXtst-devel openssl-devel zlib-devel libuv-devel
-            ;;
-          arch)
-            $SUDO pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
-            ;;
-        esac
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Package
+      run: |
+        cd build
+        cpack -C Release -G ZIP
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: InputBridge-Windows
+        path: build/*.zip
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
@@ -75,24 +44,67 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Prepare Artifacts
-      shell: bash
+    - name: Package
       run: |
-        mkdir -p dist
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          if [ -d "build/output/Release" ]; then
-            cp build/output/Release/InputBridge.exe dist/
-            cp build/output/Release/*.dll dist/
-          else
-            cp build/output/InputBridge.exe dist/
-            cp build/output/*.dll dist/
-          fi
-        else
-          cp build/output/InputBridge dist/
-        fi
+        cd build
+        cpack -C Release -G ZIP
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: InputBridge-${{ matrix.platform.name }}
-        path: dist/
+        name: InputBridge-macOS
+        path: build/*.zip
+
+  build-linux-appimage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build libgl1-mesa-dev libx11-dev libxext-dev libxi-dev libxrandr-dev libxinerama-dev libxcursor-dev libwayland-dev libxkbcommon-dev
+
+    - name: Configure and Build
+      run: |
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        DESTDIR=AppDir cmake --build build --target install
+
+    - name: Create AppImage
+      run: |
+        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        chmod +x linuxdeploy-x86_64.AppImage
+        ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: InputBridge-AppImage
+        path: InputBridge*.AppImage
+
+  build-linux-flatpak:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Flatpak
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y flatpak flatpak-builder
+        flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        flatpak install --user -y org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
+
+    - name: Build Flatpak
+      run: |
+        flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
+        flatpak build-bundle repo InputBridge.flatpak org.inputbridge.InputBridge
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: InputBridge-Flatpak
+        path: InputBridge.flatpak

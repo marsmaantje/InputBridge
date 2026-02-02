@@ -1,0 +1,23 @@
+app-id: org.inputbridge.InputBridge
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: InputBridge
+finish-args:
+  - --socket=x11
+  - --socket=wayland
+  - --device=all
+  - --share=network
+  - --share=ipc
+modules:
+  - name: InputBridge
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DENABLE_WEBSOCKETS=ON
+    build-options:
+      share-network: true
+    sources:
+      - type: dir
+        path: .

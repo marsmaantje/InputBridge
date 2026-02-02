@@ -163,6 +163,7 @@ find_package(Threads REQUIRED)
 
 # InputBridge Executable
 add_executable(InputBridge
+    WIN32 MACOSX_BUNDLE
     # ... put source files here ...
     src/main.cpp
     src/Devices/DeviceManager.cpp
@@ -275,4 +276,24 @@ if(WIN32)
         $<TARGET_FILE:SDL3::SDL3>
         $<TARGET_FILE_DIR:InputBridge>
     )
+    install(FILES $<TARGET_FILE:SDL3::SDL3> DESTINATION bin)
 endif()
+
+install(TARGETS InputBridge
+    RUNTIME DESTINATION bin
+    BUNDLE DESTINATION .
+)
+
+if(UNIX AND NOT APPLE)
+    # Generate basic desktop file and icon for packaging (Required for AppImage/Flatpak)
+    file(WRITE ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.desktop
+        "[Desktop Entry]\nName=InputBridge\nExec=InputBridge\nType=Application\nCategories=Utility;\nIcon=org.inputbridge.InputBridge\n"
+    )
+    install(FILES ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.desktop DESTINATION share/applications)
+    
+    file(WRITE ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='#333'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='10'>IB</text></svg>")
+    install(FILES ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg DESTINATION share/icons/hicolor/scalable/apps)
+endif()
+
+set(CPACK_GENERATOR "ZIP;TGZ")
+include(CPack)
