@@ -112,6 +112,7 @@ jobs:
         runs-on: ubuntu-latest
         container:
             image: fedora:latest
+            options: --device /dev/fuse --cap-add SYS_ADMIN
         steps:
             - name: Install Git
               run: dnf install -y git
@@ -160,6 +161,7 @@ jobs:
         runs-on: ubuntu-latest
         container:
             image: archlinux:latest
+            options: --device /dev/fuse --cap-add SYS_ADMIN
         steps:
             - name: Install Git
               run: |
