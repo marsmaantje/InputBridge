@@ -52,7 +52,7 @@ jobs:
                   name: InputBridge-macOS
                   path: build/*.zip
 
-    build-linux-appimage:
+    build-ubuntu-appimage:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -74,14 +74,89 @@ jobs:
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
                   ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+                  mv InputBridge*.AppImage InputBridge-Ubuntu.AppImage
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: InputBridge-AppImage
-                  path: InputBridge*.AppImage
+                  name: InputBridge-Ubuntu-AppImage
+                  path: InputBridge-Ubuntu.AppImage
 
-    build-linux-flatpak:
+    build-fedora-appimage:
+        runs-on: ubuntu-latest
+        container:
+            image: fedora:latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Dependencies
+              run: |
+                  dnf install -y gcc gcc-c++ cmake ninja-build pkg-config wget file \
+                  alsa-lib-devel pulseaudio-libs-devel jack-audio-connection-kit-devel \
+                  libsamplerate-devel libX11-devel libXext-devel libXrandr-devel \
+                  libXcursor-devel libXfixes-devel libXi-devel libXScrnSaver-devel \
+                  libxkbcommon-devel libdrm-devel mesa-libGL-devel mesa-libGLES-devel \
+                  mesa-libEGL-devel mesa-libgbm-devel dbus-devel systemd-devel \
+                  ibus-devel pipewire-devel wayland-devel libdecor-devel \
+                  libXtst-devel openssl-devel zlib-devel
+
+            - name: Configure and Build
+              run: |
+                  cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSDL_SHARED=OFF -DSDL_STATIC=ON
+                  DESTDIR=AppDir cmake --build build --target install
+
+            - name: Create AppImage
+              run: |
+                  wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+                  chmod +x linuxdeploy-x86_64.AppImage
+                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+                  mv InputBridge*.AppImage InputBridge-Fedora.AppImage
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Fedora-AppImage
+                  path: InputBridge-Fedora.AppImage
+
+    build-arch-appimage:
+        runs-on: ubuntu-latest
+        container:
+            image: archlinux:latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Dependencies
+              run: |
+                  pacman -Syu --noconfirm
+                  pacman -S --noconfirm base-devel cmake ninja pkg-config wget file \
+                  alsa-lib libpulse jack2 libsamplerate libx11 libxext libxrandr \
+                  libxcursor libxfixes libxi libxss libxkbcommon libdrm mesa \
+                  libglvnd dbus systemd ibus pipewire wayland libdecor \
+                  libxtst openssl zlib git fuse2
+
+            - name: Configure and Build
+              run: |
+                  cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSDL_SHARED=OFF -DSDL_STATIC=ON
+                  DESTDIR=AppDir cmake --build build --target install
+
+            - name: Create AppImage
+              run: |
+                  wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+                  chmod +x linuxdeploy-x86_64.AppImage
+                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+                  mv InputBridge*.AppImage InputBridge-Arch.AppImage
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Arch-AppImage
+                  path: InputBridge-Arch.AppImage
+
+    build-ubuntu-flatpak:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -98,10 +173,63 @@ jobs:
             - name: Build Flatpak
               run: |
                   flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
-                  flatpak build-bundle repo InputBridge.flatpak org.inputbridge.InputBridge
+                  flatpak build-bundle repo InputBridge-Ubuntu.flatpak org.inputbridge.InputBridge
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: InputBridge-Flatpak
-                  path: InputBridge.flatpak
+                  name: InputBridge-Ubuntu-Flatpak
+                  path: InputBridge-Ubuntu.flatpak
+
+    build-fedora-flatpak:
+        runs-on: ubuntu-latest
+        container:
+            image: fedora:latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Flatpak
+              run: |
+                  dnf install -y flatpak flatpak-builder git
+                  flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+                  flatpak install --user -y org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
+
+            - name: Build Flatpak
+              run: |
+                  flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
+                  flatpak build-bundle repo InputBridge-Fedora.flatpak org.inputbridge.InputBridge
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Fedora-Flatpak
+                  path: InputBridge-Fedora.flatpak
+
+    build-arch-flatpak:
+        runs-on: ubuntu-latest
+        container:
+            image: archlinux:latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Flatpak
+              run: |
+                  pacman -Syu --noconfirm
+                  pacman -S --noconfirm flatpak flatpak-builder git fuse2
+                  flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+                  flatpak install --user -y org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
+
+            - name: Build Flatpak
+              run: |
+                  flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
+                  flatpak build-bundle repo InputBridge-Arch.flatpak org.inputbridge.InputBridge
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Arch-Flatpak
+                  path: InputBridge-Arch.flatpak
