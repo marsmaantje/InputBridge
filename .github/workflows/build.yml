@@ -200,7 +200,7 @@ jobs:
 
             - name: Build Flatpak
               run: |
-                  flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
+                  flatpak-builder --user --disable-rofiles-fuse --repo=repo --force-clean build-dir org.inputbridge.InputBridge.yml
                   flatpak build-bundle repo InputBridge-Ubuntu.flatpak org.inputbridge.InputBridge
 
             - name: Upload Artifact
@@ -230,7 +230,7 @@ jobs:
 
             - name: Build Flatpak
               run: |
-                  flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
+                  flatpak-builder --user --disable-rofiles-fuse --repo=repo --force-clean build-dir org.inputbridge.InputBridge.yml
                   flatpak build-bundle repo InputBridge-Fedora.flatpak org.inputbridge.InputBridge
 
             - name: Upload Artifact
@@ -261,7 +261,7 @@ jobs:
 
             - name: Build Flatpak
               run: |
-                  flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
+                  flatpak-builder --user --disable-rofiles-fuse --repo=repo --force-clean build-dir org.inputbridge.InputBridge.yml
                   flatpak build-bundle repo InputBridge-Arch.flatpak org.inputbridge.InputBridge
 
             - name: Upload Artifact
