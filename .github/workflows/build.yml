@@ -87,20 +87,23 @@ jobs:
         container:
             image: fedora:latest
         steps:
+            - name: Install Git
+              run: dnf install -y git
+
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
             - name: Install Dependencies
               run: |
-                  dnf install -y gcc gcc-c++ cmake ninja-build pkg-config wget file \
+                  dnf install -y gcc gcc-c++ cmake ninja-build pkg-config wget file tar \
                   alsa-lib-devel pulseaudio-libs-devel jack-audio-connection-kit-devel \
                   libsamplerate-devel libX11-devel libXext-devel libXrandr-devel \
                   libXcursor-devel libXfixes-devel libXi-devel libXScrnSaver-devel \
                   libxkbcommon-devel libdrm-devel mesa-libGL-devel mesa-libGLES-devel \
                   mesa-libEGL-devel mesa-libgbm-devel dbus-devel systemd-devel \
                   ibus-devel pipewire-devel wayland-devel libdecor-devel \
-                  libXtst-devel openssl-devel zlib-devel
+                  libXtst-devel openssl-devel zlib-devel fuse
 
             - name: Configure and Build
               run: |
@@ -125,18 +128,21 @@ jobs:
         container:
             image: archlinux:latest
         steps:
+            - name: Install Git
+              run: |
+                  pacman -Sy --noconfirm git
+
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
             - name: Install Dependencies
               run: |
-                  pacman -Syu --noconfirm
-                  pacman -S --noconfirm base-devel cmake ninja pkg-config wget file \
+                  pacman -S --noconfirm base-devel cmake ninja pkg-config wget file tar \
                   alsa-lib libpulse jack2 libsamplerate libx11 libxext libxrandr \
                   libxcursor libxfixes libxi libxss libxkbcommon libdrm mesa \
                   libglvnd dbus systemd ibus pipewire wayland libdecor \
-                  libxtst openssl zlib git fuse2
+                  libxtst openssl zlib fuse2
 
             - name: Configure and Build
               run: |
@@ -186,13 +192,16 @@ jobs:
         container:
             image: fedora:latest
         steps:
+            - name: Install Git
+              run: dnf install -y git
+
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
             - name: Install Flatpak
               run: |
-                  dnf install -y flatpak flatpak-builder git
+                  dnf install -y flatpak flatpak-builder which ostree
                   flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
                   flatpak install --user -y org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
 
@@ -212,14 +221,17 @@ jobs:
         container:
             image: archlinux:latest
         steps:
+            - name: Install Git
+              run: |
+                  pacman -Sy --noconfirm git
+
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
             - name: Install Flatpak
               run: |
-                  pacman -Syu --noconfirm
-                  pacman -S --noconfirm flatpak flatpak-builder git fuse2
+                  pacman -S --noconfirm flatpak flatpak-builder which fuse2 ostree
                   flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
                   flatpak install --user -y org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
 
