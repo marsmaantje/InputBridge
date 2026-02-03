@@ -309,5 +309,30 @@ if(UNIX AND NOT APPLE)
     install(FILES ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg DESTINATION share/icons/hicolor/scalable/apps)
 endif()
 
-set(CPACK_GENERATOR "ZIP;TGZ")
+if(WIN32)
+    # This script will be executed at install time.
+    # It finds all runtime dependencies of InputBridge.exe and installs them into the package.
+    install(CODE "
+        set(INSTALL_DIR \"\${CMAKE_INSTALL_PREFIX}/bin\")
+        message(STATUS \"Gathering runtime dependencies for \${INSTALL_DIR}/InputBridge.exe\")
+        file(GET_RUNTIME_DEPENDENCIES
+            EXECUTABLES \"\${INSTALL_DIR}/InputBridge.exe\"
+            RESOLVED_DEPENDENCIES_VAR RDEPS
+            UNRESOLVED_DEPENDENCIES_VAR URDEPS
+        )
+        if(URDEPS)
+            message(WARNING \"CPack: Unresolved dependencies: \${URDEPS}\")
+        endif()
+        if(RDEPS)
+            message(STATUS \"CPack: Installing runtime dependencies: \${RDEPS}\")
+            file(INSTALL DESTINATION \"\${INSTALL_DIR}\" FILES \${RDEPS})
+        endif()
+    ")
+endif()
+
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+else()
+    set(CPACK_GENERATOR "TGZ")
+endif()
 include(CPack)
