@@ -21,11 +21,9 @@ modules:
             path: .
           - type: git
             url: https://github.com/uNetworking/uSockets.git
-            commit: ba0db0b110c9533acb76b702e39556133290c3e0
-            disable-shallow-clone: true
+            tag: v0.8.8
             dest: lib/uSockets_download
           - type: git
             url: https://github.com/uNetworking/uWebSockets.git
-            commit: 65f0af8b95899953c32797823293414119c95147
-            disable-shallow-clone: true
+            tag: v20.67.0
             dest: lib/uWebSockets_download
