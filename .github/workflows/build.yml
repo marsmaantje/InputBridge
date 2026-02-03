@@ -92,7 +92,13 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
-                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+                  ./linuxdeploy-x86_64.AppImage --appimage-extract
+                  ./squashfs-root/AppRun --appdir build/AppDir --output appimage \
+                    --icon-file build/org.inputbridge.InputBridge.svg \
+                    --desktop-file build/org.inputbridge.InputBridge.desktop || \
+                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
+                    --icon-file build/org.inputbridge.InputBridge.svg \
+                    --desktop-file build/org.inputbridge.InputBridge.desktop
                   mv InputBridge*.AppImage InputBridge-Ubuntu.AppImage
 
             - name: Upload Artifact
@@ -134,7 +140,13 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
-                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+                  ./linuxdeploy-x86_64.AppImage --appimage-extract
+                  ./squashfs-root/AppRun --appdir build/AppDir --output appimage \
+                    --icon-file build/org.inputbridge.InputBridge.svg \
+                    --desktop-file build/org.inputbridge.InputBridge.desktop || \
+                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
+                    --icon-file build/org.inputbridge.InputBridge.svg \
+                    --desktop-file build/org.inputbridge.InputBridge.desktop
                   mv InputBridge*.AppImage InputBridge-Fedora.AppImage
 
             - name: Upload Artifact
@@ -174,7 +186,13 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
-                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+                  ./linuxdeploy-x86_64.AppImage --appimage-extract
+                  ./squashfs-root/AppRun --appdir build/AppDir --output appimage \
+                    --icon-file build/org.inputbridge.InputBridge.svg \
+                    --desktop-file build/org.inputbridge.InputBridge.desktop || \
+                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
+                    --icon-file build/org.inputbridge.InputBridge.svg \
+                    --desktop-file build/org.inputbridge.InputBridge.desktop
                   mv InputBridge*.AppImage InputBridge-Arch.AppImage
 
             - name: Upload Artifact
