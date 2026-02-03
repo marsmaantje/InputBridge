@@ -19,14 +19,14 @@ jobs:
 
             - name: Package
               run: |
-                  cd build
-                  cpack -C Release -G ZIP
+                  cmake --install build --config Release --prefix package
+                  Compress-Archive -Path package/bin/* -DestinationPath build/InputBridge-Windows.zip
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
               with:
                   name: InputBridge-Windows
-                  path: build/*.zip
+                  path: build/InputBridge-Windows.zip
 
     build-macos:
         runs-on: macos-latest
