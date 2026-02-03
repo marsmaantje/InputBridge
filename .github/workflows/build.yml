@@ -1,107 +1,107 @@
 name: Build and Package
 
 on:
-  workflow_dispatch:
+    workflow_dispatch:
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    
-    - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+    build-windows:
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
 
-    - name: Build
-      run: cmake --build build --config Release
+            - name: Configure CMake
+              run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-    - name: Package
-      run: |
-        cd build
-        cpack -C Release -G ZIP
-    
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: InputBridge-Windows
-        path: build/*.zip
+            - name: Build
+              run: cmake --build build --config Release
 
-  build-macos:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+            - name: Package
+              run: |
+                  cd build
+                  cpack -C Release -G ZIP
 
-    - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Windows
+                  path: build/*.zip
 
-    - name: Build
-      run: cmake --build build --config Release
+    build-macos:
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
 
-    - name: Package
-      run: |
-        cd build
-        cpack -C Release -G ZIP
+            - name: Configure CMake
+              run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: InputBridge-macOS
-        path: build/*.zip
+            - name: Build
+              run: cmake --build build --config Release
 
-  build-linux-appimage:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+            - name: Package
+              run: |
+                  cd build
+                  cpack -C Release -G ZIP
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-macOS
+                  path: build/*.zip
 
-    - name: Configure and Build
-      run: |
-        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSDL_SHARED=OFF -DSDL_STATIC=ON
-        DESTDIR=AppDir cmake --build build --target install
+    build-linux-appimage:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
 
-    - name: Create AppImage
-      run: |
-        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-        chmod +x linuxdeploy-x86_64.AppImage
-        ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
+            - name: Install Dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: InputBridge-AppImage
-        path: InputBridge*.AppImage
+            - name: Configure and Build
+              run: |
+                  cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSDL_SHARED=OFF -DSDL_STATIC=ON
+                  DESTDIR=AppDir cmake --build build --target install
 
-  build-linux-flatpak:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+            - name: Create AppImage
+              run: |
+                  wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+                  chmod +x linuxdeploy-x86_64.AppImage
+                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage --icon-file build/org.inputbridge.InputBridge.svg --desktop-file build/org.inputbridge.InputBridge.desktop
 
-    - name: Install Flatpak
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y flatpak flatpak-builder
-        flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-        flatpak install --user -y org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-AppImage
+                  path: InputBridge*.AppImage
 
-    - name: Build Flatpak
-      run: |
-        flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
-        flatpak build-bundle repo InputBridge.flatpak org.inputbridge.InputBridge
+    build-linux-flatpak:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: InputBridge-Flatpak
-        path: InputBridge.flatpak
+            - name: Install Flatpak
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y flatpak flatpak-builder
+                  flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+                  flatpak install --user -y org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
+
+            - name: Build Flatpak
+              run: |
+                  flatpak-builder --user --disable-rofiles-fuse --force-clean build-dir org.inputbridge.InputBridge.yml
+                  flatpak build-bundle repo InputBridge.flatpak org.inputbridge.InputBridge
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Flatpak
+                  path: InputBridge.flatpak
