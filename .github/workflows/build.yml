@@ -92,10 +92,7 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
-                  # Try to skip stripping; if --no-strip unsupported, fall back to STRIP=/bin/true
-                  ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
-                    --icon-file build/org.inputbridge.InputBridge.svg \
-                    --desktop-file build/org.inputbridge.InputBridge.desktop --no-strip || \
+                  # Set STRIP to /bin/true to avoid strip failures on newer binaries
                   STRIP=/bin/true ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
                     --icon-file build/org.inputbridge.InputBridge.svg \
                     --desktop-file build/org.inputbridge.InputBridge.desktop
@@ -140,10 +137,7 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
-                  # Use extract-and-run to avoid FUSE permission issues
-                  APPIMAGE_EXTRACT_AND_RUN=1 ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
-                    --icon-file build/org.inputbridge.InputBridge.svg \
-                    --desktop-file build/org.inputbridge.InputBridge.desktop --no-strip || \
+                  # Set STRIP to /bin/true to avoid strip failures on newer binaries
                   APPIMAGE_EXTRACT_AND_RUN=1 STRIP=/bin/true ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
                     --icon-file build/org.inputbridge.InputBridge.svg \
                     --desktop-file build/org.inputbridge.InputBridge.desktop
@@ -186,10 +180,7 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
-                  # Use extract-and-run to avoid FUSE permission issues
-                  APPIMAGE_EXTRACT_AND_RUN=1 ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
-                    --icon-file build/org.inputbridge.InputBridge.svg \
-                    --desktop-file build/org.inputbridge.InputBridge.desktop --no-strip || \
+                  # Set STRIP to /bin/true to avoid strip failures on newer binaries
                   APPIMAGE_EXTRACT_AND_RUN=1 STRIP=/bin/true ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
                     --icon-file build/org.inputbridge.InputBridge.svg \
                     --desktop-file build/org.inputbridge.InputBridge.desktop
