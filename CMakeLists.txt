@@ -14,12 +14,12 @@ set(ENABLE_OSC ON CACHE BOOL "Enable WebSocket server support" FORCE)
 # We assume lib/sdl contains the SDL3 source code.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl/CMakeLists.txt")
     # Fix for CI: Disable XScrnSaver dependency
-    set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "Disable XScrnSaver" FORCE)
-    set(SDL_X11_XCURSOR OFF CACHE BOOL "Disable XCursor" FORCE)
-    set(SDL_X11_XINPUT OFF CACHE BOOL "Disable XInput" FORCE)
-    set(SDL_X11_XRANDR OFF CACHE BOOL "Disable XRandR" FORCE)
-    set(SDL_X11_XSHAPE OFF CACHE BOOL "Disable XShape" FORCE)
-    set(SDL_X11_XFIXES OFF CACHE BOOL "Disable XFixes" FORCE)
+    #set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "Disable XScrnSaver" FORCE)
+    #set(SDL_X11_XCURSOR OFF CACHE BOOL "Disable XCursor" FORCE)
+    #set(SDL_X11_XINPUT OFF CACHE BOOL "Disable XInput" FORCE)
+    #set(SDL_X11_XRANDR OFF CACHE BOOL "Disable XRandR" FORCE)
+    #set(SDL_X11_XSHAPE OFF CACHE BOOL "Disable XShape" FORCE)
+    #set(SDL_X11_XFIXES OFF CACHE BOOL "Disable XFixes" FORCE)
     add_subdirectory(lib/sdl)
 else()
     # Fallback to system installed SDL3
