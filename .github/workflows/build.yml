@@ -180,8 +180,8 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
-                  # Use system strip to avoid failures with newer binaries (RELR sections)
-                  APPIMAGE_EXTRACT_AND_RUN=1 STRIP=/usr/bin/strip ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
+                  # Set STRIP to /bin/true to avoid strip failures on newer binaries
+                  APPIMAGE_EXTRACT_AND_RUN=1 STRIP=/bin/true ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
                     --icon-file build/org.inputbridge.InputBridge.svg \
                     --desktop-file build/org.inputbridge.InputBridge.desktop
                   mv InputBridge*.AppImage InputBridge-Arch.AppImage
