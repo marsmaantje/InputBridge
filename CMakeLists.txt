@@ -13,6 +13,8 @@ set(ENABLE_OSC ON CACHE BOOL "Enable WebSocket server support" FORCE)
 # Add SDL3
 # We assume lib/sdl contains the SDL3 source code.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/sdl/CMakeLists.txt")
+    # Fix for CI: Disable XScrnSaver dependency
+    set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "Disable XScrnSaver" FORCE)
     add_subdirectory(lib/sdl)
 else()
     # Fallback to system installed SDL3
@@ -55,101 +57,101 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 # Add uWebSockets
 if(ENABLE_WEBSOCKETS)
-include(FetchContent)
+    include(FetchContent)
 
-# Libuv (Required for uSockets on Windows)
-if(WIN32)
+    # Libuv (Required for uSockets on Windows)
+    if(WIN32)
+        FetchContent_Declare(
+            libuv
+            GIT_REPOSITORY https://github.com/libuv/libuv.git
+            GIT_TAG v1.48.0
+            GIT_SUBMODULES ""
+        )
+        FetchContent_MakeAvailable(libuv)
+    endif()
+
+    # uSockets
     FetchContent_Declare(
-        libuv
-        GIT_REPOSITORY https://github.com/libuv/libuv.git
-        GIT_TAG        v1.48.0
+        usockets_lib
+        GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
+        GIT_TAG master
         GIT_SUBMODULES ""
     )
-    FetchContent_MakeAvailable(libuv)
-endif()
+    FetchContent_GetProperties(usockets_lib)
+    if(NOT usockets_lib_POPULATED)
+        FetchContent_Populate(usockets_lib)
+    endif()
 
-# uSockets
-FetchContent_Declare(
-    usockets_lib
-    GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
-    GIT_TAG        master
-    GIT_SUBMODULES ""
-)
-FetchContent_GetProperties(usockets_lib)
-if(NOT usockets_lib_POPULATED)
-    FetchContent_Populate(usockets_lib)
-endif()
-
-# Define uSockets library manually
-set(USOCKETS_SOURCES
-    ${usockets_lib_SOURCE_DIR}/src/bsd.c
-    ${usockets_lib_SOURCE_DIR}/src/context.c
-    ${usockets_lib_SOURCE_DIR}/src/loop.c
-    ${usockets_lib_SOURCE_DIR}/src/socket.c
-    ${usockets_lib_SOURCE_DIR}/src/udp.c
-)
-
-if(WIN32)
-    list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/libuv.c)
-else()
-    list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/epoll_kqueue.c)
-endif()
-
-find_package(OpenSSL)
-if(OpenSSL_FOUND)
-    list(APPEND USOCKETS_SOURCES
-        ${usockets_lib_SOURCE_DIR}/src/crypto/openssl.c
-        ${usockets_lib_SOURCE_DIR}/src/crypto/sni_tree.cpp
+    # Define uSockets library manually
+    set(USOCKETS_SOURCES
+        ${usockets_lib_SOURCE_DIR}/src/bsd.c
+        ${usockets_lib_SOURCE_DIR}/src/context.c
+        ${usockets_lib_SOURCE_DIR}/src/loop.c
+        ${usockets_lib_SOURCE_DIR}/src/socket.c
+        ${usockets_lib_SOURCE_DIR}/src/udp.c
     )
-endif()
 
-add_library(uSockets STATIC ${USOCKETS_SOURCES})
-target_include_directories(uSockets PUBLIC ${usockets_lib_SOURCE_DIR}/src)
+    if(WIN32)
+        list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/libuv.c)
+    else()
+        list(APPEND USOCKETS_SOURCES ${usockets_lib_SOURCE_DIR}/src/eventing/epoll_kqueue.c)
+    endif()
 
-# Add compile definitions to prevent winsock conflicts
-if(WIN32)
-    target_compile_definitions(uSockets PUBLIC 
-        WIN32_LEAN_AND_MEAN
-        NOMINMAX
-        _WINSOCK_DEPRECATED_NO_WARNINGS
+    find_package(OpenSSL)
+    if(OpenSSL_FOUND)
+        list(APPEND USOCKETS_SOURCES
+            ${usockets_lib_SOURCE_DIR}/src/crypto/openssl.c
+            ${usockets_lib_SOURCE_DIR}/src/crypto/sni_tree.cpp
+        )
+    endif()
+
+    add_library(uSockets STATIC ${USOCKETS_SOURCES})
+    target_include_directories(uSockets PUBLIC ${usockets_lib_SOURCE_DIR}/src)
+
+    # Add compile definitions to prevent winsock conflicts
+    if(WIN32)
+        target_compile_definitions(uSockets PUBLIC
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+            _WINSOCK_DEPRECATED_NO_WARNINGS
+        )
+    endif()
+
+    if(OpenSSL_FOUND)
+        target_link_libraries(uSockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(uSockets PUBLIC LIBUS_USE_OPENSSL)
+    else()
+        target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL)
+    endif()
+
+    if(WIN32)
+        target_compile_definitions(uSockets PUBLIC LIBUS_USE_LIBUV)
+        target_link_libraries(uSockets PUBLIC uv_a ws2_32)
+    endif()
+
+    # uWebSockets
+    FetchContent_Declare(
+        uwebsockets_lib
+        GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
+        GIT_TAG master
+        GIT_SUBMODULES ""
     )
-endif()
+    FetchContent_GetProperties(uwebsockets_lib)
+    if(NOT uwebsockets_lib_POPULATED)
+        FetchContent_Populate(uwebsockets_lib)
+    endif()
 
-if(OpenSSL_FOUND)
-    target_link_libraries(uSockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-    target_compile_definitions(uSockets PUBLIC LIBUS_USE_OPENSSL)
-else()
-    target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL)
-endif()
+    add_library(uWebSockets INTERFACE)
+    target_include_directories(uWebSockets INTERFACE ${uwebsockets_lib_SOURCE_DIR}/src)
+    target_link_libraries(uWebSockets INTERFACE uSockets)
 
-if(WIN32)
-    target_compile_definitions(uSockets PUBLIC LIBUS_USE_LIBUV)
-    target_link_libraries(uSockets PUBLIC uv_a ws2_32)
-endif()
-
-# uWebSockets
-FetchContent_Declare(
-    uwebsockets_lib
-    GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
-    GIT_TAG        master
-    GIT_SUBMODULES ""
-)
-FetchContent_GetProperties(uwebsockets_lib)
-if(NOT uwebsockets_lib_POPULATED)
-    FetchContent_Populate(uwebsockets_lib)
-endif()
-
-add_library(uWebSockets INTERFACE)
-target_include_directories(uWebSockets INTERFACE ${uwebsockets_lib_SOURCE_DIR}/src)
-target_link_libraries(uWebSockets INTERFACE uSockets)
-
-# ZLIB is required for uWebSockets
-find_package(ZLIB)
-if(ZLIB_FOUND)
-    target_link_libraries(uWebSockets INTERFACE ZLIB::ZLIB)
-else()
-    target_compile_definitions(uWebSockets INTERFACE UWS_NO_ZLIB)
-endif()
+    # ZLIB is required for uWebSockets
+    find_package(ZLIB)
+    if(ZLIB_FOUND)
+        target_link_libraries(uWebSockets INTERFACE ZLIB::ZLIB)
+    else()
+        target_compile_definitions(uWebSockets INTERFACE UWS_NO_ZLIB)
+    endif()
 
 endif() # if(ENABLE_WEBSOCKETS)
 
@@ -208,7 +210,7 @@ endif()
 
 # Add compile definitions to InputBridge
 if(WIN32)
-    target_compile_definitions(InputBridge PRIVATE 
+    target_compile_definitions(InputBridge PRIVATE
         WIN32_LEAN_AND_MEAN
         NOMINMAX
     )
@@ -237,9 +239,9 @@ else()
 endif()
 
 # Link libraries - order matters on Windows!
-target_link_libraries(InputBridge PRIVATE 
-    imgui 
-    SDL3::SDL3 
+target_link_libraries(InputBridge PRIVATE
+    imgui
+    SDL3::SDL3
     Threads::Threads
     nlohmann_json
 )
@@ -290,7 +292,7 @@ if(UNIX AND NOT APPLE)
         "[Desktop Entry]\nName=InputBridge\nExec=InputBridge\nType=Application\nCategories=Utility;\nIcon=org.inputbridge.InputBridge\n"
     )
     install(FILES ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.desktop DESTINATION share/applications)
-    
+
     file(WRITE ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='#333'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='10'>IB</text></svg>")
     install(FILES ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg DESTINATION share/icons/hicolor/scalable/apps)
 endif()

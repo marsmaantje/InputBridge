@@ -90,7 +90,7 @@ void WebSocketProtocol::parse(const std::string &message) {
         float value = -std::stof(msg);
 
         auto &deviceManager = DeviceManager::GetInstance();
-        HapticDevice *haptic_device = deviceManager.GetHapticDevice(4);
+        HapticDevice *haptic_device = deviceManager.GetHapticDevice(5);
 
         if (!haptic_device) {
             return;
