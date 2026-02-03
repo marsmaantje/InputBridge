@@ -62,29 +62,48 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 # Add uWebSockets
 if(ENABLE_WEBSOCKETS)
-    include(FetchContent)
+    # For flatpak, we provide sources via the manifest.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/uSockets_download/src" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/uWebSockets_download/src")
+        message(STATUS "Using pre-downloaded uSockets/uWebSockets for Flatpak build.")
+        set(usockets_lib_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/uSockets_download)
+        set(uwebsockets_lib_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/uWebSockets_download)
+    else()
+        include(FetchContent)
 
-    # Libuv (Required for uSockets on Windows)
-    if(WIN32)
+        # Libuv (Required for uSockets on Windows)
+        if(WIN32)
+            FetchContent_Declare(
+                libuv
+                GIT_REPOSITORY https://github.com/libuv/libuv.git
+                GIT_TAG v1.48.0
+                GIT_SUBMODULES ""
+            )
+            FetchContent_MakeAvailable(libuv)
+        endif()
+
+        # uSockets
         FetchContent_Declare(
-            libuv
-            GIT_REPOSITORY https://github.com/libuv/libuv.git
-            GIT_TAG v1.48.0
+            usockets_lib
+            GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
+            GIT_TAG master
             GIT_SUBMODULES ""
         )
-        FetchContent_MakeAvailable(libuv)
-    endif()
+        FetchContent_GetProperties(usockets_lib)
+        if(NOT usockets_lib_POPULATED)
+            FetchContent_Populate(usockets_lib)
+        endif()
 
-    # uSockets
-    FetchContent_Declare(
-        usockets_lib
-        GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
-        GIT_TAG master
-        GIT_SUBMODULES ""
-    )
-    FetchContent_GetProperties(usockets_lib)
-    if(NOT usockets_lib_POPULATED)
-        FetchContent_Populate(usockets_lib)
+        # uWebSockets
+        FetchContent_Declare(
+            uwebsockets_lib
+            GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
+            GIT_TAG master
+            GIT_SUBMODULES ""
+        )
+        FetchContent_GetProperties(uwebsockets_lib)
+        if(NOT uwebsockets_lib_POPULATED)
+            FetchContent_Populate(uwebsockets_lib)
+        endif()
     endif()
 
     # Define uSockets library manually
@@ -132,18 +151,6 @@ if(ENABLE_WEBSOCKETS)
     if(WIN32)
         target_compile_definitions(uSockets PUBLIC LIBUS_USE_LIBUV)
         target_link_libraries(uSockets PUBLIC uv_a ws2_32)
-    endif()
-
-    # uWebSockets
-    FetchContent_Declare(
-        uwebsockets_lib
-        GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
-        GIT_TAG master
-        GIT_SUBMODULES ""
-    )
-    FetchContent_GetProperties(uwebsockets_lib)
-    if(NOT uwebsockets_lib_POPULATED)
-        FetchContent_Populate(uwebsockets_lib)
     endif()
 
     add_library(uWebSockets INTERFACE)

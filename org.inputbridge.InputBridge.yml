@@ -1,23 +1,29 @@
 app-id: org.inputbridge.InputBridge
 runtime: org.freedesktop.Platform
-runtime-version: '23.08'
+runtime-version: "23.08"
 sdk: org.freedesktop.Sdk
 command: InputBridge
 finish-args:
-  - --socket=x11
-  - --socket=wayland
-  - --device=all
-  - --share=network
-  - --share=ipc
+    - --socket=x11
+    - --socket=wayland
+    - --device=all
+    - --share=network
+    - --share=ipc
 modules:
-  - name: InputBridge
-    buildsystem: cmake-ninja
-    builddir: true
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DENABLE_WEBSOCKETS=ON
-    build-options:
-      share-network: true
-    sources:
-      - type: dir
-        path: .
+    - name: InputBridge
+      buildsystem: cmake-ninja
+      builddir: true
+      config-opts:
+          - -DCMAKE_BUILD_TYPE=Release
+          - -DENABLE_WEBSOCKETS=ON
+      sources:
+          - type: dir
+            path: .
+          - type: git
+            url: https://github.com/uNetworking/uSockets.git
+            commit: ba0db0b110c9533acb76b702e39556133290c3e0
+            dest: lib/uSockets_download
+          - type: git
+            url: https://github.com/uNetworking/uWebSockets.git
+            commit: 65f0af8b95899953c32797823293414119c95147
+            dest: lib/uWebSockets_download
