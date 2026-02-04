@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <atomic>
 
 #if ENABLE_WEBSOCKETS
 #include <App.h>
@@ -19,6 +20,9 @@ class WebSocketServer {
     int GetPort() const;
     void SetPort(int port);
     int GetClientCount() const;
+    
+    void SetSelectedDevice(int id);
+    int GetSelectedDevice() const;
 
     void Broadcast(const std::string &address, float value);
     void Broadcast(const std::string &address, int value);
@@ -39,6 +43,9 @@ class WebSocketServer {
     int GetPort() const { return 0; }
     void SetPort(int port) {}
     int GetClientCount() const { return 0; }
+    
+    void SetSelectedDevice(int id) {}
+    int GetSelectedDevice() const { return 0; }
 
     void Broadcast(const std::string &address, float value) {}
     void Broadcast(const std::string &address, int value) {}
@@ -53,13 +60,14 @@ class WebSocketServer {
     WebSocketServer();
     ~WebSocketServer();
 #else
-    WebSocketServer() : m_Impl(nullptr) {}
+    WebSocketServer() : m_selectedDeviceId(0), m_Impl(nullptr) {}
     ~WebSocketServer() {}
 #endif
 
     WebSocketServer(const WebSocketServer &) = delete;
     WebSocketServer &operator=(const WebSocketServer &) = delete;
 
+    std::atomic<int> m_selectedDeviceId{0};
     struct Impl;
     Impl *m_Impl;
 };

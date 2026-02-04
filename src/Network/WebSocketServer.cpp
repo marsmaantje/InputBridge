@@ -37,7 +37,7 @@ WebSocketServer &WebSocketServer::GetInstance() {
     return instance;
 }
 
-WebSocketServer::WebSocketServer() : m_Impl(new Impl) {
+WebSocketServer::WebSocketServer() : m_selectedDeviceId(0), m_Impl(new Impl) {
     m_Impl->protocol = ProtocolManager::GetInstance().GetProtocol("WebSocket");
     if (!m_Impl->protocol) {
         m_Impl->protocol = std::make_shared<WebSocketProtocol>();
@@ -164,6 +164,14 @@ void WebSocketServer::SetPort(int port) {
 int WebSocketServer::GetClientCount() const {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     return m_Impl->clientCount;
+}
+
+void WebSocketServer::SetSelectedDevice(int id) {
+    m_selectedDeviceId = id;
+}
+
+int WebSocketServer::GetSelectedDevice() const {
+    return m_selectedDeviceId;
 }
 
 void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {

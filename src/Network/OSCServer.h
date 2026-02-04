@@ -35,6 +35,9 @@ public:
     void SendWheel(float steer, float brake, float throttle, float pitch, float roll);
     void SendButtons(const std::vector<uint32_t>& buttons);
 
+    void SetSelectedDevice(int id);
+    int GetSelectedDevice() const;
+
     void SetHandler(OSCHandler handler);
     
     void DrawContent();
@@ -50,6 +53,7 @@ private:
 
     std::atomic<bool> m_running = false;
     std::atomic<bool> m_isConnected = false;
+    std::atomic<int> m_selectedDeviceId = 0;
     
     // UI State
     char m_send_host[128] = "127.0.0.1";

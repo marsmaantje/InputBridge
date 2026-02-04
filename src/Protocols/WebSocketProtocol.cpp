@@ -1,5 +1,6 @@
 #include "WebSocketProtocol.h"
 #include "Devices/DeviceManager.h"
+#include "Network/WebSocketServer.h"
 #include "Haptics/GamepadHaptics.h"
 #include "Haptics/SteeringWheelHaptics.h"
 #include <algorithm>
@@ -90,7 +91,7 @@ void WebSocketProtocol::parse(const std::string &message) {
         float value = -std::stof(msg);
 
         auto &deviceManager = DeviceManager::GetInstance();
-        HapticDevice *haptic_device = deviceManager.GetHapticDevice(5);
+        HapticDevice *haptic_device = deviceManager.GetHapticDevice(WebSocketServer::GetInstance().GetSelectedDevice());
 
         if (!haptic_device) {
             return;
@@ -108,7 +109,7 @@ void WebSocketProtocol::parse(const std::string &message) {
     try {
         json data = json::parse(message);
 
-        SDL_JoystickID instance_id = data.at("device");
+        SDL_JoystickID instance_id = WebSocketServer::GetInstance().GetSelectedDevice();
         std::string type = data.at("type");
         std::string effect = data.at("effect");
         json params = data.at("params");
