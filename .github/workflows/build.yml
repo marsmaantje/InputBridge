@@ -12,12 +12,11 @@ on:
                     - all
                     - windows
                     - macos
+                    - ubuntu
                     - ubuntu-appimage
                     - ubuntu-flatpak
-                    - fedora-appimage
-                    - fedora-flatpak
-                    - arch-appimage
-                    - arch-flatpak
+                    - fedora
+                    - arch
 
 jobs:
     build-windows:
@@ -129,3 +128,91 @@ jobs:
               with:
                   name: InputBridge-Ubuntu-Flatpak
                   path: InputBridge-Ubuntu.flatpak
+
+    build-ubuntu:
+        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu' }}
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential git cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev
+
+            - name: Configure CMake
+              run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+            - name: Build
+              run: cmake --build build --config Release
+
+            - name: Prepare Artifacts
+              run: |
+                  mkdir -p dist
+                  cp build/output/InputBridge dist/
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Ubuntu
+                  path: dist/
+
+    build-fedora:
+        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'fedora' }}
+        runs-on: ubuntu-latest
+        container: fedora:latest
+        steps:
+            - name: Install Dependencies
+              run: dnf install -y git gcc-c++ make cmake libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel libxkbcommon-devel wayland-devel systemd-devel alsa-lib-devel pulseaudio-libs-devel libXScrnSaver-devel libXext-devel libXfixes-devel libXinerama-devel libXxf86vm-devel dbus-devel libdrm-devel mesa-libgbm-devel libusb1-devel libsamplerate-devel libdecor-devel libXtst-devel openssl-devel zlib-devel libuv-devel
+
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Configure CMake
+              run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+            - name: Build
+              run: cmake --build build --config Release
+
+            - name: Prepare Artifacts
+              run: |
+                  mkdir -p dist
+                  cp build/output/InputBridge dist/
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Fedora
+                  path: dist/
+
+    build-arch:
+        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'arch' }}
+        runs-on: ubuntu-latest
+        container: archlinux:latest
+        steps:
+            - name: Install Dependencies
+              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
+
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Configure CMake
+              run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+            - name: Build
+              run: cmake --build build --config Release
+
+            - name: Prepare Artifacts
+              run: |
+                  mkdir -p dist
+                  cp build/output/InputBridge dist/
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: InputBridge-Arch
+                  path: dist/
