@@ -52,7 +52,7 @@ int GamepadHaptics::Rumble(float large_magnitude, float small_magnitude, uint32_
         // Create or update the effect
         m_rumbleEffectId = UploadEffect(effect, m_rumbleEffectId);
         if (m_rumbleEffectId >= 0) {
-            if (!SDL_RunHapticEffect(m_haptic, m_rumbleEffectId, 1)) {
+            if (!SDL_RunHapticEffect(m_haptic, m_rumbleEffectId, (duration_ms == SDL_HAPTIC_INFINITY) ? SDL_HAPTIC_INFINITY : 1)) {
                 SDL_Log("SDL_RunHapticEffect failed: %s", SDL_GetError());
             }
         } else {

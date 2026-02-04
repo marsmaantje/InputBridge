@@ -40,6 +40,8 @@ public:
     // duration: milliseconds
     void SetRumble(float low_freq, float high_freq, Uint32 duration);
 
+    void UpdateEffect(SDL_HapticEffectID effectId, const SDL_HapticEffect& effect);
+
     void StopAll();
 
 protected:
@@ -51,7 +53,7 @@ protected:
     SDL_HapticEffectID m_rumbleEffectId = -1;
     std::map<Uint16, SDL_HapticEffectID> m_conditionEffects;
 
-    SDL_HapticEffectID UploadEffect(SDL_HapticEffect& effect, SDL_HapticEffectID existingId);
+    SDL_HapticEffectID UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId);
     void RunAsync(std::function<void()> task);
 
 private:

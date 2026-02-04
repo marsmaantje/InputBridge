@@ -84,11 +84,11 @@ void HapticDevice::ThreadLoop() {
     }
 }
 
-SDL_HapticEffectID HapticDevice::UploadEffect(SDL_HapticEffect& effect, SDL_HapticEffectID existingId) {
+SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId) {
     if (!m_haptic) return -1;
 
     if (existingId != -1) {
-        if (SDL_UpdateHapticEffect(m_haptic, existingId, &effect) == 0) {
+        if (SDL_UpdateHapticEffect(m_haptic, existingId, &effect)) {
             return existingId;
         } else {
             // If update fails (e.g. type mismatch), destroy and recreate
@@ -187,6 +187,13 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
         if (m_rumbleEffectId != -1) {
             SDL_RunHapticEffect(m_haptic, m_rumbleEffectId, 1);
         }
+    });
+}
+
+void HapticDevice::UpdateEffect(SDL_HapticEffectID effectId, const SDL_HapticEffect& effect) {
+    RunAsync([this, effectId, effect]() {
+        if (!m_haptic) return;
+        SDL_UpdateHapticEffect(m_haptic, effectId, &effect);
     });
 }
 

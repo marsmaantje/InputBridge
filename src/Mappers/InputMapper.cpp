@@ -72,6 +72,8 @@ void InputMapper::DrawUI() {
     if (ImGui::BeginCombo("Source Device", currentDeviceName)) {
         if (ImGui::Selectable("None", m_SelectedDeviceID == 0)) {
             m_SelectedDeviceID = 0;
+            OSCServer::GetInstance().SetSelectedDevice(0);
+            WebSocketServer::GetInstance().SetSelectedDevice(0);
         }
 
         for (const auto &dev : devices) {
@@ -83,6 +85,8 @@ void InputMapper::DrawUI() {
 #ifdef ENABLE_EXCLUSIVE_INPUT
                 ApplyExclusiveMode();
 #endif
+                OSCServer::GetInstance().SetSelectedDevice(m_SelectedDeviceID);
+                WebSocketServer::GetInstance().SetSelectedDevice(m_SelectedDeviceID);
             }
             if (isSelected) {
                 ImGui::SetItemDefaultFocus();
@@ -202,6 +206,8 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
             }
         }
     }
+    OSCServer::GetInstance().SetSelectedDevice(m_SelectedDeviceID);
+    WebSocketServer::GetInstance().SetSelectedDevice(m_SelectedDeviceID);
 
     auto LoadAxis = [&](const char *prefix, AxisConfig &config) {
         config.axisIndex = prefs.GetInt(std::string(prefix) + ".Axis", -1);

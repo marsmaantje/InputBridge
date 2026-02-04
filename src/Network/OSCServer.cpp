@@ -197,6 +197,14 @@ OSCServer::ProtocolVersion OSCServer::GetProtocolVersion() const {
     return m_protocolVersion;
 }
 
+void OSCServer::SetSelectedDevice(int id) {
+    m_selectedDeviceId = id;
+}
+
+int OSCServer::GetSelectedDevice() const {
+    return m_selectedDeviceId;
+}
+
 void OSCServer::DrawContent() {
     ImGui::InputText("Send Host", m_send_host, sizeof(m_send_host));
     ImGui::InputInt("Send Port", &m_send_port);
