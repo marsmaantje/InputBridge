@@ -28,6 +28,9 @@ class PreferencesManager {
     void SetVisualizerPreference(const std::string &guid,
                                  const std::string &visualizer);
 
+    std::string GetDeviceMapping(const std::string &guid) const;
+    void SetDeviceMapping(const std::string &guid, const std::string &mapping);
+
     bool IsPreferenceApplied(SDL_JoystickID instance_id) const;
     void MarkPreferenceApplied(SDL_JoystickID instance_id);
     void ClearAppliedPreference(SDL_JoystickID instance_id);

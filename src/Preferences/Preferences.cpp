@@ -93,6 +93,22 @@ void PreferencesManager::SetVisualizerPreference(
     m_Settings[guid] = visualizer;
 }
 
+std::string
+PreferencesManager::GetDeviceMapping(const std::string &guid) const {
+    std::string key = "Mapping_" + guid;
+    auto it = m_Settings.find(key);
+    if (it != m_Settings.end()) {
+        return it->second;
+    }
+    return "";
+}
+
+void PreferencesManager::SetDeviceMapping(const std::string &guid,
+                                          const std::string &mapping) {
+    std::string key = "Mapping_" + guid;
+    m_Settings[key] = mapping;
+}
+
 bool PreferencesManager::IsPreferenceApplied(SDL_JoystickID instance_id) const {
     return m_AppliedPreferences.find(instance_id) != m_AppliedPreferences.end();
 }
