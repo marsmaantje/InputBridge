@@ -44,6 +44,10 @@ PreferencesManager::GetString(const std::string &key,
     return defaultValue;
 }
 
+void PreferencesManager::DeleteKey(const std::string &key) {
+    m_Settings.erase(key);
+}
+
 void PreferencesManager::SetInt(const std::string &key, int value) {
     m_Settings[key] = std::to_string(value);
 }
@@ -107,6 +111,7 @@ void PreferencesManager::SetDeviceMapping(const std::string &guid,
                                           const std::string &mapping) {
     std::string key = "Mapping_" + guid;
     m_Settings[key] = mapping;
+    Save();
 }
 
 bool PreferencesManager::IsPreferenceApplied(SDL_JoystickID instance_id) const {

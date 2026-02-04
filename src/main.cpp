@@ -337,7 +337,7 @@ int main(int argc, char *argv[]) {
             ImGui::PopID();
         }
 
-        inputMapper.DrawUI();
+        inputMapper.DrawUI(preferencesManager);
 
         if (ImGui::Button("Exit"))
             done = true;

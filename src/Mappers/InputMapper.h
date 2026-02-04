@@ -21,7 +21,7 @@ class InputMapper {
     InputMapper(const DeviceManager &deviceManager);
     ~InputMapper();
 
-    void DrawUI();
+    void DrawUI(PreferencesManager& prefs);
     std::string UpdateAndBroadcastMessage();
 
     void LoadConfig(const PreferencesManager &prefs);

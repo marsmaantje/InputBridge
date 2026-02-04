@@ -13,6 +13,7 @@ class PreferencesManager {
     void SetString(const std::string &key, const std::string &value);
     std::string GetString(const std::string &key,
                           const std::string &defaultValue = "") const;
+    void DeleteKey(const std::string &key);
 
     void SetInt(const std::string &key, int value);
     int GetInt(const std::string &key, int defaultValue = 0) const;
