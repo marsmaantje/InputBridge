@@ -128,3 +128,49 @@ Used for spring, damper, friction, or inertia effects (e.g., centering spring).
   }
 }
 ```
+
+## OSC Format and Messages 🔊
+
+InputBridge also supports sending and receiving Open Sound Control (OSC) messages for haptics control and wheel telemetry.
+
+- **Default send host:** `127.0.0.1`
+- **Default send port:** `9066`
+- **Default receive port:** `9068`
+
+### Incoming (Control) Messages
+
+All incoming haptics messages are under the `/inputbridge/haptics/*` namespace. Types use liblo-style type tags where `i` = int and `f` = float. The first argument is reserved for a device id (int), but the server currently uses the *selected* device from the UI (the id is still expected to match the signature).
+
+- `/inputbridge/haptics/rumble` — types: "iffi" (deviceId, low_freq, high_freq, duration_ms)
+  - Example arguments: `[1, 0.8, 0.2, 500]` — Rumble with low/high magnitude and duration.
+
+- `/inputbridge/haptics/force` — types: "ifi" (deviceId, strength, duration_ms)
+  - Example: `[1, 0.5, 1000]` — Constant force on steering wheels.
+
+- `/inputbridge/haptics/periodic` — types: "ififfii" (deviceId, strength, period, magnitude, offset, phase, duration_ms)
+  - Example: `[1, 1.0, 100, 0.5, 0.0, 0, 2000]`
+
+- `/inputbridge/haptics/condition` — types: "iffffffi" (deviceId, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)
+  - Example: `[1, 1.0, 1.0, 0.5, 0.5, 0.1, 0.0, 5000]`
+
+- `/inputbridge/haptics/gain` — types: "ii" (deviceId, gain)
+  - Example: `[1, 100]`
+
+> Note: the device ID argument is currently ignored by the handlers in favor of the UI-selected device ID, but the message signature still requires the ID value to be present.
+
+### Outgoing (Telemetry) Messages
+
+InputBridge sends wheel telemetry under `/wheel/*` and button states under `/wheel/buttons/*`.
+
+- `/wheel/steer` — type: `f` (float)
+- `/wheel/brake` — type: `f`
+- `/wheel/throttle` — type: `f`
+- `/wheel/pitch` — type: `f`
+- `/wheel/roll` — type: `f`
+- `/wheel/buttons/0`...`/wheel/buttons/3` — type: `i` (int)
+
+These messages are emitted using the configured protocol/version (selectable in the UI) and are useful for external telemetry or integrations.
+
+---
+
+If you'd like, I can also add example scripts for sending these messages from the command line or other OSC tools.

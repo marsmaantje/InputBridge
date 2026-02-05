@@ -11,8 +11,7 @@ class PreferencesManager {
 
     // Generic accessors
     void SetString(const std::string &key, const std::string &value);
-    std::string GetString(const std::string &key,
-                          const std::string &defaultValue = "") const;
+    std::string GetString(const std::string &key, const std::string &defaultValue = "") const;
     void SetString(const std::string &section, const std::string &key, const std::string &value);
     std::string GetString(const std::string &section, const std::string &key, const std::string &defaultValue = "") const;
     void DeleteKey(const std::string &key);
@@ -35,8 +34,7 @@ class PreferencesManager {
 
     // Specific accessors
     std::string GetVisualizerPreference(const std::string &guid) const;
-    void SetVisualizerPreference(const std::string &guid,
-                                 const std::string &visualizer);
+    void SetVisualizerPreference(const std::string &guid, const std::string &visualizer);
 
     std::string GetDeviceMapping(const std::string &guid) const;
     void SetDeviceMapping(const std::string &guid, const std::string &mapping);
@@ -48,5 +46,5 @@ class PreferencesManager {
   private:
     std::map<std::string, std::map<std::string, std::string>> m_Sections;
     std::set<SDL_JoystickID> m_AppliedPreferences;
-    const char *CONFIG_FILENAME = "visualizer_prefs.ini";
+    const char *CONFIG_FILENAME = "visualizer_prefs.toml";
 };

@@ -26,7 +26,7 @@ struct WebSocketServer::Impl {
     std::shared_ptr<IProtocol> protocol;
     std::string selectedProtocol;
 
-    std::thread *thread = nullptr;
+    std::thread thread;
     uWS::App *app = nullptr;
     uWS::Loop *loop = nullptr;
     struct us_listen_socket_t *listen_socket = nullptr;
@@ -48,6 +48,9 @@ WebSocketServer::WebSocketServer() : m_selectedDeviceId(0), m_Impl(new Impl) {
 
 WebSocketServer::~WebSocketServer() {
     Stop();
+    if (m_Impl->thread.joinable()) {
+        m_Impl->thread.join();
+    }
     delete m_Impl;
 }
 
@@ -60,11 +63,11 @@ void WebSocketServer::Start(int port) {
     m_Impl->running = true;
     m_Impl->runningPort = port;
 
-    if (m_Impl->thread) {
-        delete m_Impl->thread;
+    if (m_Impl->thread.joinable()) {
+        m_Impl->thread.join();
     }
 
-    m_Impl->thread = new std::thread([this, port]() {
+    m_Impl->thread = std::thread([this, port]() {
         uWS::App app;
         {
             std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -75,41 +78,41 @@ void WebSocketServer::Start(int port) {
         }
 
         app.ws<int>("/*", {/* Settings */
-                    .compression = uWS::SHARED_COMPRESSOR,
-                    .maxPayloadLength = 16 * 1024 * 1024,
-                    .idleTimeout = 16,
+                           .compression = uWS::SHARED_COMPRESSOR,
+                           .maxPayloadLength = 16 * 1024 * 1024,
+                           .idleTimeout = 16,
 
-                    .open =
-                        [this](auto *ws) {
-                            std::string ip(ws->getRemoteAddressAsText());
-                            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                            m_Impl->clientCount++;
-                            m_Impl->clients[ws] = ip;
-                            m_Impl->logs.push_back("Client connected: " + ip);
-                            if (m_Impl->logs.size() > 100)
-                                m_Impl->logs.pop_front();
-                        },
-                    .message =
-                        [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
-                            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                            m_Impl->logs.push_back("Client data: " + std::string(message));
-                            if (m_Impl->protocol) {
-                                m_Impl->protocol->parse(std::string(message));
-                            }
-                            // Echo the message back to C#
-                            ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
-                        },
-                    .close =
-                        [this](auto *ws, int code, std::string_view message) {
-                            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                            if (m_Impl->clients.count(ws)) {
-                                m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
-                                if (m_Impl->logs.size() > 100)
-                                    m_Impl->logs.pop_front();
-                                m_Impl->clients.erase(ws);
-                            }
-                            m_Impl->clientCount--;
-                        }})
+                           .open =
+                               [this](auto *ws) {
+                                   std::string ip(ws->getRemoteAddressAsText());
+                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                   m_Impl->clientCount++;
+                                   m_Impl->clients[ws] = ip;
+                                   m_Impl->logs.push_back("Client connected: " + ip);
+                                   if (m_Impl->logs.size() > 100)
+                                       m_Impl->logs.pop_front();
+                               },
+                           .message =
+                               [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
+                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                   m_Impl->logs.push_back("Client data: " + std::string(message));
+                                   if (m_Impl->protocol) {
+                                       m_Impl->protocol->parse(std::string(message));
+                                   }
+                                   // Echo the message back to C#
+                                   ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
+                               },
+                           .close =
+                               [this](auto *ws, int code, std::string_view message) {
+                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                   if (m_Impl->clients.count(ws)) {
+                                       m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
+                                       if (m_Impl->logs.size() > 100)
+                                           m_Impl->logs.pop_front();
+                                       m_Impl->clients.erase(ws);
+                                   }
+                                   m_Impl->clientCount--;
+                               }})
             .listen(port,
                     [this](auto *listen_socket) {
                         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -134,14 +137,13 @@ void WebSocketServer::Start(int port) {
             m_Impl->runningPort = 0;
         }
     });
-    m_Impl->thread->detach();
 }
 
 void WebSocketServer::Stop() {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     m_Impl->restartPending = false;
-    if (m_Impl->loop && m_Impl->listen_socket) {
-        struct us_listen_socket_t *socket = m_Impl->listen_socket;
+    if (m_Impl->running && m_Impl->loop && m_Impl->listen_socket) {
+        struct us_listen_socket_t *socket = (struct us_listen_socket_t *)m_Impl->listen_socket;
         m_Impl->loop->defer([socket]() { us_listen_socket_close(0, socket); });
     }
 }
@@ -166,13 +168,9 @@ int WebSocketServer::GetClientCount() const {
     return m_Impl->clientCount;
 }
 
-void WebSocketServer::SetSelectedDevice(int id) {
-    m_selectedDeviceId = id;
-}
+void WebSocketServer::SetSelectedDevice(int id) { m_selectedDeviceId = id; }
 
-int WebSocketServer::GetSelectedDevice() const {
-    return m_selectedDeviceId;
-}
+int WebSocketServer::GetSelectedDevice() const { return m_selectedDeviceId; }
 
 void WebSocketServer::SetProtocolVersion(int version) {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -271,105 +269,105 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
 }
 
 void WebSocketServer::DrawContent() {
-        bool doRestart = false;
-        int restartPort = 0;
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            if (m_Impl->restartPending && !m_Impl->running) {
-                doRestart = true;
-                restartPort = m_Impl->restartPort;
-                m_Impl->restartPending = false;
+    bool doRestart = false;
+    int restartPort = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        if (m_Impl->restartPending && !m_Impl->running) {
+            doRestart = true;
+            restartPort = m_Impl->restartPort;
+            m_Impl->restartPending = false;
+        }
+    }
+
+    if (doRestart) {
+        Start(restartPort);
+    }
+
+    bool running;
+    int currentPort;
+    int clientCount;
+    int runningPort;
+    bool restartPending;
+    std::deque<std::string> logs;
+    std::map<void *, std::string> clients;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        running = m_Impl->running;
+        currentPort = m_Impl->port;
+        clientCount = m_Impl->clientCount;
+        runningPort = m_Impl->runningPort;
+        restartPending = m_Impl->restartPending;
+        logs = m_Impl->logs;
+        clients = m_Impl->clients;
+    }
+
+    int portInput = currentPort;
+    if (ImGui::InputInt("Port", &portInput)) {
+        SetPort(portInput);
+    }
+
+    // WebSocket Format selection
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
+        if (wsProtocol) {
+            int currentFormat = (int)wsProtocol->getProtocolVersion();
+            if (ImGui::Combo(
+                    "Format", &currentFormat,
+                    [](void *, int idx, const char **out_text) {
+                        *out_text = WebSocketProtocol::GetVersionLabel(idx);
+                        return true;
+                    },
+                    nullptr, WebSocketProtocol::GetVersionCount())) {
+                wsProtocol->setProtocolVersion((WebSocketProtocol::ProtocolVersion)currentFormat);
             }
         }
+    }
 
-        if (doRestart) {
-            Start(restartPort);
-        }
-
-        bool running;
-        int currentPort;
-        int clientCount;
-        int runningPort;
-        bool restartPending;
-        std::deque<std::string> logs;
-        std::map<void *, std::string> clients;
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            running = m_Impl->running;
-            currentPort = m_Impl->port;
-            clientCount = m_Impl->clientCount;
-            runningPort = m_Impl->runningPort;
-            restartPending = m_Impl->restartPending;
-            logs = m_Impl->logs;
-            clients = m_Impl->clients;
-        }
-
-        int portInput = currentPort;
-        if (ImGui::InputInt("Port", &portInput)) {
-            SetPort(portInput);
-        }
-
-        // WebSocket Format selection
-        {
-            std::lock_guard<std::mutex> lock(m_Impl->mutex);
-            auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
-            if (wsProtocol) {
-                int currentFormat = (int)wsProtocol->getProtocolVersion();
-                if (ImGui::Combo(
-                        "Format", &currentFormat,
-                        [](void *, int idx, const char **out_text) {
-                            *out_text = WebSocketProtocol::GetVersionLabel(idx);
-                            return true;
-                        },
-                        nullptr, WebSocketProtocol::GetVersionCount())) {
-                    wsProtocol->setProtocolVersion((WebSocketProtocol::ProtocolVersion)currentFormat);
-                }
-            }
-        }
-
-        if (running) {
-            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Status: Running (Port %d)", runningPort);
-            if (runningPort != currentPort) {
-                ImGui::SameLine();
-                if (restartPending) {
-                    ImGui::TextDisabled("(Restarting...)");
-                } else if (ImGui::Button("Restart to apply")) {
-                    Stop();
-                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                    m_Impl->restartPending = true;
-                    m_Impl->restartPort = currentPort;
-                }
-            }
+    if (running) {
+        ImGui::TextColored(ImVec4(0, 1, 0, 1), "Status: Running (Port %d)", runningPort);
+        if (runningPort != currentPort) {
             ImGui::SameLine();
-            if (ImGui::Button("Stop"))
+            if (restartPending) {
+                ImGui::TextDisabled("(Restarting...)");
+            } else if (ImGui::Button("Restart to apply")) {
                 Stop();
-            ImGui::Text("Connected Clients: %d", clientCount);
+                std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                m_Impl->restartPending = true;
+                m_Impl->restartPort = currentPort;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Stop"))
+            Stop();
+        ImGui::Text("Connected Clients: %d", clientCount);
 
-            if (ImGui::TreeNode("Client List")) {
-                if (ImGui::BeginChild("Clients", ImVec2(0, 100), true)) {
-                    for (const auto &pair : clients) {
-                        ImGui::TextUnformatted(pair.second.c_str());
-                    }
+        if (ImGui::TreeNode("Client List")) {
+            if (ImGui::BeginChild("Clients", ImVec2(0, 100), true)) {
+                for (const auto &pair : clients) {
+                    ImGui::TextUnformatted(pair.second.c_str());
                 }
-                ImGui::EndChild();
-                ImGui::TreePop();
             }
-        } else {
-            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Status: Stopped");
-            ImGui::SameLine();
-            if (ImGui::Button("Start"))
-                Start(portInput);
+            ImGui::EndChild();
+            ImGui::TreePop();
         }
+    } else {
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Status: Stopped");
+        ImGui::SameLine();
+        if (ImGui::Button("Start"))
+            Start(portInput);
+    }
 
-        ImGui::Separator();
-        ImGui::Text("Log");
-        if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
-            for (const auto &log : logs) {
-                ImGui::TextUnformatted(log.c_str());
-            }
-            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-                ImGui::SetScrollHereY(1.0f);
+    ImGui::Separator();
+    ImGui::Text("Log");
+    if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
+        for (const auto &log : logs) {
+            ImGui::TextUnformatted(log.c_str());
         }
-        ImGui::EndChild();
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f);
+    }
+    ImGui::EndChild();
 }
 #endif
