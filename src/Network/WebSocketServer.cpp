@@ -155,9 +155,15 @@ void WebSocketServer::Stop() {
         // Move the actual closing into the uWS Thread via defer
         m_Impl->loop->defer([targets, this]() {
             for (void *ptr : targets) {
+                // Check if the client is still connected to avoid use-after-free
+                {
+                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                    if (m_Impl->clients.find(ptr) == m_Impl->clients.end())
+                        continue;
+                }
                 // Cast back to the specific WebSocket type used in Start()
                 auto *ws = (uWS::WebSocket<false, true, int> *)ptr;
-                ws->close();
+                ws->end(1000, "Server stopping");
             }
         });
     }
