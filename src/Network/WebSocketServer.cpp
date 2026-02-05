@@ -142,6 +142,26 @@ void WebSocketServer::Start(int port) {
 void WebSocketServer::Stop() {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     m_Impl->restartPending = false;
+
+    // loop over all connected clients, closing them
+    if (m_Impl->running && m_Impl->loop && !m_Impl->clients.empty()) {
+
+        // We capture a copy of the clients map pointers to avoid long locks
+        std::vector<void *> targets;
+        for (auto const &[ws, ip] : m_Impl->clients) {
+            targets.push_back(ws);
+        }
+
+        // Move the actual closing into the uWS Thread via defer
+        m_Impl->loop->defer([targets, this]() {
+            for (void *ptr : targets) {
+                // Cast back to the specific WebSocket type used in Start()
+                auto *ws = (uWS::WebSocket<false, true, int> *)ptr;
+                ws->close();
+            }
+        });
+    }
+
     if (m_Impl->running && m_Impl->loop && m_Impl->listen_socket) {
         struct us_listen_socket_t *socket = (struct us_listen_socket_t *)m_Impl->listen_socket;
         m_Impl->loop->defer([socket]() { us_listen_socket_close(0, socket); });
