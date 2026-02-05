@@ -25,6 +25,12 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     
     m_clients.clear();
 
+    // Update internal state for UI
+    strncpy(m_send_host, send_host.c_str(), sizeof(m_send_host) - 1);
+    m_send_host[sizeof(m_send_host) - 1] = '\0';
+    m_send_port = send_port;
+    m_recv_port = recv_port;
+
     // Setup sending address
     m_send_address = lo_address_new(send_host.c_str(), std::to_string(send_port).c_str());
     if (!m_send_address) {
@@ -203,6 +209,18 @@ void OSCServer::SetSelectedDevice(int id) {
 
 int OSCServer::GetSelectedDevice() const {
     return m_selectedDeviceId;
+}
+
+const char* OSCServer::GetSendHost() const {
+    return m_send_host;
+}
+
+int OSCServer::GetSendPort() const {
+    return m_send_port;
+}
+
+int OSCServer::GetReceivePort() const {
+    return m_recv_port;
 }
 
 void OSCServer::DrawContent() {

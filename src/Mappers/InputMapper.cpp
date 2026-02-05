@@ -303,12 +303,23 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
 #endif
 
 #ifdef ENABLE_WEBSOCKETS
-    int wsPort = prefs.GetInt("WebSocketServer.Port", 9001);
+    int wsPort = prefs.GetInt("WebSocket", "Port", 4269);
+    int wsProtocol = prefs.GetInt("WebSocket", "Protocol", 0);
     if (!WebSocketServer::GetInstance().IsRunning() || WebSocketServer::GetInstance().GetPort() != wsPort) {
         WebSocketServer::GetInstance().Stop();
         WebSocketServer::GetInstance().Start(wsPort);
     }
+    WebSocketServer::GetInstance().SetProtocolVersion(wsProtocol);
 #endif
+
+    // OSC
+    std::string oscHost = prefs.GetString("OSC", "SendHost", "127.0.0.1");
+    int oscSendPort = prefs.GetInt("OSC", "SendPort", 9000);
+    int oscRecvPort = prefs.GetInt("OSC", "ReceivePort", 9001);
+    int oscProtocol = prefs.GetInt("OSC", "Protocol", 0);
+    OSCServer::GetInstance().Stop();
+    OSCServer::GetInstance().Start(oscHost, oscSendPort, oscRecvPort);
+    OSCServer::GetInstance().SetProtocolVersion((OSCServer::ProtocolVersion)oscProtocol);
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
     ApplyExclusiveMode();
@@ -345,8 +356,16 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
 #endif
 
 #ifdef ENABLE_WEBSOCKETS
-    prefs.SetInt("WebSocketServer.Port", WebSocketServer::GetInstance().GetPort());
+    prefs.SetInt("WebSocket", "Port", WebSocketServer::GetInstance().GetPort());
+    prefs.SetInt("WebSocket", "Protocol", WebSocketServer::GetInstance().GetProtocolVersion());
 #endif
+
+    // OSC
+    auto &osc = OSCServer::GetInstance();
+    prefs.SetString("OSC", "SendHost", osc.GetSendHost());
+    prefs.SetInt("OSC", "SendPort", osc.GetSendPort());
+    prefs.SetInt("OSC", "ReceivePort", osc.GetReceivePort());
+    prefs.SetInt("OSC", "Protocol", (int)osc.GetProtocolVersion());
 }
 
 #ifdef ENABLE_EXCLUSIVE_INPUT

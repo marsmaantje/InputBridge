@@ -59,14 +59,22 @@ void PreferencesManager::Save() {
 
 void PreferencesManager::SetString(const std::string &key,
                                    const std::string &value) {
-    m_Sections["General"][key] = value;
+    SetString("General", key, value);
+}
+
+void PreferencesManager::SetString(const std::string &section, const std::string &key, const std::string &value) {
+    m_Sections[section][key] = value;
 }
 
 std::string
 PreferencesManager::GetString(const std::string &key,
                               const std::string &defaultValue) const {
-    if (m_Sections.count("General")) {
-        const auto &general = m_Sections.at("General");
+    return GetString("General", key, defaultValue);
+}
+
+std::string PreferencesManager::GetString(const std::string &section, const std::string &key, const std::string &defaultValue) const {
+    if (m_Sections.count(section)) {
+        const auto &general = m_Sections.at(section);
         auto it = general.find(key);
         if (it != general.end())
             return it->second;
@@ -75,18 +83,30 @@ PreferencesManager::GetString(const std::string &key,
 }
 
 void PreferencesManager::DeleteKey(const std::string &key) {
-    if (m_Sections.count("General")) {
-        m_Sections["General"].erase(key);
+    DeleteKey("General", key);
+}
+
+void PreferencesManager::DeleteKey(const std::string &section, const std::string &key) {
+    if (m_Sections.count(section)) {
+        m_Sections[section].erase(key);
     }
 }
 
 void PreferencesManager::SetInt(const std::string &key, int value) {
-    m_Sections["General"][key] = std::to_string(value);
+    SetInt("General", key, value);
+}
+
+void PreferencesManager::SetInt(const std::string &section, const std::string &key, int value) {
+    m_Sections[section][key] = std::to_string(value);
 }
 
 int PreferencesManager::GetInt(const std::string &key, int defaultValue) const {
-    if (m_Sections.count("General")) {
-        const auto &general = m_Sections.at("General");
+    return GetInt("General", key, defaultValue);
+}
+
+int PreferencesManager::GetInt(const std::string &section, const std::string &key, int defaultValue) const {
+    if (m_Sections.count(section)) {
+        const auto &general = m_Sections.at(section);
         auto it = general.find(key);
         if (it != general.end())
             return std::atoi(it->second.c_str());
@@ -95,13 +115,21 @@ int PreferencesManager::GetInt(const std::string &key, int defaultValue) const {
 }
 
 void PreferencesManager::SetFloat(const std::string &key, float value) {
-    m_Sections["General"][key] = std::to_string(value);
+    SetFloat("General", key, value);
+}
+
+void PreferencesManager::SetFloat(const std::string &section, const std::string &key, float value) {
+    m_Sections[section][key] = std::to_string(value);
 }
 
 float PreferencesManager::GetFloat(const std::string &key,
                                    float defaultValue) const {
-    if (m_Sections.count("General")) {
-        const auto &general = m_Sections.at("General");
+    return GetFloat("General", key, defaultValue);
+}
+
+float PreferencesManager::GetFloat(const std::string &section, const std::string &key, float defaultValue) const {
+    if (m_Sections.count(section)) {
+        const auto &general = m_Sections.at(section);
         auto it = general.find(key);
         if (it != general.end())
             return (float)std::atof(it->second.c_str());
@@ -110,13 +138,21 @@ float PreferencesManager::GetFloat(const std::string &key,
 }
 
 void PreferencesManager::SetBool(const std::string &key, bool value) {
-    m_Sections["General"][key] = value ? "1" : "0";
+    SetBool("General", key, value);
+}
+
+void PreferencesManager::SetBool(const std::string &section, const std::string &key, bool value) {
+    m_Sections[section][key] = value ? "1" : "0";
 }
 
 bool PreferencesManager::GetBool(const std::string &key,
                                  bool defaultValue) const {
-    if (m_Sections.count("General")) {
-        const auto &general = m_Sections.at("General");
+    return GetBool("General", key, defaultValue);
+}
+
+bool PreferencesManager::GetBool(const std::string &section, const std::string &key, bool defaultValue) const {
+    if (m_Sections.count(section)) {
+        const auto &general = m_Sections.at(section);
         auto it = general.find(key);
         if (it != general.end())
             return it->second == "1";

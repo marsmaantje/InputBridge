@@ -38,6 +38,10 @@ public:
     void SetSelectedDevice(int id);
     int GetSelectedDevice() const;
 
+    const char* GetSendHost() const;
+    int GetSendPort() const;
+    int GetReceivePort() const;
+
     void SetHandler(OSCHandler handler);
     
     void DrawContent();

@@ -24,6 +24,9 @@ class WebSocketServer {
     void SetSelectedDevice(int id);
     int GetSelectedDevice() const;
 
+    void SetProtocolVersion(int version);
+    int GetProtocolVersion() const;
+
     void Broadcast(const std::string &address, float value);
     void Broadcast(const std::string &address, int value);
     void Broadcast(const std::string &address, const std::string &value);
@@ -46,6 +49,9 @@ class WebSocketServer {
     
     void SetSelectedDevice(int id) {}
     int GetSelectedDevice() const { return 0; }
+
+    void SetProtocolVersion(int version) {}
+    int GetProtocolVersion() const { return 0; }
 
     void Broadcast(const std::string &address, float value) {}
     void Broadcast(const std::string &address, int value) {}

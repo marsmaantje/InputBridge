@@ -174,6 +174,23 @@ int WebSocketServer::GetSelectedDevice() const {
     return m_selectedDeviceId;
 }
 
+void WebSocketServer::SetProtocolVersion(int version) {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
+    if (wsProtocol) {
+        wsProtocol->setProtocolVersion((WebSocketProtocol::ProtocolVersion)version);
+    }
+}
+
+int WebSocketServer::GetProtocolVersion() const {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
+    if (wsProtocol) {
+        return (int)wsProtocol->getProtocolVersion();
+    }
+    return 0;
+}
+
 void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
 
