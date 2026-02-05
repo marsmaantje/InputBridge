@@ -8,6 +8,7 @@
 #endif
 
 class IProtocol;
+class PreferencesManager;
 
 class WebSocketServer {
   public:
@@ -34,6 +35,9 @@ class WebSocketServer {
     void Broadcast(const std::string &msg, uWS::OpCode opCode);
 
     void DrawContent();
+
+    void LoadConfig(const PreferencesManager& prefs);
+    void SaveConfig(PreferencesManager& prefs);
 #else
     static WebSocketServer &GetInstance() {
         static WebSocketServer i;
@@ -59,6 +63,9 @@ class WebSocketServer {
     void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll) {}
 
     void DrawContent() {}
+
+    void LoadConfig(const PreferencesManager& prefs) {}
+    void SaveConfig(PreferencesManager& prefs) {}
 #endif
 
   private:

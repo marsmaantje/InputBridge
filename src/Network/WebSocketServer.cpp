@@ -1,4 +1,5 @@
 #include "WebSocketServer.h"
+#include "Preferences/Preferences.h"
 
 #if ENABLE_WEBSOCKETS
 
@@ -163,6 +164,7 @@ void WebSocketServer::Stop() {
                 }
                 // Cast back to the specific WebSocket type used in Start()
                 auto *ws = (uWS::WebSocket<false, true, int> *)ptr;
+                // code 1000 means "Normal closure" and gets send to all clients
                 ws->end(1000, "Server stopping");
             }
         });
@@ -292,6 +294,37 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
             Broadcast(msg, opCode);
         }
     }
+}
+
+void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
+    int port = prefs.GetInt("WebSocket", "Port", 9001);
+    int protocol = prefs.GetInt("WebSocket", "Protocol", 0);
+    bool enabled = prefs.GetBool("WebSocket", "Enabled", false);
+
+    SetPort(port);
+    SetProtocolVersion(protocol);
+
+    if (enabled) {
+        Start(port);
+    }
+}
+
+void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
+    int port;
+    int protocol = 0;
+    bool running;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        port = m_Impl->port;
+        running = m_Impl->running;
+        auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
+        if (wsProtocol) {
+             protocol = (int)wsProtocol->getProtocolVersion();
+        }
+    }
+    prefs.SetInt("WebSocket", "Port", port);
+    prefs.SetInt("WebSocket", "Protocol", protocol);
+    prefs.SetBool("WebSocket", "Enabled", running);
 }
 
 void WebSocketServer::DrawContent() {

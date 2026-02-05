@@ -9,6 +9,8 @@
 #include <set>
 #include <vector>
 
+class PreferencesManager;
+
 // Callback for incoming OSC messages
 using OSCHandler = std::function<void(const char* path, const char* types, lo_arg** argv, int argc)>;
 
@@ -49,6 +51,9 @@ public:
     void SetProtocolVersion(ProtocolVersion version);
     ProtocolVersion GetProtocolVersion() const;
 
+    void LoadConfig(const PreferencesManager& prefs);
+    void SaveConfig(PreferencesManager& prefs);
+
 private:
     static int generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
@@ -63,6 +68,11 @@ private:
     char m_send_host[128] = "127.0.0.1";
     int m_send_port = 9066;
     int m_recv_port = 9068;
+
+    // Running State
+    std::string m_running_send_host;
+    int m_running_send_port = 0;
+    int m_running_recv_port = 0;
 
     OSCHandler m_handler;
     std::mutex m_mutex;

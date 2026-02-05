@@ -189,8 +189,10 @@ bool PreferencesManager::GetBool(const std::string &section, const std::string &
     if (m_Sections.count(section)) {
         const auto &general = m_Sections.at(section);
         auto it = general.find(key);
-        if (it != general.end())
-            return it->second == "true" || it->second == "1"; // "1" for backward compatibility
+        if (it != general.end()) {
+            if (it->second == "true" || it->second == "1") return true;
+            if (it->second == "false" || it->second == "0") return false;
+        }
     }
     return defaultValue;
 }

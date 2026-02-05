@@ -1,10 +1,12 @@
 #include "Network/OSCServer.h"
+#include "Preferences/Preferences.h"
 #include "imgui.h"
 #include <iostream>
 #include <string>
 #include <cstdarg>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 
 OSCServer& OSCServer::GetInstance() {
     static OSCServer instance;
@@ -30,6 +32,10 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     m_send_host[sizeof(m_send_host) - 1] = '\0';
     m_send_port = send_port;
     m_recv_port = recv_port;
+    
+    m_running_send_host = send_host;
+    m_running_send_port = send_port;
+    m_running_recv_port = recv_port;
 
     // Setup sending address
     m_send_address = lo_address_new(send_host.c_str(), std::to_string(send_port).c_str());
@@ -203,6 +209,36 @@ OSCServer::ProtocolVersion OSCServer::GetProtocolVersion() const {
     return m_protocolVersion;
 }
 
+void OSCServer::LoadConfig(const PreferencesManager& prefs) {
+    std::string send_host = prefs.GetString("OSC", "SendHost", "127.0.0.1");
+    int send_port = prefs.GetInt("OSC", "SendPort", 9066);
+    int recv_port = prefs.GetInt("OSC", "RecvPort", 9068);
+    int protocol = prefs.GetInt("OSC", "Protocol", (int)ProtocolVersion::Default);
+    bool enabled = prefs.GetBool("OSC", "Enabled", false);
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        strncpy(m_send_host, send_host.c_str(), sizeof(m_send_host) - 1);
+        m_send_host[sizeof(m_send_host) - 1] = '\0';
+        m_send_port = send_port;
+        m_recv_port = recv_port;
+        m_protocolVersion = (ProtocolVersion)protocol;
+    }
+
+    if (enabled) {
+        Start(send_host, send_port, recv_port);
+    }
+}
+
+void OSCServer::SaveConfig(PreferencesManager& prefs) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    prefs.SetString("OSC", "SendHost", m_send_host);
+    prefs.SetInt("OSC", "SendPort", m_send_port);
+    prefs.SetInt("OSC", "RecvPort", m_recv_port);
+    prefs.SetInt("OSC", "Protocol", (int)m_protocolVersion);
+    prefs.SetBool("OSC", "Enabled", m_running);
+}
+
 void OSCServer::SetSelectedDevice(int id) {
     m_selectedDeviceId = id;
 }
@@ -235,6 +271,18 @@ void OSCServer::DrawContent() {
     }
 
     if (IsRunning()) {
+        bool settingsChanged = (m_send_port != m_running_send_port) || 
+                               (m_recv_port != m_running_recv_port) ||
+                               (m_running_send_host != m_send_host);
+
+        if (settingsChanged) {
+            if (ImGui::Button("Restart to apply")) {
+                Stop();
+                Start(m_send_host, m_send_port, m_recv_port);
+            }
+            ImGui::SameLine();
+        }
+
         if (ImGui::Button("Stop OSC")) {
             Stop();
         }

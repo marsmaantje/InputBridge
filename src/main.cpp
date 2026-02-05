@@ -16,6 +16,8 @@
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
+#include "Network/OSCServer.h"
+#include "Network/WebSocketServer.h"
 #include "Protocols/ProtocolManager.h"
 #if ENABLE_WEBSOCKETS
 #include "Protocols/WebSocketProtocol.h"
@@ -94,6 +96,10 @@ int main(int argc, char *argv[]) {
 
     InputMapper inputMapper(deviceManager);
     inputMapper.LoadConfig(preferencesManager);
+
+    // Load Network Server Configs
+    OSCServer::GetInstance().LoadConfig(preferencesManager);
+    WebSocketServer::GetInstance().LoadConfig(preferencesManager);
 
     bool done = false;
     bool vsync = true;
@@ -376,6 +382,10 @@ int main(int argc, char *argv[]) {
     ImGui::DestroyContext();
 
     inputMapper.SaveConfig(preferencesManager);
+    
+    // Save Network Server Configs
+    OSCServer::GetInstance().SaveConfig(preferencesManager);
+    WebSocketServer::GetInstance().SaveConfig(preferencesManager);
     preferencesManager.Save();
 
     SDL_DestroyRenderer(renderer);
