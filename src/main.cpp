@@ -4,9 +4,11 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
+#include "imgui_internal.h"
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <SDL3/SDL_filesystem.h>
 
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
@@ -16,6 +18,8 @@
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
+#include "Network/OSCServer.h"
+#include "Network/WebSocketServer.h"
 #include "Protocols/ProtocolManager.h"
 #if ENABLE_WEBSOCKETS
 #include "Protocols/WebSocketProtocol.h"
@@ -48,8 +52,7 @@ int main(int argc, char *argv[]) {
 
     // Create window with SDL3 flags
     Uint32 window_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    SDL_Window *window = SDL_CreateWindow("InputBridge Debugger (SDL3)", 1280,
-                                          720, window_flags);
+    SDL_Window *window = SDL_CreateWindow("InputBridge", 1280, 720, window_flags);
     if (!window) {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
         return -1;
@@ -68,8 +71,18 @@ int main(int argc, char *argv[]) {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
     // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad
     // Controls
+
+    static std::string ini_filename;
+    const char *base_path = SDL_GetBasePath();
+    if (base_path) {
+        ini_filename = std::string(base_path) + "imgui.ini";
+    } else {
+        ini_filename = "imgui.ini";
+    }
+    io.IniFilename = ini_filename.c_str();
 
     ImGui::StyleColorsDark();
 
@@ -94,6 +107,10 @@ int main(int argc, char *argv[]) {
 
     InputMapper inputMapper(deviceManager);
     inputMapper.LoadConfig(preferencesManager);
+
+    // Load Network Server Configs
+    OSCServer::GetInstance().LoadConfig(preferencesManager);
+    WebSocketServer::GetInstance().LoadConfig(preferencesManager);
 
     bool done = false;
     bool vsync = true;
@@ -134,6 +151,36 @@ int main(int argc, char *argv[]) {
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+
+        // Menu Bar
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Exit")) {
+                    done = true;
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
+        // DockSpace
+        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        static bool first_time = true;
+        if (first_time) {
+            first_time = false;
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+            ImGuiID dock_id_left, dock_id_right;
+            ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.5f, &dock_id_left, &dock_id_right);
+            ImGuiID dock_id_right_top, dock_id_right_bottom;
+            ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
+            ImGui::DockBuilderDockWindow("InputBridge Status", dock_id_left);
+            ImGui::DockBuilderDockWindow("Network Server Status", dock_id_right_top);
+            ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
+        ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
         ImGui::Begin("InputBridge Status");
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
@@ -204,7 +251,7 @@ int main(int argc, char *argv[]) {
 
                 if (dev.is_gamepad) {
                     if (ImGui::BeginTabBar("DeviceMode")) {
-                        TabItem("Standard Layout", gamepad_viz);
+                        // TabItem("Standard Layout", gamepad_viz);
                         TabItem("Raw Inputs", generic_viz);
                         ImGui::EndTabBar();
                     }
@@ -239,12 +286,12 @@ int main(int argc, char *argv[]) {
                             SDL_GetJoystickType(dev.joystick);
                         if (type == SDL_JOYSTICK_TYPE_WHEEL ||
                             type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                            TabItem("Steering Wheel", wheel_viz);
+                            // TabItem("Steering Wheel", wheel_viz);
                         }
                         if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK ||
                             type == SDL_JOYSTICK_TYPE_THROTTLE ||
                             type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                            TabItem("Flight Stick", flight_stick_viz);
+                            // TabItem("Flight Stick", flight_stick_viz);
                         }
                         ImGui::EndTabBar();
                     }
@@ -329,18 +376,15 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                // TODO: Serialize dev.axes and dev.buttons here and send via
-                // OSC/Websocket
-
                 ImGui::Unindent();
             }
             ImGui::PopID();
         }
 
-        inputMapper.DrawUI();
+        inputMapper.DrawUI(preferencesManager);
 
-        if (ImGui::Button("Exit"))
-            done = true;
+        //if (ImGui::Button("Exit"))
+        //    done = true;
         ImGui::End();
 
         NetworkStatusWindow::Draw();
@@ -376,6 +420,10 @@ int main(int argc, char *argv[]) {
     ImGui::DestroyContext();
 
     inputMapper.SaveConfig(preferencesManager);
+    
+    // Save Network Server Configs
+    OSCServer::GetInstance().SaveConfig(preferencesManager);
+    WebSocketServer::GetInstance().SaveConfig(preferencesManager);
     preferencesManager.Save();
 
     SDL_DestroyRenderer(renderer);

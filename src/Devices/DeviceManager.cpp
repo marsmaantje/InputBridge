@@ -61,7 +61,10 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
             m_HapticDevices[instance_id]->Init();
         }
     } break;
-    case SDL_JOYSTICK_TYPE_FLIGHT_STICK: {
+    case SDL_JOYSTICK_TYPE_FLIGHT_STICK:
+    case SDL_JOYSTICK_TYPE_THROTTLE:
+    case SDL_JOYSTICK_TYPE_ARCADE_STICK:
+    case SDL_JOYSTICK_TYPE_UNKNOWN: {
         SDL_Joystick *joystick = SDL_OpenJoystick(instance_id);
         if (joystick) {
             DeviceState dev;

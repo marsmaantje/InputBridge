@@ -8,6 +8,7 @@
 #endif
 
 class IProtocol;
+class PreferencesManager;
 
 class WebSocketServer {
   public:
@@ -24,6 +25,9 @@ class WebSocketServer {
     void SetSelectedDevice(int id);
     int GetSelectedDevice() const;
 
+    void SetProtocolVersion(int version);
+    int GetProtocolVersion() const;
+
     void Broadcast(const std::string &address, float value);
     void Broadcast(const std::string &address, int value);
     void Broadcast(const std::string &address, const std::string &value);
@@ -31,6 +35,9 @@ class WebSocketServer {
     void Broadcast(const std::string &msg, uWS::OpCode opCode);
 
     void DrawContent();
+
+    void LoadConfig(const PreferencesManager& prefs);
+    void SaveConfig(PreferencesManager& prefs);
 #else
     static WebSocketServer &GetInstance() {
         static WebSocketServer i;
@@ -47,12 +54,18 @@ class WebSocketServer {
     void SetSelectedDevice(int id) {}
     int GetSelectedDevice() const { return 0; }
 
+    void SetProtocolVersion(int version) {}
+    int GetProtocolVersion() const { return 0; }
+
     void Broadcast(const std::string &address, float value) {}
     void Broadcast(const std::string &address, int value) {}
     void Broadcast(const std::string &address, const std::string &value) {}
     void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll) {}
 
     void DrawContent() {}
+
+    void LoadConfig(const PreferencesManager& prefs) {}
+    void SaveConfig(PreferencesManager& prefs) {}
 #endif
 
   private:

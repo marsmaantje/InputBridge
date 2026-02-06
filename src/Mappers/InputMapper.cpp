@@ -19,39 +19,72 @@ SDL_Joystick *GetSelectedJoystick(SDL_JoystickID selectedId, const DeviceManager
     return (it != devices.end()) ? it->joystick : nullptr;
 }
 
+std::string SerializeAxisConfig(const InputMapper::AxisConfig &config) {
+    return std::to_string(config.axisIndex) + "," + (config.invert ? "1" : "0") + "," + std::to_string(config.deadzone) + "," + std::to_string(config.outputRange);
+}
+
+void DeserializeAxisConfig(const std::string &data, InputMapper::AxisConfig &config) {
+    if (data.empty()) return;
+    size_t start = 0;
+    auto get_next = [&](size_t &pos) {
+        size_t end = data.find(',', pos);
+        if (end == std::string::npos) end = data.length();
+        std::string val = data.substr(pos, end - pos);
+        pos = end + 1;
+        return val;
+    };
+    try {
+        config.axisIndex = std::stoi(get_next(start));
+        config.invert = (std::stoi(get_next(start)) != 0);
+        config.deadzone = std::stof(get_next(start));
+        config.outputRange = std::stoi(get_next(start));
+    } catch (...) {}
+}
+
 } // namespace
 
 InputMapper::InputMapper(const DeviceManager &deviceManager) : m_DeviceManager(deviceManager) {}
 
-static void DrawAxisConfig(const char *label, InputMapper::AxisConfig &config, int numAxes) {
+static bool DrawAxisConfig(const char *label, InputMapper::AxisConfig &config, int numAxes) {
+    bool changed = false;
     ImGui::PushID(label);
     ImGui::Text("%s", label);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     if (ImGui::BeginCombo("##axis", config.axisIndex == -1 ? "None" : std::to_string(config.axisIndex).c_str())) {
-        if (ImGui::Selectable("None", config.axisIndex == -1))
+        if (ImGui::Selectable("None", config.axisIndex == -1)) {
+            if (config.axisIndex != -1) {
+                config.axisIndex = -1;
+                changed = true;
+            }
+        }
             config.axisIndex = -1;
         for (int i = 0; i < numAxes; i++) {
-            if (ImGui::Selectable(std::to_string(i).c_str(), config.axisIndex == i))
+            if (ImGui::Selectable(std::to_string(i).c_str(), config.axisIndex == i)) {
+                if (config.axisIndex != i) {
                 config.axisIndex = i;
+                    changed = true;
+                }
+            }
         }
         ImGui::EndCombo();
     }
     ImGui::SameLine();
-    ImGui::Checkbox("Inv", &config.invert);
+    if (ImGui::Checkbox("Inv", &config.invert)) changed = true;
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
-    ImGui::SliderFloat("Deadzone", &config.deadzone, 0.0f, 0.5f);
+    if (ImGui::SliderFloat("Deadzone", &config.deadzone, 0.0f, 0.5f)) changed = true;
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     const char *ranges[] = {"-1..1", "0..1", "-1..0"};
-    ImGui::Combo("Range", &config.outputRange, ranges, IM_ARRAYSIZE(ranges));
+    if (ImGui::Combo("Range", &config.outputRange, ranges, IM_ARRAYSIZE(ranges))) changed = true;
     ImGui::PopID();
+    return changed;
 }
 
 InputMapper::~InputMapper() {}
 
-void InputMapper::DrawUI() {
+void InputMapper::DrawUI(PreferencesManager& prefs) {
     ImGui::Begin("Input Mapper");
 
     const auto &devices = m_DeviceManager.GetDevices();
@@ -82,6 +115,36 @@ void InputMapper::DrawUI() {
             if (ImGui::Selectable(label.c_str(), isSelected)) {
                 m_SelectedDeviceID = dev.instance_id;
                 selectedDeviceState = &dev;
+
+                // Load settings for this device
+                std::string guid = DeviceManager::GetDeviceGUIDString(dev);
+                std::string mapping = prefs.GetDeviceMapping(guid);
+                if (!mapping.empty()) {
+                    std::string s = mapping;
+                    size_t pos = 0;
+                    while (pos < s.length()) {
+                        size_t end = s.find(';', pos);
+                        if (end == std::string::npos) end = s.length();
+                        std::string token = s.substr(pos, end - pos);
+                        pos = end + 1;
+                        size_t colon = token.find(':');
+                        if (colon != std::string::npos) {
+                            std::string key = token.substr(0, colon);
+                            std::string val = token.substr(colon + 1);
+                            if (key == "Steering") DeserializeAxisConfig(val, m_Steering);
+                            else if (key == "Throttle") DeserializeAxisConfig(val, m_Throttle);
+                            else if (key == "Brake") DeserializeAxisConfig(val, m_Brake);
+                            else if (key == "Clutch") DeserializeAxisConfig(val, m_Clutch);
+                            else if (key == "Handbrake") DeserializeAxisConfig(val, m_Handbrake);
+                            else if (key == "Pitch") DeserializeAxisConfig(val, m_Pitch);
+                            else if (key == "Roll") DeserializeAxisConfig(val, m_Roll);
+                        }
+                    }
+                } else {
+                    // Reset to defaults if no mapping found
+                    m_Steering = {}; m_Throttle = {}; m_Brake = {}; m_Clutch = {}; m_Handbrake = {}; m_Pitch = {}; m_Roll = {};
+                }
+
 #ifdef ENABLE_EXCLUSIVE_INPUT
                 ApplyExclusiveMode();
 #endif
@@ -111,13 +174,27 @@ void InputMapper::DrawUI() {
     if (selectedDeviceState) {
         ImGui::Separator();
         ImGui::Text("Axis Mapping");
-        DrawAxisConfig("Steering", m_Steering, selectedDeviceState->num_axes);
-        DrawAxisConfig("Throttle", m_Throttle, selectedDeviceState->num_axes);
-        DrawAxisConfig("Brake", m_Brake, selectedDeviceState->num_axes);
-        DrawAxisConfig("Clutch", m_Clutch, selectedDeviceState->num_axes);
-        DrawAxisConfig("Handbrake", m_Handbrake, selectedDeviceState->num_axes);
-        DrawAxisConfig("Pitch", m_Pitch, selectedDeviceState->num_axes);
-        DrawAxisConfig("Roll", m_Roll, selectedDeviceState->num_axes);
+        bool changed = false;
+        changed |= DrawAxisConfig("Steering", m_Steering, selectedDeviceState->num_axes);
+        changed |= DrawAxisConfig("Throttle", m_Throttle, selectedDeviceState->num_axes);
+        changed |= DrawAxisConfig("Brake", m_Brake, selectedDeviceState->num_axes);
+        changed |= DrawAxisConfig("Clutch", m_Clutch, selectedDeviceState->num_axes);
+        changed |= DrawAxisConfig("Handbrake", m_Handbrake, selectedDeviceState->num_axes);
+        changed |= DrawAxisConfig("Pitch", m_Pitch, selectedDeviceState->num_axes);
+        changed |= DrawAxisConfig("Roll", m_Roll, selectedDeviceState->num_axes);
+
+        if (changed) {
+            std::string guid = DeviceManager::GetDeviceGUIDString(*selectedDeviceState);
+            std::string mapping;
+            mapping += "Steering:" + SerializeAxisConfig(m_Steering) + ";";
+            mapping += "Throttle:" + SerializeAxisConfig(m_Throttle) + ";";
+            mapping += "Brake:" + SerializeAxisConfig(m_Brake) + ";";
+            mapping += "Clutch:" + SerializeAxisConfig(m_Clutch) + ";";
+            mapping += "Handbrake:" + SerializeAxisConfig(m_Handbrake) + ";";
+            mapping += "Pitch:" + SerializeAxisConfig(m_Pitch) + ";";
+            mapping += "Roll:" + SerializeAxisConfig(m_Roll) + ";";
+            prefs.SetDeviceMapping(guid, mapping);
+        }
     }
 
     ImGui::Separator();
@@ -224,15 +301,6 @@ void InputMapper::LoadConfig(const PreferencesManager &prefs) {
 #ifdef ENABLE_EXCLUSIVE_INPUT
     m_ExclusiveModeHandler.SetEnabled(prefs.GetBool("InputMapper.ExclusiveMode", false));
 #endif
-
-#ifdef ENABLE_WEBSOCKETS
-    int wsPort = prefs.GetInt("WebSocketServer.Port", 9001);
-    if (!WebSocketServer::GetInstance().IsRunning() || WebSocketServer::GetInstance().GetPort() != wsPort) {
-        WebSocketServer::GetInstance().Stop();
-        WebSocketServer::GetInstance().Start(wsPort);
-    }
-#endif
-
 #ifdef ENABLE_EXCLUSIVE_INPUT
     ApplyExclusiveMode();
 #endif
@@ -265,10 +333,6 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
     SaveAxis("InputMapper.Handbrake", m_Handbrake);
 #ifdef ENABLE_EXCLUSIVE_INPUT
     prefs.SetBool("InputMapper.ExclusiveMode", m_ExclusiveModeHandler.IsEnabled());
-#endif
-
-#ifdef ENABLE_WEBSOCKETS
-    prefs.SetInt("WebSocketServer.Port", WebSocketServer::GetInstance().GetPort());
 #endif
 }
 
