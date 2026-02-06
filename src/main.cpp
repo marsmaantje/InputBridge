@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <SDL3/SDL_filesystem.h>
 
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
@@ -50,8 +51,7 @@ int main(int argc, char *argv[]) {
 
     // Create window with SDL3 flags
     Uint32 window_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    SDL_Window *window = SDL_CreateWindow("InputBridge Debugger (SDL3)", 1280,
-                                          720, window_flags);
+    SDL_Window *window = SDL_CreateWindow("InputBridge", 1280, 720, window_flags);
     if (!window) {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
         return -1;
@@ -72,6 +72,15 @@ int main(int argc, char *argv[]) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad
     // Controls
+
+    static std::string ini_filename;
+    const char *base_path = SDL_GetBasePath();
+    if (base_path) {
+        ini_filename = std::string(base_path) + "imgui.ini";
+    } else {
+        ini_filename = "imgui.ini";
+    }
+    io.IniFilename = ini_filename.c_str();
 
     ImGui::StyleColorsDark();
 
