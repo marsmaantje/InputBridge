@@ -47,4 +47,5 @@ class PreferencesManager {
     std::map<std::string, std::map<std::string, std::string>> m_Sections;
     std::set<SDL_JoystickID> m_AppliedPreferences;
     const char *CONFIG_FILENAME = "visualizer_prefs.toml";
+    std::string GetConfigFilePath();
 };

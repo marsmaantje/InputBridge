@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <SDL3/SDL_filesystem.h>
 
 // Helper to escape a string for TOML format
 static std::string escape_for_toml(const std::string &s) {
@@ -39,9 +40,20 @@ static std::string unescape_for_toml(const std::string &s) {
     return out;
 }
 
+std::string PreferencesManager::GetConfigFilePath() {
+    const char *base_path = SDL_GetBasePath();
+    std::string path;
+    if (base_path) {
+        path = std::string(base_path) + CONFIG_FILENAME;
+    } else {
+        path = CONFIG_FILENAME;
+    }
+    return path;
+}
+
 void PreferencesManager::Load() {
     m_Sections.clear();
-    std::ifstream file(CONFIG_FILENAME);
+    std::ifstream file(GetConfigFilePath());
     if (file.is_open()) {
         std::string line;
         std::string currentSection; // Top-level keys go into "General"
@@ -100,7 +112,7 @@ void PreferencesManager::Load() {
     }
 }
 void PreferencesManager::Save() {
-    std::ofstream file(CONFIG_FILENAME);
+    std::ofstream file(GetConfigFilePath());
     if (file.is_open()) {
         // Save General section first as top-level keys
         if (m_Sections.count("General")) {
