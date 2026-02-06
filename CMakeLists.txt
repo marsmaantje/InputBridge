@@ -290,6 +290,26 @@ if(WIN32)
         $<TARGET_FILE:SDL3::SDL3>
         $<TARGET_FILE_DIR:InputBridge>
     )
+
+    # Generate a script to copy other runtime dependencies (OpenSSL, ZLib, etc.) to the build directory
+    set(COPY_DEPS_SCRIPT "${CMAKE_BINARY_DIR}/CopyRuntimeDependencies.cmake")
+    file(WRITE "${COPY_DEPS_SCRIPT}" "
+        file(GET_RUNTIME_DEPENDENCIES
+            EXECUTABLES \"\${EXECUTABLE_FILE}\"
+            RESOLVED_DEPENDENCIES_VAR RDEPS
+            UNRESOLVED_DEPENDENCIES_VAR URDEPS
+            DIRECTORIES \"\${BINARY_DIR}\"
+            POST_EXCLUDE_REGEXES \"^C:/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/[Ss][Yy][Ss][Tt][Ee][Mm]32/.*\"
+        )
+        foreach(DEP \${RDEPS})
+            file(INSTALL DESTINATION \"\${BINARY_DIR}\" TYPE SHARED_LIBRARY FILES \"\${DEP}\")
+        endforeach()
+    ")
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -DEXECUTABLE_FILE=$<TARGET_FILE:InputBridge> -DBINARY_DIR=$<TARGET_FILE_DIR:InputBridge> -P "${COPY_DEPS_SCRIPT}"
+        COMMENT "Resolving and copying runtime dependencies..."
+    )
+
     install(FILES $<TARGET_FILE:SDL3::SDL3> DESTINATION bin)
 endif()
 
@@ -310,6 +330,11 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(WIN32)
+    include(InstallRequiredSystemLibraries)
+    if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+        install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION bin)
+    endif()
+
     # This script will be executed at install time.
     # It finds all runtime dependencies of InputBridge.exe and installs them into the package.
     install(CODE "
