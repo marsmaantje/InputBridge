@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
+#include "imgui_internal.h"
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -70,6 +71,7 @@ int main(int argc, char *argv[]) {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
     // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad
     // Controls
 
@@ -149,6 +151,36 @@ int main(int argc, char *argv[]) {
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+
+        // Menu Bar
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Exit")) {
+                    done = true;
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
+        // DockSpace
+        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        static bool first_time = true;
+        if (first_time) {
+            first_time = false;
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+            ImGuiID dock_id_left, dock_id_right;
+            ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.5f, &dock_id_left, &dock_id_right);
+            ImGuiID dock_id_right_top, dock_id_right_bottom;
+            ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
+            ImGui::DockBuilderDockWindow("InputBridge Status", dock_id_left);
+            ImGui::DockBuilderDockWindow("Network Server Status", dock_id_right_top);
+            ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
+        ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
         ImGui::Begin("InputBridge Status");
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
@@ -344,9 +376,6 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                // TODO: Serialize dev.axes and dev.buttons here and send via
-                // OSC/Websocket
-
                 ImGui::Unindent();
             }
             ImGui::PopID();
@@ -354,8 +383,8 @@ int main(int argc, char *argv[]) {
 
         inputMapper.DrawUI(preferencesManager);
 
-        if (ImGui::Button("Exit"))
-            done = true;
+        //if (ImGui::Button("Exit"))
+        //    done = true;
         ImGui::End();
 
         NetworkStatusWindow::Draw();
