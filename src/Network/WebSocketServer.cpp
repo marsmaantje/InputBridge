@@ -15,7 +15,7 @@
 struct us_listen_socket_t;
 
 struct WebSocketServer::Impl {
-    int port = 9001;
+    int port = 4269;
     bool running = false;
     int clientCount = 0;
     int runningPort = 0;
@@ -297,7 +297,7 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
 }
 
 void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
-    int port = prefs.GetInt("WebSocket", "Port", 9001);
+    int port = prefs.GetInt("WebSocket", "Port", 4269);
     int protocol = prefs.GetInt("WebSocket", "Protocol", 0);
     bool enabled = prefs.GetBool("WebSocket", "Enabled", false);
 

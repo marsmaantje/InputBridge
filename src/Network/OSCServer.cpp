@@ -234,7 +234,7 @@ void OSCServer::SaveConfig(PreferencesManager& prefs) {
     std::lock_guard<std::mutex> lock(m_mutex);
     prefs.SetString("OSC", "SendHost", m_send_host);
     prefs.SetInt("OSC", "SendPort", m_send_port);
-    prefs.SetInt("OSC", "RecvPort", m_recv_port);
+    prefs.SetInt("OSC", "ReceivePort", m_recv_port);
     prefs.SetInt("OSC", "Protocol", (int)m_protocolVersion);
     prefs.SetBool("OSC", "Enabled", m_running);
 }
@@ -260,7 +260,8 @@ int OSCServer::GetReceivePort() const {
 }
 
 void OSCServer::DrawContent() {
-    ImGui::InputText("Send Host", m_send_host, sizeof(m_send_host));
+    // Currently disabled, since its remains localhost anyway
+    //ImGui::InputText("Send Host", m_send_host, sizeof(m_send_host));
     ImGui::InputInt("Send Port", &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 
