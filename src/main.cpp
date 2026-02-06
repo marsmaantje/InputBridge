@@ -251,7 +251,7 @@ int main(int argc, char *argv[]) {
 
                 if (dev.is_gamepad) {
                     if (ImGui::BeginTabBar("DeviceMode")) {
-                        TabItem("Standard Layout", gamepad_viz);
+                        // TabItem("Standard Layout", gamepad_viz);
                         TabItem("Raw Inputs", generic_viz);
                         ImGui::EndTabBar();
                     }
@@ -286,12 +286,12 @@ int main(int argc, char *argv[]) {
                             SDL_GetJoystickType(dev.joystick);
                         if (type == SDL_JOYSTICK_TYPE_WHEEL ||
                             type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                            TabItem("Steering Wheel", wheel_viz);
+                            // TabItem("Steering Wheel", wheel_viz);
                         }
                         if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK ||
                             type == SDL_JOYSTICK_TYPE_THROTTLE ||
                             type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                            TabItem("Flight Stick", flight_stick_viz);
+                            // TabItem("Flight Stick", flight_stick_viz);
                         }
                         ImGui::EndTabBar();
                     }
