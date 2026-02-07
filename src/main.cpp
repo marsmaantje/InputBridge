@@ -90,6 +90,20 @@ int main(int argc, char *argv[]) {
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 
+    auto UpdateUIScale = [](SDL_Window *win) {
+        float scale = SDL_GetWindowDisplayScale(win);
+        float density = SDL_GetWindowPixelDensity(win);
+        if (density <= 0.0f) density = 1.0f;
+        if (scale <= 0.0f) scale = 1.0f;
+        float ui_scale = scale / density;
+
+        ImGuiStyle &style = ImGui::GetStyle();
+        ImGui::StyleColorsDark();
+        style.ScaleAllSizes(ui_scale);
+        ImGui::GetIO().FontGlobalScale = ui_scale;
+    };
+    UpdateUIScale(window);
+
     DeviceManager& deviceManager = DeviceManager::GetInstance();
     PreferencesManager preferencesManager;
 
@@ -127,6 +141,11 @@ int main(int argc, char *argv[]) {
             if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                 event.window.windowID == SDL_GetWindowID(window))
                 done = true;
+
+            if (event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED &&
+                event.window.windowID == SDL_GetWindowID(window)) {
+                UpdateUIScale(window);
+            }
 
             // Handle hot-plugging
             if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
