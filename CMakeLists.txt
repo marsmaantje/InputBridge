@@ -344,6 +344,7 @@ if(WIN32)
             EXECUTABLES \"\${INSTALL_DIR}/InputBridge.exe\"
             RESOLVED_DEPENDENCIES_VAR RDEPS
             UNRESOLVED_DEPENDENCIES_VAR URDEPS
+            POST_EXCLUDE_REGEXES \"^C:/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/[Ss][Yy][Ss][Tt][Ee][Mm]32/.*\"
         )
         if(URDEPS)
             message(WARNING \"CPack: Unresolved dependencies: \${URDEPS}\")
