@@ -1,0 +1,33 @@
+#pragma once
+#include "Devices/DeviceState.h"
+#include "Devices/DeviceManager.h"
+
+class SteeringWheelHapticsVisualizer {
+public:
+    void Draw(const DeviceState& dev, DeviceManager& deviceManager);
+
+private:
+    // Constant
+    float m_constant_strength = 0.5f;
+    int m_constant_duration = 1000;
+    bool m_constant_infinite_duration = false;
+
+    // Periodic
+    float m_periodic_strength = 1.0f;
+    int m_periodic_period = 1000;
+    float m_periodic_magnitude = 0.5f;
+    float m_periodic_offset = 0.0f;
+    int m_periodic_phase = 0;
+    int m_periodic_duration = 1000;
+    bool m_periodic_infinite_duration = false;
+
+    // Condition
+    float m_condition_right_sat = 1.0f;
+    float m_condition_left_sat = 1.0f;
+    float m_condition_right_coeff = 0.5f;
+    float m_condition_left_coeff = 0.5f;
+    float m_condition_deadband = 0.1f;
+    float m_condition_center = 0.0f;
+    int m_condition_duration = 5000;
+    bool m_condition_infinite_duration = false;
+};

@@ -12,9 +12,6 @@
 
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
-#include "Haptics/GamepadHaptics.h"
-#include "Haptics/DualSenseTriggerEffectGenerator.h"
-#include "Haptics/SteeringWheelHaptics.h"
 #include "Mappers/InputMapper.h"
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
@@ -29,6 +26,8 @@
 #include "Visualizers/GamepadVisualizer.h"
 #include "Visualizers/GenericVisualizer.h"
 #include "Visualizers/SteeringWheelVisualizer.h"
+#include "Visualizers/GamepadHapticsVisualizer.h"
+#include "Visualizers/SteeringWheelHapticsVisualizer.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
@@ -310,6 +309,8 @@ int main(int argc, char *argv[]) {
                 static GenericVisualizer generic_viz;
                 static SteeringWheelVisualizer wheel_viz;
                 static FlightStickVisualizer flight_stick_viz;
+                static GamepadHapticsVisualizer gamepad_haptics_viz;
+                static SteeringWheelHapticsVisualizer wheel_haptics_viz;
 
                 std::string guid = DeviceManager::GetDeviceGUIDString(dev);
                 bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
@@ -342,120 +343,7 @@ int main(int argc, char *argv[]) {
                         ImGui::EndTabBar();
                     }
 
-                    ImGui::Separator();
-                    ImGui::Text("Haptics Test");
-                    static float low_freq = 0.5f;
-                    static float high_freq = 0.5f;
-                    static int duration = 1000;
-                    static bool infinite_duration = false;
-                    ImGui::SliderFloat("Low Freq", &low_freq, 0.0f, 1.0f);
-                    ImGui::SliderFloat("High Freq", &high_freq, 0.0f, 1.0f);
-                    ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                    if (!infinite_duration) {
-                        ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
-                    }
-
-                    if (ImGui::Button("Play Rumble")) {
-                        HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
-                        if (haptic) {
-                            if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
-                                gamepadHaptics->Rumble(low_freq, high_freq,
-                                                       infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                            }
-                        }
-                    }
-
-                    {
-                        SDL_Gamepad* pad = SDL_GetGamepadFromID(dev.instance_id);
-                        if (pad && SDL_GetBooleanProperty(SDL_GetGamepadProperties(pad), SDL_PROP_GAMEPAD_CAP_TRIGGER_RUMBLE_BOOLEAN, false)) {
-                            ImGui::Separator();
-                            ImGui::Text("Trigger Rumble");
-                            static int left_trigger = 0;
-                            static int right_trigger = 0;
-                            static int trigger_duration = 1000;
-                            
-                            ImGui::SliderInt("Left Trigger", &left_trigger, 0, 65535);
-                            ImGui::SliderInt("Right Trigger", &right_trigger, 0, 65535);
-                            ImGui::SliderInt("Trig Duration (ms)", &trigger_duration, 0, 5000);
-
-                            if (ImGui::Button("Play Trigger Rumble")) {
-                                SDL_RumbleGamepadTriggers(pad, (Uint16)left_trigger, (Uint16)right_trigger, (Uint32)trigger_duration);
-                            }
-                        }
-                    }
-
-                    ImGui::Separator();
-                    ImGui::Text("DualSense Adaptive Triggers");
-                    
-                    static int ds_effect_type = 0;
-                    const char* ds_effect_names[] = { "Off", "Feedback", "Weapon", "Vibration", "Bow", "Galloping", "MachineGun" };
-                    ImGui::Combo("Effect Type", &ds_effect_type, ds_effect_names, IM_ARRAYSIZE(ds_effect_names));
-
-                    static int ds_params[5] = {0};
-                    
-                    switch (ds_effect_type) {
-                        case 1: // Feedback
-                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
-                            ImGui::SliderInt("Strength", &ds_params[1], 0, 8);
-                            break;
-                        case 2: // Weapon
-                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
-                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
-                            ImGui::SliderInt("Strength", &ds_params[2], 0, 8);
-                            break;
-                        case 3: // Vibration
-                            ImGui::SliderInt("Position", &ds_params[0], 0, 9);
-                            ImGui::SliderInt("Amplitude", &ds_params[1], 0, 8);
-                            ImGui::SliderInt("Frequency", &ds_params[2], 0, 255);
-                            break;
-                        case 4: // Bow
-                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
-                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
-                            ImGui::SliderInt("Strength", &ds_params[2], 0, 8);
-                            ImGui::SliderInt("Snap Force", &ds_params[3], 0, 8);
-                            break;
-                        case 5: // Galloping
-                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
-                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
-                            ImGui::SliderInt("First Foot", &ds_params[2], 0, 9);
-                            ImGui::SliderInt("Second Foot", &ds_params[3], 0, 9);
-                            ImGui::SliderInt("Frequency", &ds_params[4], 0, 255);
-                            break;
-                        case 6: // MachineGun
-                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
-                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
-                            ImGui::SliderInt("Strength", &ds_params[2], 0, 8);
-                            ImGui::SliderInt("Frequency", &ds_params[3], 0, 255);
-                            break;
-                    }
-                    
-                    if (ImGui::Button("Send Effect")) {
-                        SDL_Gamepad* pad = SDL_GetGamepadFromID(dev.instance_id);
-                        if (pad) {
-                            DualSenseTriggerEffect effect;
-                            switch (ds_effect_type) {
-                                default:
-                                case 0: effect = DualSenseTriggerEffectGenerator::Off(); break;
-                                case 1: effect = DualSenseTriggerEffectGenerator::Feedback((uint8_t)ds_params[0], (uint8_t)ds_params[1]); break;
-                                case 2: effect = DualSenseTriggerEffectGenerator::Weapon((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2]); break;
-                                case 3: effect = DualSenseTriggerEffectGenerator::Vibration((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2]); break;
-                                case 4: effect = DualSenseTriggerEffectGenerator::Bow((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2], (uint8_t)ds_params[3]); break;
-                                case 5: effect = DualSenseTriggerEffectGenerator::Galloping((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2], (uint8_t)ds_params[3], (uint8_t)ds_params[4]); break;
-                                case 6: effect = DualSenseTriggerEffectGenerator::MachineGun((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2], (uint8_t)ds_params[3]); break;
-                            }
-
-                            // DS5 Output Report for Triggers (Report ID 0x31)
-                            Uint8 data[48] = {};
-                            data[0] = 0x31; // Report ID
-                            data[1] = 0x02; // Mode: Allow Trigger update
-                            data[2] = 0x0C; // Valid Flags: Bit 2 (Right Trigger), Bit 3 (Left Trigger)
-                            
-                            DualSenseTriggerEffectGenerator::ApplyToBuffer(data, 11, effect);
-                            DualSenseTriggerEffectGenerator::ApplyToBuffer(data, 22, effect);
-
-                            SDL_SendGamepadEffect(pad, data, sizeof(data));
-                        }
-                    }
+                    gamepad_haptics_viz.Draw(dev, deviceManager);
                 } else {
                     if (ImGui::BeginTabBar("DeviceMode")) {
                         TabItem("Raw Inputs", generic_viz);
@@ -475,82 +363,7 @@ int main(int argc, char *argv[]) {
                     }
 
                     if (SDL_GetJoystickType(dev.joystick) == SDL_JOYSTICK_TYPE_WHEEL) {
-                        ImGui::Separator();
-                        ImGui::Text("Haptics Test");
-
-                        HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
-                        if (auto *wheelHaptics = dynamic_cast<SteeringWheelHaptics *>(haptic)) {
-                            if (ImGui::TreeNode("Constant Force")) {
-                                static float strength = 0.5f;
-                                static int duration = 1000;
-                                static bool infinite_duration = false;
-                                ImGui::SliderFloat("Strength", &strength, -1.0f, 1.0f);
-                                ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                                if (!infinite_duration) {
-                                    ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
-                                }
-                                if (ImGui::Button("Play Constant")) {
-                                    wheelHaptics->PlayConstant(strength, infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                                }
-                                ImGui::TreePop();
-                            }
-
-                            if (ImGui::TreeNode("Periodic (Sine)")) {
-                                static float strength = 1.0f;
-                                static int period = 1000;
-                                static float magnitude = 0.5f;
-                                static float offset = 0.0f;
-                                static int phase = 0;
-                                static int duration = 1000;
-                                static bool infinite_duration = false;
-
-                                ImGui::SliderFloat("Strength", &strength, 0.0f, 1.0f);
-                                ImGui::SliderInt("Period (ms)", &period, 1, 5000);
-                                ImGui::SliderFloat("Magnitude", &magnitude, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Offset", &offset, -1.0f, 1.0f);
-                                ImGui::SliderInt("Phase", &phase, 0, 36000);
-                                ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                                if (!infinite_duration) {
-                                    ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
-                                }
-
-                                if (ImGui::Button("Play Periodic")) {
-                                    wheelHaptics->PlayPeriodic(strength, (uint32_t)period, magnitude, offset, (uint32_t)phase,
-                                                               infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                                }
-                                ImGui::TreePop();
-                            }
-
-                            if (ImGui::TreeNode("Condition (Spring)")) {
-                                static float right_sat = 1.0f;
-                                static float left_sat = 1.0f;
-                                static float right_coeff = 0.5f;
-                                static float left_coeff = 0.5f;
-                                static float deadband = 0.1f;
-                                static float center = 0.0f;
-                                static int duration = 5000;
-                                static bool infinite_duration = false;
-
-                                ImGui::SliderFloat("Right Sat", &right_sat, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Left Sat", &left_sat, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Right Coeff", &right_coeff, -1.0f, 1.0f);
-                                ImGui::SliderFloat("Left Coeff", &left_coeff, -1.0f, 1.0f);
-                                ImGui::SliderFloat("Deadband", &deadband, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Center", &center, -1.0f, 1.0f);
-                                ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                                if (!infinite_duration) {
-                                    ImGui::SliderInt("Duration (ms)", &duration, 0, 10000);
-                                }
-
-                                if (ImGui::Button("Play Spring")) {
-                                    wheelHaptics->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center,
-                                                                infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                                }
-                                ImGui::TreePop();
-                            }
-                        } else {
-                            ImGui::TextDisabled("Haptics not available");
-                        }
+                        wheel_haptics_viz.Draw(dev, deviceManager);
                     }
                 }
 

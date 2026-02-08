@@ -208,8 +208,10 @@ add_executable(InputBridge
     src/Preferences/Preferences.cpp
     src/Visualizers/GenericVisualizer.cpp
     src/Visualizers/GamepadVisualizer.cpp
+    src/Visualizers/GamepadHapticsVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
+    src/Visualizers/SteeringWheelHapticsVisualizer.cpp
     src/Network/NetworkStatusWindow.cpp
     src/Mappers/InputMapper.cpp
     src/Protocols/OSCProtocol.cpp
