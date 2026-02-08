@@ -144,6 +144,26 @@ if(ENABLE_WEBSOCKETS)
     if(OpenSSL_FOUND)
         target_link_libraries(uSockets PUBLIC OpenSSL::SSL OpenSSL::Crypto)
         target_compile_definitions(uSockets PUBLIC LIBUS_USE_OPENSSL)
+
+        if(WIN32)
+            set(OPENSSL_LIB_PATH "${OPENSSL_CRYPTO_LIBRARY}")
+            # Handle the case where OPENSSL_CRYPTO_LIBRARY is a list (e.g., optimized;path;debug;path)
+            if("${OPENSSL_LIB_PATH}" MATCHES ";")
+                foreach(ITEM ${OPENSSL_LIB_PATH})
+                    if(EXISTS "${ITEM}")
+                        set(OPENSSL_LIB_PATH "${ITEM}")
+                        break()
+                    endif()
+                endforeach()
+            endif()
+
+            get_filename_component(OPENSSL_LIB_DIR "${OPENSSL_LIB_PATH}" DIRECTORY)
+            find_file(OPENSSL_CRYPTO_DLL NAMES libcrypto-3-x64.dll libcrypto-1_1-x64.dll HINTS "${OPENSSL_LIB_DIR}/../bin" NO_DEFAULT_PATH)
+            find_file(OPENSSL_SSL_DLL NAMES libssl-3-x64.dll libssl-1_1-x64.dll HINTS "${OPENSSL_LIB_DIR}/../bin" NO_DEFAULT_PATH)
+            if(OPENSSL_CRYPTO_DLL AND OPENSSL_SSL_DLL)
+                install(FILES ${OPENSSL_CRYPTO_DLL} ${OPENSSL_SSL_DLL} DESTINATION bin)
+            endif()
+        endif()
     else()
         target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL)
     endif()
@@ -184,11 +204,14 @@ add_executable(InputBridge
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
     src/Haptics/SteeringWheelHaptics.cpp
+    src/Haptics/DualSenseTriggerEffectGenerator.cpp
     src/Preferences/Preferences.cpp
     src/Visualizers/GenericVisualizer.cpp
     src/Visualizers/GamepadVisualizer.cpp
+    src/Visualizers/GamepadHapticsVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
+    src/Visualizers/SteeringWheelHapticsVisualizer.cpp
     src/Network/NetworkStatusWindow.cpp
     src/Mappers/InputMapper.cpp
     src/Protocols/OSCProtocol.cpp
@@ -290,6 +313,26 @@ if(WIN32)
         $<TARGET_FILE:SDL3::SDL3>
         $<TARGET_FILE_DIR:InputBridge>
     )
+
+    # Generate a script to copy other runtime dependencies (OpenSSL, ZLib, etc.) to the build directory
+    set(COPY_DEPS_SCRIPT "${CMAKE_BINARY_DIR}/CopyRuntimeDependencies.cmake")
+    file(WRITE "${COPY_DEPS_SCRIPT}" "
+        file(GET_RUNTIME_DEPENDENCIES
+            EXECUTABLES \"\${EXECUTABLE_FILE}\"
+            RESOLVED_DEPENDENCIES_VAR RDEPS
+            UNRESOLVED_DEPENDENCIES_VAR URDEPS
+            DIRECTORIES \"\${BINARY_DIR}\"
+            POST_EXCLUDE_REGEXES \"^C:/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/[Ss][Yy][Ss][Tt][Ee][Mm]32/.*\"
+        )
+        foreach(DEP \${RDEPS})
+            file(INSTALL DESTINATION \"\${BINARY_DIR}\" TYPE SHARED_LIBRARY FILES \"\${DEP}\")
+        endforeach()
+    ")
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -DEXECUTABLE_FILE=$<TARGET_FILE:InputBridge> -DBINARY_DIR=$<TARGET_FILE_DIR:InputBridge> -P "${COPY_DEPS_SCRIPT}"
+        COMMENT "Resolving and copying runtime dependencies..."
+    )
+
     install(FILES $<TARGET_FILE:SDL3::SDL3> DESTINATION bin)
 endif()
 
@@ -310,6 +353,11 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(WIN32)
+    include(InstallRequiredSystemLibraries)
+    if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+        install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION bin)
+    endif()
+
     # This script will be executed at install time.
     # It finds all runtime dependencies of InputBridge.exe and installs them into the package.
     install(CODE "
@@ -319,6 +367,7 @@ if(WIN32)
             EXECUTABLES \"\${INSTALL_DIR}/InputBridge.exe\"
             RESOLVED_DEPENDENCIES_VAR RDEPS
             UNRESOLVED_DEPENDENCIES_VAR URDEPS
+            POST_EXCLUDE_REGEXES \"^C:/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/[Ss][Yy][Ss][Tt][Ee][Mm]32/.*\"
         )
         if(URDEPS)
             message(WARNING \"CPack: Unresolved dependencies: \${URDEPS}\")
@@ -336,3 +385,24 @@ else()
     set(CPACK_GENERATOR "TGZ")
 endif()
 include(CPack)
+
+# Install Licenses
+set(LICENSE_DIR "bin/licenses")
+
+install(FILES ${IMGUI_DIR}/LICENSE.txt DESTINATION ${LICENSE_DIR} RENAME IMGUI_LICENSE.txt OPTIONAL)
+install(FILES lib/nlohmann_json/LICENSE.MIT DESTINATION ${LICENSE_DIR} RENAME JSON_LICENSE.txt OPTIONAL)
+install(FILES lib/liblo/COPYING DESTINATION ${LICENSE_DIR} RENAME LIBLO_LICENSE.txt OPTIONAL)
+install(FILES lib/sdl/LICENSE.txt DESTINATION ${LICENSE_DIR} RENAME SDL3_LICENSE.txt OPTIONAL)
+
+if(ENABLE_WEBSOCKETS)
+    if(DEFINED usockets_lib_SOURCE_DIR)
+        install(FILES ${usockets_lib_SOURCE_DIR}/LICENSE DESTINATION ${LICENSE_DIR} RENAME USOCKETS_LICENSE OPTIONAL)
+    endif()
+    if(DEFINED uwebsockets_lib_SOURCE_DIR)
+        install(FILES ${uwebsockets_lib_SOURCE_DIR}/LICENSE DESTINATION ${LICENSE_DIR} RENAME UWEBSOCKETS_LICENSE OPTIONAL)
+        install(FILES ${uwebsockets_lib_SOURCE_DIR}/libdeflate/COPYING DESTINATION ${LICENSE_DIR} RENAME LIBDEFLATE_COPYING OPTIONAL)
+    endif()
+    if(WIN32 AND DEFINED libuv_SOURCE_DIR)
+        install(FILES ${libuv_SOURCE_DIR}/LICENSE DESTINATION ${LICENSE_DIR} RENAME LIBUV_LICENSE OPTIONAL)
+    endif()
+endif()

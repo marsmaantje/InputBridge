@@ -12,8 +12,6 @@
 
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
-#include "Haptics/GamepadHaptics.h"
-#include "Haptics/SteeringWheelHaptics.h"
 #include "Mappers/InputMapper.h"
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
@@ -28,6 +26,8 @@
 #include "Visualizers/GamepadVisualizer.h"
 #include "Visualizers/GenericVisualizer.h"
 #include "Visualizers/SteeringWheelVisualizer.h"
+#include "Visualizers/GamepadHapticsVisualizer.h"
+#include "Visualizers/SteeringWheelHapticsVisualizer.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
@@ -43,6 +43,7 @@ int main(int argc, char *argv[]) {
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, "1");
 
     // Setup SDL3 with Joystick and Gamepad support
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC)) {
@@ -50,9 +51,11 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    const int initial_width = 1280;
+    const int initial_height = 720;
     // Create window with SDL3 flags
     Uint32 window_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    SDL_Window *window = SDL_CreateWindow("InputBridge", 1280, 720, window_flags);
+    SDL_Window *window = SDL_CreateWindow("InputBridge", initial_width, initial_height, window_flags);
     if (!window) {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
         return -1;
@@ -105,6 +108,33 @@ int main(int argc, char *argv[]) {
 
     preferencesManager.Load();
 
+    float user_ui_scale = preferencesManager.GetFloat("UIScale", 1.0f);
+    bool scale_with_window = preferencesManager.GetBool("ScaleWithWindow", false);
+
+    auto UpdateUIScale = [&](SDL_Window *win) {
+        float scale = SDL_GetWindowDisplayScale(win);
+        float density = SDL_GetWindowPixelDensity(win);
+        if (density <= 0.0f) density = 1.0f;
+        if (scale <= 0.0f) scale = 1.0f;
+        float ui_scale = scale / density;
+
+        if (scale_with_window) {
+            int w, h;
+            SDL_GetWindowSize(win, &w, &h);
+            user_ui_scale = (float)w / (float)initial_width;
+            preferencesManager.SetFloat("UIScale", user_ui_scale);
+        }
+        ui_scale *= user_ui_scale;
+
+        ImGuiStyle &style = ImGui::GetStyle();
+        style = ImGuiStyle(); // Reset to default style to avoid compounding scales
+        ImGui::StyleColorsDark();
+        style.ScaleAllSizes(ui_scale);
+        if (style.WindowBorderHoverPadding <= 0.0f) style.WindowBorderHoverPadding = 1.0f;
+        ImGui::GetIO().FontGlobalScale = ui_scale;
+    };
+    UpdateUIScale(window);
+
     InputMapper inputMapper(deviceManager);
     inputMapper.LoadConfig(preferencesManager);
 
@@ -115,6 +145,7 @@ int main(int argc, char *argv[]) {
     bool done = false;
     bool vsync = true;
     int framerate_limit = 60;
+    static bool show_ui_settings = false;
     SDL_SetRenderVSync(renderer, 1);
 
     while (!done) {
@@ -127,6 +158,15 @@ int main(int argc, char *argv[]) {
             if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                 event.window.windowID == SDL_GetWindowID(window))
                 done = true;
+
+            if (event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED &&
+                event.window.windowID == SDL_GetWindowID(window)) {
+                UpdateUIScale(window);
+            }
+            if (event.type == SDL_EVENT_WINDOW_RESIZED && scale_with_window &&
+                event.window.windowID == SDL_GetWindowID(window)) {
+                UpdateUIScale(window);
+            }
 
             // Handle hot-plugging
             if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
@@ -160,7 +200,52 @@ int main(int argc, char *argv[]) {
                 }
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("Settings")) {
+                ImGui::MenuItem("UI Settings", NULL, &show_ui_settings);
+                ImGui::EndMenu();
+            }
             ImGui::EndMainMenuBar();
+        }
+
+        if (show_ui_settings) {
+            ImGui::Begin("UI Settings", &show_ui_settings, ImGuiWindowFlags_AlwaysAutoResize);
+            bool changed = false;
+            bool scale_changed = false;
+            if (ImGui::Button("-")) {
+                user_ui_scale -= 0.05f;
+                if (user_ui_scale < 0.5f) user_ui_scale = 0.5f;
+                scale_changed = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("+")) {
+                user_ui_scale += 0.05f;
+                if (user_ui_scale > 3.0f) user_ui_scale = 3.0f;
+                scale_changed = true;
+            }
+            ImGui::SameLine();
+            ImGui::Text("UI Scale: %.2f", user_ui_scale);
+
+            if (scale_changed) {
+                scale_with_window = false;
+                changed = true;
+            }
+            if (ImGui::Checkbox("Scale with Window", &scale_with_window)) changed = true;
+
+            if (ImGui::Button("Reset UI")) {
+                user_ui_scale = 1.0f;
+                scale_with_window = false;
+                SDL_SetWindowSize(window, initial_width, initial_height);
+                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                changed = true;
+            }
+            
+            if (changed) {
+                preferencesManager.SetFloat("UIScale", user_ui_scale);
+                preferencesManager.SetBool("ScaleWithWindow", scale_with_window);
+                preferencesManager.Save();
+                UpdateUIScale(window);
+            }
+            ImGui::End();
         }
 
         // DockSpace
@@ -224,6 +309,8 @@ int main(int argc, char *argv[]) {
                 static GenericVisualizer generic_viz;
                 static SteeringWheelVisualizer wheel_viz;
                 static FlightStickVisualizer flight_stick_viz;
+                static GamepadHapticsVisualizer gamepad_haptics_viz;
+                static SteeringWheelHapticsVisualizer wheel_haptics_viz;
 
                 std::string guid = DeviceManager::GetDeviceGUIDString(dev);
                 bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
@@ -256,28 +343,7 @@ int main(int argc, char *argv[]) {
                         ImGui::EndTabBar();
                     }
 
-                    ImGui::Separator();
-                    ImGui::Text("Haptics Test");
-                    static float low_freq = 0.5f;
-                    static float high_freq = 0.5f;
-                    static int duration = 1000;
-                    static bool infinite_duration = false;
-                    ImGui::SliderFloat("Low Freq", &low_freq, 0.0f, 1.0f);
-                    ImGui::SliderFloat("High Freq", &high_freq, 0.0f, 1.0f);
-                    ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                    if (!infinite_duration) {
-                        ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
-                    }
-
-                    if (ImGui::Button("Play Rumble")) {
-                        HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
-                        if (haptic) {
-                            if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
-                                gamepadHaptics->Rumble(low_freq, high_freq,
-                                                       infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                            }
-                        }
-                    }
+                    gamepad_haptics_viz.Draw(dev, deviceManager);
                 } else {
                     if (ImGui::BeginTabBar("DeviceMode")) {
                         TabItem("Raw Inputs", generic_viz);
@@ -297,82 +363,7 @@ int main(int argc, char *argv[]) {
                     }
 
                     if (SDL_GetJoystickType(dev.joystick) == SDL_JOYSTICK_TYPE_WHEEL) {
-                        ImGui::Separator();
-                        ImGui::Text("Haptics Test");
-
-                        HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
-                        if (auto *wheelHaptics = dynamic_cast<SteeringWheelHaptics *>(haptic)) {
-                            if (ImGui::TreeNode("Constant Force")) {
-                                static float strength = 0.5f;
-                                static int duration = 1000;
-                                static bool infinite_duration = false;
-                                ImGui::SliderFloat("Strength", &strength, -1.0f, 1.0f);
-                                ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                                if (!infinite_duration) {
-                                    ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
-                                }
-                                if (ImGui::Button("Play Constant")) {
-                                    wheelHaptics->PlayConstant(strength, infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                                }
-                                ImGui::TreePop();
-                            }
-
-                            if (ImGui::TreeNode("Periodic (Sine)")) {
-                                static float strength = 1.0f;
-                                static int period = 1000;
-                                static float magnitude = 0.5f;
-                                static float offset = 0.0f;
-                                static int phase = 0;
-                                static int duration = 1000;
-                                static bool infinite_duration = false;
-
-                                ImGui::SliderFloat("Strength", &strength, 0.0f, 1.0f);
-                                ImGui::SliderInt("Period (ms)", &period, 1, 5000);
-                                ImGui::SliderFloat("Magnitude", &magnitude, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Offset", &offset, -1.0f, 1.0f);
-                                ImGui::SliderInt("Phase", &phase, 0, 36000);
-                                ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                                if (!infinite_duration) {
-                                    ImGui::SliderInt("Duration (ms)", &duration, 0, 5000);
-                                }
-
-                                if (ImGui::Button("Play Periodic")) {
-                                    wheelHaptics->PlayPeriodic(strength, (uint32_t)period, magnitude, offset, (uint32_t)phase,
-                                                               infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                                }
-                                ImGui::TreePop();
-                            }
-
-                            if (ImGui::TreeNode("Condition (Spring)")) {
-                                static float right_sat = 1.0f;
-                                static float left_sat = 1.0f;
-                                static float right_coeff = 0.5f;
-                                static float left_coeff = 0.5f;
-                                static float deadband = 0.1f;
-                                static float center = 0.0f;
-                                static int duration = 5000;
-                                static bool infinite_duration = false;
-
-                                ImGui::SliderFloat("Right Sat", &right_sat, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Left Sat", &left_sat, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Right Coeff", &right_coeff, -1.0f, 1.0f);
-                                ImGui::SliderFloat("Left Coeff", &left_coeff, -1.0f, 1.0f);
-                                ImGui::SliderFloat("Deadband", &deadband, 0.0f, 1.0f);
-                                ImGui::SliderFloat("Center", &center, -1.0f, 1.0f);
-                                ImGui::Checkbox("Infinite Duration", &infinite_duration);
-                                if (!infinite_duration) {
-                                    ImGui::SliderInt("Duration (ms)", &duration, 0, 10000);
-                                }
-
-                                if (ImGui::Button("Play Spring")) {
-                                    wheelHaptics->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center,
-                                                                infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
-                                }
-                                ImGui::TreePop();
-                            }
-                        } else {
-                            ImGui::TextDisabled("Haptics not available");
-                        }
+                        wheel_haptics_viz.Draw(dev, deviceManager);
                     }
                 }
 
