@@ -39,7 +39,7 @@ jobs:
                   copy "C:/Program Files/OpenSSL/bin/libcrypto-3-x64.dll" package/bin
                   copy "C:/Program Files/OpenSSL/bin/libssl-3-x64.dll" package/bin
                   cmake -E make_directory package/bin/licenses
-                  if exist "C:/Program Files/OpenSSL/license.txt" copy "C:/Program Files/OpenSSL/license.txt" package/bin/licenses/OPENSSL_LICENSE.txt
+                  if (Test-Path "C:/Program Files/OpenSSL/license.txt") { copy "C:/Program Files/OpenSSL/license.txt" package/bin/licenses/OPENSSL_LICENSE.txt }
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
