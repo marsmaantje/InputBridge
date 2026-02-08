@@ -1,6 +1,7 @@
 #pragma once
 
-#include <cstdint>
+#include <cstddef> // for std::size_t
+#include <cstdint> // for uint8_t
 
 struct DualSenseTriggerEffect {
     uint8_t Mode;
@@ -8,7 +9,7 @@ struct DualSenseTriggerEffect {
 };
 
 class DualSenseTriggerEffectGenerator {
-public:
+  public:
     static DualSenseTriggerEffect Off();
     static DualSenseTriggerEffect Feedback(uint8_t startPosition, uint8_t strength);
     static DualSenseTriggerEffect Weapon(uint8_t startPosition, uint8_t endPosition, uint8_t strength);
@@ -16,7 +17,7 @@ public:
     static DualSenseTriggerEffect Bow(uint8_t startPosition, uint8_t endPosition, uint8_t strength, uint8_t snapForce);
     static DualSenseTriggerEffect Galloping(uint8_t startPosition, uint8_t endPosition, uint8_t firstFoot, uint8_t secondFoot, uint8_t frequency);
     static DualSenseTriggerEffect MachineGun(uint8_t startPosition, uint8_t endPosition, uint8_t strength, uint8_t frequency);
-    
+
     // Helper to apply an effect to a specific trigger in the output report buffer
-    static void ApplyToBuffer(uint8_t* buffer, std::size_t offset, const DualSenseTriggerEffect& effect);
+    static void ApplyToBuffer(uint8_t *buffer, std::size_t offset, const DualSenseTriggerEffect &effect);
 };
