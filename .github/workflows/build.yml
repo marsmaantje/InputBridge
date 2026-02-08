@@ -151,7 +151,7 @@ jobs:
               run: |
                   cmake --install build --config Release --prefix package
                   mkdir -p dist
-                  tar -czvf dist/InputBridge-Ubuntu.tar.gz -C package .
+                  tar -czvf dist/InputBridge-Ubuntu.tar.gz -C package/bin .
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
@@ -181,7 +181,7 @@ jobs:
               run: |
                   cmake --install build --config Release --prefix package
                   mkdir -p dist
-                  tar -czvf dist/InputBridge-Fedora.tar.gz -C package .
+                  tar -czvf dist/InputBridge-Fedora.tar.gz -C package/bin .
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
@@ -211,7 +211,7 @@ jobs:
               run: |
                   cmake --install build --config Release --prefix package
                   mkdir -p dist
-                  tar -czvf dist/InputBridge-Arch.tar.gz -C package .
+                  tar -czvf dist/InputBridge-Arch.tar.gz -C package/bin .
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
