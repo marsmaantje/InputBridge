@@ -1,7 +1,7 @@
 #include "DualSenseTriggerEffectGenerator.h"
 #include <cstring>
 
-void DualSenseTriggerEffectGenerator::ApplyToBuffer(uint8_t* buffer, size_t offset, const DualSenseTriggerEffect& effect) {
+void DualSenseTriggerEffectGenerator::ApplyToBuffer(uint8_t* buffer, std::size_t offset, const DualSenseTriggerEffect& effect) {
     buffer[offset] = effect.Mode;
     std::memcpy(buffer + offset + 1, effect.Params, sizeof(effect.Params));
 }
