@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (show_ui_settings) {
-            ImGui::Begin("UI Settings", &show_ui_settings);
+            ImGui::Begin("UI Settings", &show_ui_settings, ImGuiWindowFlags_AlwaysAutoResize);
             bool changed = false;
             bool scale_changed = false;
             if (ImGui::Button("-")) {
@@ -222,13 +222,21 @@ int main(int argc, char *argv[]) {
                 scale_changed = true;
             }
             ImGui::SameLine();
-            if (ImGui::SliderFloat("UI Scale", &user_ui_scale, 0.5f, 3.0f, "%.2f")) scale_changed = true;
+            ImGui::Text("UI Scale: %.2f", user_ui_scale);
 
             if (scale_changed) {
                 scale_with_window = false;
                 changed = true;
             }
             if (ImGui::Checkbox("Scale with Window", &scale_with_window)) changed = true;
+
+            if (ImGui::Button("Reset UI")) {
+                user_ui_scale = 1.0f;
+                scale_with_window = false;
+                SDL_SetWindowSize(window, initial_width, initial_height);
+                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                changed = true;
+            }
             
             if (changed) {
                 preferencesManager.SetFloat("UIScale", user_ui_scale);
