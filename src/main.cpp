@@ -13,6 +13,7 @@
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
 #include "Haptics/GamepadHaptics.h"
+#include "Haptics/DualSenseTriggerEffectGenerator.h"
 #include "Haptics/SteeringWheelHaptics.h"
 #include "Mappers/InputMapper.h"
 #include "Network/NetworkStatusWindow.h"
