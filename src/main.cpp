@@ -364,20 +364,63 @@ int main(int argc, char *argv[]) {
                         }
                     }
 
-                    ImGui::Separator();
-                    ImGui::Text("Trigger Rumble (DualSense)");
-                    static int left_trigger = 0;
-                    static int right_trigger = 0;
-                    static int trigger_duration = 1000;
-                    
-                    ImGui::SliderInt("Left Trigger", &left_trigger, 0, 65535);
-                    ImGui::SliderInt("Right Trigger", &right_trigger, 0, 65535);
-                    ImGui::SliderInt("Trig Duration (ms)", &trigger_duration, 0, 5000);
+                    {
+                        SDL_Gamepad* pad = SDL_GetGamepadFromID(dev.instance_id);
+                        if (pad && SDL_GetBooleanProperty(SDL_GetGamepadProperties(pad), SDL_PROP_GAMEPAD_CAP_TRIGGER_RUMBLE_BOOLEAN, false)) {
+                            ImGui::Separator();
+                            ImGui::Text("Trigger Rumble");
+                            static int left_trigger = 0;
+                            static int right_trigger = 0;
+                            static int trigger_duration = 1000;
+                            
+                            ImGui::SliderInt("Left Trigger", &left_trigger, 0, 65535);
+                            ImGui::SliderInt("Right Trigger", &right_trigger, 0, 65535);
+                            ImGui::SliderInt("Trig Duration (ms)", &trigger_duration, 0, 5000);
 
-                    if (ImGui::Button("Play Trigger Rumble")) {
+                            if (ImGui::Button("Play Trigger Rumble")) {
+                                SDL_RumbleGamepadTriggers(pad, (Uint16)left_trigger, (Uint16)right_trigger, (Uint32)trigger_duration);
+                            }
+                        }
+                    }
+
+                    ImGui::Separator();
+                    ImGui::Text("DualSense Adaptive Triggers (Experimental)");
+                    static int ds5_mode = 0; // 0: Off, 1: Rigid, 2: Pulse
+                    const char* modes[] = { "Off", "Rigid", "Pulse" };
+                    ImGui::Combo("Mode", &ds5_mode, modes, IM_ARRAYSIZE(modes));
+                    
+                    if (ImGui::Button("Send DS5 Effect")) {
                         SDL_Gamepad* pad = SDL_GetGamepadFromID(dev.instance_id);
                         if (pad) {
-                            SDL_RumbleGamepadTriggers(pad, (Uint16)left_trigger, (Uint16)right_trigger, (Uint32)trigger_duration);
+                            // DS5 Output Report for Triggers (Report ID 0x31)
+                            Uint8 data[48] = {};
+                            data[0] = 0x31; // Report ID
+                            data[1] = 0x02; // Mode: Allow Trigger update
+                            data[2] = 0x0C; // Valid Flags: Bit 2 (Right Trigger), Bit 3 (Left Trigger)
+                            
+                            // Right Trigger (Offset 11)
+                            data[11] = (Uint8)ds5_mode; 
+                            if (ds5_mode == 1) { // Rigid
+                                data[12] = 0;   // Start of resistance (0-255)
+                                data[13] = 255; // Amount of force (0-255)
+                            } else if (ds5_mode == 2) { // Pulse
+                                data[12] = 255; // Start
+                                data[13] = 30;  // Strength
+                                data[14] = 128; // Frequency
+                            }
+
+                            // Left Trigger (Offset 22)
+                            data[22] = (Uint8)ds5_mode;
+                            if (ds5_mode == 1) {
+                                data[23] = 0;
+                                data[24] = 255;
+                            } else if (ds5_mode == 2) {
+                                data[23] = 255;
+                                data[24] = 30;
+                                data[25] = 128;
+                            }
+
+                            SDL_SendGamepadEffect(pad, data, sizeof(data));
                         }
                     }
                 } else {
