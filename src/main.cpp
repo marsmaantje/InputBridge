@@ -385,41 +385,73 @@ int main(int argc, char *argv[]) {
                     }
 
                     ImGui::Separator();
-                    ImGui::Text("DualSense Adaptive Triggers (Experimental)");
-                    static int ds5_mode = 0; // 0: Off, 1: Rigid, 2: Pulse
-                    const char* modes[] = { "Off", "Rigid", "Pulse" };
-                    ImGui::Combo("Mode", &ds5_mode, modes, IM_ARRAYSIZE(modes));
+                    ImGui::Text("DualSense Adaptive Triggers");
                     
-                    if (ImGui::Button("Send DS5 Effect")) {
+                    static int ds_effect_type = 0;
+                    const char* ds_effect_names[] = { "Off", "Feedback", "Weapon", "Vibration", "Bow", "Galloping", "MachineGun" };
+                    ImGui::Combo("Effect Type", &ds_effect_type, ds_effect_names, IM_ARRAYSIZE(ds_effect_names));
+
+                    static int ds_params[5] = {0};
+                    
+                    switch (ds_effect_type) {
+                        case 1: // Feedback
+                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
+                            ImGui::SliderInt("Strength", &ds_params[1], 0, 8);
+                            break;
+                        case 2: // Weapon
+                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
+                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
+                            ImGui::SliderInt("Strength", &ds_params[2], 0, 8);
+                            break;
+                        case 3: // Vibration
+                            ImGui::SliderInt("Position", &ds_params[0], 0, 9);
+                            ImGui::SliderInt("Amplitude", &ds_params[1], 0, 8);
+                            ImGui::SliderInt("Frequency", &ds_params[2], 0, 255);
+                            break;
+                        case 4: // Bow
+                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
+                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
+                            ImGui::SliderInt("Strength", &ds_params[2], 0, 8);
+                            ImGui::SliderInt("Snap Force", &ds_params[3], 0, 8);
+                            break;
+                        case 5: // Galloping
+                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
+                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
+                            ImGui::SliderInt("First Foot", &ds_params[2], 0, 9);
+                            ImGui::SliderInt("Second Foot", &ds_params[3], 0, 9);
+                            ImGui::SliderInt("Frequency", &ds_params[4], 0, 255);
+                            break;
+                        case 6: // MachineGun
+                            ImGui::SliderInt("Start Position", &ds_params[0], 0, 9);
+                            ImGui::SliderInt("End Position", &ds_params[1], 0, 9);
+                            ImGui::SliderInt("Strength", &ds_params[2], 0, 8);
+                            ImGui::SliderInt("Frequency", &ds_params[3], 0, 255);
+                            break;
+                    }
+                    
+                    if (ImGui::Button("Send Effect")) {
                         SDL_Gamepad* pad = SDL_GetGamepadFromID(dev.instance_id);
                         if (pad) {
+                            DualSenseTriggerEffect effect;
+                            switch (ds_effect_type) {
+                                default:
+                                case 0: effect = DualSenseTriggerEffectGenerator::Off(); break;
+                                case 1: effect = DualSenseTriggerEffectGenerator::Feedback((uint8_t)ds_params[0], (uint8_t)ds_params[1]); break;
+                                case 2: effect = DualSenseTriggerEffectGenerator::Weapon((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2]); break;
+                                case 3: effect = DualSenseTriggerEffectGenerator::Vibration((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2]); break;
+                                case 4: effect = DualSenseTriggerEffectGenerator::Bow((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2], (uint8_t)ds_params[3]); break;
+                                case 5: effect = DualSenseTriggerEffectGenerator::Galloping((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2], (uint8_t)ds_params[3], (uint8_t)ds_params[4]); break;
+                                case 6: effect = DualSenseTriggerEffectGenerator::MachineGun((uint8_t)ds_params[0], (uint8_t)ds_params[1], (uint8_t)ds_params[2], (uint8_t)ds_params[3]); break;
+                            }
+
                             // DS5 Output Report for Triggers (Report ID 0x31)
                             Uint8 data[48] = {};
                             data[0] = 0x31; // Report ID
                             data[1] = 0x02; // Mode: Allow Trigger update
                             data[2] = 0x0C; // Valid Flags: Bit 2 (Right Trigger), Bit 3 (Left Trigger)
                             
-                            // Right Trigger (Offset 11)
-                            data[11] = (Uint8)ds5_mode; 
-                            if (ds5_mode == 1) { // Rigid
-                                data[12] = 0;   // Start of resistance (0-255)
-                                data[13] = 255; // Amount of force (0-255)
-                            } else if (ds5_mode == 2) { // Pulse
-                                data[12] = 255; // Start
-                                data[13] = 30;  // Strength
-                                data[14] = 128; // Frequency
-                            }
-
-                            // Left Trigger (Offset 22)
-                            data[22] = (Uint8)ds5_mode;
-                            if (ds5_mode == 1) {
-                                data[23] = 0;
-                                data[24] = 255;
-                            } else if (ds5_mode == 2) {
-                                data[23] = 255;
-                                data[24] = 30;
-                                data[25] = 128;
-                            }
+                            DualSenseTriggerEffectGenerator::ApplyToBuffer(data, 11, effect);
+                            DualSenseTriggerEffectGenerator::ApplyToBuffer(data, 22, effect);
 
                             SDL_SendGamepadEffect(pad, data, sizeof(data));
                         }

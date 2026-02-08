@@ -204,6 +204,7 @@ add_executable(InputBridge
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
     src/Haptics/SteeringWheelHaptics.cpp
+    src/Haptics/DualSenseTriggerEffectGenerator.cpp
     src/Preferences/Preferences.cpp
     src/Visualizers/GenericVisualizer.cpp
     src/Visualizers/GamepadVisualizer.cpp
