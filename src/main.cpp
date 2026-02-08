@@ -43,6 +43,7 @@ int main(int argc, char *argv[]) {
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, "1");
 
     // Setup SDL3 with Joystick and Gamepad support
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC)) {
@@ -360,6 +361,23 @@ int main(int argc, char *argv[]) {
                                 gamepadHaptics->Rumble(low_freq, high_freq,
                                                        infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
                             }
+                        }
+                    }
+
+                    ImGui::Separator();
+                    ImGui::Text("Trigger Rumble (DualSense)");
+                    static int left_trigger = 0;
+                    static int right_trigger = 0;
+                    static int trigger_duration = 1000;
+                    
+                    ImGui::SliderInt("Left Trigger", &left_trigger, 0, 65535);
+                    ImGui::SliderInt("Right Trigger", &right_trigger, 0, 65535);
+                    ImGui::SliderInt("Trig Duration (ms)", &trigger_duration, 0, 5000);
+
+                    if (ImGui::Button("Play Trigger Rumble")) {
+                        SDL_Gamepad* pad = SDL_GetGamepadFromID(dev.instance_id);
+                        if (pad) {
+                            SDL_RumbleGamepadTriggers(pad, (Uint16)left_trigger, (Uint16)right_trigger, (Uint32)trigger_duration);
                         }
                     }
                 } else {
