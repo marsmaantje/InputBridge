@@ -105,15 +105,47 @@ void WebSocketServer::Start(int port) {
                                    if (m_OutputMapper) {
                                        try {
                                            auto json = nlohmann::json::parse(message);
-                                           if (json["type"] == "haptic") {
-                                               std::string effect = json["effect"];
+                                           std::string type = json.value("type", "");
+                                           if (type == "haptic" || type == "gamepad" || type == "steering_wheel") {
+                                               std::string effect = json.value("effect", "");
                                                int device = json.value("device", 0);
-                                               auto& data = json["data"];
+                                               
+                                               nlohmann::json data;
+                                               if (json.contains("params")) {
+                                                   data = json["params"];
+                                               } else if (json.contains("data")) {
+                                                   data = json["data"];
+                                               } else {
+                                                   data = nlohmann::json::object();
+                                               }
 
                                                if (effect == "rumble") {
-                                                   m_OutputMapper->QueueRumble(device, data.value("low", 0.0f), data.value("high", 0.0f), data.value("duration", 0));
+                                                   float low = data.value("low", 0.0f);
+                                                   if (data.contains("large_magnitude")) low = data.value("large_magnitude", 0.0f);
+                                                   
+                                                   float high = data.value("high", 0.0f);
+                                                   if (data.contains("small_magnitude")) high = data.value("small_magnitude", 0.0f);
+                                                   
+                                                   int duration = data.value("duration", 0);
+                                                   if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
+
+                                                   m_OutputMapper->QueueRumble(device, low, high, duration);
                                                } else if (effect == "constant") {
-                                                   m_OutputMapper->QueueConstantForce(device, data.value("strength", 0.0f), data.value("duration", 0));
+                                                   float strength = data.value("strength", 0.0f);
+                                                   int duration = data.value("duration", 0);
+                                                   if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
+
+                                                   m_OutputMapper->QueueConstantForce(device, strength, duration);
+                                               } else if (effect == "periodic") {
+                                                   int duration = data.value("duration", 0);
+                                                   if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
+                                                   
+                                                   m_OutputMapper->QueuePeriodic(device, data.value("strength", 0.0f), data.value("period", 0), data.value("magnitude", 0.0f), data.value("offset", 0.0f), data.value("phase", 0), duration);
+                                               } else if (effect == "condition") {
+                                                   int duration = data.value("duration", 0);
+                                                   if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
+
+                                                   m_OutputMapper->QueueCondition(device, data.value("right_sat", 0.0f), data.value("left_sat", 0.0f), data.value("right_coeff", 0.0f), data.value("left_coeff", 0.0f), data.value("deadband", 0.0f), data.value("center", 0.0f), duration);
                                                }
                                            }
                                        } catch (...) {}
