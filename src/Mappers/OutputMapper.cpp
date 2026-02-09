@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <cmath>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <SDL3/SDL_filesystem.h>
@@ -78,6 +77,10 @@ void OutputMapper::LoadConfig(PreferencesManager& prefs) {
                     target.virtual_id = item.value("virtual_id", 0);
                     target.name = item.value("name", "Target");
                     target.device_guid = item.value("device_guid", "");
+                    target.enable_rumble = item.value("enable_rumble", true);
+                    target.enable_constant = item.value("enable_constant", true);
+                    target.enable_periodic = item.value("enable_periodic", true);
+                    target.enable_condition = item.value("enable_condition", true);
                     m_Targets.push_back(target);
                 }
             } catch (const std::exception& e) {
@@ -96,6 +99,10 @@ void OutputMapper::SaveConfig() const {
         item["virtual_id"] = target.virtual_id;
         item["name"] = target.name;
         item["device_guid"] = target.device_guid;
+        item["enable_rumble"] = target.enable_rumble;
+        item["enable_constant"] = target.enable_constant;
+        item["enable_periodic"] = target.enable_periodic;
+        item["enable_condition"] = target.enable_condition;
         data["targets"].push_back(item);
     }
 
@@ -127,11 +134,10 @@ void OutputMapper::DrawContent() {
 
     int targetToDelete = -1;
 
-    if (ImGui::BeginTable("HapticTargetsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+    if (ImGui::BeginTable("HapticTargetsTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
         ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-        ImGui::TableSetupColumn("Name");
-        ImGui::TableSetupColumn("Physical Device");
-        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Device");
+        ImGui::TableSetupColumn("Effects");
         ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableHeadersRow();
 
@@ -145,19 +151,8 @@ void OutputMapper::DrawContent() {
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("%d", target.virtual_id);
 
-            // Name
-            ImGui::TableSetColumnIndex(1);
-            char nameBuf[64];
-            strncpy(nameBuf, target.name.c_str(), sizeof(nameBuf));
-            nameBuf[sizeof(nameBuf)-1] = 0;
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::InputText("##Name", nameBuf, sizeof(nameBuf))) {
-                target.name = nameBuf;
-                SaveConfig();
-            }
-
             // Device Selector
-            ImGui::TableSetColumnIndex(2);
+            ImGui::TableSetColumnIndex(1);
             std::string currentDeviceName = "None";
             if (target.instance_id != 0) {
                  const auto& devices = m_DeviceManager.GetDevices();
@@ -188,10 +183,34 @@ void OutputMapper::DrawContent() {
                 ImGui::EndCombo();
             }
 
-            // Status
-            ImGui::TableSetColumnIndex(3);
+            // Effects
+            ImGui::TableSetColumnIndex(2);
             if (target.haptic_device) {
-                ImGui::TextColored(ImVec4(0,1,0,1), "Active");
+                unsigned int features = SDL_GetHapticFeatures(target.haptic_device);
+                bool has_rumble = (features & SDL_HAPTIC_LEFTRIGHT) || SDL_HapticRumbleSupported(target.haptic_device);
+                bool has_constant = (features & SDL_HAPTIC_CONSTANT);
+                bool has_periodic = (features & SDL_HAPTIC_SINE) || (features & SDL_HAPTIC_TRIANGLE);
+                bool has_condition = (features & SDL_HAPTIC_SPRING) || (features & SDL_HAPTIC_DAMPER);
+
+                if (!has_rumble) ImGui::BeginDisabled();
+                if (ImGui::Checkbox("Rumble", &target.enable_rumble)) SaveConfig();
+                if (!has_rumble) ImGui::EndDisabled();
+                ImGui::SameLine();
+
+                if (!has_constant) ImGui::BeginDisabled();
+                if (ImGui::Checkbox("Constant", &target.enable_constant)) SaveConfig();
+                if (!has_constant) ImGui::EndDisabled();
+                ImGui::SameLine();
+
+                if (!has_periodic) ImGui::BeginDisabled();
+                if (ImGui::Checkbox("Periodic", &target.enable_periodic)) SaveConfig();
+                if (!has_periodic) ImGui::EndDisabled();
+                ImGui::SameLine();
+
+                if (!has_condition) ImGui::BeginDisabled();
+                if (ImGui::Checkbox("Condition", &target.enable_condition)) SaveConfig();
+                if (!has_condition) ImGui::EndDisabled();
+
             } else if (!target.device_guid.empty()) {
                 ImGui::TextColored(ImVec4(1,0,0,1), "Missing");
             } else {
@@ -199,7 +218,7 @@ void OutputMapper::DrawContent() {
             }
 
             // Actions
-            ImGui::TableSetColumnIndex(4);
+            ImGui::TableSetColumnIndex(3);
             if (ImGui::Button("Delete")) {
                 targetToDelete = i;
             }
@@ -296,11 +315,10 @@ void OutputMapper::CloseHapticDevice(HapticTarget& target) {
     }
 }
 
-HapticTarget* OutputMapper::GetTarget(int virtual_id) {
+void OutputMapper::GetTargets(int virtual_id, std::vector<HapticTarget*>& out_targets) {
     for (auto& target : m_Targets) {
-        if (target.virtual_id == virtual_id) return &target;
+        if (target.virtual_id == virtual_id) out_targets.push_back(&target);
     }
-    return nullptr;
 }
 
 // --- Queue Methods ---
@@ -358,8 +376,10 @@ void OutputMapper::QueueCondition(int virtual_id, float right_sat, float left_sa
 // --- Trigger Implementations ---
 
 void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq, int duration_ms) {
-    HapticTarget* target = GetTarget(virtual_id);
-    if (!target || !target->haptic_device) return;
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+    if (!target || !target->haptic_device || !target->enable_rumble) continue;
 
     if (SDL_GetHapticFeatures(target->haptic_device) & SDL_HAPTIC_LEFTRIGHT) {
         SDL_HapticEffect effect;
@@ -382,11 +402,14 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
         float strength = std::max(low_freq, high_freq);
         SDL_PlayHapticRumble(target->haptic_device, strength, duration_ms);
     }
+    }
 }
 
 void OutputMapper::TriggerConstantForce(int virtual_id, float strength, int duration_ms) {
-    HapticTarget* target = GetTarget(virtual_id);
-    if (!target || !target->haptic_device) return;
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+    if (!target || !target->haptic_device || !target->enable_constant) continue;
 
     SDL_HapticEffect effect;
     SDL_memset(&effect, 0, sizeof(effect));
@@ -405,11 +428,14 @@ void OutputMapper::TriggerConstantForce(int virtual_id, float strength, int dura
     if (target->constant_effect_id != -1) {
         SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
     }
+    }
 }
 
 void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
-    HapticTarget* target = GetTarget(virtual_id);
-    if (!target || !target->haptic_device) return;
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+    if (!target || !target->haptic_device || !target->enable_periodic) continue;
 
     SDL_HapticEffect effect;
     SDL_memset(&effect, 0, sizeof(effect));
@@ -435,11 +461,14 @@ void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, f
     if (target->periodic_effect_id != -1) {
         SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
     }
+    }
 }
 
 void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
-    HapticTarget* target = GetTarget(virtual_id);
-    if (!target || !target->haptic_device) return;
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+    if (!target || !target->haptic_device || !target->enable_condition) continue;
 
     SDL_HapticEffect effect;
     SDL_memset(&effect, 0, sizeof(effect));
@@ -460,5 +489,6 @@ void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_
 
     if (target->condition_effect_id != -1) {
         SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
+    }
     }
 }

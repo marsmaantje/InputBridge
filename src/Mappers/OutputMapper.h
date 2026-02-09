@@ -15,6 +15,12 @@ struct HapticTarget {
     SDL_JoystickID instance_id = 0;
     SDL_Haptic* haptic_device = nullptr;
 
+    // Effect Toggles
+    bool enable_rumble = true;
+    bool enable_constant = true;
+    bool enable_periodic = true;
+    bool enable_condition = true;
+
     // Cached Effect IDs
     int constant_effect_id = -1;
     int periodic_effect_id = -1;
@@ -65,7 +71,7 @@ private:
     std::mutex m_Mutex;
     std::vector<HapticCommand> m_CommandQueue;
 
-    HapticTarget* GetTarget(int virtual_id);
+    void GetTargets(int virtual_id, std::vector<HapticTarget*>& out_targets);
     void UpdateHapticDevice(HapticTarget& target);
     void CloseHapticDevice(HapticTarget& target);
 
