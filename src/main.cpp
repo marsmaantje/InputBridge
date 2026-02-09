@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
                 SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
                 changed = true;
             }
-            
+
             if (changed) {
                 preferencesManager.SetFloat("UIScale", user_ui_scale);
                 preferencesManager.SetBool("ScaleWithWindow", scale_with_window);
@@ -260,14 +260,14 @@ int main(int argc, char *argv[]) {
             ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.5f, &dock_id_left, &dock_id_right);
             ImGuiID dock_id_right_top, dock_id_right_bottom;
             ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
-            ImGui::DockBuilderDockWindow("InputBridge Status", dock_id_left);
-            ImGui::DockBuilderDockWindow("Network Server Status", dock_id_right_top);
+            ImGui::DockBuilderDockWindow("Devices", dock_id_left);
+            ImGui::DockBuilderDockWindow("Network Server", dock_id_right_top);
             ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
             ImGui::DockBuilderFinish(dockspace_id);
         }
         ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-        ImGui::Begin("InputBridge Status");
+        ImGui::Begin("Devices");
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
         if (ImGui::Checkbox("VSync", &vsync)) {
@@ -411,7 +411,7 @@ int main(int argc, char *argv[]) {
     ImGui::DestroyContext();
 
     inputMapper.SaveConfig(preferencesManager);
-    
+
     // Save Network Server Configs
     OSCServer::GetInstance().SaveConfig(preferencesManager);
     WebSocketServer::GetInstance().SaveConfig(preferencesManager);

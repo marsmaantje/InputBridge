@@ -4,7 +4,7 @@
 #include "imgui.h"
 
 void NetworkStatusWindow::Draw() {
-    if (ImGui::Begin("Network Server Status")) {
+    if (ImGui::Begin("Network Server")) {
         if (ImGui::BeginTabBar("NetworkTabs")) {
             if (ImGui::BeginTabItem("OSC Server")) {
                 OSCServer::GetInstance().DrawContent();
