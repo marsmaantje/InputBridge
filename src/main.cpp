@@ -136,10 +136,12 @@ int main(int argc, char *argv[]) {
     };
     UpdateUIScale(window);
 
-    InputMapper inputMapper(deviceManager);
+    InputMapper::Init(deviceManager);
+    InputMapper& inputMapper = InputMapper::GetInstance();
     inputMapper.LoadConfig(preferencesManager);
 
-    OutputMapper outputMapper(deviceManager);
+    OutputMapper::Init(deviceManager);
+    OutputMapper& outputMapper = OutputMapper::GetInstance();
     outputMapper.LoadConfig(preferencesManager);
 
     // Load Network Server Configs
@@ -271,7 +273,7 @@ int main(int argc, char *argv[]) {
             ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
             ImGui::DockBuilderDockWindow("Devices", dock_id_left);
             ImGui::DockBuilderDockWindow("Network Server", dock_id_right_top);
-            ImGui::DockBuilderDockWindow("Output Mapper", dock_id_right_top);
+            ImGui::DockBuilderDockWindow("Output Mapper", dock_id_right_bottom);
             ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -382,8 +384,8 @@ int main(int argc, char *argv[]) {
             ImGui::PopID();
         }
 
-        inputMapper.DrawUI(preferencesManager);
-        outputMapper.DrawUI(preferencesManager);
+        inputMapper.DrawContent();
+        outputMapper.DrawContent();
 
         //if (ImGui::Button("Exit"))
         //    done = true;
@@ -422,7 +424,10 @@ int main(int argc, char *argv[]) {
     ImGui::DestroyContext();
 
     inputMapper.SaveConfig(preferencesManager);
-    outputMapper.SaveConfig(preferencesManager);
+    outputMapper.SaveConfig();
+
+    InputMapper::Shutdown();
+    OutputMapper::Shutdown();
 
     // Save Network Server Configs
     OSCServer::GetInstance().SaveConfig(preferencesManager);

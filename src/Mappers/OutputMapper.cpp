@@ -6,6 +6,7 @@
 #include <cmath>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <SDL3/SDL_filesystem.h>
 
 using json = nlohmann::json;
 
@@ -19,7 +20,7 @@ OutputMapper& OutputMapper::GetInstance()
 void OutputMapper::Init(const DeviceManager& deviceManager)
 {
     if (!s_Instance)
-        s_Instance = std::make_unique<OutputMapper>(deviceManager);
+        s_Instance.reset(new OutputMapper(deviceManager));
 }
 
 void OutputMapper::Shutdown()
@@ -34,6 +35,25 @@ namespace {
         auto it = std::find_if(devices.begin(), devices.end(), [id](const DeviceState& dev) { return dev.instance_id == id; });
         return (it != devices.end()) ? it->joystick : nullptr;
     }
+
+    std::filesystem::path GetOutputConfigPath() {
+        const char *basePath = SDL_GetBasePath();
+        std::filesystem::path dir;
+        if (basePath) {
+            dir = std::filesystem::path(basePath) / "mappings";
+        } else {
+            dir = "mappings";
+        }
+
+        try {
+            if (!std::filesystem::exists(dir)) {
+                std::filesystem::create_directories(dir);
+            }
+        } catch (const std::exception& e) {
+            SDL_Log("Failed to create output directory: %s", e.what());
+        }
+        return dir / "output_mappings.json";
+    }
 }
 
 OutputMapper::OutputMapper(const DeviceManager& deviceManager) : m_DeviceManager(deviceManager) {
@@ -46,7 +66,7 @@ OutputMapper::~OutputMapper() {
 }
 
 void OutputMapper::LoadConfig(PreferencesManager& prefs) {
-    std::filesystem::path configPath = "output_mappings.json";
+    std::filesystem::path configPath = GetOutputConfigPath();
     if (std::filesystem::exists(configPath)) {
         std::ifstream f(configPath);
         if (f.is_open()) {
@@ -79,7 +99,7 @@ void OutputMapper::SaveConfig() const {
         data["targets"].push_back(item);
     }
 
-    std::ofstream o("output_mappings.json");
+    std::ofstream o(GetOutputConfigPath());
     if (o.is_open()) {
         o << data.dump(4);
     }

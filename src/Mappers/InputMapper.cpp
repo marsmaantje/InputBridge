@@ -10,6 +10,7 @@
 #include <fstream>
 #include <filesystem>
 #include <memory>
+#include <SDL3/SDL_filesystem.h>
 
 using json = nlohmann::json;
 
@@ -23,7 +24,7 @@ InputMapper &InputMapper::GetInstance()
 void InputMapper::Init(const DeviceManager &deviceManager)
 {
     if (!s_Instance)
-        s_Instance = std::make_unique<InputMapper>(deviceManager);
+        s_Instance.reset(new InputMapper(deviceManager));
 }
 
 void InputMapper::Shutdown()
@@ -43,6 +44,17 @@ SDL_Joystick *GetJoystickByID(SDL_JoystickID id, const DeviceManager &deviceMana
     return (it != devices.end()) ? it->joystick : nullptr;
 }
 
+std::filesystem::path GetMappingsDirectory() {
+    const char *basePath = SDL_GetBasePath();
+    std::filesystem::path path;
+    if (basePath) {
+        path = std::filesystem::path(basePath) / "mappings";
+    } else {
+        path = "mappings";
+    }
+    return path;
+}
+
 } // namespace
 
 InputMapper::InputMapper(const DeviceManager &deviceManager) : m_DeviceManager(deviceManager) {
@@ -52,13 +64,26 @@ InputMapper::~InputMapper() {}
 
 void InputMapper::LoadConfig(PreferencesManager &prefs) {
     LoadProfiles();
+
+    std::string lastProfile = prefs.GetString("InputMapper", "LastProfile", "");
+    if (!lastProfile.empty()) {
+        for (size_t i = 0; i < m_Profiles.size(); ++i) {
+            if (m_Profiles[i].name == lastProfile) {
+                m_SelectedProfileIndex = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
     HandleDeviceConnectionChange();
 }
 
 void InputMapper::SaveConfig(PreferencesManager &prefs) const {
-    // The new system saves profiles to individual JSON files upon modification.
-    // This function could be used to save global settings related to the mapper,
-    // like the last selected profile, if needed. For now, it's a no-op.
+    if (m_SelectedProfileIndex >= 0 && m_SelectedProfileIndex < m_Profiles.size()) {
+        prefs.SetString("InputMapper", "LastProfile", m_Profiles[m_SelectedProfileIndex].name);
+    } else {
+        prefs.SetString("InputMapper", "LastProfile", "");
+    }
 }
 
 void InputMapper::DrawContent() {
@@ -122,13 +147,17 @@ void InputMapper::DrawContent() {
 
             if (ImGui::Button("Yes", ImVec2(120, 0))) {
                 const auto& profile = m_Profiles[m_SelectedProfileIndex];
-                std::filesystem::path profilePath = "mappings";
-                profilePath /= (profile.name + ".json");
-                if (std::filesystem::exists(profilePath)) {
-                    std::filesystem::remove(profilePath);
+                try {
+                    std::filesystem::path profilePath = GetMappingsDirectory();
+                    profilePath /= (profile.name + ".json");
+                    if (std::filesystem::exists(profilePath)) {
+                        std::filesystem::remove(profilePath);
+                    }
+                    m_Profiles.erase(m_Profiles.begin() + m_SelectedProfileIndex);
+                    m_SelectedProfileIndex = -1;
+                } catch (const std::exception& e) {
+                    SDL_Log("Failed to delete profile: %s", e.what());
                 }
-                m_Profiles.erase(m_Profiles.begin() + m_SelectedProfileIndex);
-                m_SelectedProfileIndex = -1;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SetItemDefaultFocus();
@@ -150,8 +179,8 @@ void InputMapper::DrawContent() {
         ImGui::Text("'%s' Mappings", profile.name.c_str());
 
         if (ImGui::BeginTable("mappings", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-            ImGui::TableSetupColumn("Output Channel");
-            ImGui::TableSetupColumn("Input Source");
+            ImGui::TableSetupColumn("Output Channel", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("Input Source", ImGuiTableColumnFlags_WidthStretch, 2.0f);
             ImGui::TableHeadersRow();
 
             for (const auto &outputName : m_GenericOutputs) {
@@ -172,6 +201,19 @@ void InputMapper::DrawContent() {
                     if (it != devices.end()) {
                         preview = it->name + " - Axis " + std::to_string(source.axisIndex);
                     }
+                }
+
+                if (source.axisIndex != -1) {
+                    ImGuiStyle& style = ImGui::GetStyle();
+                    float spacing = style.ItemSpacing.x;
+                    float x_btn_width = ImGui::CalcTextSize("X").x + style.FramePadding.x * 2.0f;
+                    float invert_width = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x + ImGui::CalcTextSize("Invert").x;
+                    float deadzone_width = 80.0f;
+                    float range_width = 100.0f;
+                    float extras_width = x_btn_width + spacing + invert_width + spacing + deadzone_width + spacing + range_width + spacing;
+                    ImGui::SetNextItemWidth(-extras_width);
+                } else {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
                 }
 
                 if (ImGui::BeginCombo("##source", preview.c_str())) {
@@ -330,63 +372,71 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
 
 void InputMapper::LoadProfiles() {
     m_Profiles.clear();
-    std::filesystem::path profileDir = "mappings";
-    if (!std::filesystem::exists(profileDir)) {
-        std::filesystem::create_directory(profileDir);
-    }
+    try {
+        std::filesystem::path profileDir = GetMappingsDirectory();
+        if (!std::filesystem::exists(profileDir)) {
+            std::filesystem::create_directories(profileDir);
+        }
 
-    for (const auto &entry : std::filesystem::directory_iterator(profileDir)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            std::ifstream f(entry.path());
-            if (f.is_open()) {
-                try {
-                    json data = json::parse(f);
-                    MappingProfile profile;
-                    profile.name = data["name"];
-                    for (auto& [key, val] : data["mappings"].items()) {
-                        InputSource source;
-                        source.deviceGuid = val["device_guid"];
-                        source.axisIndex = val["axis"];
-                        source.invert = val["invert"];
-                        source.deadzone = val["deadzone"];
-                        source.outputRange = val["range"];
-                        profile.outputToInput[key] = source;
+        for (const auto &entry : std::filesystem::directory_iterator(profileDir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".json") {
+                std::ifstream f(entry.path());
+                if (f.is_open()) {
+                    try {
+                        json data = json::parse(f);
+                        MappingProfile profile;
+                        profile.name = data["name"];
+                        for (auto& [key, val] : data["mappings"].items()) {
+                            InputSource source;
+                            source.deviceGuid = val["device_guid"];
+                            source.axisIndex = val["axis"];
+                            source.invert = val["invert"];
+                            source.deadzone = val["deadzone"];
+                            source.outputRange = val["range"];
+                            profile.outputToInput[key] = source;
+                        }
+                        m_Profiles.push_back(profile);
+                    } catch (const std::exception& e) {
+                        SDL_Log("Failed to parse profile %s: %s", entry.path().string().c_str(), e.what());
                     }
-                    m_Profiles.push_back(profile);
-                } catch (const std::exception& e) {
-                    SDL_Log("Failed to parse profile %s: %s", entry.path().string().c_str(), e.what());
                 }
             }
         }
+    } catch (const std::exception& e) {
+        SDL_Log("Failed to load profiles: %s", e.what());
     }
 }
 
 void InputMapper::SaveProfile(const MappingProfile &profile) const {
-    std::filesystem::path profileDir = "mappings";
-    if (!std::filesystem::exists(profileDir)) {
-        std::filesystem::create_directory(profileDir);
-    }
-    std::filesystem::path profilePath = profileDir / (profile.name + ".json");
-
-    json data;
-    data["name"] = profile.name;
-    data["mappings"] = json::object();
-
-    for (const auto& [key, val] : profile.outputToInput) {
-        if (val.axisIndex != -1) {
-            data["mappings"][key] = {
-                {"device_guid", val.deviceGuid},
-                {"axis", val.axisIndex},
-                {"invert", val.invert},
-                {"deadzone", val.deadzone},
-                {"range", val.outputRange}
-            };
+    try {
+        std::filesystem::path profileDir = GetMappingsDirectory();
+        if (!std::filesystem::exists(profileDir)) {
+            std::filesystem::create_directories(profileDir);
         }
-    }
+        std::filesystem::path profilePath = profileDir / (profile.name + ".json");
 
-    std::ofstream o(profilePath);
-    if (o.is_open()) {
-        o << data.dump(4);
+        json data;
+        data["name"] = profile.name;
+        data["mappings"] = json::object();
+
+        for (const auto& [key, val] : profile.outputToInput) {
+            if (val.axisIndex != -1) {
+                data["mappings"][key] = {
+                    {"device_guid", val.deviceGuid},
+                    {"axis", val.axisIndex},
+                    {"invert", val.invert},
+                    {"deadzone", val.deadzone},
+                    {"range", val.outputRange}
+                };
+            }
+        }
+
+        std::ofstream o(profilePath);
+        if (o.is_open()) {
+            o << data.dump(4);
+        }
+    } catch (const std::exception& e) {
+        SDL_Log("Failed to save profile: %s", e.what());
     }
 }
 
