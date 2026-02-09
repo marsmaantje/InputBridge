@@ -17,7 +17,6 @@ struct us_listen_socket_t;
 struct WebSocketServer::Impl {
     int port = 4269;
     bool running = false;
-    int clientCount = 0;
     int runningPort = 0;
     bool restartPending = false;
     int restartPort = 0;
@@ -74,7 +73,6 @@ void WebSocketServer::Start(int port) {
             std::lock_guard<std::mutex> lock(m_Impl->mutex);
             m_Impl->app = &app;
             m_Impl->loop = uWS::Loop::get();
-            m_Impl->clientCount = 0;
             m_Impl->clients.clear();
         }
 
@@ -87,7 +85,6 @@ void WebSocketServer::Start(int port) {
                                [this](auto *ws) {
                                    std::string ip(ws->getRemoteAddressAsText());
                                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                                   m_Impl->clientCount++;
                                    m_Impl->clients[ws] = ip;
                                    m_Impl->logs.push_back("Client connected: " + ip);
                                    if (m_Impl->logs.size() > 100)
@@ -112,7 +109,6 @@ void WebSocketServer::Start(int port) {
                                            m_Impl->logs.pop_front();
                                        m_Impl->clients.erase(ws);
                                    }
-                                   m_Impl->clientCount--;
                                }})
             .listen(port,
                     [this](auto *listen_socket) {
@@ -193,7 +189,7 @@ void WebSocketServer::SetPort(int port) {
 
 int WebSocketServer::GetClientCount() const {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    return m_Impl->clientCount;
+    return (int)m_Impl->clients.size();
 }
 
 void WebSocketServer::SetSelectedDevice(int id) { m_selectedDeviceId = id; }
@@ -354,7 +350,7 @@ void WebSocketServer::DrawContent() {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
         running = m_Impl->running;
         currentPort = m_Impl->port;
-        clientCount = m_Impl->clientCount;
+        clientCount = (int)m_Impl->clients.size();
         runningPort = m_Impl->runningPort;
         restartPending = m_Impl->restartPending;
         logs = m_Impl->logs;
@@ -400,6 +396,7 @@ void WebSocketServer::DrawContent() {
         ImGui::SameLine();
         if (ImGui::Button("Stop"))
             Stop();
+        ImGui::Separator();
         ImGui::Text("Connected Clients: %d", clientCount);
 
         if (ImGui::TreeNode("Client List")) {
