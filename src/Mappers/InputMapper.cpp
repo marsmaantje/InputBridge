@@ -68,7 +68,17 @@ void InputMapper::DrawUI(PreferencesManager &prefs) {
         ImGui::EndCombo();
     }
 
-    ImGui::InputText("New Profile Name", m_NewProfileName, sizeof(m_NewProfileName));
+    float avail_width = ImGui::GetContentRegionAvail().x;
+    float create_btn_width = ImGui::CalcTextSize("Create New").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float delete_btn_width = ImGui::CalcTextSize("Delete").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float style_spacing = ImGui::GetStyle().ItemSpacing.x;
+
+    float input_width = avail_width - create_btn_width - style_spacing;
+    if (m_SelectedProfileIndex != -1) {
+        input_width -= (delete_btn_width + style_spacing);
+    }
+    ImGui::SetNextItemWidth(input_width > 1.0f ? input_width : 1.0f);
+    ImGui::InputTextWithHint("##NewProfileName", "New Profile Name", m_NewProfileName, sizeof(m_NewProfileName));
     ImGui::SameLine();
     if (ImGui::Button("Create New")) {
         if (strlen(m_NewProfileName) > 0) {
@@ -84,15 +94,30 @@ void InputMapper::DrawUI(PreferencesManager &prefs) {
     if (m_SelectedProfileIndex != -1) {
         ImGui::SameLine();
         if (ImGui::Button("Delete")) {
-            // TODO: Add confirmation
-            const auto& profile = m_Profiles[m_SelectedProfileIndex];
-            std::filesystem::path profilePath = "mappings";
-            profilePath /= (profile.name + ".json");
-            if (std::filesystem::exists(profilePath)) {
-                std::filesystem::remove(profilePath);
+            ImGui::OpenPopup("Delete Profile?");
+        }
+
+        if (ImGui::BeginPopupModal("Delete Profile?", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Are you sure you want to delete profile '%s'?", m_Profiles[m_SelectedProfileIndex].name.c_str());
+            ImGui::Separator();
+
+            if (ImGui::Button("Yes", ImVec2(120, 0))) {
+                const auto& profile = m_Profiles[m_SelectedProfileIndex];
+                std::filesystem::path profilePath = "mappings";
+                profilePath /= (profile.name + ".json");
+                if (std::filesystem::exists(profilePath)) {
+                    std::filesystem::remove(profilePath);
+                }
+                m_Profiles.erase(m_Profiles.begin() + m_SelectedProfileIndex);
+                m_SelectedProfileIndex = -1;
+                ImGui::CloseCurrentPopup();
             }
-            m_Profiles.erase(m_Profiles.begin() + m_SelectedProfileIndex);
-            m_SelectedProfileIndex = -1;
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if (ImGui::Button("No", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
         }
     }
 
@@ -153,6 +178,12 @@ void InputMapper::DrawUI(PreferencesManager &prefs) {
                 }
 
                 if (source.axisIndex != -1) {
+                    ImGui::SameLine();
+                    if (ImGui::Button("X")) {
+                        source = {};
+                        changed = true;
+                    }
+                    ImGui::SetItemTooltip("Clear mapping");
                     ImGui::SameLine();
                     if (ImGui::Checkbox("Invert", &source.invert)) changed = true;
                     ImGui::SameLine();
