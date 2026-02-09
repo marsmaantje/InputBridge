@@ -9,8 +9,27 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
+#include <memory>
 
 using json = nlohmann::json;
+
+std::unique_ptr<InputMapper> InputMapper::s_Instance;
+
+InputMapper &InputMapper::GetInstance()
+{
+    return *s_Instance;
+}
+
+void InputMapper::Init(const DeviceManager &deviceManager)
+{
+    if (!s_Instance)
+        s_Instance = std::make_unique<InputMapper>(deviceManager);
+}
+
+void InputMapper::Shutdown()
+{
+    s_Instance.reset();
+}
 
 namespace { // Anonymous namespace for private helper functions
 
@@ -42,7 +61,7 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
     // like the last selected profile, if needed. For now, it's a no-op.
 }
 
-void InputMapper::DrawUI(PreferencesManager &prefs) {
+void InputMapper::DrawContent() {
     HandleDeviceConnectionChange();
 
     ImGui::Begin("Input Mapper");

@@ -9,6 +9,7 @@
 
 class IProtocol;
 class PreferencesManager;
+class OutputMapper;
 
 class WebSocketServer {
   public:
@@ -21,7 +22,7 @@ class WebSocketServer {
     int GetPort() const;
     void SetPort(int port);
     int GetClientCount() const;
-    
+
     void SetSelectedDevice(int id);
     int GetSelectedDevice() const;
 
@@ -38,6 +39,8 @@ class WebSocketServer {
 
     void LoadConfig(const PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs);
+
+    void SetOutputMapper(OutputMapper* mapper);
 #else
     static WebSocketServer &GetInstance() {
         static WebSocketServer i;
@@ -50,7 +53,7 @@ class WebSocketServer {
     int GetPort() const { return 0; }
     void SetPort(int port) {}
     int GetClientCount() const { return 0; }
-    
+
     void SetSelectedDevice(int id) {}
     int GetSelectedDevice() const { return 0; }
 
@@ -66,6 +69,8 @@ class WebSocketServer {
 
     void LoadConfig(const PreferencesManager& prefs) {}
     void SaveConfig(PreferencesManager& prefs) {}
+
+    void SetOutputMapper(OutputMapper* mapper) {}
 #endif
 
   private:
@@ -83,4 +88,5 @@ class WebSocketServer {
     std::atomic<int> m_selectedDeviceId{0};
     struct Impl;
     Impl *m_Impl;
+    OutputMapper* m_OutputMapper = nullptr;
 };

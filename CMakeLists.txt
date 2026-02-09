@@ -214,6 +214,7 @@ add_executable(InputBridge
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
     src/Network/NetworkStatusWindow.cpp
     src/Mappers/InputMapper.cpp
+    src/Mappers/OutputMapper.cpp
     src/Protocols/OSCProtocol.cpp
     src/Protocols/ProtocolManager.cpp
 )

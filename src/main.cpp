@@ -13,6 +13,7 @@
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
 #include "Mappers/InputMapper.h"
+#include "Mappers/OutputMapper.h"
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
@@ -138,6 +139,9 @@ int main(int argc, char *argv[]) {
     InputMapper inputMapper(deviceManager);
     inputMapper.LoadConfig(preferencesManager);
 
+    OutputMapper outputMapper(deviceManager);
+    outputMapper.LoadConfig(preferencesManager);
+
     // Load Network Server Configs
     OSCServer::GetInstance().LoadConfig(preferencesManager);
     WebSocketServer::GetInstance().LoadConfig(preferencesManager);
@@ -147,6 +151,9 @@ int main(int argc, char *argv[]) {
     int framerate_limit = 60;
     static bool show_ui_settings = false;
     SDL_SetRenderVSync(renderer, 1);
+
+    WebSocketServer::GetInstance().SetOutputMapper(&outputMapper);
+    OSCServer::GetInstance().SetOutputMapper(&outputMapper);
 
     while (!done) {
         Uint64 frame_start_time = SDL_GetTicks();
@@ -186,6 +193,8 @@ int main(int argc, char *argv[]) {
                 preferencesManager.ClearAppliedPreference(event.jdevice.which);
             }
         }
+
+        outputMapper.Update();
 
         // Start the Dear ImGui frame
         ImGui_ImplSDLRenderer3_NewFrame();
@@ -262,6 +271,7 @@ int main(int argc, char *argv[]) {
             ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
             ImGui::DockBuilderDockWindow("Devices", dock_id_left);
             ImGui::DockBuilderDockWindow("Network Server", dock_id_right_top);
+            ImGui::DockBuilderDockWindow("Output Mapper", dock_id_right_top);
             ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -373,6 +383,7 @@ int main(int argc, char *argv[]) {
         }
 
         inputMapper.DrawUI(preferencesManager);
+        outputMapper.DrawUI(preferencesManager);
 
         //if (ImGui::Button("Exit"))
         //    done = true;
@@ -411,6 +422,7 @@ int main(int argc, char *argv[]) {
     ImGui::DestroyContext();
 
     inputMapper.SaveConfig(preferencesManager);
+    outputMapper.SaveConfig(preferencesManager);
 
     // Save Network Server Configs
     OSCServer::GetInstance().SaveConfig(preferencesManager);

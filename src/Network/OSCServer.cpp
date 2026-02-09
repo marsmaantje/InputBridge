@@ -1,4 +1,5 @@
 #include "Network/OSCServer.h"
+#include "../Mappers/OutputMapper.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include <iostream>
@@ -19,12 +20,32 @@ OSCServer::~OSCServer() {
     Stop();
 }
 
+int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    auto* server = (OSCServer*)user_data;
+    if (server->m_OutputMapper && argc >= 4) {
+        int id = argv[0]->i;
+        float low = argv[1]->f;
+        float high = argv[2]->f;
+        int duration = argv[3]->i;
+        server->m_OutputMapper->QueueRumble(id, low, high, duration);
+    }
+    return 0;
+}
+
+int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    auto* server = (OSCServer*)user_data;
+    if (server->m_OutputMapper && argc >= 3) {
+        server->m_OutputMapper->QueueConstantForce(argv[0]->i, argv[1]->f, argv[2]->i);
+    }
+    return 0;
+}
+
 bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_running) {
         return true;
     }
-    
+
     m_clients.clear();
 
     // Update internal state for UI
@@ -32,7 +53,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     m_send_host[sizeof(m_send_host) - 1] = '\0';
     m_send_port = send_port;
     m_recv_port = recv_port;
-    
+
     m_running_send_host = send_host;
     m_running_send_port = send_port;
     m_running_recv_port = recv_port;
@@ -54,6 +75,8 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
         return false;
     }
 
+    lo_server_thread_add_method(m_server_thread, "/haptic/rumble", "iffi", haptic_rumble_handler, this);
+    lo_server_thread_add_method(m_server_thread, "/haptic/constant", "ifi", haptic_constant_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);
 
@@ -61,7 +84,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     m_isConnected = true;
     std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
               << ", Listening on port " << recv_port << std::endl;
-    
+
     m_logs.push_back("OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port));
     if (m_logs.size() > 100) m_logs.pop_front();
 
@@ -180,7 +203,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
     auto* server = static_cast<OSCServer*>(user_data);
     if (server) {
         std::lock_guard<std::mutex> lock(server->m_mutex);
-        
+
         lo_address src = lo_message_get_source(msg);
         if (src) {
             const char* hostname = lo_address_get_hostname(src);
@@ -190,7 +213,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 server->m_clients.insert(client);
             }
         }
-        
+
         server->m_logs.push_back("Recv: " + std::string(path));
         if (server->m_logs.size() > 100) server->m_logs.pop_front();
 
@@ -272,7 +295,7 @@ void OSCServer::DrawContent() {
     }
 
     if (IsRunning()) {
-        bool settingsChanged = (m_send_port != m_running_send_port) || 
+        bool settingsChanged = (m_send_port != m_running_send_port) ||
                                (m_recv_port != m_running_recv_port) ||
                                (m_running_send_host != m_send_host);
 
@@ -333,4 +356,8 @@ void OSCServer::DrawContent() {
             ImGui::SetScrollHereY(1.0f);
     }
     ImGui::EndChild();
+}
+
+void OSCServer::SetOutputMapper(OutputMapper* mapper) {
+    m_OutputMapper = mapper;
 }

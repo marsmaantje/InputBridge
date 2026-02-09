@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 class DeviceManager;
 class PreferencesManager;
@@ -27,10 +28,15 @@ class InputMapper {
         std::map<std::string, InputSource> outputToInput;
     };
 
-    InputMapper(const DeviceManager &deviceManager);
+    static InputMapper &GetInstance();
+    static void Init(const DeviceManager &deviceManager);
+    static void Shutdown();
+
     ~InputMapper();
 
-    void DrawUI(PreferencesManager &prefs);
+    InputMapper(const InputMapper &) = delete;
+    InputMapper &operator=(const InputMapper &) = delete;
+    void DrawContent();
     std::string UpdateAndBroadcastMessage();
 
     void LoadConfig(PreferencesManager &prefs);
@@ -40,6 +46,9 @@ class InputMapper {
     void HandleDeviceConnectionChange();
 
   private:
+    InputMapper(const DeviceManager &deviceManager);
+    static std::unique_ptr<InputMapper> s_Instance;
+
     const DeviceManager &m_DeviceManager;
     std::vector<MappingProfile> m_Profiles;
     int m_SelectedProfileIndex = -1;

@@ -1,5 +1,7 @@
 #include "WebSocketServer.h"
 #include "Preferences/Preferences.h"
+#include "../Mappers/OutputMapper.h"
+#include <nlohmann/json.hpp>
 
 #if ENABLE_WEBSOCKETS
 
@@ -99,6 +101,23 @@ void WebSocketServer::Start(int port) {
                                    }
                                    // Echo the message back to C#
                                    ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
+
+                                   if (m_OutputMapper) {
+                                       try {
+                                           auto json = nlohmann::json::parse(message);
+                                           if (json["type"] == "haptic") {
+                                               std::string effect = json["effect"];
+                                               int device = json.value("device", 0);
+                                               auto& data = json["data"];
+
+                                               if (effect == "rumble") {
+                                                   m_OutputMapper->QueueRumble(device, data.value("low", 0.0f), data.value("high", 0.0f), data.value("duration", 0));
+                                               } else if (effect == "constant") {
+                                                   m_OutputMapper->QueueConstantForce(device, data.value("strength", 0.0f), data.value("duration", 0));
+                                               }
+                                           }
+                                       } catch (...) {}
+                                   }
                                },
                            .close =
                                [this](auto *ws, int code, std::string_view message) {
@@ -425,5 +444,9 @@ void WebSocketServer::DrawContent() {
             ImGui::SetScrollHereY(1.0f);
     }
     ImGui::EndChild();
+}
+
+void WebSocketServer::SetOutputMapper(OutputMapper* mapper) {
+    m_OutputMapper = mapper;
 }
 #endif
