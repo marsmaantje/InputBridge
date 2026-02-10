@@ -140,12 +140,12 @@ int main(int argc, char *argv[]) {
     };
     UpdateUIScale(window);
 
+    OutputMapper::Init(deviceManager);
+    OutputMapper& outputMapper = OutputMapper::GetInstance();
+
     InputMapper::Init(deviceManager);
     InputMapper& inputMapper = InputMapper::GetInstance();
     inputMapper.LoadConfig(preferencesManager);
-
-    OutputMapper::Init(deviceManager);
-    OutputMapper& outputMapper = OutputMapper::GetInstance();
 
     // Load Network Server Configs
     OSCServer::GetInstance().LoadConfig(preferencesManager);
