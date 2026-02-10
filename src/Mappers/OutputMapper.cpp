@@ -268,16 +268,27 @@ void OutputMapper::UpdateHapticDevice(HapticTarget& target) {
 
     SDL_Joystick* joystick = GetJoystickByID(target.instance_id, m_DeviceManager);
     if (joystick && SDL_IsJoystickHaptic(joystick)) {
-        target.haptic_device = SDL_OpenHapticFromJoystick(joystick);
+        // Try to get existing haptic device from DeviceManager to avoid double-open conflict
+        HapticDevice* existingHaptic = m_DeviceManager.GetHapticDevice(target.instance_id);
+        if (existingHaptic && existingHaptic->IsReady()) {
+            target.haptic_device = existingHaptic->GetHandle();
+            target.owns_haptic_device = false;
+        } else {
+            target.haptic_device = SDL_OpenHapticFromJoystick(joystick);
+            target.owns_haptic_device = true;
+        }
+
         if (target.haptic_device) {
-            if (SDL_HapticRumbleSupported(target.haptic_device)) {
-                if (!SDL_InitHapticRumble(target.haptic_device)) {
-                    target.status_message = std::string("Rumble Init Failed: ") + SDL_GetError();
-                    SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+            if (target.owns_haptic_device) {
+                if (SDL_HapticRumbleSupported(target.haptic_device)) {
+                    if (!SDL_InitHapticRumble(target.haptic_device)) {
+                        target.status_message = std::string("Rumble Init Failed: ") + SDL_GetError();
+                        SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+                    }
                 }
+                SDL_SetHapticGain(target.haptic_device, 100);
+                SDL_SetHapticAutocenter(target.haptic_device, 0);
             }
-            SDL_SetHapticGain(target.haptic_device, 100);
-            SDL_SetHapticAutocenter(target.haptic_device, 0);
         } else {
             target.status_message = std::string("Open Failed: ") + SDL_GetError();
         }
@@ -286,7 +297,9 @@ void OutputMapper::UpdateHapticDevice(HapticTarget& target) {
 
 void OutputMapper::CloseHapticDevice(HapticTarget& target) {
     if (target.haptic_device) {
-        SDL_CloseHaptic(target.haptic_device);
+        if (target.owns_haptic_device) {
+            SDL_CloseHaptic(target.haptic_device);
+        }
         target.haptic_device = nullptr;
         target.constant_effect_id = -1;
         target.periodic_effect_id = -1;

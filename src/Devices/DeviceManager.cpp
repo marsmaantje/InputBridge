@@ -120,7 +120,7 @@ void DeviceManager::CloseAllDevices() {
     m_HapticDevices.clear();
 }
 
-HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) {
+HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
     auto it = m_HapticDevices.find(instance_id);
     if (it != m_HapticDevices.end()) {
         return it->second.get();

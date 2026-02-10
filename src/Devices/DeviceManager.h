@@ -22,7 +22,7 @@ class DeviceManager {
     const std::vector<DeviceState> &GetDevices() const;
     static std::string GetDeviceGUIDString(const DeviceState &dev);
 
-    HapticDevice* GetHapticDevice(SDL_JoystickID instance_id);
+    HapticDevice* GetHapticDevice(SDL_JoystickID instance_id) const;
 
   private:
     DeviceManager();

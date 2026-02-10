@@ -19,6 +19,7 @@ struct HapticTarget {
     std::string device_guid;
     SDL_JoystickID instance_id = 0;
     SDL_Haptic* haptic_device = nullptr;
+    bool owns_haptic_device = true;
 
     // Effect Toggles
     bool enable_rumble = true;
