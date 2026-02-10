@@ -145,24 +145,26 @@ void OutputMapper::DrawContent() {
                 bool has_periodic = (features & SDL_HAPTIC_SINE) || (features & SDL_HAPTIC_TRIANGLE);
                 bool has_condition = (features & SDL_HAPTIC_SPRING) || (features & SDL_HAPTIC_DAMPER);
 
-                if (!has_rumble) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Rumble", &target.enable_rumble)) inputMapper.SaveCurrentProfile();
-                if (!has_rumble) ImGui::EndDisabled();
-                ImGui::SameLine();
+                ImGuiStyle& style = ImGui::GetStyle();
+                float avail_width = ImGui::GetContentRegionAvail().x;
+                float current_line_width = 0.0f;
 
-                if (!has_constant) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Constant", &target.enable_constant)) inputMapper.SaveCurrentProfile();
-                if (!has_constant) ImGui::EndDisabled();
-                ImGui::SameLine();
+                auto DrawEffect = [&](const char* label, bool* v, bool supported) {
+                    float item_w = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x + ImGui::CalcTextSize(label).x;
+                    if (current_line_width > 0.0f) {
+                        if (current_line_width + style.ItemSpacing.x + item_w > avail_width) current_line_width = 0.0f;
+                        else { ImGui::SameLine(); current_line_width += style.ItemSpacing.x; }
+                    }
+                    if (!supported) ImGui::BeginDisabled();
+                    if (ImGui::Checkbox(label, v)) inputMapper.SaveCurrentProfile();
+                    if (!supported) ImGui::EndDisabled();
+                    current_line_width += item_w;
+                };
 
-                if (!has_periodic) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Periodic", &target.enable_periodic)) inputMapper.SaveCurrentProfile();
-                if (!has_periodic) ImGui::EndDisabled();
-                ImGui::SameLine();
-
-                if (!has_condition) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Condition", &target.enable_condition)) inputMapper.SaveCurrentProfile();
-                if (!has_condition) ImGui::EndDisabled();
+                DrawEffect("Rumble", &target.enable_rumble, has_rumble);
+                DrawEffect("Constant", &target.enable_constant, has_constant);
+                DrawEffect("Periodic", &target.enable_periodic, has_periodic);
+                DrawEffect("Condition", &target.enable_condition, has_condition);
 
             } else if (!target.device_guid.empty()) {
                 ImGui::TextColored(ImVec4(1,0,0,1), "Missing");
