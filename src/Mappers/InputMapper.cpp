@@ -404,15 +404,19 @@ void InputMapper::LoadProfiles() {
                 if (f.is_open()) {
                     try {
                         json data = json::parse(f);
+                        if (!data.contains("name") || !data["name"].is_string() || data["name"].get<std::string>().empty()) {
+                            SDL_Log("Skipping profile with no name: %s", entry.path().string().c_str());
+                            continue;
+                        }
                         MappingProfile profile;
                         profile.name = data["name"];
                         for (auto& [key, val] : data["mappings"].items()) {
                             InputSource source;
-                            source.deviceGuid = val["device_guid"];
-                            source.axisIndex = val["axis"];
-                            source.invert = val["invert"];
-                            source.deadzone = val["deadzone"];
-                            source.outputRange = val["range"];
+                            source.deviceGuid = val.value("device_guid", "");
+                            source.axisIndex = val.value("axis", -1);
+                            source.invert = val.value("invert", false);
+                            source.deadzone = val.value("deadzone", 0.05f);
+                            source.outputRange = val.value("range", 0);
                             profile.outputToInput[key] = source;
                         }
                         if (data.contains("haptic_targets")) {

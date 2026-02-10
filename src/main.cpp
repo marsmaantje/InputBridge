@@ -43,7 +43,11 @@ int main(int argc, char *argv[]) {
 #endif
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    // This tells SDL to use its own built-in driver for Steam Controllers
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "1");
+    // This ensures SDL handles the rumble translation itself
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM_HOME_LED, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, "1");
 
     // Setup SDL3 with Joystick and Gamepad support
