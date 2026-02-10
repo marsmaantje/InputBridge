@@ -12,6 +12,27 @@
 class DeviceManager;
 class PreferencesManager;
 
+// Moved from OutputMapper.h
+struct HapticTarget {
+    int virtual_id = 0;
+    std::string name;
+    std::string device_guid;
+    SDL_JoystickID instance_id = 0;
+    SDL_Haptic* haptic_device = nullptr;
+
+    // Effect Toggles
+    bool enable_rumble = true;
+    bool enable_constant = true;
+    bool enable_periodic = true;
+    bool enable_condition = true;
+
+    // Cached Effect IDs
+    int constant_effect_id = -1;
+    int periodic_effect_id = -1;
+    int condition_effect_id = -1;
+    int rumble_effect_id = -1;
+};
+
 class InputMapper {
   public:
     struct InputSource {
@@ -26,6 +47,7 @@ class InputMapper {
     struct MappingProfile {
         std::string name;
         std::map<std::string, InputSource> outputToInput;
+        std::vector<HapticTarget> hapticTargets;
     };
 
     static InputMapper &GetInstance();
@@ -41,9 +63,11 @@ class InputMapper {
 
     void LoadConfig(PreferencesManager &prefs);
     void SaveConfig(PreferencesManager &prefs) const;
+    void SaveCurrentProfile() const;
     void LoadProfiles();
     void SaveProfile(const MappingProfile &profile) const;
     void HandleDeviceConnectionChange();
+    std::vector<HapticTarget>* GetCurrentHapticTargets();
 
   private:
     InputMapper(const DeviceManager &deviceManager);

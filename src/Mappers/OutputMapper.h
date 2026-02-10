@@ -6,27 +6,9 @@
 #include <mutex>
 #include <SDL3/SDL.h>
 #include "Devices/DeviceManager.h"
-#include "Preferences/Preferences.h"
 
-struct HapticTarget {
-    int virtual_id = 0;
-    std::string name;
-    std::string device_guid;
-    SDL_JoystickID instance_id = 0;
-    SDL_Haptic* haptic_device = nullptr;
-
-    // Effect Toggles
-    bool enable_rumble = true;
-    bool enable_constant = true;
-    bool enable_periodic = true;
-    bool enable_condition = true;
-
-    // Cached Effect IDs
-    int constant_effect_id = -1;
-    int periodic_effect_id = -1;
-    int condition_effect_id = -1;
-    int rumble_effect_id = -1;
-};
+struct HapticTarget;
+class PreferencesManager;
 
 struct HapticCommand {
     enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION } type;
@@ -45,12 +27,12 @@ public:
 
     OutputMapper(const OutputMapper&) = delete;
     OutputMapper& operator=(const OutputMapper&) = delete;
-    void LoadConfig(PreferencesManager& prefs);
-    void SaveConfig() const;
     void DrawContent();
 
     // Call this every frame in the main loop to process queued haptic commands
     void Update();
+
+    void SetActiveHapticTargets(std::vector<HapticTarget>* targets);
 
     void HandleDeviceConnectionChange();
 
@@ -66,7 +48,8 @@ private:
     static std::unique_ptr<OutputMapper> s_Instance;
 
     const DeviceManager& m_DeviceManager;
-    std::vector<HapticTarget> m_Targets;
+
+    std::vector<HapticTarget>* m_active_targets = nullptr;
 
     std::mutex m_Mutex;
     std::vector<HapticCommand> m_CommandQueue;

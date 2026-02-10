@@ -1,5 +1,6 @@
 #include "OutputMapper.h"
 #include "imgui.h"
+#include "InputMapper.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -34,82 +35,27 @@ namespace {
         auto it = std::find_if(devices.begin(), devices.end(), [id](const DeviceState& dev) { return dev.instance_id == id; });
         return (it != devices.end()) ? it->joystick : nullptr;
     }
-
-    std::filesystem::path GetOutputConfigPath() {
-        const char *basePath = SDL_GetBasePath();
-        std::filesystem::path dir;
-        if (basePath) {
-            dir = std::filesystem::path(basePath) / "mappings";
-        } else {
-            dir = "mappings";
-        }
-
-        try {
-            if (!std::filesystem::exists(dir)) {
-                std::filesystem::create_directories(dir);
-            }
-        } catch (const std::exception& e) {
-            SDL_Log("Failed to create output directory: %s", e.what());
-        }
-        return dir / "output_mappings.json";
-    }
 }
 
 OutputMapper::OutputMapper(const DeviceManager& deviceManager) : m_DeviceManager(deviceManager) {
 }
 
 OutputMapper::~OutputMapper() {
-    for (auto& target : m_Targets) {
-        CloseHapticDevice(target);
-    }
-}
-
-void OutputMapper::LoadConfig(PreferencesManager& prefs) {
-    std::filesystem::path configPath = GetOutputConfigPath();
-    if (std::filesystem::exists(configPath)) {
-        std::ifstream f(configPath);
-        if (f.is_open()) {
-            try {
-                json data = json::parse(f);
-                m_Targets.clear();
-                for (const auto& item : data["targets"]) {
-                    HapticTarget target;
-                    target.virtual_id = item.value("virtual_id", 0);
-                    target.name = item.value("name", "Target");
-                    target.device_guid = item.value("device_guid", "");
-                    target.enable_rumble = item.value("enable_rumble", true);
-                    target.enable_constant = item.value("enable_constant", true);
-                    target.enable_periodic = item.value("enable_periodic", true);
-                    target.enable_condition = item.value("enable_condition", true);
-                    m_Targets.push_back(target);
-                }
-            } catch (const std::exception& e) {
-                SDL_Log("Failed to load output mappings: %s", e.what());
-            }
+    if (m_active_targets) {
+        for (auto& target : *m_active_targets) {
+            CloseHapticDevice(target);
         }
     }
-    HandleDeviceConnectionChange();
 }
 
-void OutputMapper::SaveConfig() const {
-    json data;
-    data["targets"] = json::array();
-    for (const auto& target : m_Targets) {
-        json item;
-        item["virtual_id"] = target.virtual_id;
-        item["name"] = target.name;
-        item["device_guid"] = target.device_guid;
-        item["enable_rumble"] = target.enable_rumble;
-        item["enable_constant"] = target.enable_constant;
-        item["enable_periodic"] = target.enable_periodic;
-        item["enable_condition"] = target.enable_condition;
-        data["targets"].push_back(item);
+void OutputMapper::SetActiveHapticTargets(std::vector<HapticTarget>* targets) {
+    if (m_active_targets) {
+        for (auto& target : *m_active_targets) {
+            CloseHapticDevice(target);
+        }
     }
-
-    std::ofstream o(GetOutputConfigPath());
-    if (o.is_open()) {
-        o << data.dump(4);
-    }
+    m_active_targets = targets;
+    HandleDeviceConnectionChange();
 }
 
 void OutputMapper::DrawContent() {
@@ -122,14 +68,21 @@ void OutputMapper::DrawContent() {
     ImGui::TextWrapped("Map virtual device IDs (used by external apps) to physical haptic devices.");
     ImGui::Spacing();
 
+    auto& inputMapper = InputMapper::GetInstance();
+    if (!m_active_targets) {
+        ImGui::Text("No mapping profile selected in Input Mapper.");
+        ImGui::End();
+        return;
+    }
+
     if (ImGui::Button("Add Target")) {
         HapticTarget newTarget;
         int maxId = -1;
-        for(const auto& t : m_Targets) if(t.virtual_id > maxId) maxId = t.virtual_id;
+        for(const auto& t : *m_active_targets) if(t.virtual_id > maxId) maxId = t.virtual_id;
         newTarget.virtual_id = maxId + 1;
         newTarget.name = "Target " + std::to_string(newTarget.virtual_id);
-        m_Targets.push_back(newTarget);
-        SaveConfig();
+        m_active_targets->push_back(newTarget);
+        inputMapper.SaveCurrentProfile();
     }
 
     int targetToDelete = -1;
@@ -141,8 +94,8 @@ void OutputMapper::DrawContent() {
         ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableHeadersRow();
 
-        for (int i = 0; i < m_Targets.size(); ++i) {
-            auto& target = m_Targets[i];
+        for (int i = 0; i < m_active_targets->size(); ++i) {
+            auto& target = (*m_active_targets)[i];
             ImGui::PushID(i);
 
             ImGui::TableNextRow();
@@ -166,7 +119,7 @@ void OutputMapper::DrawContent() {
                     target.device_guid = "";
                     target.instance_id = 0;
                     CloseHapticDevice(target);
-                    SaveConfig();
+                    inputMapper.SaveCurrentProfile();
                 }
 
                 for (const auto& dev : m_DeviceManager.GetDevices()) {
@@ -176,7 +129,7 @@ void OutputMapper::DrawContent() {
                             target.device_guid = DeviceManager::GetDeviceGUIDString(dev);
                             target.instance_id = dev.instance_id;
                             UpdateHapticDevice(target);
-                            SaveConfig();
+                            inputMapper.SaveCurrentProfile();
                         }
                     }
                 }
@@ -193,22 +146,22 @@ void OutputMapper::DrawContent() {
                 bool has_condition = (features & SDL_HAPTIC_SPRING) || (features & SDL_HAPTIC_DAMPER);
 
                 if (!has_rumble) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Rumble", &target.enable_rumble)) SaveConfig();
+                if (ImGui::Checkbox("Rumble", &target.enable_rumble)) inputMapper.SaveCurrentProfile();
                 if (!has_rumble) ImGui::EndDisabled();
                 ImGui::SameLine();
 
                 if (!has_constant) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Constant", &target.enable_constant)) SaveConfig();
+                if (ImGui::Checkbox("Constant", &target.enable_constant)) inputMapper.SaveCurrentProfile();
                 if (!has_constant) ImGui::EndDisabled();
                 ImGui::SameLine();
 
                 if (!has_periodic) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Periodic", &target.enable_periodic)) SaveConfig();
+                if (ImGui::Checkbox("Periodic", &target.enable_periodic)) inputMapper.SaveCurrentProfile();
                 if (!has_periodic) ImGui::EndDisabled();
                 ImGui::SameLine();
 
                 if (!has_condition) ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Condition", &target.enable_condition)) SaveConfig();
+                if (ImGui::Checkbox("Condition", &target.enable_condition)) inputMapper.SaveCurrentProfile();
                 if (!has_condition) ImGui::EndDisabled();
 
             } else if (!target.device_guid.empty()) {
@@ -229,9 +182,9 @@ void OutputMapper::DrawContent() {
     }
 
     if (targetToDelete != -1) {
-        CloseHapticDevice(m_Targets[targetToDelete]);
-        m_Targets.erase(m_Targets.begin() + targetToDelete);
-        SaveConfig();
+        CloseHapticDevice((*m_active_targets)[targetToDelete]);
+        m_active_targets->erase(m_active_targets->begin() + targetToDelete);
+        inputMapper.SaveCurrentProfile();
     }
 
     ImGui::End();
@@ -263,13 +216,15 @@ void OutputMapper::Update() {
 }
 
 void OutputMapper::HandleDeviceConnectionChange() {
+    if (!m_active_targets) return;
+
     const auto& devices = m_DeviceManager.GetDevices();
     std::map<std::string, SDL_JoystickID> guidMap;
     for (const auto& dev : devices) {
         guidMap[DeviceManager::GetDeviceGUIDString(dev)] = dev.instance_id;
     }
 
-    for (auto& target : m_Targets) {
+    for (auto& target : *m_active_targets) {
         if (target.device_guid.empty()) continue;
 
         auto it = guidMap.find(target.device_guid);
@@ -316,7 +271,8 @@ void OutputMapper::CloseHapticDevice(HapticTarget& target) {
 }
 
 void OutputMapper::GetTargets(int virtual_id, std::vector<HapticTarget*>& out_targets) {
-    for (auto& target : m_Targets) {
+    if (!m_active_targets) return;
+    for (auto& target : *m_active_targets) {
         if (target.virtual_id == virtual_id) out_targets.push_back(&target);
     }
 }

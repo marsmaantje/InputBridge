@@ -142,7 +142,6 @@ int main(int argc, char *argv[]) {
 
     OutputMapper::Init(deviceManager);
     OutputMapper& outputMapper = OutputMapper::GetInstance();
-    outputMapper.LoadConfig(preferencesManager);
 
     // Load Network Server Configs
     OSCServer::GetInstance().LoadConfig(preferencesManager);
@@ -424,7 +423,6 @@ int main(int argc, char *argv[]) {
     ImGui::DestroyContext();
 
     inputMapper.SaveConfig(preferencesManager);
-    outputMapper.SaveConfig();
 
     InputMapper::Shutdown();
     OutputMapper::Shutdown();

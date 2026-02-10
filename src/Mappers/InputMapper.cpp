@@ -1,5 +1,6 @@
 #include "InputMapper.h"
 #include "Devices/DeviceManager.h"
+#include "Mappers/OutputMapper.h"
 #include "Network/WebSocketServer.h"
 #include "Network/OSCServer.h"
 #include "Preferences/Preferences.h"
@@ -75,6 +76,10 @@ void InputMapper::LoadConfig(PreferencesManager &prefs) {
         }
     }
 
+    if (m_SelectedProfileIndex != -1) {
+        OutputMapper::GetInstance().SetActiveHapticTargets(&m_Profiles[m_SelectedProfileIndex].hapticTargets);
+    }
+
     HandleDeviceConnectionChange();
 }
 
@@ -83,6 +88,12 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
         prefs.SetString("InputMapper", "LastProfile", m_Profiles[m_SelectedProfileIndex].name);
     } else {
         prefs.SetString("InputMapper", "LastProfile", "");
+    }
+}
+
+void InputMapper::SaveCurrentProfile() const {
+    if (m_SelectedProfileIndex >= 0 && m_SelectedProfileIndex < m_Profiles.size()) {
+        SaveProfile(m_Profiles[m_SelectedProfileIndex]);
     }
 }
 
@@ -95,6 +106,7 @@ void InputMapper::DrawContent() {
     ImGui::Text("Mapping Profiles");
     ImGui::Separator();
 
+    int old_idx = m_SelectedProfileIndex;
     const char *current_profile_name = (m_SelectedProfileIndex != -1) ? m_Profiles[m_SelectedProfileIndex].name.c_str() : "None";
     if (ImGui::BeginCombo("Active Profile", current_profile_name)) {
         if (ImGui::Selectable("None", m_SelectedProfileIndex == -1)) {
@@ -110,6 +122,12 @@ void InputMapper::DrawContent() {
             }
         }
         ImGui::EndCombo();
+    }
+    if (old_idx != m_SelectedProfileIndex) {
+        auto& outputMapper = OutputMapper::GetInstance();
+        std::vector<HapticTarget>* old_targets = (old_idx != -1) ? &m_Profiles[old_idx].hapticTargets : nullptr;
+        std::vector<HapticTarget>* new_targets = (m_SelectedProfileIndex != -1) ? &m_Profiles[m_SelectedProfileIndex].hapticTargets : nullptr;
+        outputMapper.SetActiveHapticTargets(new_targets);
     }
 
     float avail_width = ImGui::GetContentRegionAvail().x;
@@ -131,6 +149,7 @@ void InputMapper::DrawContent() {
             m_Profiles.push_back(new_profile);
             m_SelectedProfileIndex = m_Profiles.size() - 1;
             SaveProfile(new_profile);
+            OutputMapper::GetInstance().SetActiveHapticTargets(&m_Profiles.back().hapticTargets);
             m_NewProfileName[0] = '\0';
         }
     }
@@ -155,6 +174,7 @@ void InputMapper::DrawContent() {
                     }
                     m_Profiles.erase(m_Profiles.begin() + m_SelectedProfileIndex);
                     m_SelectedProfileIndex = -1;
+                    OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
                 } catch (const std::exception& e) {
                     SDL_Log("Failed to delete profile: %s", e.what());
                 }
@@ -395,6 +415,19 @@ void InputMapper::LoadProfiles() {
                             source.outputRange = val["range"];
                             profile.outputToInput[key] = source;
                         }
+                        if (data.contains("haptic_targets")) {
+                            for (const auto& item : data["haptic_targets"]) {
+                                HapticTarget target;
+                                target.virtual_id = item.value("virtual_id", 0);
+                                target.name = item.value("name", "Target");
+                                target.device_guid = item.value("device_guid", "");
+                                target.enable_rumble = item.value("enable_rumble", true);
+                                target.enable_constant = item.value("enable_constant", true);
+                                target.enable_periodic = item.value("enable_periodic", true);
+                                target.enable_condition = item.value("enable_condition", true);
+                                profile.hapticTargets.push_back(target);
+                            }
+                        }
                         m_Profiles.push_back(profile);
                     } catch (const std::exception& e) {
                         SDL_Log("Failed to parse profile %s: %s", entry.path().string().c_str(), e.what());
@@ -431,6 +464,19 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
             }
         }
 
+        data["haptic_targets"] = json::array();
+        for (const auto& target : profile.hapticTargets) {
+            json item;
+            item["virtual_id"] = target.virtual_id;
+            item["name"] = target.name;
+            item["device_guid"] = target.device_guid;
+            item["enable_rumble"] = target.enable_rumble;
+            item["enable_constant"] = target.enable_constant;
+            item["enable_periodic"] = target.enable_periodic;
+            item["enable_condition"] = target.enable_condition;
+            data["haptic_targets"].push_back(item);
+        }
+
         std::ofstream o(profilePath);
         if (o.is_open()) {
             o << data.dump(4);
@@ -438,6 +484,13 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
     } catch (const std::exception& e) {
         SDL_Log("Failed to save profile: %s", e.what());
     }
+}
+
+std::vector<HapticTarget>* InputMapper::GetCurrentHapticTargets() {
+    if (m_SelectedProfileIndex >= 0 && m_SelectedProfileIndex < m_Profiles.size()) {
+        return &m_Profiles[m_SelectedProfileIndex].hapticTargets;
+    }
+    return nullptr;
 }
 
 void InputMapper::HandleDeviceConnectionChange() {
@@ -456,6 +509,18 @@ void InputMapper::HandleDeviceConnectionChange() {
                 source.instance_id = it->second;
             } else {
                 source.instance_id = 0; // Device not connected
+            }
+        }
+    }
+
+    for (auto &profile : m_Profiles) {
+        for (auto &target : profile.hapticTargets) {
+            if (target.device_guid.empty()) continue;
+            auto it = guidToInstanceId.find(target.device_guid);
+            if (it != guidToInstanceId.end()) {
+                target.instance_id = it->second;
+            } else if (target.instance_id != 0) {
+                target.instance_id = 0;
             }
         }
     }
