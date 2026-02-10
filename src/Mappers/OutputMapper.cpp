@@ -147,6 +147,9 @@ void OutputMapper::DrawContent() {
                 }
                 ImGui::EndCombo();
             }
+            if (!target.status_message.empty()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", target.status_message.c_str());
+            }
 
             // Effects
             ImGui::TableSetColumnIndex(2);
@@ -260,6 +263,7 @@ void OutputMapper::HandleDeviceConnectionChange() {
 
 void OutputMapper::UpdateHapticDevice(HapticTarget& target) {
     CloseHapticDevice(target);
+    target.status_message.clear();
     if (target.instance_id == 0) return;
 
     SDL_Joystick* joystick = GetJoystickByID(target.instance_id, m_DeviceManager);
@@ -268,11 +272,14 @@ void OutputMapper::UpdateHapticDevice(HapticTarget& target) {
         if (target.haptic_device) {
             if (SDL_HapticRumbleSupported(target.haptic_device)) {
                 if (!SDL_InitHapticRumble(target.haptic_device)) {
+                    target.status_message = std::string("Rumble Init Failed: ") + SDL_GetError();
                     SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
                 }
             }
             SDL_SetHapticGain(target.haptic_device, 100);
             SDL_SetHapticAutocenter(target.haptic_device, 0);
+        } else {
+            target.status_message = std::string("Open Failed: ") + SDL_GetError();
         }
     }
 }
@@ -372,7 +379,14 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
         }
 
         if (target->rumble_effect_id != -1) {
-            SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
+            bool should_run = created || duration_ms > 0;
+            if (!should_run) {
+                unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
+                if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->rumble_effect_id) == 0) {
+                    should_run = true;
+                }
+            }
+            if (should_run) SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
         }
     } else {
         float strength = std::max(low_freq, high_freq);
@@ -404,7 +418,14 @@ void OutputMapper::TriggerConstantForce(int virtual_id, float strength, int dura
     }
 
     if (target->constant_effect_id != -1) {
-        SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
+        bool should_run = created || duration_ms > 0;
+        if (!should_run) {
+            unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
+            if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->constant_effect_id) == 0) {
+                should_run = true;
+            }
+        }
+        if (should_run) SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
     }
     }
 }
@@ -439,7 +460,14 @@ void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, f
     }
 
     if (target->periodic_effect_id != -1) {
-        SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
+        bool should_run = created || duration_ms > 0;
+        if (!should_run) {
+            unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
+            if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->periodic_effect_id) == 0) {
+                should_run = true;
+            }
+        }
+        if (should_run) SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
     }
     }
 }
@@ -472,7 +500,14 @@ void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_
     }
 
     if (target->condition_effect_id != -1) {
-        SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
+        bool should_run = created || duration_ms > 0;
+        if (!should_run) {
+            unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
+            if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->condition_effect_id) == 0) {
+                should_run = true;
+            }
+        }
+        if (should_run) SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
     }
     }
 }

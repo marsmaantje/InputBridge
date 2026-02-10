@@ -31,6 +31,8 @@ struct HapticTarget {
     int periodic_effect_id = -1;
     int condition_effect_id = -1;
     int rumble_effect_id = -1;
+
+    std::string status_message;
 };
 
 class InputMapper {
