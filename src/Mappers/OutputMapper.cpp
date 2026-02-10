@@ -392,14 +392,7 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
         }
 
         if (target->rumble_effect_id != -1) {
-            bool should_run = created || duration_ms > 0;
-            if (!should_run) {
-                unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
-                if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->rumble_effect_id) == 0) {
-                    should_run = true;
-                }
-            }
-            if (should_run) SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
+            SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
         }
     } else {
         float strength = std::max(low_freq, high_freq);
@@ -431,14 +424,7 @@ void OutputMapper::TriggerConstantForce(int virtual_id, float strength, int dura
     }
 
     if (target->constant_effect_id != -1) {
-        bool should_run = created || duration_ms > 0;
-        if (!should_run) {
-            unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
-            if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->constant_effect_id) == 0) {
-                should_run = true;
-            }
-        }
-        if (should_run) SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
+        SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
     }
     }
 }
@@ -473,14 +459,7 @@ void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, f
     }
 
     if (target->periodic_effect_id != -1) {
-        bool should_run = created || duration_ms > 0;
-        if (!should_run) {
-            unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
-            if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->periodic_effect_id) == 0) {
-                should_run = true;
-            }
-        }
-        if (should_run) SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
+        SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
     }
     }
 }
@@ -513,14 +492,7 @@ void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_
     }
 
     if (target->condition_effect_id != -1) {
-        bool should_run = created || duration_ms > 0;
-        if (!should_run) {
-            unsigned int features = SDL_GetHapticFeatures(target->haptic_device);
-            if ((features & SDL_HAPTIC_STATUS) == 0 || SDL_GetHapticEffectStatus(target->haptic_device, target->condition_effect_id) == 0) {
-                should_run = true;
-            }
-        }
-        if (should_run) SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
+        SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
     }
     }
 }
