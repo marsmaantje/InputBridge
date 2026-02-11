@@ -26,7 +26,6 @@
 #define TRIGGER_EFFECT_GENERATOR_H
 
 #include <cstdint>
-#include <array>
 
 namespace ExtendInput {
 namespace DataTools {

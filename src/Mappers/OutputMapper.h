@@ -3,7 +3,6 @@
 #include <vector>
 #include <memory>
 #include <mutex>
-#include <string>
 #include <SDL3/SDL.h>
 #include "Devices/DeviceManager.h"
 
