@@ -392,7 +392,9 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
         }
 
         if (target->rumble_effect_id != -1) {
-            SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
+            if (created || duration_ms > 0) {
+                SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
+            }
         }
     } else {
         float strength = std::max(low_freq, high_freq);
@@ -424,7 +426,9 @@ void OutputMapper::TriggerConstantForce(int virtual_id, float strength, int dura
     }
 
     if (target->constant_effect_id != -1) {
-        SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
+        if (created || duration_ms > 0) {
+            SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
+        }
     }
     }
 }
@@ -459,7 +463,9 @@ void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, f
     }
 
     if (target->periodic_effect_id != -1) {
-        SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
+        if (created || duration_ms > 0) {
+            SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
+        }
     }
     }
 }
@@ -492,7 +498,9 @@ void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_
     }
 
     if (target->condition_effect_id != -1) {
-        SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
+        if (created || duration_ms > 0) {
+            SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
+        }
     }
     }
 }
