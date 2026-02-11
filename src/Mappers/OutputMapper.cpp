@@ -121,7 +121,7 @@ void OutputMapper::DrawContent() {
                 }
 
                 for (const auto& dev : m_DeviceManager.GetDevices()) {
-                    if (SDL_IsJoystickHaptic(dev.joystick)) {
+                    if (SDL_IsJoystickHaptic(dev.joystick) || SDL_IsGamepad(dev.instance_id)) {
                         bool isSelected = (target.instance_id == dev.instance_id);
                         bool isUsed = false;
                         for (const auto& other_target : *m_active_targets) {
@@ -153,12 +153,22 @@ void OutputMapper::DrawContent() {
 
             // Effects
             ImGui::TableSetColumnIndex(2);
-            if (target.haptic_device) {
-                unsigned int features = SDL_GetHapticFeatures(target.haptic_device);
-                bool has_rumble = (features & SDL_HAPTIC_LEFTRIGHT) || SDL_HapticRumbleSupported(target.haptic_device);
-                bool has_constant = (features & SDL_HAPTIC_CONSTANT);
-                bool has_periodic = (features & SDL_HAPTIC_SINE) || (features & SDL_HAPTIC_TRIANGLE);
-                bool has_condition = (features & SDL_HAPTIC_SPRING) || (features & SDL_HAPTIC_DAMPER);
+            if (target.haptic_device || (target.instance_id != 0 && SDL_IsGamepad(target.instance_id))) {
+                bool has_rumble = false;
+                bool has_constant = false;
+                bool has_periodic = false;
+                bool has_condition = false;
+
+                if (target.haptic_device) {
+                    unsigned int features = SDL_GetHapticFeatures(target.haptic_device);
+                    has_rumble = (features & SDL_HAPTIC_LEFTRIGHT) || SDL_HapticRumbleSupported(target.haptic_device);
+                    has_constant = (features & SDL_HAPTIC_CONSTANT);
+                    has_periodic = (features & SDL_HAPTIC_SINE) || (features & SDL_HAPTIC_TRIANGLE);
+                    has_condition = (features & SDL_HAPTIC_SPRING) || (features & SDL_HAPTIC_DAMPER);
+                } else {
+                    // Assume Gamepad supports rumble
+                    has_rumble = true;
+                }
 
                 ImGuiStyle& style = ImGui::GetStyle();
                 float avail_width = ImGui::GetContentRegionAvail().x;
@@ -170,6 +180,12 @@ void OutputMapper::DrawContent() {
                         if (current_line_width + style.ItemSpacing.x + item_w > avail_width) current_line_width = 0.0f;
                         else { ImGui::SameLine(); current_line_width += style.ItemSpacing.x; }
                     }
+
+                    if (!supported && *v) {
+                        *v = false;
+                        inputMapper.SaveCurrentProfile();
+                    }
+
                     if (!supported) ImGui::BeginDisabled();
                     if (ImGui::Checkbox(label, v)) inputMapper.SaveCurrentProfile();
                     if (!supported) ImGui::EndDisabled();
@@ -270,13 +286,13 @@ void OutputMapper::UpdateHapticDevice(HapticTarget& target) {
     if (target.instance_id == 0) return;
 
     SDL_Joystick* joystick = GetJoystickByID(target.instance_id, m_DeviceManager);
-    if (joystick && SDL_IsJoystickHaptic(joystick)) {
+    if (joystick && (SDL_IsJoystickHaptic(joystick) || SDL_IsGamepad(target.instance_id))) {
         // Try to get existing haptic device from DeviceManager to avoid double-open conflict
         HapticDevice* existingHaptic = m_DeviceManager.GetHapticDevice(target.instance_id);
         if (existingHaptic && existingHaptic->IsReady()) {
             target.haptic_device = existingHaptic->GetHandle();
             target.owns_haptic_device = false;
-        } else {
+        } else if (SDL_IsJoystickHaptic(joystick)) {
             target.haptic_device = SDL_OpenHapticFromJoystick(joystick);
             target.owns_haptic_device = true;
         }
@@ -292,7 +308,7 @@ void OutputMapper::UpdateHapticDevice(HapticTarget& target) {
                 SDL_SetHapticGain(target.haptic_device, 100);
                 SDL_SetHapticAutocenter(target.haptic_device, 0);
             }
-        } else {
+        } else if (!SDL_IsGamepad(target.instance_id)) {
             target.status_message = std::string("Open Failed: ") + SDL_GetError();
         }
     }
@@ -385,33 +401,40 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-    if (!target || !target->haptic_device || !target->enable_rumble) continue;
+        if (!target || !target->enable_rumble) continue;
 
-    if (SDL_GetHapticFeatures(target->haptic_device) & SDL_HAPTIC_LEFTRIGHT) {
-        SDL_HapticEffect effect;
-        SDL_memset(&effect, 0, sizeof(effect));
-        effect.type = SDL_HAPTIC_LEFTRIGHT;
-        effect.leftright.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
-        effect.leftright.large_magnitude = (Uint16)(std::clamp(low_freq, 0.0f, 1.0f) * 65535.0f);
-        effect.leftright.small_magnitude = (Uint16)(std::clamp(high_freq, 0.0f, 1.0f) * 65535.0f);
+        if (target->haptic_device) {
+            if (SDL_GetHapticFeatures(target->haptic_device) & SDL_HAPTIC_LEFTRIGHT) {
+                SDL_HapticEffect effect;
+                SDL_memset(&effect, 0, sizeof(effect));
+                effect.type = SDL_HAPTIC_LEFTRIGHT;
+                effect.leftright.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
+                effect.leftright.large_magnitude = (Uint16)(std::clamp(low_freq, 0.0f, 1.0f) * 65535.0f);
+                effect.leftright.small_magnitude = (Uint16)(std::clamp(high_freq, 0.0f, 1.0f) * 65535.0f);
 
-        bool created = false;
-        if (target->rumble_effect_id == -1) {
-             target->rumble_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
-             created = true;
-        } else {
-             SDL_UpdateHapticEffect(target->haptic_device, target->rumble_effect_id, &effect);
-        }
+                bool created = false;
+                if (target->rumble_effect_id == -1) {
+                    target->rumble_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
+                    created = true;
+                } else {
+                    SDL_UpdateHapticEffect(target->haptic_device, target->rumble_effect_id, &effect);
+                }
 
-        if (target->rumble_effect_id != -1) {
-            if (created || duration_ms > 0) {
-                SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
+                if (target->rumble_effect_id != -1) {
+                    if (created || duration_ms > 0) {
+                        SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
+                    }
+                }
+            } else {
+                float strength = std::max(low_freq, high_freq);
+                SDL_PlayHapticRumble(target->haptic_device, strength, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms);
+            }
+        } else if (target->instance_id != 0 && SDL_IsGamepad(target->instance_id)) {
+            SDL_Gamepad* pad = SDL_GetGamepadFromID(target->instance_id);
+            if (pad) {
+                SDL_RumbleGamepad(pad, (Uint16)(std::clamp(low_freq, 0.0f, 1.0f) * 65535.0f), (Uint16)(std::clamp(high_freq, 0.0f, 1.0f) * 65535.0f), (Uint32)duration_ms);
             }
         }
-    } else {
-        float strength = std::max(low_freq, high_freq);
-        SDL_PlayHapticRumble(target->haptic_device, strength, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms);
-    }
     }
 }
 
