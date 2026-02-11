@@ -109,10 +109,14 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
         if (ImGui::BeginTabBar("DeviceMode")) {
             // TabItem("Standard Layout", gamepad_viz);
             TabItem("Raw Inputs", generic_viz);
+            if (ImGui::BeginTabItem("Haptic Test")) {
+                DrawHapticsControl(dev, deviceManager);
+                ImGui::Separator();
+                gamepad_haptics_viz.Draw(dev, deviceManager);
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
-
-        gamepad_haptics_viz.Draw(dev, deviceManager);
     } else {
         if (ImGui::BeginTabBar("DeviceMode")) {
             TabItem("Raw Inputs", generic_viz);
@@ -124,11 +128,15 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
             if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK || type == SDL_JOYSTICK_TYPE_THROTTLE || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
                 // TabItem("Flight Stick", flight_stick_viz);
             }
+            if (type == SDL_JOYSTICK_TYPE_WHEEL) {
+                if (ImGui::BeginTabItem("Haptic Test")) {
+                    DrawHapticsControl(dev, deviceManager);
+                    ImGui::Separator();
+                    wheel_haptics_viz.Draw(dev, deviceManager);
+                    ImGui::EndTabItem();
+                }
+            }
             ImGui::EndTabBar();
-        }
-
-        if (SDL_GetJoystickType(dev.joystick) == SDL_JOYSTICK_TYPE_WHEEL) {
-            wheel_haptics_viz.Draw(dev, deviceManager);
         }
     }
 }
@@ -138,7 +146,6 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
     std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
     if (ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
-        DrawHapticsControl(dev, deviceManager);
         DrawDeviceVisualizer(dev, deviceManager, preferencesManager);
         ImGui::Unindent();
     }
