@@ -81,6 +81,9 @@ class InputMapper {
     int m_SelectedProfileIndex = -1;
     char m_NewProfileName[128] = "";
 
+    std::map<std::string, float> m_LastOutputValues;
+    Uint64 m_LastBroadcastTime = 0;
+
 #ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_ExclusiveModeHandler;
 #endif

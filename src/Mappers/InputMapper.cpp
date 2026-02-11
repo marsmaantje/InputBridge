@@ -365,22 +365,30 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
         outputValues[outputName] = ProcessAxis(source);
     }
 
-    float steering = outputValues["Steering"];
-    float throttle = outputValues["Throttle"];
-    float brake = outputValues["Brake"];
-    // float clutch = outputValues["Clutch"];
-    // float handbrake = outputValues["Handbrake"];
-    float pitch = outputValues["Pitch"];
-    float roll = outputValues["Roll"];
+    const bool changed = (outputValues != m_LastOutputValues);
+    const Uint64 currentTime = SDL_GetTicks();
+    const bool sendDueToTimeout = (currentTime - m_LastBroadcastTime) >= 500;
 
-    auto &websocket_server = WebSocketServer::GetInstance();
-    if (websocket_server.IsRunning()) {
-        websocket_server.Broadcast_wheel(steering, brake, throttle, pitch, roll);
-    }
+    if (changed || sendDueToTimeout) {
+        float steering = outputValues["Steering"];
+        float throttle = outputValues["Throttle"];
+        float brake = outputValues["Brake"];
+        // float clutch = outputValues["Clutch"];
+        // float handbrake = outputValues["Handbrake"];
+        float pitch = outputValues["Pitch"];
+        float roll = outputValues["Roll"];
 
-    auto &osc_server = OSCServer::GetInstance();
-    if (osc_server.IsRunning()) {
-        osc_server.SendWheel(steering, brake, throttle, pitch, roll);
+        auto &websocket_server = WebSocketServer::GetInstance();
+        if (websocket_server.IsRunning()) {
+            websocket_server.Broadcast_wheel(steering, brake, throttle, pitch, roll);
+        }
+
+        auto &osc_server = OSCServer::GetInstance();
+        if (osc_server.IsRunning()) {
+            osc_server.SendWheel(steering, brake, throttle, pitch, roll);
+        }
+        m_LastOutputValues = outputValues;
+        m_LastBroadcastTime = currentTime;
     }
 
     std::string preview;
