@@ -97,6 +97,8 @@ void WebSocketProtocol::parse(const std::string &message) {
         // Not a valid float message, ignore
     }
 
+    /*
+     * TODO: Update json parsing to utilize new OutputMapper
     try {
         json data = json::parse(message);
 
@@ -151,6 +153,7 @@ void WebSocketProtocol::parse(const std::string &message) {
     } catch (const json::exception &e) {
         // Not a valid haptic message, ignore
     }
+    */
 }
 
 const char *WebSocketProtocol::GetVersionLabel(int index) {
