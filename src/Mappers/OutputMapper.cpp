@@ -228,6 +228,9 @@ void OutputMapper::Update() {
             case HapticCommand::CONDITION:
                 TriggerCondition(cmd.virtual_id, cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[0]);
                 break;
+            case HapticCommand::GAIN:
+                TriggerSetGain(cmd.virtual_id, cmd.iParams[0]);
+                break;
         }
     }
 }
@@ -367,6 +370,15 @@ void OutputMapper::QueueCondition(int virtual_id, float right_sat, float left_sa
     m_CommandQueue.push_back(cmd);
 }
 
+void OutputMapper::QueueSetGain(int virtual_id, int gain) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    HapticCommand cmd;
+    cmd.type = HapticCommand::GAIN;
+    cmd.virtual_id = virtual_id;
+    cmd.iParams[0] = gain;
+    m_CommandQueue.push_back(cmd);
+}
+
 // --- Trigger Implementations ---
 
 void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq, int duration_ms) {
@@ -400,6 +412,15 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
         float strength = std::max(low_freq, high_freq);
         SDL_PlayHapticRumble(target->haptic_device, strength, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms);
     }
+    }
+}
+
+void OutputMapper::TriggerSetGain(int virtual_id, int gain) {
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+        if (!target || !target->haptic_device) continue;
+        SDL_SetHapticGain(target->haptic_device, std::clamp(gain, 0, 100));
     }
 }
 

@@ -10,7 +10,7 @@ struct HapticTarget;
 class PreferencesManager;
 
 struct HapticCommand {
-    enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION } type;
+    enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION, GAIN } type;
     int virtual_id;
     float fParams[8]; // Generic float storage
     int iParams[4];   // Generic int storage
@@ -40,6 +40,7 @@ public:
     void QueueConstantForce(int virtual_id, float strength, int duration_ms);
     void QueuePeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
     void QueueCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms);
+    void QueueSetGain(int virtual_id, int gain);
 
 private:
     OutputMapper(const DeviceManager& deviceManager);
@@ -62,4 +63,5 @@ private:
     void TriggerConstantForce(int virtual_id, float strength, int duration_ms);
     void TriggerPeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
     void TriggerCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms);
+    void TriggerSetGain(int virtual_id, int gain);
 };

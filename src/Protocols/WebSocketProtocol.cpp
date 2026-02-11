@@ -1,8 +1,4 @@
 #include "WebSocketProtocol.h"
-#include "Devices/DeviceManager.h"
-#include "Network/WebSocketServer.h"
-#include "Haptics/GamepadHaptics.h"
-#include "Haptics/SteeringWheelHaptics.h"
 #include "../Mappers/OutputMapper.h"
 #include <algorithm>
 #include <cstdio>
@@ -97,63 +93,48 @@ void WebSocketProtocol::parse(const std::string &message) {
         // Not a valid float message, ignore
     }
 
-    /*
-     * TODO: Update json parsing to utilize new OutputMapper
     try {
         json data = json::parse(message);
 
-        SDL_JoystickID instance_id = WebSocketServer::GetInstance().GetSelectedDevice();
         std::string type = data.at("type");
         std::string effect = data.at("effect");
         json params = data.at("params");
 
-        auto &deviceManager = DeviceManager::GetInstance();
-        HapticDevice *haptic_device = deviceManager.GetHapticDevice(instance_id);
-
-        if (!haptic_device) {
-            return;
-        }
-
         if (type == "gamepad" && effect == "rumble") {
-            if (auto *gamepad_haptics = dynamic_cast<GamepadHaptics *>(haptic_device)) {
-                float large_magnitude = params.at("large_magnitude");
-                float small_magnitude = params.at("small_magnitude");
-                int duration_ms = params.at("duration_ms");
-                gamepad_haptics->Rumble(large_magnitude, small_magnitude, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
-            }
+            float large_magnitude = params.at("large_magnitude");
+            float small_magnitude = params.at("small_magnitude");
+            int duration_ms = params.at("duration_ms");
+            OutputMapper::GetInstance().QueueRumble(0, large_magnitude, small_magnitude, duration_ms);
         } else if (type == "steering_wheel") {
-            if (auto *wheel_haptics = dynamic_cast<SteeringWheelHaptics *>(haptic_device)) {
-                if (effect == "constant") {
-                    float strength = params.at("strength");
-                    int duration_ms = params.at("duration_ms");
-                    wheel_haptics->PlayConstant(strength, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
-                } else if (effect == "periodic") {
-                    float strength = params.at("strength");
-                    uint32_t period = params.at("period");
-                    float magnitude = params.at("magnitude");
-                    float offset = params.at("offset");
-                    uint32_t phase = params.at("phase");
-                    int duration_int = params.at("duration_ms");
-                    wheel_haptics->PlayPeriodic(strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
-                } else if (effect == "condition") {
-                    float right_sat = params.at("right_sat");
-                    float left_sat = params.at("left_sat");
-                    float right_coeff = params.at("right_coeff");
-                    float left_coeff = params.at("left_coeff");
-                    float deadband = params.at("deadband");
-                    float center = params.at("center");
-                    int duration_int = params.at("duration_ms");
-                    wheel_haptics->PlayCondition(right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
-                } else if (effect == "gain") {
-                    int value = params.at("value");
-                    wheel_haptics->SetGain(value);
-                }
+            if (effect == "constant") {
+                float strength = params.at("strength");
+                int duration_ms = params.at("duration_ms");
+                OutputMapper::GetInstance().QueueConstantForce(0, strength, duration_ms);
+            } else if (effect == "periodic") {
+                float strength = params.at("strength");
+                int period = params.at("period");
+                float magnitude = params.at("magnitude");
+                float offset = params.at("offset");
+                int phase = params.at("phase");
+                int duration_int = params.at("duration_ms");
+                OutputMapper::GetInstance().QueuePeriodic(0, strength, period, magnitude, offset, phase, duration_int);
+            } else if (effect == "condition") {
+                float right_sat = params.at("right_sat");
+                float left_sat = params.at("left_sat");
+                float right_coeff = params.at("right_coeff");
+                float left_coeff = params.at("left_coeff");
+                float deadband = params.at("deadband");
+                float center = params.at("center");
+                int duration_int = params.at("duration_ms");
+                OutputMapper::GetInstance().QueueCondition(0, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_int);
+            } else if (effect == "gain") {
+                int value = params.at("value");
+                OutputMapper::GetInstance().QueueSetGain(0, value);
             }
         }
     } catch (const json::exception &e) {
         // Not a valid haptic message, ignore
     }
-    */
 }
 
 const char *WebSocketProtocol::GetVersionLabel(int index) {
