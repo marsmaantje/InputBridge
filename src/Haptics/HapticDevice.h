@@ -7,8 +7,8 @@
 #include <condition_variable>
 #include <queue>
 #include <functional>
-#include "../Utils/SDLHandles.h"
-#include "../Core/Result.h"
+#include "Utils/SDLHandles.h"
+#include "Core/Result.h"
 
 class HapticDevice {
 public:
@@ -50,7 +50,7 @@ public:
 protected:
     SDL_Joystick* m_joystick = nullptr;  // Non-owning pointer
     InputBridge::HapticHandle m_haptic;  // RAII ownership of haptic device
-    
+
     SDL_HapticEffectID m_constantEffectId = -1;
     SDL_HapticEffectID m_periodicEffectId = -1;
     SDL_HapticEffectID m_rumbleEffectId = -1;
