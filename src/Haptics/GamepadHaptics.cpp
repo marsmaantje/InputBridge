@@ -158,25 +158,47 @@ bool GamepadHaptics::IsDualSenseUSB() const {
     SDL_Gamepad* gamepad = SDL_GetGamepadFromID(id);
     if (!gamepad) return false;
     
-    // USB DualSense controllers typically use "USB" in their path or have specific properties
-    // For now, we'll use a heuristic: check if it's a HID device path
+    // Check SDL power info - USB devices typically report more accurate battery info
+    SDL_PowerState state = SDL_POWERSTATE_UNKNOWN;
+    int percent = 0;
+    state = SDL_GetGamepadPowerInfo(gamepad, &percent);
+    
+    // USB DualSense controllers report as "wired" power state
+    if (state == SDL_POWERSTATE_CHARGED || state == SDL_POWERSTATE_CHARGING) {
+        return true;  // Definitely USB
+    }
+    
+    // Check the joystick path
     const char* path = SDL_GetJoystickPath(m_joystick);
     if (path) {
-        // USB devices typically have "usb" in their path
-        // Bluetooth devices have "bluetooth" or longer MAC-style addresses
         std::string pathStr(path);
         std::transform(pathStr.begin(), pathStr.end(), pathStr.begin(), ::tolower);
         
+        // USB devices have "usb" in path or "hidraw" without bluetooth identifiers
         if (pathStr.find("usb") != std::string::npos) {
             return true;
         }
-        if (pathStr.find("bluetooth") != std::string::npos || pathStr.find("bt") != std::string::npos) {
+        
+        // Bluetooth devices have these identifiers
+        if (pathStr.find("bluetooth") != std::string::npos || 
+            pathStr.find("bt") != std::string::npos ||
+            pathStr.find("-") != std::string::npos) {  // MAC address format AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF
             return false;
+        }
+        
+        // On Linux, check if it's a hidraw device without BT indicators
+        if (pathStr.find("hidraw") != std::string::npos) {
+            return true;  // Likely USB
         }
     }
     
-    // Fallback: assume Bluetooth (safer default as it has more complex protocol)
-    return false;
+    // If power state is on battery, it's definitely Bluetooth
+    if (state == SDL_POWERSTATE_ON_BATTERY) {
+        return false;
+    }
+    
+    // Default to USB as it's safer (simpler protocol)
+    return true;
 }
 
 void GamepadHaptics::SendDualSenseTriggerEffect(uint8_t* leftTriggerData, uint8_t* rightTriggerData) {
@@ -188,19 +210,34 @@ void GamepadHaptics::SendDualSenseTriggerEffect(uint8_t* leftTriggerData, uint8_
     }
     
     bool isUSB = IsDualSenseUSB();
+    SDL_Log("SendDualSenseTriggerEffect: %s connection detected", isUSB ? "USB" : "Bluetooth");
     
     if (isUSB) {
         // USB Report Format (Report ID 0x02)
-        // Simpler format, 48 bytes
-        Uint8 data[48] = {};
+        // Reference: Valve's ISteamDualsense and HID specifications
+        Uint8 data[48] = {0};
         data[0] = 0x02;  // Report ID for USB
-        data[1] = 0xFF;  // Feature flags - all features enabled
-        data[2] = 0xF7;  // Feature flags byte 2
+        data[1] = 0xFF;  // Feature flags - enable haptics, lightbar, etc.
+        data[2] = 0xF7;  // Feature flags byte 2 - enable trigger motor effects
         
-        // Right trigger starts at offset 11
+        // Rumble motors (set to 0 to not interfere with triggers)
+        data[3] = 0;     // Right rumble
+        data[4] = 0;     // Left rumble
+        
+        // Mute button LED (optional)
+        data[9] = 0;
+        
+        // Right trigger effect data starts at offset 11
         std::memcpy(&data[11], rightTriggerData, 11);
-        // Left trigger starts at offset 22
+        
+        // Left trigger effect data starts at offset 22
         std::memcpy(&data[22], leftTriggerData, 11);
+        
+        // Player LED (optional, keep existing)
+        data[44] = 0;
+        
+        SDL_Log("Sending USB trigger data: Report[0]=0x%02X, Flags[1]=0x%02X, Flags[2]=0x%02X", data[0], data[1], data[2]);
+        SDL_Log("Right trigger[0]=0x%02X, Left trigger[0]=0x%02X", rightTriggerData[0], leftTriggerData[0]);
         
         if (!SDL_SendGamepadEffect(pad, data, sizeof(data))) {
             SDL_Log("SDL_SendGamepadEffect (DualSense USB Trigger) failed: %s", SDL_GetError());
@@ -209,21 +246,61 @@ void GamepadHaptics::SendDualSenseTriggerEffect(uint8_t* leftTriggerData, uint8_
         }
     } else {
         // Bluetooth Report Format (Report ID 0x31)
-        // More complex, requires proper structure and CRC
-        Uint8 data[78] = {};  // Using minimal BT report size
+        // More complex format based on Sony's HID specification
+        Uint8 data[78] = {0};
         data[0] = 0x31;  // Report ID for Bluetooth
-        data[1] = 0x02;  // seq_tag | (enable_rumble_emulation << 4) | (use_rumble_not_haptics << 5)
+        data[1] = 0x02;  // HID + CRC; bit 0-3: seq tag, bit 4: enable rumble emulation, bit 5-7: flags
         
-        // Feature flags - enable trigger motors
-        data[2] = 0x1C;  // enable_improved_rumble_emulation | enable_audio_control | enable_led_color | enable_trigger_motor_effects
+        // Feature flags byte 1 (offset 2)
+        // bit 0: enable_rumble_emulation
+        // bit 1: use_rumble_not_haptics  
+        // bit 2: enable_improved_rumble_emulation
+        // bit 3: enable_audio_control
+        // bit 4: enable_mic_mute
+        // bit 5: enable_audio_mute  
+        // bit 6: enable_led_color
+        // bit 7: enable_unk_0x80
+        data[2] = 0x14;  // Enable improved rumble (bit 2) and enable_trigger_motor_effects would be in next byte
         
-        // Right trigger at offset 11 (same as USB offset in the feature report)
-        std::memcpy(&data[11], rightTriggerData, 11);
-        // Left trigger at offset 22
-        std::memcpy(&data[22], leftTriggerData, 11);
+        // Feature flags byte 2 (offset 3)  
+        // bit 0: enable_rumble
+        // bit 1: enable_led_strips
+        // bit 2: enable_trigger_motor_effects  <-- THIS IS THE KEY!
+        // bit 3: enable_unk_0x08
+        // bit 4: enable_trigger_motor_effects_right
+        // bit 5: enable_trigger_motor_effects_left
+        // bit 6: enable_unk_0x40
+        // bit 7: enable_unk_0x80
+        data[3] = 0x3C;  // Enable trigger motors: bits 2, 3, 4, 5 (0x04 | 0x08 | 0x10 | 0x20 = 0x3C)
         
-        // For Bluetooth, we should calculate CRC32, but SDL might handle this
-        // Send the report
+        // Rumble motors (set to 0)
+        data[4] = 0;     // Right rumble
+        data[5] = 0;     // Left rumble
+        
+        // Mute button LED
+        data[10] = 0;
+        
+        // Right trigger effect data - Bluetooth uses different offset
+        // In BT mode, the trigger data starts at offset 23 for right, 34 for left
+        // This is different from USB!
+        std::memcpy(&data[23], rightTriggerData, 11);
+        
+        // Left trigger effect data
+        std::memcpy(&data[34], leftTriggerData, 11);
+        
+        // LED color (R, G, B)
+        data[45] = 0;
+        data[46] = 0;
+        data[47] = 255;  // Blue
+        
+        // Player LED (optional)
+        data[48] = 0;
+        
+        SDL_Log("Sending BT trigger data: Report[0]=0x%02X, Tag[1]=0x%02X, Flags1[2]=0x%02X, Flags2[3]=0x%02X", 
+                data[0], data[1], data[2], data[3]);
+        SDL_Log("Right trigger[0]=0x%02X, Left trigger[0]=0x%02X", rightTriggerData[0], leftTriggerData[0]);
+        
+        // For Bluetooth, SDL should handle CRC32 calculation
         if (!SDL_SendGamepadEffect(pad, data, sizeof(data))) {
             SDL_Log("SDL_SendGamepadEffect (DualSense BT Trigger) failed: %s", SDL_GetError());
         } else {

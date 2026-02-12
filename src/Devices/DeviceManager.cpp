@@ -30,6 +30,9 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     
     m_Devices.push_back(std::move(result->state));
     
+    // Initialize battery info for the new device
+    UpdateBatteryInfo(m_Devices.back());
+    
     if (result->haptic) {
         m_HapticDevices[instance_id] = std::move(result->haptic);
     }
@@ -70,4 +73,21 @@ HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
         return it->second.get();
     }
     return nullptr;
+}
+
+void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
+    if (dev.gamepad) {
+        // Get battery info from gamepad
+        int percent = 0;
+        dev.battery_state = SDL_GetGamepadPowerInfo(dev.gamepad, &percent);
+        dev.battery_percent = percent;
+    } else if (dev.joystick) {
+        // Get battery info from joystick
+        int percent = 0;
+        dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
+        dev.battery_percent = percent;
+    } else {
+        dev.battery_state = SDL_POWERSTATE_UNKNOWN;
+        dev.battery_percent = -1;
+    }
 }

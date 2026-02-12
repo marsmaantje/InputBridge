@@ -144,8 +144,71 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
 void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
     ImGui::PushID((int)dev.instance_id);
     std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
+    
+    // Add battery indicator if available
+    if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+        ImVec4 battery_color;
+        const char* battery_icon;
+        
+        if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
+            battery_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Green for charging
+            battery_icon = " 🔌";
+        } else if (dev.battery_state == SDL_POWERSTATE_CHARGED) {
+            battery_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Green for fully charged
+            battery_icon = " ⚡";
+        } else { // ON_BATTERY
+            if (dev.battery_percent >= 70) {
+                battery_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Green
+                battery_icon = " 🔋";
+            } else if (dev.battery_percent >= 30) {
+                battery_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f); // Yellow
+                battery_icon = " 🔋";
+            } else {
+                battery_color = ImVec4(1.0f, 0.2f, 0.2f, 1.0f); // Red
+                battery_icon = " 🪫";
+            }
+        }
+        
+        label += battery_icon;
+        if (dev.battery_percent >= 0) {
+            label += " " + std::to_string(dev.battery_percent) + "%";
+        }
+    }
+    
     if (ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
+        
+        // Show detailed battery info
+        if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+            const char* state_str = "Unknown";
+            switch (dev.battery_state) {
+                case SDL_POWERSTATE_ON_BATTERY: state_str = "On Battery"; break;
+                case SDL_POWERSTATE_NO_BATTERY: state_str = "No Battery"; break;
+                case SDL_POWERSTATE_CHARGING: state_str = "Charging"; break;
+                case SDL_POWERSTATE_CHARGED: state_str = "Fully Charged"; break;
+                default: break;
+            }
+            
+            ImGui::Text("Battery: %s", state_str);
+            if (dev.battery_percent >= 0) {
+                ImGui::SameLine();
+                ImGui::Text("(%d%%)", dev.battery_percent);
+                
+                // Draw battery level bar
+                float battery_fraction = dev.battery_percent / 100.0f;
+                ImVec4 bar_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f);
+                if (dev.battery_percent < 30) {
+                    bar_color = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+                } else if (dev.battery_percent < 70) {
+                    bar_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
+                }
+                
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
+                ImGui::ProgressBar(battery_fraction, ImVec2(-1, 0), "");
+                ImGui::PopStyleColor();
+            }
+        }
+        
         DrawDeviceVisualizer(dev, deviceManager, preferencesManager);
         ImGui::Unindent();
     }
@@ -245,8 +308,17 @@ void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& prefere
     }
 
     ImGui::Separator();
-    const auto &devices = deviceManager.GetDevices();
+    auto &devices = deviceManager.GetDevices();
     ImGui::Text("Connected Devices: %d", (int)devices.size());
+
+    // Update battery info periodically (every 60 frames / ~1 second at 60fps)
+    static int frame_counter = 0;
+    if (frame_counter++ >= 60) {
+        frame_counter = 0;
+        for (auto &dev : const_cast<std::vector<DeviceState>&>(devices)) {
+            deviceManager.UpdateBatteryInfo(dev);
+        }
+    }
 
     for (const auto &dev : devices) {
         DrawDeviceItem(dev, deviceManager, preferencesManager);
