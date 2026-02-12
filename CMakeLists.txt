@@ -202,22 +202,32 @@ add_executable(InputBridge
     src/main.cpp
     src/Devices/DeviceManager.cpp
     src/Devices/DeviceFactory.cpp
+    # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
     src/Haptics/SteeringWheelHaptics.cpp
     src/Haptics/DualSenseTriggerEffectGenerator.cpp
     src/Preferences/Preferences.cpp
+    # Input device visualizers
     src/Visualizers/GenericVisualizer.cpp
     src/Visualizers/GamepadVisualizer.cpp
     src/Visualizers/GamepadHapticsVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
+    # Networking
     src/Network/NetworkStatusWindow.cpp
+    # Device input and protocol output mappings
     src/Mappers/InputMapper.cpp
     src/Mappers/OutputMapper.cpp
+    # Webseerver and OSC protocol
     src/Protocols/OSCProtocol.cpp
     src/Protocols/ProtocolManager.cpp
+    src/Protocols/WebSocketProtocol.cpp
+    src/Protocols/MarsmaantjeOldProtocol.cpp
+    src/Protocols/MarsmaantjeNewProtocol.cpp
+    src/Protocols/OSCBaseProtocol.cpp
+    src/Protocols/OSCDefaultProtocol.cpp
 )
 
 if(ENABLE_WEBSOCKETS)

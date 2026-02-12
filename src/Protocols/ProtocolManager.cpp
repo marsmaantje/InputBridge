@@ -1,5 +1,8 @@
 #include "ProtocolManager.h"
 #include <map>
+#include "Protocols/MarsmaantjeOldProtocol.h"
+#include "Protocols/MarsmaantjeNewProtocol.h"
+#include "Protocols/OSCDefaultProtocol.h"
 
 struct ProtocolManager::Impl {
     std::map<std::string, std::shared_ptr<IProtocol>> protocols;
@@ -10,7 +13,12 @@ ProtocolManager &ProtocolManager::GetInstance() {
     return instance;
 }
 
-ProtocolManager::ProtocolManager() : m_Impl(new Impl) {}
+ProtocolManager::ProtocolManager() : m_Impl(new Impl) {
+    // Register default protocols
+    RegisterProtocol(std::make_shared<MarsmaantjeOldProtocol>());
+    RegisterProtocol(std::make_shared<MarsmaantjeNewProtocol>());
+    RegisterProtocol(std::make_shared<OSCDefaultProtocol>());
+}
 
 ProtocolManager::~ProtocolManager() { delete m_Impl; }
 
