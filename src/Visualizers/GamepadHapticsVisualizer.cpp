@@ -3,6 +3,9 @@
 #include "Haptics/GamepadHaptics.h"
 #include "Haptics/DualSenseTriggerEffectGenerator.h"
 #include <SDL3/SDL.h>
+#include <algorithm>
+#include <cstring>
+#include <string>
 
 using namespace ExtendInput::DataTools::DualSense;
 
@@ -105,29 +108,87 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     if (ImGui::Button("Send Effect")) {
         SDL_Gamepad* pad = SDL_GetGamepadFromID(dev.instance_id);
         if (pad) {
-            // DS5 Output Report for Triggers (Report ID 0x31)
-            Uint8 data[48] = {};
-            data[0] = 0x31; // Report ID
-            data[1] = 0x02; // Mode: Allow Trigger update
-            data[2] = 0x0C; // Valid Flags: Bit 2 (Right Trigger), Bit 3 (Left Trigger)
+            SDL_Joystick* joystick = SDL_GetGamepadJoystick(pad);
+            if (!joystick) return;
+            
+            // Check if it's a DualSense controller
+            Uint16 vendor = SDL_GetJoystickVendor(joystick);
+            Uint16 product = SDL_GetJoystickProduct(joystick);
+            bool isDualSense = (vendor == 0x054C && (product == 0x0CE6 || product == 0x0DF2));
+            
+            if (!isDualSense) {
+                SDL_Log("Not a DualSense controller - trigger effects not supported");
+                return;
+            }
+            
+            // Detect USB vs Bluetooth
+            bool isUSB = false;
+            const char* path = SDL_GetJoystickPath(joystick);
+            if (path) {
+                std::string pathStr(path);
+                std::transform(pathStr.begin(), pathStr.end(), pathStr.begin(), ::tolower);
+                if (pathStr.find("usb") != std::string::npos) {
+                    isUSB = true;
+                }
+            }
+            
+            SDL_Log("DualSense controller detected - Connection: %s", isUSB ? "USB" : "Bluetooth");
+            
+            // Prepare trigger data (11 bytes each)
+            uint8_t leftTriggerData[11] = {};
+            uint8_t rightTriggerData[11] = {};
 
-            auto ApplyEffect = [&](int effect_type, int* params, int offset) {
+            auto ApplyEffect = [&](int effect_type, int* params, uint8_t* triggerData) {
                 switch (effect_type) {
                     default:
-                    case 0: DualSenseTriggerEffectGenerator::Off(data, offset); break;
-                    case 1: DualSenseTriggerEffectGenerator::Feedback(data, offset, (uint8_t)params[0], (uint8_t)params[1]); break;
-                    case 2: DualSenseTriggerEffectGenerator::Weapon(data, offset, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2]); break;
-                    case 3: DualSenseTriggerEffectGenerator::Vibration(data, offset, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2]); break;
-                    case 4: DualSenseTriggerEffectGenerator::Bow(data, offset, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3]); break;
-                    case 5: DualSenseTriggerEffectGenerator::Galloping(data, offset, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3], (uint8_t)params[4]); break;
-                    case 6: DualSenseTriggerEffectGenerator::Machine(data, offset, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3], (uint8_t)params[4], (uint8_t)params[5]); break;
+                    case 0: DualSenseTriggerEffectGenerator::Off(triggerData, 0); break;
+                    case 1: DualSenseTriggerEffectGenerator::Feedback(triggerData, 0, (uint8_t)params[0], (uint8_t)params[1]); break;
+                    case 2: DualSenseTriggerEffectGenerator::Weapon(triggerData, 0, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2]); break;
+                    case 3: DualSenseTriggerEffectGenerator::Vibration(triggerData, 0, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2]); break;
+                    case 4: DualSenseTriggerEffectGenerator::Bow(triggerData, 0, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3]); break;
+                    case 5: DualSenseTriggerEffectGenerator::Galloping(triggerData, 0, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3], (uint8_t)params[4]); break;
+                    case 6: DualSenseTriggerEffectGenerator::Machine(triggerData, 0, (uint8_t)params[0], (uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3], (uint8_t)params[4], (uint8_t)params[5]); break;
                 }
             };
 
-            ApplyEffect(right_effect_type, right_params, 11);
-            ApplyEffect(left_effect_type, left_params, 22);
-
-            SDL_SendGamepadEffect(pad, data, sizeof(data));
+            ApplyEffect(right_effect_type, right_params, rightTriggerData);
+            ApplyEffect(left_effect_type, left_params, leftTriggerData);
+            
+            if (isUSB) {
+                // USB Report Format (Report ID 0x02)
+                Uint8 data[48] = {};
+                data[0] = 0x02;  // Report ID for USB
+                data[1] = 0xFF;  // Feature flags - all features enabled
+                data[2] = 0xF7;  // Feature flags byte 2
+                
+                // Right trigger starts at offset 11
+                std::memcpy(&data[11], rightTriggerData, 11);
+                // Left trigger starts at offset 22
+                std::memcpy(&data[22], leftTriggerData, 11);
+                
+                if (!SDL_SendGamepadEffect(pad, data, sizeof(data))) {
+                    SDL_Log("SDL_SendGamepadEffect (USB) failed: %s", SDL_GetError());
+                } else {
+                    SDL_Log("DualSense USB trigger effect sent successfully");
+                }
+            } else {
+                // Bluetooth Report Format (Report ID 0x31)
+                Uint8 data[78] = {};
+                data[0] = 0x31;  // Report ID for Bluetooth
+                data[1] = 0x02;  // seq_tag
+                data[2] = 0x1C;  // Feature flags
+                
+                // Right trigger at offset 11
+                std::memcpy(&data[11], rightTriggerData, 11);
+                // Left trigger at offset 22
+                std::memcpy(&data[22], leftTriggerData, 11);
+                
+                if (!SDL_SendGamepadEffect(pad, data, sizeof(data))) {
+                    SDL_Log("SDL_SendGamepadEffect (Bluetooth) failed: %s", SDL_GetError());
+                } else {
+                    SDL_Log("DualSense Bluetooth trigger effect sent successfully");
+                }
+            }
         }
     }
 }
