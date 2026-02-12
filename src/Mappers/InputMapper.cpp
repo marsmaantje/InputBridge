@@ -338,8 +338,8 @@ void InputMapper::DrawContent() {
     int mappingToDelete = -1;
     if (ImGui::BeginTable("ButtonMappingsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
         ImGui::TableSetupColumn("Device");
-        ImGui::TableSetupColumn("Button", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-        ImGui::TableSetupColumn("Target ID", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+        ImGui::TableSetupColumn("Button", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("Target ID", ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableSetupColumn("On Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableSetupColumn("Off Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 60.0f);
@@ -501,6 +501,15 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
     for(const auto& pair : outputValues) {
         preview += pair.first + ": " + std::to_string(pair.second) + "\n";
     }
+
+    if (!s_ButtonMappings.empty()) {
+        preview += "\nButton Mappings:\n";
+        for (const auto& mapping : s_ButtonMappings) {
+            float val = mapping.last_button_state ? mapping.on_value : mapping.off_value;
+            preview += "Target " + std::to_string(mapping.target_virtual_id) + ": " + std::to_string(val) + "\n";
+        }
+    }
+
     return preview;
 }
 
