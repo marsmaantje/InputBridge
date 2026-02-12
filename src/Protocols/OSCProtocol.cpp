@@ -104,4 +104,137 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
             }
         }
     }
+    // DualSense Trigger Effects
+    // Example: /inputbridge/haptics/dualsense/trigger/left/feedback i i i (deviceId, position, strength)
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/feedback" && std::strcmp(types, "iii") == 0 && argc == 3) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+        int position = argv[1]->i;
+        int strength = argv[2]->i;
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                params["position"] = position;
+                params["strength"] = strength;
+                gamepad->SendDualSenseTrigger("left", "feedback", params);
+            }
+        }
+    }
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/feedback" && std::strcmp(types, "iii") == 0 && argc == 3) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+        int position = argv[1]->i;
+        int strength = argv[2]->i;
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                params["position"] = position;
+                params["strength"] = strength;
+                gamepad->SendDualSenseTrigger("right", "feedback", params);
+            }
+        }
+    }
+    // Example: /inputbridge/haptics/dualsense/trigger/left/weapon i i i i (deviceId, start_position, end_position, strength)
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/weapon" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+        int start_pos = argv[1]->i;
+        int end_pos = argv[2]->i;
+        int strength = argv[3]->i;
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                params["start_position"] = start_pos;
+                params["end_position"] = end_pos;
+                params["strength"] = strength;
+                gamepad->SendDualSenseTrigger("left", "weapon", params);
+            }
+        }
+    }
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/weapon" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+        int start_pos = argv[1]->i;
+        int end_pos = argv[2]->i;
+        int strength = argv[3]->i;
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                params["start_position"] = start_pos;
+                params["end_position"] = end_pos;
+                params["strength"] = strength;
+                gamepad->SendDualSenseTrigger("right", "weapon", params);
+            }
+        }
+    }
+    // Example: /inputbridge/haptics/dualsense/trigger/left/vibration i i i i (deviceId, position, amplitude, frequency)
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/vibration" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+        int position = argv[1]->i;
+        int amplitude = argv[2]->i;
+        int frequency = argv[3]->i;
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                params["position"] = position;
+                params["amplitude"] = amplitude;
+                params["frequency"] = frequency;
+                gamepad->SendDualSenseTrigger("left", "vibration", params);
+            }
+        }
+    }
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/vibration" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+        int position = argv[1]->i;
+        int amplitude = argv[2]->i;
+        int frequency = argv[3]->i;
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                params["position"] = position;
+                params["amplitude"] = amplitude;
+                params["frequency"] = frequency;
+                gamepad->SendDualSenseTrigger("right", "vibration", params);
+            }
+        }
+    }
+    // Example: /inputbridge/haptics/dualsense/trigger/left/off i (deviceId)
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/off" && std::strcmp(types, "i") == 0 && argc == 1) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                gamepad->SendDualSenseTrigger("left", "off", params);
+            }
+        }
+    }
+    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/off" && std::strcmp(types, "i") == 0 && argc == 1) {
+        int deviceId = OSCServer::GetInstance().GetSelectedDevice();
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        HapticDevice* haptic_dev = deviceManager.GetHapticDevice(deviceId);
+        if (haptic_dev) {
+            if (auto* gamepad = dynamic_cast<GamepadHaptics*>(haptic_dev)) {
+                std::map<std::string, int> params;
+                gamepad->SendDualSenseTrigger("right", "off", params);
+            }
+        }
+    }
 }
