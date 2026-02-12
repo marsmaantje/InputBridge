@@ -1,5 +1,5 @@
 #include "WebSocketProtocol.h"
-#include "../Mappers/OutputMapper.h"
+#include "Mappers/OutputMapper.h"
 #include <algorithm>
 #include <cstdio>
 #include <string>

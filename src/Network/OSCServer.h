@@ -80,7 +80,7 @@ private:
     int m_running_recv_port = 0;
 
     OSCHandler m_handler;
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;  // mutable for const methods
     ProtocolVersion m_protocolVersion = ProtocolVersion::Default;
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;

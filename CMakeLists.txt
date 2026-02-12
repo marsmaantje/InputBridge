@@ -201,6 +201,7 @@ add_executable(InputBridge
     # ... put source files here ...
     src/main.cpp
     src/Devices/DeviceManager.cpp
+    src/Devices/DeviceFactory.cpp
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
     src/Haptics/SteeringWheelHaptics.cpp

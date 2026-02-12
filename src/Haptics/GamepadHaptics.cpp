@@ -108,10 +108,10 @@ int GamepadHaptics::Rumble(float large_magnitude, float small_magnitude, uint32_
         }
 
         // Check if the haptic device supports the SDL_HAPTIC_LEFTRIGHT effect
-        if ((SDL_GetHapticFeatures(m_haptic) & SDL_HAPTIC_LEFTRIGHT) == 0) {
+        if ((SDL_GetHapticFeatures(m_haptic.Get()) & SDL_HAPTIC_LEFTRIGHT) == 0) {
             // If not supported, fall back to simple rumble
             float strength = std::max(large_magnitude, small_magnitude);
-            if (!SDL_PlayHapticRumble(m_haptic, strength, duration_ms)) {
+            if (!SDL_PlayHapticRumble(m_haptic.Get(), strength, duration_ms)) {
                 SDL_Log("SDL_PlayHapticRumble failed: %s", SDL_GetError());
             }
             return;
@@ -128,7 +128,7 @@ int GamepadHaptics::Rumble(float large_magnitude, float small_magnitude, uint32_
         // Create or update the effect
         m_rumbleEffectId = UploadEffect(effect, m_rumbleEffectId);
         if (m_rumbleEffectId >= 0) {
-            if (!SDL_RunHapticEffect(m_haptic, m_rumbleEffectId, (duration_ms == SDL_HAPTIC_INFINITY) ? SDL_HAPTIC_INFINITY : 1)) {
+            if (!SDL_RunHapticEffect(m_haptic.Get(), m_rumbleEffectId, (duration_ms == SDL_HAPTIC_INFINITY) ? SDL_HAPTIC_INFINITY : 1)) {
                 SDL_Log("SDL_RunHapticEffect failed: %s", SDL_GetError());
             }
         } else {

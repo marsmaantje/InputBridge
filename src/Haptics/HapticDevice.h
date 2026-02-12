@@ -7,16 +7,18 @@
 #include <condition_variable>
 #include <queue>
 #include <functional>
+#include "../Utils/SDLHandles.h"
+#include "../Core/Result.h"
 
 class HapticDevice {
 public:
     HapticDevice(SDL_Joystick* joystick);
     virtual ~HapticDevice();
 
-    bool Init();
+    InputBridge::Result<bool, InputBridge::HapticError> Init();
     void Close();
     virtual bool IsReady() const;
-    SDL_Haptic* GetHandle() const { return m_haptic; }
+    SDL_Haptic* GetHandle() const { return m_haptic.Get(); }
 
     // Steering Wheel Effects
     // level: -1.0 to 1.0
@@ -46,8 +48,8 @@ public:
     void StopAll();
 
 protected:
-    SDL_Joystick* m_joystick = nullptr;
-    SDL_Haptic* m_haptic = nullptr;
+    SDL_Joystick* m_joystick = nullptr;  // Non-owning pointer
+    InputBridge::HapticHandle m_haptic;  // RAII ownership of haptic device
     
     SDL_HapticEffectID m_constantEffectId = -1;
     SDL_HapticEffectID m_periodicEffectId = -1;

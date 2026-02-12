@@ -1,4 +1,5 @@
 #include "DeviceManager.h"
+#include "DeviceFactory.h"
 #include "SDL3/SDL_joystick.h"
 #include "SDL3/SDL_log.h"
 #include <algorithm>
@@ -21,73 +22,16 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
 }
 
 void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
-    SDL_JoystickType type = SDL_GetJoystickTypeForID(instance_id);
-    switch (type) {
-    case SDL_JOYSTICK_TYPE_WHEEL: {
-        SDL_Joystick *joystick = SDL_OpenJoystick(instance_id);
-        if (joystick) {
-            DeviceState dev;
-            dev.instance_id = instance_id;
-            dev.name = SDL_GetJoystickName(joystick);
-            dev.is_gamepad = false;
-            dev.gamepad = nullptr;
-            dev.joystick = joystick;
-            dev.num_axes = SDL_GetNumJoystickAxes(joystick);
-            dev.num_buttons = SDL_GetNumJoystickButtons(joystick);
-            dev.num_hats = SDL_GetNumJoystickHats(joystick);
-            m_Devices.push_back(dev);
-
-            if (SDL_IsJoystickHaptic(joystick)) {
-                m_HapticDevices[instance_id] = std::make_unique<SteeringWheelHaptics>(joystick);
-                m_HapticDevices[instance_id]->Init();
-            }
-        }
-    } break;
-    case SDL_JOYSTICK_TYPE_GAMEPAD: {
-        SDL_Gamepad *gamepad = SDL_OpenGamepad(instance_id);
-        if (gamepad) {
-            DeviceState dev;
-            dev.instance_id = instance_id;
-            dev.name = SDL_GetGamepadName(gamepad);
-            dev.is_gamepad = true;
-            dev.gamepad = gamepad;
-            dev.joystick = SDL_GetGamepadJoystick(gamepad);
-            dev.num_axes = SDL_GetNumJoystickAxes(dev.joystick);
-            dev.num_buttons = SDL_GetNumJoystickButtons(dev.joystick);
-            dev.num_hats = SDL_GetNumJoystickHats(dev.joystick);
-            m_Devices.push_back(dev);
-
-            m_HapticDevices[instance_id] = std::make_unique<GamepadHaptics>(dev.joystick);
-            m_HapticDevices[instance_id]->Init();
-        }
-    } break;
-    case SDL_JOYSTICK_TYPE_FLIGHT_STICK:
-    case SDL_JOYSTICK_TYPE_THROTTLE:
-    case SDL_JOYSTICK_TYPE_ARCADE_STICK:
-    case SDL_JOYSTICK_TYPE_UNKNOWN: {
-        SDL_Joystick *joystick = SDL_OpenJoystick(instance_id);
-        if (joystick) {
-            DeviceState dev;
-            dev.instance_id = instance_id;
-            dev.name = SDL_GetJoystickName(joystick);
-            dev.is_gamepad = false;
-            dev.gamepad = nullptr;
-            dev.joystick = joystick;
-            dev.num_axes = SDL_GetNumJoystickAxes(joystick);
-            dev.num_buttons = SDL_GetNumJoystickButtons(joystick);
-            dev.num_hats = SDL_GetNumJoystickHats(joystick);
-            m_Devices.push_back(dev);
-
-            if (SDL_IsJoystickHaptic(joystick)) {
-                // TODO: init flight stick haptics once class exists
-            }
-        }
-    } break;
-
-    default:
-        // Unsupported device type
-        SDL_Log("Unsupported device type connected: %d", (int)type);
-        break;
+    auto result = InputBridge::DeviceFactory::CreateDevice(instance_id);
+    if (!result) {
+        SDL_Log("Failed to create device %d", instance_id);
+        return;
+    }
+    
+    m_Devices.push_back(std::move(result->state));
+    
+    if (result->haptic) {
+        m_HapticDevices[instance_id] = std::move(result->haptic);
     }
 }
 

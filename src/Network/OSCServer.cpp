@@ -1,5 +1,5 @@
 #include "Network/OSCServer.h"
-#include "../Mappers/OutputMapper.h"
+#include "Mappers/OutputMapper.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include <iostream>
@@ -271,14 +271,17 @@ int OSCServer::GetSelectedDevice() const {
 }
 
 const char* OSCServer::GetSendHost() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_send_host;
 }
 
 int OSCServer::GetSendPort() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_send_port;
 }
 
 int OSCServer::GetReceivePort() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_recv_port;
 }
 
