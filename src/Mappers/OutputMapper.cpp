@@ -1,8 +1,11 @@
 #include "OutputMapper.h"
 #include "imgui.h"
 #include "InputMapper.h"
+#include "Haptics/GamepadHaptics.h"
 #include <algorithm>
 #include <memory>
+#include <map>
+#include <cstring>
 #include <nlohmann/json.hpp>
 #include <SDL3/SDL_filesystem.h>
 
@@ -247,6 +250,13 @@ void OutputMapper::Update() {
             case HapticCommand::GAIN:
                 TriggerSetGain(cmd.virtual_id, cmd.iParams[0]);
                 break;
+            case HapticCommand::DUALSENSE_TRIGGER:
+                TriggerDualSenseTrigger(cmd.virtual_id, cmd.sParams[0], cmd.sParams[1],
+                                       cmd.iParams[0], cmd.iParams[1], cmd.iParams[2],
+                                       cmd.iParams[3], cmd.iParams[4], cmd.iParams[5],
+                                       cmd.iParams[6], cmd.iParams[7], cmd.iParams[8],
+                                       cmd.iParams[9], cmd.iParams[10]);
+                break;
         }
     }
 }
@@ -392,6 +402,31 @@ void OutputMapper::QueueSetGain(int virtual_id, int gain) {
     cmd.type = HapticCommand::GAIN;
     cmd.virtual_id = virtual_id;
     cmd.iParams[0] = gain;
+    m_CommandQueue.push_back(cmd);
+}
+
+void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,
+                                         int position, int strength, int end_position,
+                                         int amplitude, int frequency, int snap_force,
+                                         int first_foot, int second_foot, int period,
+                                         int amplitude_a, int amplitude_b) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    HapticCommand cmd;
+    cmd.type = HapticCommand::DUALSENSE_TRIGGER;
+    cmd.virtual_id = virtual_id;
+    std::strncpy(cmd.sParams[0], trigger, sizeof(cmd.sParams[0]) - 1);
+    std::strncpy(cmd.sParams[1], effect_type, sizeof(cmd.sParams[1]) - 1);
+    cmd.iParams[0] = position;
+    cmd.iParams[1] = strength;
+    cmd.iParams[2] = end_position;
+    cmd.iParams[3] = amplitude;
+    cmd.iParams[4] = frequency;
+    cmd.iParams[5] = snap_force;
+    cmd.iParams[6] = first_foot;
+    cmd.iParams[7] = second_foot;
+    cmd.iParams[8] = period;
+    cmd.iParams[9] = amplitude_a;
+    cmd.iParams[10] = amplitude_b;
     m_CommandQueue.push_back(cmd);
 }
 
@@ -548,3 +583,40 @@ void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_
     }
     }
 }
+
+void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,
+                                           int position, int strength, int end_position,
+                                           int amplitude, int frequency, int snap_force,
+                                           int first_foot, int second_foot, int period,
+                                           int amplitude_a, int amplitude_b) {
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+        if (!target || target->instance_id == 0) continue;
+        
+        // Get the haptic device - for DualSense, we need to access GamepadHaptics
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (!hapticDevice) continue;
+        
+        GamepadHaptics* gamepadHaptics = dynamic_cast<GamepadHaptics*>(hapticDevice);
+        if (!gamepadHaptics) continue;
+        
+        // Build parameters map
+        std::map<std::string, int> params;
+        params["position"] = position;
+        params["strength"] = strength;
+        params["end_position"] = end_position;
+        params["start_position"] = position;  // Many effects use start_position instead of position
+        params["amplitude"] = amplitude;
+        params["frequency"] = frequency;
+        params["snap_force"] = snap_force;
+        params["first_foot"] = first_foot;
+        params["second_foot"] = second_foot;
+        params["period"] = period;
+        params["amplitude_a"] = amplitude_a;
+        params["amplitude_b"] = amplitude_b;
+        
+        gamepadHaptics->SendDualSenseTrigger(trigger, effect_type, params);
+    }
+}
+
