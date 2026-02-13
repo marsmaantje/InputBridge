@@ -28,6 +28,7 @@
 #include "Visualizers/GenericVisualizer.h"
 #include "Visualizers/SteeringWheelVisualizer.h"
 #include "Visualizers/GamepadHapticsVisualizer.h"
+#include "Visualizers/WiimoteVisualizer.h"
 #include "Visualizers/SteeringWheelHapticsVisualizer.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
@@ -63,6 +64,7 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
     static FlightStickVisualizer flight_stick_viz;
     static GamepadHapticsVisualizer gamepad_haptics_viz;
     static SteeringWheelHapticsVisualizer wheel_haptics_viz;
+    static WiimoteVisualizer wiimote_viz;
 
     std::string guid = DeviceManager::GetDeviceGUIDString(dev);
     bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
@@ -108,6 +110,9 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
             }
             if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK || type == SDL_JOYSTICK_TYPE_THROTTLE || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
                 // TabItem("Flight Stick", flight_stick_viz);
+            }
+            if (dev.name.find("Nintendo") != std::string::npos || dev.name.find("Wiimote") != std::string::npos) {
+                TabItem("Wiimote", wiimote_viz);
             }
             if (type == SDL_JOYSTICK_TYPE_WHEEL) {
                 if (ImGui::BeginTabItem("Haptic Test")) {

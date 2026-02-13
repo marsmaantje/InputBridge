@@ -231,6 +231,7 @@ add_executable(InputBridge
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
+    src/Visualizers/WiimoteVisualizer.cpp
     # Networking
     src/Network/NetworkStatusWindow.cpp
     # Device input and protocol output mappings
