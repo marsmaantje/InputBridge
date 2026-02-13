@@ -286,7 +286,12 @@ void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& prefere
     if (ImGui::Checkbox("VSync", &vsync)) {
         SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
     }
-    ImGui::InputInt("Framerate Limit", &framerate_limit);
+    ImGui::SameLine();
+    const char* label = "Framerate Limit";
+    float width = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemInnerSpacing.x;
+    if (width < 10.0f) width = 10.0f;
+    ImGui::SetNextItemWidth(width);
+    ImGui::InputInt(label, &framerate_limit);
     if (framerate_limit < 0) {
         framerate_limit = 0;
     }
@@ -519,11 +524,40 @@ int main(int argc, char *argv[]) {
     WebSocketServer::GetInstance().SetOutputMapper(&outputMapper);
     OSCServer::GetInstance().SetOutputMapper(&outputMapper);
 
+    static int server_update_rate = 60;
+    static bool server_dynamic_rate = false;
+    static Uint64 last_server_update_time = 0;
+    static int messages_sent_counter = 0;
+    static float current_messages_per_second = 0.0f;
+    static Uint64 last_mps_update_time = SDL_GetTicks();
+
     while (!done) {
         Uint64 frame_start_time = SDL_GetTicks();
         ProcessEvents(done, window, deviceManager, preferencesManager, user_ui_scale, scale_with_window, initial_width);
 
-        outputMapper.Update();
+        bool should_update_server = false;
+        if (server_dynamic_rate) {
+            should_update_server = true;
+        } else {
+            if (server_update_rate > 0) {
+                Uint64 interval = 1000 / server_update_rate;
+                if (frame_start_time - last_server_update_time >= interval) {
+                    should_update_server = true;
+                }
+            }
+        }
+
+        if (should_update_server) {
+            outputMapper.Update();
+            last_server_update_time = frame_start_time;
+            messages_sent_counter++;
+        }
+
+        if (frame_start_time - last_mps_update_time >= 1000) {
+            current_messages_per_second = (float)messages_sent_counter / ((frame_start_time - last_mps_update_time) / 1000.0f);
+            messages_sent_counter = 0;
+            last_mps_update_time = frame_start_time;
+        }
 
         // Start the Dear ImGui frame
         ImGui_ImplSDLRenderer3_NewFrame();
@@ -543,7 +577,7 @@ int main(int argc, char *argv[]) {
         inputMapper.DrawContent();
         outputMapper.DrawContent();
 
-        NetworkStatusWindow::Draw();
+        NetworkStatusWindow::Draw(server_update_rate, server_dynamic_rate, current_messages_per_second);
 
         // Rendering
         RenderFrame(renderer, window, vsync, framerate_limit, frame_start_time);
