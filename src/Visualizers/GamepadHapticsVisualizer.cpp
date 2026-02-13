@@ -10,6 +10,25 @@
 using namespace ExtendInput::DataTools::DualSense;
 
 void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
+    HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
+    if (haptic) {
+        if (haptic->IsReady()) {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Haptics: Ready");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Haptics: Not Available");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Stop All Effects")) {
+            haptic->StopAll();
+            if (dev.gamepad) {
+                SDL_RumbleGamepad(dev.gamepad, 0, 0, 0);
+                SDL_RumbleGamepadTriggers(dev.gamepad, 0, 0, 0);
+            }
+        }
+    } else {
+        ImGui::TextDisabled("Haptics: Not Supported");
+    }
+
     ImGui::Separator();
     ImGui::Text("Haptics Test");
 
@@ -21,7 +40,6 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     }
 
     if (ImGui::Button("Play Rumble")) {
-        HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
         if (haptic) {
             if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
                 gamepadHaptics->Rumble(m_low_freq, m_high_freq,

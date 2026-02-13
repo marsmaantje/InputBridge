@@ -56,23 +56,6 @@ void UpdateUIScale(SDL_Window *window, float& user_ui_scale, bool scale_with_win
     ImGui::GetIO().FontGlobalScale = ui_scale;
 }
 
-void DrawHapticsControl(const DeviceState& dev, DeviceManager& deviceManager) {
-    HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
-    if (haptic) {
-        if (haptic->IsReady()) {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Haptics: Ready");
-        } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Haptics: Not Available");
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Stop All Effects")) {
-            haptic->StopAll();
-        }
-    } else {
-        ImGui::TextDisabled("Haptics: Not Supported");
-    }
-}
-
 void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
     static GamepadVisualizer gamepad_viz;
     static GenericVisualizer generic_viz;
@@ -110,8 +93,6 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
             // TabItem("Standard Layout", gamepad_viz);
             TabItem("Raw Inputs", generic_viz);
             if (ImGui::BeginTabItem("Haptic Test")) {
-                DrawHapticsControl(dev, deviceManager);
-                ImGui::Separator();
                 gamepad_haptics_viz.Draw(dev, deviceManager);
                 ImGui::EndTabItem();
             }
@@ -130,8 +111,6 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
             }
             if (type == SDL_JOYSTICK_TYPE_WHEEL) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
-                    DrawHapticsControl(dev, deviceManager);
-                    ImGui::Separator();
                     wheel_haptics_viz.Draw(dev, deviceManager);
                     ImGui::EndTabItem();
                 }
