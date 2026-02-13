@@ -286,6 +286,17 @@ void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& prefere
         framerate_limit = 0;
     }
 
+    static bool first_run = true;
+    static bool enable_battery_led = true;
+    if (first_run) {
+        enable_battery_led = preferencesManager.GetBool("EnableBatteryLED", true);
+        first_run = false;
+    }
+    if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
+        preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
+        preferencesManager.Save();
+    }
+
     ImGui::Separator();
     auto &devices = deviceManager.GetDevices();
     ImGui::Text("Connected Devices: %d", (int)devices.size());
@@ -296,6 +307,35 @@ void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& prefere
         frame_counter = 0;
         for (auto &dev : const_cast<std::vector<DeviceState>&>(devices)) {
             deviceManager.UpdateBatteryInfo(dev);
+
+            // Update LED based on battery level
+            if (enable_battery_led && dev.gamepad) {
+                Uint8 r = 0, g = 0, b = 0;
+                bool update_led = false;
+
+                if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
+                    // Blue for charging
+                    r = 0; g = 0; b = 255;
+                    update_led = true;
+                } else if (dev.battery_state == SDL_POWERSTATE_CHARGED) {
+                    // Green for fully charged
+                    r = 0; g = 255; b = 0;
+                    update_led = true;
+                } else if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+                    if (dev.battery_percent >= 70) {
+                        r = 0; g = 255; b = 0; // Green
+                    } else if (dev.battery_percent >= 30) {
+                        r = 255; g = 165; b = 0; // Yellow/Orange
+                    } else {
+                        r = 255; g = 0; b = 0; // Red
+                    }
+                    update_led = true;
+                }
+
+                if (update_led) {
+                    SDL_SetGamepadLED(dev.gamepad, r, g, b);
+                }
+            }
         }
     }
 
