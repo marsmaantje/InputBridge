@@ -129,37 +129,57 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
     ImGui::PushID((int)dev.instance_id);
     std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
     
-    // Add battery indicator if available
+    bool header_open = ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+    // Draw battery indicator if available
     if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
-        ImVec4 battery_color;
-        const char* battery_icon;
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2 rect_min = ImGui::GetItemRectMin();
+        ImVec2 rect_max = ImGui::GetItemRectMax();
         
-        if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
-            battery_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Green for charging
-            battery_icon = " 🔌";
-        } else if (dev.battery_state == SDL_POWERSTATE_CHARGED) {
-            battery_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Green for fully charged
-            battery_icon = " ⚡";
-        } else { // ON_BATTERY
-            if (dev.battery_percent >= 70) {
-                battery_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Green
-                battery_icon = " 🔋";
-            } else if (dev.battery_percent >= 30) {
-                battery_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f); // Yellow
-                battery_icon = " 🔋";
-            } else {
-                battery_color = ImVec4(1.0f, 0.2f, 0.2f, 1.0f); // Red
-                battery_icon = " 🪫";
+        float icon_h = ImGui::GetTextLineHeight();
+        float icon_w = icon_h * 1.6f;
+        float pad = ImGui::GetStyle().FramePadding.x;
+        
+        ImVec2 icon_pos = ImVec2(rect_max.x - icon_w - pad, rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
+        
+        ImU32 bat_col = ImGui::GetColorU32(ImGuiCol_Text);
+        if (dev.battery_state == SDL_POWERSTATE_CHARGING || dev.battery_state == SDL_POWERSTATE_CHARGED) {
+            bat_col = IM_COL32(50, 255, 50, 255);
+        } else if (dev.battery_percent >= 0) {
+            if (dev.battery_percent <= 20) bat_col = IM_COL32(255, 50, 50, 255);
+            else if (dev.battery_percent <= 50) bat_col = IM_COL32(255, 200, 50, 255);
+            else bat_col = IM_COL32(50, 255, 50, 255);
+        }
+        
+        // Draw Battery Body
+        float body_w = icon_w * 0.85f;
+        float term_w = icon_w * 0.15f;
+        float term_h = icon_h * 0.4f;
+        
+        draw_list->AddRect(icon_pos, icon_pos + ImVec2(body_w, icon_h), bat_col, 0.0f, 0, 2.0f);
+        draw_list->AddRectFilled(icon_pos + ImVec2(body_w, (icon_h - term_h) * 0.5f), 
+                                 icon_pos + ImVec2(icon_w, (icon_h + term_h) * 0.5f), bat_col);
+                                 
+        // Draw Level
+        if (dev.battery_percent >= 0) {
+            float fill_pct = dev.battery_percent / 100.0f;
+            float fill_w = (body_w - 4.0f) * fill_pct;
+            if (fill_w > 0) {
+                draw_list->AddRectFilled(icon_pos + ImVec2(2.0f, 2.0f), 
+                                         icon_pos + ImVec2(2.0f + fill_w, icon_h - 2.0f), bat_col);
             }
         }
         
-        label += battery_icon;
-        if (dev.battery_percent >= 0) {
-            label += " " + std::to_string(dev.battery_percent) + "%";
+        // Charging indicator
+        if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
+            ImVec2 center = icon_pos + ImVec2(body_w * 0.5f, icon_h * 0.5f);
+            draw_list->AddLine(center + ImVec2(-3, 0), center + ImVec2(3, 0), IM_COL32(255,255,255,255), 2.0f);
+            draw_list->AddLine(center + ImVec2(0, -3), center + ImVec2(0, 3), IM_COL32(255,255,255,255), 2.0f);
         }
     }
     
-    if (ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (header_open) {
         ImGui::Indent();
         
         // Show detailed battery info
