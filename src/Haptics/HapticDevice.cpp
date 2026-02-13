@@ -13,29 +13,36 @@ InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
     }
 
     auto joystickID = SDL_GetJoystickID(m_joystick);
+    bool isHaptic = SDL_IsJoystickHaptic(m_joystick);
+    SDL_Log("HapticDevice::Init - Joystick ID %u, IsHaptic: %d", joystickID, isHaptic);
 
-    if (SDL_IsJoystickHaptic(m_joystick)) {
+    if (isHaptic) {
         m_haptic.Reset(SDL_OpenHapticFromJoystick(m_joystick));
         if (!m_haptic) {
             SDL_Log("Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
-            return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::SDLError);
-        }
-        
-        if (SDL_HapticRumbleSupported(m_haptic.Get())) {
-            if (!SDL_InitHapticRumble(m_haptic.Get())) {
-                SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+            SDL_Log("Will continue - gamepad rumble fallback may still work");
+            // FIXED: Don't return error here - allow fallback to gamepad rumble
+            // Some controllers (like DualSense) work better with SDL_RumbleGamepad
+        } else {
+            if (SDL_HapticRumbleSupported(m_haptic.Get())) {
+                if (!SDL_InitHapticRumble(m_haptic.Get())) {
+                    SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+                }
             }
+            SDL_SetHapticGain(m_haptic.Get(), 100);
+            SDL_SetHapticAutocenter(m_haptic.Get(), 0);
         }
-        SDL_SetHapticGain(m_haptic.Get(), 100);
-        SDL_SetHapticAutocenter(m_haptic.Get(), 0);
-        m_running = true;
-        m_thread = std::thread(&HapticDevice::ThreadLoop, this);
-        return InputBridge::Result<bool, InputBridge::HapticError>::Ok(true);
     }
 
+    // Start the async thread for both SDL_Haptic devices (steering wheels) AND gamepads.
+    // Gamepads use SDL_RumbleGamepad but it still needs to be queued on the haptics thread
+    // to maintain thread safety and consistency with the async architecture.
     if (m_haptic || SDL_IsGamepad(joystickID)) {
         m_running = true;
         m_thread = std::thread(&HapticDevice::ThreadLoop, this);
+    }
+
+    if (m_haptic || SDL_IsGamepad(joystickID)) {
         return InputBridge::Result<bool, InputBridge::HapticError>::Ok(true);
     }
 
@@ -45,6 +52,7 @@ InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
 bool HapticDevice::IsReady() const {
     return static_cast<bool>(m_haptic);
 }
+
 
 void HapticDevice::Close() {
     {

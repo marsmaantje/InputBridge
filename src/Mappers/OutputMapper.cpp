@@ -255,7 +255,7 @@ void OutputMapper::Update() {
                                        cmd.iParams[0], cmd.iParams[1], cmd.iParams[2],
                                        cmd.iParams[3], cmd.iParams[4], cmd.iParams[5],
                                        cmd.iParams[6], cmd.iParams[7], cmd.iParams[8],
-                                       cmd.iParams[9], cmd.iParams[10]);
+                                       cmd.iParams[9] & 0xFF, (cmd.iParams[9] >> 8) & 0xFF);
                 break;
         }
     }
@@ -267,7 +267,9 @@ void OutputMapper::HandleDeviceConnectionChange() {
     const auto& devices = m_DeviceManager.GetDevices();
     std::map<std::string, SDL_JoystickID> guidMap;
     for (const auto& dev : devices) {
-        guidMap[DeviceManager::GetDeviceGUIDString(dev)] = dev.instance_id;
+        if (dev.joystick) {
+            guidMap[DeviceManager::GetDeviceGUIDString(dev)] = dev.instance_id;
+        }
     }
 
     for (auto& target : *m_active_targets) {
@@ -425,8 +427,7 @@ void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, co
     cmd.iParams[6] = first_foot;
     cmd.iParams[7] = second_foot;
     cmd.iParams[8] = period;
-    cmd.iParams[9] = amplitude_a;
-    cmd.iParams[10] = amplitude_b;
+    cmd.iParams[9] = (amplitude_a & 0xFF) | ((amplitude_b & 0xFF) << 8);
     m_CommandQueue.push_back(cmd);
 }
 
@@ -619,4 +620,3 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
         gamepadHaptics->SendDualSenseTrigger(trigger, effect_type, params);
     }
 }
-

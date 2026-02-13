@@ -3,6 +3,7 @@
 #include "SDL3/SDL_joystick.h"
 #include "SDL3/SDL_log.h"
 #include <algorithm>
+#include <cstdlib>
 
 DeviceManager &DeviceManager::GetInstance() {
     static DeviceManager instance;
@@ -15,7 +16,11 @@ DeviceManager::~DeviceManager() { CloseAllDevices(); }
 const std::vector<DeviceState> &DeviceManager::GetDevices() const { return m_Devices; }
 
 std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
-    SDL_GUID guid = SDL_GetJoystickGUID(dev.joystick);
+    SDL_Joystick* joystick = SDL_GetJoystickFromID(dev.instance_id);
+    if (!joystick) {
+        return "00000000000000000000000000000000";
+    }
+    SDL_GUID guid = SDL_GetJoystickGUID(joystick);
     char guidStr[33];
     SDL_GUIDToString(guid, guidStr, sizeof(guidStr));
     return std::string(guidStr);
@@ -39,7 +44,19 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
 }
 
 void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
-    m_HapticDevices.erase(instance_id);
+    // CRITICAL FIX: Manually close the haptic device before erasing
+    // This ensures SDL_CloseHaptic is called before SDL_CloseGamepad/Joystick
+    // which prevents double-free when the gamepad close also closes the haptic
+    auto haptic_it = m_HapticDevices.find(instance_id);
+    if (haptic_it != m_HapticDevices.end()) {
+        // Manually call Close() to clean up haptic before SDL closes it
+        if (haptic_it->second) {
+            haptic_it->second->Close();
+        }
+        // Now erase (destructor will be called but Close() is idempotent)
+        m_HapticDevices.erase(haptic_it);
+    }
+    
     auto it = std::remove_if(m_Devices.begin(), m_Devices.end(), [instance_id](const DeviceState &dev) {
         if (dev.instance_id == instance_id) {
             if (dev.gamepad)
@@ -57,6 +74,15 @@ void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
 }
 
 void DeviceManager::CloseAllDevices() {
+    // Close haptic devices first (before their joysticks are closed)
+    for (auto& pair : m_HapticDevices) {
+        if (pair.second) {
+            pair.second->Close();
+        }
+    }
+    m_HapticDevices.clear();
+    
+    // Now close SDL devices
     for (auto &dev : m_Devices) {
         if (dev.gamepad)
             SDL_CloseGamepad(dev.gamepad);
@@ -64,7 +90,6 @@ void DeviceManager::CloseAllDevices() {
             SDL_CloseJoystick(dev.joystick);
     }
     m_Devices.clear();
-    m_HapticDevices.clear();
 }
 
 HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
@@ -76,16 +101,69 @@ HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
 }
 
 void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
+    SDL_PowerState old_state = dev.battery_state;
+    int old_percent = dev.battery_percent;
+    
     if (dev.gamepad) {
         // Get battery info from gamepad
         int percent = 0;
         dev.battery_state = SDL_GetGamepadPowerInfo(dev.gamepad, &percent);
         dev.battery_percent = percent;
+        
+        // Log battery info on first read or when state/percent changes significantly
+        static bool first_update = true;
+        bool state_changed = (old_state != dev.battery_state);
+        bool percent_changed = (abs(old_percent - percent) >= 5); // Log if changed by 5% or more
+        
+        if (first_update || state_changed || percent_changed) {
+            const char* state_str;
+            switch (dev.battery_state) {
+                case SDL_POWERSTATE_UNKNOWN: state_str = "UNKNOWN"; break;
+                case SDL_POWERSTATE_ON_BATTERY: state_str = "ON_BATTERY"; break;
+                case SDL_POWERSTATE_NO_BATTERY: state_str = "NO_BATTERY"; break;
+                case SDL_POWERSTATE_CHARGING: state_str = "CHARGING"; break;
+                case SDL_POWERSTATE_CHARGED: state_str = "CHARGED"; break;
+                default: state_str = "INVALID"; break;
+            }
+            
+            if (dev.battery_state == SDL_POWERSTATE_UNKNOWN || dev.battery_state == SDL_POWERSTATE_NO_BATTERY) {
+                SDL_Log("Battery [%s]: State=%s (battery info not available)", 
+                        dev.name.c_str(), state_str);
+                if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
+                    SDL_Log("  Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
+                }
+            } else {
+                SDL_Log("Battery [%s]: State=%s, Percent=%d%%", 
+                        dev.name.c_str(), state_str, percent);
+            }
+            first_update = false;
+        }
     } else if (dev.joystick) {
         // Get battery info from joystick
         int percent = 0;
         dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
         dev.battery_percent = percent;
+        
+        // Similar logging for joystick
+        static bool first_joystick_update = true;
+        bool state_changed = (old_state != dev.battery_state);
+        bool percent_changed = (abs(old_percent - percent) >= 5);
+        
+        if (first_joystick_update || state_changed || percent_changed) {
+            const char* state_str;
+            switch (dev.battery_state) {
+                case SDL_POWERSTATE_UNKNOWN: state_str = "UNKNOWN"; break;
+                case SDL_POWERSTATE_ON_BATTERY: state_str = "ON_BATTERY"; break;
+                case SDL_POWERSTATE_NO_BATTERY: state_str = "NO_BATTERY"; break;
+                case SDL_POWERSTATE_CHARGING: state_str = "CHARGING"; break;
+                case SDL_POWERSTATE_CHARGED: state_str = "CHARGED"; break;
+                default: state_str = "INVALID"; break;
+            }
+            
+            SDL_Log("Battery (Joystick) [%s]: State=%s, Percent=%d%%", 
+                    dev.name.c_str(), state_str, percent);
+            first_joystick_update = false;
+        }
     } else {
         dev.battery_state = SDL_POWERSTATE_UNKNOWN;
         dev.battery_percent = -1;

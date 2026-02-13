@@ -62,7 +62,8 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateGamepadDevice(SDL_Joyst
     state.is_gamepad = true;
     state.gamepad = gamepad;
     state.joystick = joystick;
-    state.name = SDL_GetGamepadName(gamepad); // Override with gamepad name
+    const char* gamepad_name = SDL_GetGamepadName(gamepad);
+    state.name = gamepad_name ? gamepad_name : state.name; // Override with gamepad name if available
     
     auto haptic = CreateHapticDevice(joystick, SDL_JOYSTICK_TYPE_GAMEPAD);
     
@@ -91,7 +92,8 @@ DeviceState DeviceFactory::CreateBaseDeviceState(SDL_Joystick* joystick,
                                                   SDL_JoystickID instance_id) {
     DeviceState state{};
     state.instance_id = instance_id;
-    state.name = SDL_GetJoystickName(joystick);
+    const char* joystick_name = SDL_GetJoystickName(joystick);
+    state.name = joystick_name ? joystick_name : "Unknown Device";
     state.num_axes = SDL_GetNumJoystickAxes(joystick);
     state.num_buttons = SDL_GetNumJoystickButtons(joystick);
     state.num_hats = SDL_GetNumJoystickHats(joystick);
@@ -101,6 +103,19 @@ DeviceState DeviceFactory::CreateBaseDeviceState(SDL_Joystick* joystick,
 
 std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* joystick, 
                                                                  SDL_JoystickType device_type) {
+    // For gamepads, ALWAYS create a GamepadHaptics device, even if SDL_IsJoystickHaptic() returns false.
+    // Many modern controllers (DualSense, Xbox) don't report as haptic via SDL_IsJoystickHaptic()
+    // but still support rumble via SDL_RumbleGamepad. The GamepadHaptics class handles both cases.
+    if (device_type == SDL_JOYSTICK_TYPE_GAMEPAD) {
+        auto haptic = std::make_unique<GamepadHaptics>(joystick);
+        if (haptic && !haptic->Init()) {
+            SDL_Log("Failed to initialize gamepad haptics");
+            return nullptr;
+        }
+        return haptic;
+    }
+    
+    // For steering wheels, only create if the joystick reports as haptic
     if (!SDL_IsJoystickHaptic(joystick)) {
         return nullptr;
     }
@@ -108,10 +123,6 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
     std::unique_ptr<HapticDevice> haptic;
     
     switch (device_type) {
-        case SDL_JOYSTICK_TYPE_GAMEPAD:
-            haptic = std::make_unique<GamepadHaptics>(joystick);
-            break;
-            
         case SDL_JOYSTICK_TYPE_WHEEL:
             haptic = std::make_unique<SteeringWheelHaptics>(joystick);
             break;

@@ -13,7 +13,7 @@ struct HapticCommand {
     enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION, GAIN, DUALSENSE_TRIGGER } type;
     int virtual_id;
     float fParams[8]; // Generic float storage
-    int iParams[11];  // Generic int storage - increased for more params
+    int iParams[10];  // Generic int storage - increased for more params
     char sParams[2][32]; // String params: [0]=trigger ("left"/"right"/"both"), [1]=effect_type
 };
 

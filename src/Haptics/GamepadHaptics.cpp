@@ -2,7 +2,9 @@
 #include "DualSenseTriggerEffectGenerator.h"
 #include <algorithm>
 #include <cstring>
+#include <cctype>
 #include <SDL3/SDL_joystick.h>
+#include <SDL3/SDL_gamepad.h>
 
 using namespace ExtendInput::DataTools::DualSense;
 
@@ -96,46 +98,18 @@ int GamepadHaptics::Rumble(float large_magnitude, float small_magnitude, uint32_
             return;
         }
 
-        if (!m_haptic) {
-            // Fallback for Gamepads that don't support SDL_Haptic but support Rumble
-            SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
-            SDL_Gamepad* gamepad = SDL_GetGamepadFromID(id);
-            if (gamepad) {
-                if (!SDL_RumbleGamepad(gamepad, static_cast<Uint16>(large_magnitude * 0xFFFF), static_cast<Uint16>(small_magnitude * 0xFFFF), duration_ms)) {
-                    SDL_Log("SDL_RumbleGamepad failed (VID 0x%04X, PID 0x%04X): %s", vendor, product, SDL_GetError());
-                }
-            } else {
-                SDL_Log("GamepadHaptics: Could not get gamepad handle for ID %u", id);
-            }
-            return;
-        }
-
-        // Check if the haptic device supports the SDL_HAPTIC_LEFTRIGHT effect
-        if ((SDL_GetHapticFeatures(m_haptic.Get()) & SDL_HAPTIC_LEFTRIGHT) == 0) {
-            // If not supported, fall back to simple rumble
-            float strength = std::max(large_magnitude, small_magnitude);
-            if (!SDL_PlayHapticRumble(m_haptic.Get(), strength, duration_ms)) {
-                SDL_Log("SDL_PlayHapticRumble failed: %s", SDL_GetError());
-            }
-            return;
-        }
-
-        SDL_HapticEffect effect;
-        SDL_memset(&effect, 0, sizeof(SDL_HapticEffect)); // Zero out the effect struct
-
-        effect.type = SDL_HAPTIC_LEFTRIGHT;
-        effect.leftright.length = duration_ms;
-        effect.leftright.large_magnitude = static_cast<Uint16>(std::clamp(large_magnitude, 0.0f, 1.0f) * 0xFFFF);
-        effect.leftright.small_magnitude = static_cast<Uint16>(std::clamp(small_magnitude, 0.0f, 1.0f) * 0xFFFF);
-
-        // Create or update the effect
-        m_rumbleEffectId = UploadEffect(effect, m_rumbleEffectId);
-        if (m_rumbleEffectId >= 0) {
-            if (!SDL_RunHapticEffect(m_haptic.Get(), m_rumbleEffectId, (duration_ms == SDL_HAPTIC_INFINITY) ? SDL_HAPTIC_INFINITY : 1)) {
-                SDL_Log("SDL_RunHapticEffect failed: %s", SDL_GetError());
+        // Standard Gamepad Rumble (DualSense, Xbox, etc.)
+        // We use SDL_RumbleGamepad directly which is thread-safe and handles DualSense correctly on SDL3.
+        SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
+        SDL_Gamepad* gamepad = SDL_GetGamepadFromID(id);
+        if (gamepad) {
+            Uint16 low = static_cast<Uint16>(large_magnitude * 0xFFFF);
+            Uint16 high = static_cast<Uint16>(small_magnitude * 0xFFFF);
+            if (!SDL_RumbleGamepad(gamepad, low, high, duration_ms)) {
+                SDL_Log("SDL_RumbleGamepad failed: %s", SDL_GetError());
             }
         } else {
-            SDL_Log("UploadEffect (Rumble) failed: %s", SDL_GetError());
+            SDL_Log("SDL_GetGamepadFromID failed - gamepad not available");
         }
     });
     return 0;
@@ -172,7 +146,8 @@ bool GamepadHaptics::IsDualSenseUSB() const {
     const char* path = SDL_GetJoystickPath(m_joystick);
     if (path) {
         std::string pathStr(path);
-        std::transform(pathStr.begin(), pathStr.end(), pathStr.begin(), ::tolower);
+        std::transform(pathStr.begin(), pathStr.end(), pathStr.begin(), 
+            [](unsigned char c){ return std::tolower(c); });
         
         // USB devices have "usb" in path or "hidraw" without bluetooth identifiers
         if (pathStr.find("usb") != std::string::npos) {
@@ -202,10 +177,8 @@ bool GamepadHaptics::IsDualSenseUSB() const {
 }
 
 void GamepadHaptics::SendDualSenseTriggerEffect(uint8_t* leftTriggerData, uint8_t* rightTriggerData) {
-    SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
-    SDL_Gamepad* pad = SDL_GetGamepadFromID(id);
-    if (!pad) {
-        SDL_Log("GamepadHaptics::SendDualSenseTriggerEffect: Could not get gamepad handle");
+    if (!m_joystick) {
+        SDL_Log("SendDualSenseTriggerEffect: No joystick available");
         return;
     }
     
@@ -239,8 +212,9 @@ void GamepadHaptics::SendDualSenseTriggerEffect(uint8_t* leftTriggerData, uint8_
         SDL_Log("Sending USB trigger data: Report[0]=0x%02X, Flags[1]=0x%02X, Flags[2]=0x%02X", data[0], data[1], data[2]);
         SDL_Log("Right trigger[0]=0x%02X, Left trigger[0]=0x%02X", rightTriggerData[0], leftTriggerData[0]);
         
-        if (!SDL_SendGamepadEffect(pad, data, sizeof(data))) {
-            SDL_Log("SDL_SendGamepadEffect (DualSense USB Trigger) failed: %s", SDL_GetError());
+        // Use SDL_SendJoystickEffect instead of SDL_SendGamepadEffect
+        if (!SDL_SendJoystickEffect(m_joystick, data, sizeof(data))) {
+            SDL_Log("SDL_SendJoystickEffect (DualSense USB Trigger) failed: %s", SDL_GetError());
         } else {
             SDL_Log("DualSense USB trigger effect sent successfully");
         }
@@ -301,8 +275,9 @@ void GamepadHaptics::SendDualSenseTriggerEffect(uint8_t* leftTriggerData, uint8_
         SDL_Log("Right trigger[0]=0x%02X, Left trigger[0]=0x%02X", rightTriggerData[0], leftTriggerData[0]);
         
         // For Bluetooth, SDL should handle CRC32 calculation
-        if (!SDL_SendGamepadEffect(pad, data, sizeof(data))) {
-            SDL_Log("SDL_SendGamepadEffect (DualSense BT Trigger) failed: %s", SDL_GetError());
+        // Use SDL_SendJoystickEffect instead of SDL_SendGamepadEffect
+        if (!SDL_SendJoystickEffect(m_joystick, data, sizeof(data))) {
+            SDL_Log("SDL_SendJoystickEffect (DualSense BT Trigger) failed: %s", SDL_GetError());
         } else {
             SDL_Log("DualSense Bluetooth trigger effect sent successfully");
         }
@@ -315,45 +290,45 @@ int GamepadHaptics::SendDualSenseTrigger(const char* trigger, const char* effect
         return -1;
     }
     
-    RunAsync([this, trigger = std::string(trigger), effect_type = std::string(effect_type), params]() {
+    {
         // Prepare trigger effect data (11 bytes each)
         uint8_t leftTriggerData[11] = {};
         uint8_t rightTriggerData[11] = {};
         
         // Determine which trigger to update
-        bool updateLeft = (trigger == "left" || trigger == "both");
-        bool updateRight = (trigger == "right" || trigger == "both");
+        bool updateLeft = (std::strcmp(trigger, "left") == 0 || std::strcmp(trigger, "both") == 0);
+        bool updateRight = (std::strcmp(trigger, "right") == 0 || std::strcmp(trigger, "both") == 0);
         
         // Helper lambda to apply effect to a trigger data array
         auto applyEffect = [&](uint8_t* triggerData) {
-            if (effect_type == "off") {
+            if (std::strcmp(effect_type, "off") == 0) {
                 DualSenseTriggerEffectGenerator::Off(triggerData, 0);
             } 
-            else if (effect_type == "feedback") {
+            else if (std::strcmp(effect_type, "feedback") == 0) {
                 uint8_t position = params.count("position") ? params.at("position") : 0;
                 uint8_t strength = params.count("strength") ? params.at("strength") : 5;
                 DualSenseTriggerEffectGenerator::Feedback(triggerData, 0, position, strength);
             } 
-            else if (effect_type == "weapon") {
+            else if (std::strcmp(effect_type, "weapon") == 0) {
                 uint8_t start_position = params.count("start_position") ? params.at("start_position") : 2;
                 uint8_t end_position = params.count("end_position") ? params.at("end_position") : 7;
                 uint8_t strength = params.count("strength") ? params.at("strength") : 5;
                 DualSenseTriggerEffectGenerator::Weapon(triggerData, 0, start_position, end_position, strength);
             } 
-            else if (effect_type == "vibration") {
+            else if (std::strcmp(effect_type, "vibration") == 0) {
                 uint8_t position = params.count("position") ? params.at("position") : 0;
                 uint8_t amplitude = params.count("amplitude") ? params.at("amplitude") : 5;
                 uint8_t frequency = params.count("frequency") ? params.at("frequency") : 10;
                 DualSenseTriggerEffectGenerator::Vibration(triggerData, 0, position, amplitude, frequency);
             } 
-            else if (effect_type == "bow") {
+            else if (std::strcmp(effect_type, "bow") == 0) {
                 uint8_t start_position = params.count("start_position") ? params.at("start_position") : 0;
                 uint8_t end_position = params.count("end_position") ? params.at("end_position") : 8;
                 uint8_t strength = params.count("strength") ? params.at("strength") : 5;
                 uint8_t snap_force = params.count("snap_force") ? params.at("snap_force") : 5;
                 DualSenseTriggerEffectGenerator::Bow(triggerData, 0, start_position, end_position, strength, snap_force);
             } 
-            else if (effect_type == "galloping") {
+            else if (std::strcmp(effect_type, "galloping") == 0) {
                 uint8_t start_position = params.count("start_position") ? params.at("start_position") : 0;
                 uint8_t end_position = params.count("end_position") ? params.at("end_position") : 9;
                 uint8_t first_foot = params.count("first_foot") ? params.at("first_foot") : 2;
@@ -361,7 +336,7 @@ int GamepadHaptics::SendDualSenseTrigger(const char* trigger, const char* effect
                 uint8_t frequency = params.count("frequency") ? params.at("frequency") : 10;
                 DualSenseTriggerEffectGenerator::Galloping(triggerData, 0, start_position, end_position, first_foot, second_foot, frequency);
             } 
-            else if (effect_type == "machine") {
+            else if (std::strcmp(effect_type, "machine") == 0) {
                 uint8_t start_position = params.count("start_position") ? params.at("start_position") : 0;
                 uint8_t end_position = params.count("end_position") ? params.at("end_position") : 9;
                 uint8_t amplitude_a = params.count("amplitude_a") ? params.at("amplitude_a") : 4;
@@ -371,7 +346,7 @@ int GamepadHaptics::SendDualSenseTrigger(const char* trigger, const char* effect
                 DualSenseTriggerEffectGenerator::Machine(triggerData, 0, start_position, end_position, amplitude_a, amplitude_b, frequency, period);
             }
             else {
-                SDL_Log("Unknown DualSense trigger effect type: %s", effect_type.c_str());
+                SDL_Log("Unknown DualSense trigger effect type: %s", effect_type);
                 DualSenseTriggerEffectGenerator::Off(triggerData, 0);
             }
         };
@@ -386,7 +361,7 @@ int GamepadHaptics::SendDualSenseTrigger(const char* trigger, const char* effect
         
         // Send the effect
         SendDualSenseTriggerEffect(leftTriggerData, rightTriggerData);
-    });
+    }
     
     return 0;
 }
