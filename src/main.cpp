@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
-#include <map>
 #include <SDL3/SDL_filesystem.h>
 
 #include "Devices/DeviceManager.h"
@@ -545,8 +544,8 @@ int main(int argc, char *argv[]) {
     WebSocketServer::GetInstance().SetOutputMapper(&outputMapper);
     OSCServer::GetInstance().SetOutputMapper(&outputMapper);
 
-    static int server_update_rate = 60;
-    static bool server_dynamic_rate = false;
+    static int server_update_rate = preferencesManager.GetInt("Network", "UpdateRate", 60);
+    static bool server_dynamic_rate = preferencesManager.GetBool("Network", "DynamicRate", false);
     static Uint64 last_server_update_time = 0;
     static int messages_sent_counter = 0;
     static float current_messages_per_second = 0.0f;
@@ -619,6 +618,10 @@ int main(int argc, char *argv[]) {
     // Save Network Server Configs
     OSCServer::GetInstance().SaveConfig(preferencesManager);
     WebSocketServer::GetInstance().SaveConfig(preferencesManager);
+
+    preferencesManager.SetInt("Network", "UpdateRate", server_update_rate);
+    preferencesManager.SetBool("Network", "DynamicRate", server_dynamic_rate);
+
     preferencesManager.Save();
 
     SDL_DestroyRenderer(renderer);
