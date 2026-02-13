@@ -6,8 +6,7 @@
 #include <memory>
 #include <map>
 
-#include "Haptics/GamepadHaptics.h"
-#include "Haptics/SteeringWheelHaptics.h"
+#include "Haptics/HapticDevice.h"
 
 class DeviceManager {
   public:
