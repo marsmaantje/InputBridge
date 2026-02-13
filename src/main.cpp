@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <map>
 #include <SDL3/SDL_filesystem.h>
 
 #include "Devices/DeviceManager.h"
@@ -555,20 +556,22 @@ int main(int argc, char *argv[]) {
         Uint64 frame_start_time = SDL_GetTicks();
         ProcessEvents(done, window, deviceManager, preferencesManager, user_ui_scale, scale_with_window, initial_width);
 
-        bool should_update_server = false;
+        // Always update haptics to ensure low latency
+        outputMapper.Update();
+
+        bool check_input_update = false;
         if (server_dynamic_rate) {
-            should_update_server = true;
+            check_input_update = true;
         } else {
             if (server_update_rate > 0) {
                 Uint64 interval = 1000 / server_update_rate;
                 if (frame_start_time - last_server_update_time >= interval) {
-                    should_update_server = true;
+                    check_input_update = true;
                 }
             }
         }
 
-        if (should_update_server) {
-            outputMapper.Update();
+        if (check_input_update && inputMapper.Update(server_dynamic_rate)) {
             last_server_update_time = frame_start_time;
             messages_sent_counter++;
         }

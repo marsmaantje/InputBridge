@@ -407,7 +407,7 @@ void InputMapper::DrawContent() {
 
     ImGui::Separator();
     ImGui::Text("Output Preview:");
-    std::string outputPreview = UpdateAndBroadcastMessage();
+    std::string outputPreview = GetOutputPreview();
     ImGui::TextWrapped("%s", outputPreview.c_str());
 
     ImGui::End();
@@ -451,9 +451,9 @@ float InputMapper::ProcessAxis(const InputSource &config) {
     return result;
 }
 
-std::string InputMapper::UpdateAndBroadcastMessage() {
+bool InputMapper::Update(bool dynamic_rate) {
     if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= m_Profiles.size()) {
-        return "No active profile selected.";
+        return false;
     }
 
     const auto &profile = m_Profiles[m_SelectedProfileIndex];
@@ -471,11 +471,17 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
         outputValues[outputName] = ProcessAxis(source);
     }
 
-    const bool changed = (outputValues != m_LastOutputValues);
-    const Uint64 currentTime = SDL_GetTicks();
-    const bool sendDueToTimeout = (currentTime - m_LastBroadcastTime) >= 500;
+    bool should_send = false;
+    if (dynamic_rate) {
+        const bool changed = (outputValues != m_LastOutputValues);
+        const Uint64 currentTime = SDL_GetTicks();
+        const bool sendDueToTimeout = (currentTime - m_LastBroadcastTime) >= 500;
+        should_send = changed || sendDueToTimeout;
+    } else {
+        should_send = true;
+    }
 
-    if (changed || sendDueToTimeout) {
+    if (should_send) {
         float steering = outputValues["Steering"];
         float throttle = outputValues["Throttle"];
         float brake = outputValues["Brake"];
@@ -494,7 +500,28 @@ std::string InputMapper::UpdateAndBroadcastMessage() {
             osc_server.SendWheel(steering, brake, throttle, pitch, roll);
         }
         m_LastOutputValues = outputValues;
-        m_LastBroadcastTime = currentTime;
+        m_LastBroadcastTime = SDL_GetTicks();
+    }
+    
+    return should_send;
+}
+
+std::string InputMapper::GetOutputPreview() {
+    if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= m_Profiles.size()) {
+        return "No active profile selected.";
+    }
+
+    const auto &profile = m_Profiles[m_SelectedProfileIndex];
+    std::map<std::string, float> outputValues;
+
+    for (const auto &outputName : m_GenericOutputs) {
+        outputValues[outputName] = 0.0f;
+    }
+
+    for (const auto &pair : profile.outputToInput) {
+        const std::string &outputName = pair.first;
+        const InputSource &source = pair.second;
+        outputValues[outputName] = ProcessAxis(source);
     }
 
     std::string preview;
