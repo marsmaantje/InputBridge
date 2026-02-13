@@ -39,7 +39,18 @@ set(WITH_CPP_TESTS OFF CACHE BOOL "Disable liblo C++ tests" FORCE)
 set(WITH_STATIC ON CACHE BOOL "Enable liblo static lib" FORCE)
 
 # liblo's CMakeLists.txt is located in the 'cmake' subdirectory
+if(DEFINED CMAKE_WARN_DEPRECATED)
+    set(CMAKE_WARN_DEPRECATED_OLD ${CMAKE_WARN_DEPRECATED})
+else()
+    unset(CMAKE_WARN_DEPRECATED_OLD)
+endif()
+set(CMAKE_WARN_DEPRECATED OFF)
 add_subdirectory(lib/liblo/cmake lib/liblo)
+if(DEFINED CMAKE_WARN_DEPRECATED_OLD)
+    set(CMAKE_WARN_DEPRECATED ${CMAKE_WARN_DEPRECATED_OLD})
+else()
+    unset(CMAKE_WARN_DEPRECATED)
+endif()
 
 # Create an alias 'lo' to the static library target 'liblo_static'
 # This ensures compatibility with the rest of the project that links against 'lo'
@@ -69,6 +80,11 @@ if(ENABLE_WEBSOCKETS)
         set(uwebsockets_lib_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/uWebSockets_download)
     else()
         include(FetchContent)
+
+        # Suppress warning about FetchContent_Populate being deprecated (CMake 3.30+)
+        if(POLICY CMP0169)
+            cmake_policy(SET CMP0169 OLD)
+        endif()
 
         # Libuv (Required for uSockets on Windows)
         if(WIN32)
