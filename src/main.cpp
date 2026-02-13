@@ -130,7 +130,7 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
     std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
     
     // Add battery indicator if available
-    if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+    if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
         ImVec4 battery_color;
         const char* battery_icon;
         
@@ -163,7 +163,7 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
         ImGui::Indent();
         
         // Show detailed battery info
-        if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+        if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
             const char* state_str = "Unknown";
             switch (dev.battery_state) {
                 case SDL_POWERSTATE_ON_BATTERY: state_str = "On Battery"; break;
