@@ -33,18 +33,6 @@ void InputMapper::Shutdown()
     s_Instance.reset();
 }
 
-struct ButtonToAnalogMapping {
-    std::string device_guid;
-    SDL_JoystickID instance_id = 0;
-    int button_index = 0;
-    int target_virtual_id = 0;
-    float on_value = 1.0f;
-    float off_value = 0.0f;
-    bool last_button_state = false;
-};
-
-static std::vector<ButtonToAnalogMapping> s_ButtonMappings;
-
 namespace { // Anonymous namespace for private helper functions
 
 SDL_Joystick *GetJoystickByID(SDL_JoystickID id, const DeviceManager &deviceManager) {
@@ -66,21 +54,6 @@ std::filesystem::path GetMappingsDirectory() {
         path = "mappings";
     }
     return path;
-}
-
-void ProcessButtonMappings(const DeviceManager& deviceManager) {
-    for (auto& mapping : s_ButtonMappings) {
-        if (mapping.instance_id == 0) continue;
-        SDL_Joystick* joystick = GetJoystickByID(mapping.instance_id, deviceManager);
-        if (!joystick) continue;
-
-        bool current_state = SDL_GetJoystickButton(joystick, mapping.button_index);
-        if (current_state != mapping.last_button_state) {
-            float value = current_state ? mapping.on_value : mapping.off_value;
-            OutputMapper::GetInstance().QueueConstantForce(mapping.target_virtual_id, value, -1);
-            mapping.last_button_state = current_state;
-        }
-    }
 }
 
 } // namespace
@@ -324,86 +297,98 @@ void InputMapper::DrawContent() {
         }
         ImGui::EndDisabled();
 #endif
-    }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Text("Button to Analog Mappings");
-    ImGui::TextWrapped("Map buttons to analog outputs (Constant Force). Note: These mappings are not currently saved.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text("Button to Analog Mappings");
+        ImGui::TextWrapped("Map buttons to analog outputs (e.g. set Throttle to 1.0 when a button is pressed).");
 
-    if (ImGui::Button("Add Mapping")) {
-        s_ButtonMappings.push_back(ButtonToAnalogMapping());
-    }
-
-    int mappingToDelete = -1;
-    if (ImGui::BeginTable("ButtonMappingsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
-        ImGui::TableSetupColumn("Device");
-        ImGui::TableSetupColumn("Button", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-        ImGui::TableSetupColumn("Target ID", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-        ImGui::TableSetupColumn("On Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-        ImGui::TableSetupColumn("Off Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-        ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-        ImGui::TableHeadersRow();
-
-        for (int i = 0; i < s_ButtonMappings.size(); ++i) {
-            auto& mapping = s_ButtonMappings[i];
-            ImGui::PushID(1000 + i);
-            ImGui::TableNextRow();
-
-            ImGui::TableSetColumnIndex(0);
-            std::string currentDeviceName = "None";
-            if (mapping.instance_id != 0) {
-                 const auto& devices = m_DeviceManager.GetDevices();
-                 auto it = std::find_if(devices.begin(), devices.end(), [&](const DeviceState& d){ return d.instance_id == mapping.instance_id; });
-                 if (it != devices.end()) currentDeviceName = it->name;
-            }
-
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::BeginCombo("##Device", currentDeviceName.c_str())) {
-                if (ImGui::Selectable("None", mapping.instance_id == 0)) {
-                    mapping.device_guid = "";
-                    mapping.instance_id = 0;
-                }
-                for (const auto& dev : m_DeviceManager.GetDevices()) {
-                    if (ImGui::Selectable(dev.name.c_str(), mapping.instance_id == dev.instance_id)) {
-                        mapping.device_guid = DeviceManager::GetDeviceGUIDString(dev);
-                        mapping.instance_id = dev.instance_id;
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::TableSetColumnIndex(1);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::InputInt("##Button", &mapping.button_index);
-
-            ImGui::TableSetColumnIndex(2);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::InputInt("##TargetID", &mapping.target_virtual_id);
-
-            ImGui::TableSetColumnIndex(3);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::DragFloat("##OnVal", &mapping.on_value, 0.01f, -1.0f, 1.0f);
-
-            ImGui::TableSetColumnIndex(4);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::DragFloat("##OffVal", &mapping.off_value, 0.01f, -1.0f, 1.0f);
-
-            ImGui::TableSetColumnIndex(5);
-            if (ImGui::Button("Delete")) {
-                mappingToDelete = i;
-            }
-
-            ImGui::PopID();
+        if (ImGui::Button("Add Mapping")) {
+            profile.buttonMappings.push_back(ButtonToAnalogMapping());
+            SaveProfile(profile);
         }
-        ImGui::EndTable();
-    }
 
-    if (mappingToDelete != -1) {
-        s_ButtonMappings.erase(s_ButtonMappings.begin() + mappingToDelete);
-    }
+        int mappingToDelete = -1;
+        if (ImGui::BeginTable("ButtonMappingsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+            ImGui::TableSetupColumn("Device");
+            ImGui::TableSetupColumn("Button", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+            ImGui::TableSetupColumn("Target Output", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+            ImGui::TableSetupColumn("On Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Off Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableHeadersRow();
 
-    ProcessButtonMappings(m_DeviceManager);
+            for (int i = 0; i < profile.buttonMappings.size(); ++i) {
+                auto& mapping = profile.buttonMappings[i];
+                bool mappingChanged = false;
+                ImGui::PushID(1000 + i);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                std::string currentDeviceName = "None";
+                if (mapping.instance_id != 0) {
+                     const auto& devices = m_DeviceManager.GetDevices();
+                     auto it = std::find_if(devices.begin(), devices.end(), [&](const DeviceState& d){ return d.instance_id == mapping.instance_id; });
+                     if (it != devices.end()) currentDeviceName = it->name;
+                }
+
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::BeginCombo("##Device", currentDeviceName.c_str())) {
+                    if (ImGui::Selectable("None", mapping.instance_id == 0)) {
+                        mapping.device_guid = "";
+                        mapping.instance_id = 0;
+                        mappingChanged = true;
+                    }
+                    for (const auto& dev : m_DeviceManager.GetDevices()) {
+                        if (ImGui::Selectable(dev.name.c_str(), mapping.instance_id == dev.instance_id)) {
+                            mapping.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            mapping.instance_id = dev.instance_id;
+                            mappingChanged = true;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::InputInt("##Button", &mapping.button_index)) mappingChanged = true;
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::BeginCombo("##Target", mapping.target_output_name.c_str())) {
+                    for (const auto& output : m_GenericOutputs) {
+                        if (ImGui::Selectable(output.c_str(), mapping.target_output_name == output)) {
+                            mapping.target_output_name = output;
+                            mappingChanged = true;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                ImGui::TableSetColumnIndex(3);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::DragFloat("##OnVal", &mapping.on_value, 0.01f, -1.0f, 1.0f)) mappingChanged = true;
+
+                ImGui::TableSetColumnIndex(4);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::DragFloat("##OffVal", &mapping.off_value, 0.01f, -1.0f, 1.0f)) mappingChanged = true;
+
+                ImGui::TableSetColumnIndex(5);
+                if (ImGui::Button("Delete")) {
+                    mappingToDelete = i;
+                }
+
+                if (mappingChanged) SaveProfile(profile);
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+
+        if (mappingToDelete != -1) {
+            profile.buttonMappings.erase(profile.buttonMappings.begin() + mappingToDelete);
+            SaveProfile(profile);
+        }
+    }
 
     ImGui::Separator();
     ImGui::Text("Output Preview:");
@@ -471,6 +456,17 @@ bool InputMapper::Update(bool dynamic_rate) {
         outputValues[outputName] = ProcessAxis(source);
     }
 
+    // Process button mappings
+    for (const auto& mapping : profile.buttonMappings) {
+        if (mapping.instance_id == 0 || mapping.target_output_name.empty()) continue;
+        SDL_Joystick* joystick = GetJoystickByID(mapping.instance_id, m_DeviceManager);
+        if (!joystick) continue;
+
+        if (SDL_GetJoystickButton(joystick, mapping.button_index)) {
+            outputValues[mapping.target_output_name] = mapping.on_value;
+        }
+    }
+
     bool should_send = false;
     if (dynamic_rate) {
         const bool changed = (outputValues != m_LastOutputValues);
@@ -529,11 +525,17 @@ std::string InputMapper::GetOutputPreview() {
         preview += pair.first + ": " + std::to_string(pair.second) + "\n";
     }
 
-    if (!s_ButtonMappings.empty()) {
+    if (!profile.buttonMappings.empty()) {
         preview += "\nButton Mappings:\n";
-        for (const auto& mapping : s_ButtonMappings) {
-            float val = mapping.last_button_state ? mapping.on_value : mapping.off_value;
-            preview += "Target " + std::to_string(mapping.target_virtual_id) + ": " + std::to_string(val) + "\n";
+        for (const auto& mapping : profile.buttonMappings) {
+            float val = mapping.off_value;
+            if (mapping.instance_id != 0) {
+                SDL_Joystick* joystick = GetJoystickByID(mapping.instance_id, m_DeviceManager);
+                if (joystick && SDL_GetJoystickButton(joystick, mapping.button_index)) {
+                    val = mapping.on_value;
+                }
+            }
+            preview += "Target " + mapping.target_output_name + ": " + std::to_string(val) + "\n";
         }
     }
 
@@ -580,6 +582,17 @@ void InputMapper::LoadProfiles() {
                                 target.enable_periodic = item.value("enable_periodic", true);
                                 target.enable_condition = item.value("enable_condition", true);
                                 profile.hapticTargets.push_back(target);
+                            }
+                        }
+                        if (data.contains("button_mappings")) {
+                            for (const auto& item : data["button_mappings"]) {
+                                ButtonToAnalogMapping mapping;
+                                mapping.device_guid = item.value("device_guid", "");
+                                mapping.button_index = item.value("button_index", 0);
+                                mapping.target_output_name = item.value("target_output_name", "");
+                                mapping.on_value = item.value("on_value", 1.0f);
+                                mapping.off_value = item.value("off_value", 0.0f);
+                                profile.buttonMappings.push_back(mapping);
                             }
                         }
                         m_Profiles.push_back(profile);
@@ -631,6 +644,17 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
             data["haptic_targets"].push_back(item);
         }
 
+        data["button_mappings"] = json::array();
+        for (const auto& mapping : profile.buttonMappings) {
+            json item;
+            item["device_guid"] = mapping.device_guid;
+            item["button_index"] = mapping.button_index;
+            item["target_output_name"] = mapping.target_output_name;
+            item["on_value"] = mapping.on_value;
+            item["off_value"] = mapping.off_value;
+            data["button_mappings"].push_back(item);
+        }
+
         std::ofstream o(profilePath);
         if (o.is_open()) {
             o << data.dump(4);
@@ -677,15 +701,15 @@ void InputMapper::HandleDeviceConnectionChange() {
                 target.instance_id = 0;
             }
         }
-    }
 
-    for (auto& mapping : s_ButtonMappings) {
-        if (mapping.device_guid.empty()) continue;
-        auto it = guidToInstanceId.find(mapping.device_guid);
-        if (it != guidToInstanceId.end()) {
-            mapping.instance_id = it->second;
-        } else {
-            mapping.instance_id = 0;
+        for (auto& mapping : profile.buttonMappings) {
+            if (mapping.device_guid.empty()) continue;
+            auto it = guidToInstanceId.find(mapping.device_guid);
+            if (it != guidToInstanceId.end()) {
+                mapping.instance_id = it->second;
+            } else {
+                mapping.instance_id = 0;
+            }
         }
     }
 }
