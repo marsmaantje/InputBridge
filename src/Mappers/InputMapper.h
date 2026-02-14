@@ -62,7 +62,8 @@ class InputMapper {
     InputMapper(const InputMapper &) = delete;
     InputMapper &operator=(const InputMapper &) = delete;
     void DrawContent();
-    std::string UpdateAndBroadcastMessage();
+    bool Update(bool dynamic_rate);
+    std::string GetOutputPreview();
 
     void LoadConfig(PreferencesManager &prefs);
     void SaveConfig(PreferencesManager &prefs) const;

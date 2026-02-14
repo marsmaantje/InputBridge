@@ -7,10 +7,13 @@
 #include <mutex>
 #include <deque>
 #include <set>
+#include <memory>
 #include <vector>
 
 class PreferencesManager;
 class OutputMapper;
+class IProtocol;
+class OSCBaseProtocol;
 
 // Callback for incoming OSC messages
 using OSCHandler = std::function<void(const char* path, const char* types, lo_arg** argv, int argc)>;
@@ -49,8 +52,8 @@ public:
 
     void DrawContent();
 
-    void SetProtocolVersion(ProtocolVersion version);
-    ProtocolVersion GetProtocolVersion() const;
+    void SetProtocol(const std::string& name);
+    std::string GetProtocol() const;
 
     void LoadConfig(const PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs);
@@ -80,8 +83,9 @@ private:
     int m_running_recv_port = 0;
 
     OSCHandler m_handler;
-    std::mutex m_mutex;
-    ProtocolVersion m_protocolVersion = ProtocolVersion::Default;
+    mutable std::mutex m_mutex;  // mutable for const methods
+    std::shared_ptr<IProtocol> m_protocol;
+    std::string m_protocolName = "OSC Default";
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;
     OutputMapper* m_OutputMapper = nullptr;

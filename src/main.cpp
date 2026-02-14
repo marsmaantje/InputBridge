@@ -28,6 +28,7 @@
 #include "Visualizers/GenericVisualizer.h"
 #include "Visualizers/SteeringWheelVisualizer.h"
 #include "Visualizers/GamepadHapticsVisualizer.h"
+#include "Visualizers/WiimoteVisualizer.h"
 #include "Visualizers/SteeringWheelHapticsVisualizer.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
@@ -56,23 +57,6 @@ void UpdateUIScale(SDL_Window *window, float& user_ui_scale, bool scale_with_win
     ImGui::GetIO().FontGlobalScale = ui_scale;
 }
 
-void DrawHapticsControl(const DeviceState& dev, DeviceManager& deviceManager) {
-    HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
-    if (haptic) {
-        if (haptic->IsReady()) {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Haptics: Ready");
-        } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Haptics: Not Available");
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Stop All Effects")) {
-            haptic->StopAll();
-        }
-    } else {
-        ImGui::TextDisabled("Haptics: Not Supported");
-    }
-}
-
 void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
     static GamepadVisualizer gamepad_viz;
     static GenericVisualizer generic_viz;
@@ -80,6 +64,7 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
     static FlightStickVisualizer flight_stick_viz;
     static GamepadHapticsVisualizer gamepad_haptics_viz;
     static SteeringWheelHapticsVisualizer wheel_haptics_viz;
+    static WiimoteVisualizer wiimote_viz;
 
     std::string guid = DeviceManager::GetDeviceGUIDString(dev);
     bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
@@ -110,8 +95,6 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
             // TabItem("Standard Layout", gamepad_viz);
             TabItem("Raw Inputs", generic_viz);
             if (ImGui::BeginTabItem("Haptic Test")) {
-                DrawHapticsControl(dev, deviceManager);
-                ImGui::Separator();
                 gamepad_haptics_viz.Draw(dev, deviceManager);
                 ImGui::EndTabItem();
             }
@@ -128,10 +111,11 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
             if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK || type == SDL_JOYSTICK_TYPE_THROTTLE || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
                 // TabItem("Flight Stick", flight_stick_viz);
             }
+            if (dev.name.find("Nintendo") != std::string::npos || dev.name.find("Wiimote") != std::string::npos) {
+                TabItem("Wiimote", wiimote_viz);
+            }
             if (type == SDL_JOYSTICK_TYPE_WHEEL) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
-                    DrawHapticsControl(dev, deviceManager);
-                    ImGui::Separator();
                     wheel_haptics_viz.Draw(dev, deviceManager);
                     ImGui::EndTabItem();
                 }
@@ -144,8 +128,91 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
 void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
     ImGui::PushID((int)dev.instance_id);
     std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
-    if (ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    
+    bool header_open = ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+    // Draw battery indicator if available
+    if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2 rect_min = ImGui::GetItemRectMin();
+        ImVec2 rect_max = ImGui::GetItemRectMax();
+        
+        float icon_h = ImGui::GetTextLineHeight();
+        float icon_w = icon_h * 1.6f;
+        float pad = ImGui::GetStyle().FramePadding.x;
+        
+        ImVec2 icon_pos = ImVec2(rect_max.x - icon_w - pad, rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
+        
+        ImU32 bat_col = ImGui::GetColorU32(ImGuiCol_Text);
+        if (dev.battery_state == SDL_POWERSTATE_CHARGING || dev.battery_state == SDL_POWERSTATE_CHARGED) {
+            bat_col = IM_COL32(50, 255, 50, 255);
+        } else if (dev.battery_percent >= 0) {
+            if (dev.battery_percent <= 20) bat_col = IM_COL32(255, 50, 50, 255);
+            else if (dev.battery_percent <= 50) bat_col = IM_COL32(255, 200, 50, 255);
+            else bat_col = IM_COL32(50, 255, 50, 255);
+        }
+        
+        // Draw Battery Body
+        float body_w = icon_w * 0.85f;
+        float term_w = icon_w * 0.15f;
+        float term_h = icon_h * 0.4f;
+        
+        draw_list->AddRect(icon_pos, icon_pos + ImVec2(body_w, icon_h), bat_col, 0.0f, 0, 2.0f);
+        draw_list->AddRectFilled(icon_pos + ImVec2(body_w, (icon_h - term_h) * 0.5f), 
+                                 icon_pos + ImVec2(icon_w, (icon_h + term_h) * 0.5f), bat_col);
+                                 
+        // Draw Level
+        if (dev.battery_percent >= 0) {
+            float fill_pct = dev.battery_percent / 100.0f;
+            float fill_w = (body_w - 4.0f) * fill_pct;
+            if (fill_w > 0) {
+                draw_list->AddRectFilled(icon_pos + ImVec2(2.0f, 2.0f), 
+                                         icon_pos + ImVec2(2.0f + fill_w, icon_h - 2.0f), bat_col);
+            }
+        }
+        
+        // Charging indicator
+        if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
+            ImVec2 center = icon_pos + ImVec2(body_w * 0.5f, icon_h * 0.5f);
+            draw_list->AddLine(center + ImVec2(-3, 0), center + ImVec2(3, 0), IM_COL32(255,255,255,255), 2.0f);
+            draw_list->AddLine(center + ImVec2(0, -3), center + ImVec2(0, 3), IM_COL32(255,255,255,255), 2.0f);
+        }
+    }
+    
+    if (header_open) {
         ImGui::Indent();
+        
+        // Show detailed battery info
+        if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+            const char* state_str = "Unknown";
+            switch (dev.battery_state) {
+                case SDL_POWERSTATE_ON_BATTERY: state_str = "On Battery"; break;
+                case SDL_POWERSTATE_NO_BATTERY: state_str = "No Battery"; break;
+                case SDL_POWERSTATE_CHARGING: state_str = "Charging"; break;
+                case SDL_POWERSTATE_CHARGED: state_str = "Fully Charged"; break;
+                default: break;
+            }
+            
+            ImGui::Text("Battery: %s", state_str);
+            if (dev.battery_percent >= 0) {
+                ImGui::SameLine();
+                ImGui::Text("(%d%%)", dev.battery_percent);
+                
+                // Draw battery level bar
+                float battery_fraction = dev.battery_percent / 100.0f;
+                ImVec4 bar_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f);
+                if (dev.battery_percent < 30) {
+                    bar_color = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+                } else if (dev.battery_percent < 70) {
+                    bar_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
+                }
+                
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
+                ImGui::ProgressBar(battery_fraction, ImVec2(-1, 0), "");
+                ImGui::PopStyleColor();
+            }
+        }
+        
         DrawDeviceVisualizer(dev, deviceManager, preferencesManager);
         ImGui::Unindent();
     }
@@ -239,14 +306,68 @@ void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& prefere
     if (ImGui::Checkbox("VSync", &vsync)) {
         SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
     }
-    ImGui::InputInt("Framerate Limit", &framerate_limit);
+    ImGui::SameLine();
+    const char* label = "Framerate Limit";
+    float width = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemInnerSpacing.x;
+    if (width < 10.0f) width = 10.0f;
+    ImGui::SetNextItemWidth(width);
+    ImGui::InputInt(label, &framerate_limit);
     if (framerate_limit < 0) {
         framerate_limit = 0;
     }
 
+    static bool first_run = true;
+    static bool enable_battery_led = true;
+    if (first_run) {
+        enable_battery_led = preferencesManager.GetBool("EnableBatteryLED", true);
+        first_run = false;
+    }
+    if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
+        preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
+        preferencesManager.Save();
+    }
+
     ImGui::Separator();
-    const auto &devices = deviceManager.GetDevices();
+    auto &devices = deviceManager.GetDevices();
     ImGui::Text("Connected Devices: %d", (int)devices.size());
+
+    // Update battery info periodically (every 60 frames / ~1 second at 60fps)
+    static int frame_counter = 0;
+    if (frame_counter++ >= 60) {
+        frame_counter = 0;
+        for (auto &dev : const_cast<std::vector<DeviceState>&>(devices)) {
+            deviceManager.UpdateBatteryInfo(dev);
+
+            // Update LED based on battery level
+            if (enable_battery_led && dev.gamepad) {
+                Uint8 r = 0, g = 0, b = 0;
+                bool update_led = false;
+
+                if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
+                    // Blue for charging
+                    r = 0; g = 0; b = 255;
+                    update_led = true;
+                } else if (dev.battery_state == SDL_POWERSTATE_CHARGED) {
+                    // Green for fully charged
+                    r = 0; g = 255; b = 0;
+                    update_led = true;
+                } else if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+                    if (dev.battery_percent >= 70) {
+                        r = 0; g = 255; b = 0; // Green
+                    } else if (dev.battery_percent >= 30) {
+                        r = 255; g = 165; b = 0; // Yellow/Orange
+                    } else {
+                        r = 255; g = 0; b = 0; // Red
+                    }
+                    update_led = true;
+                }
+
+                if (update_led) {
+                    SDL_SetGamepadLED(dev.gamepad, r, g, b);
+                }
+            }
+        }
+    }
 
     for (const auto &dev : devices) {
         DrawDeviceItem(dev, deviceManager, preferencesManager);
@@ -423,11 +544,42 @@ int main(int argc, char *argv[]) {
     WebSocketServer::GetInstance().SetOutputMapper(&outputMapper);
     OSCServer::GetInstance().SetOutputMapper(&outputMapper);
 
+    static int server_update_rate = preferencesManager.GetInt("Network", "UpdateRate", 60);
+    static bool server_dynamic_rate = preferencesManager.GetBool("Network", "DynamicRate", false);
+    static Uint64 last_server_update_time = 0;
+    static int messages_sent_counter = 0;
+    static float current_messages_per_second = 0.0f;
+    static Uint64 last_mps_update_time = SDL_GetTicks();
+
     while (!done) {
         Uint64 frame_start_time = SDL_GetTicks();
         ProcessEvents(done, window, deviceManager, preferencesManager, user_ui_scale, scale_with_window, initial_width);
 
+        // Always update haptics to ensure low latency
         outputMapper.Update();
+
+        bool check_input_update = false;
+        if (server_dynamic_rate) {
+            check_input_update = true;
+        } else {
+            if (server_update_rate > 0) {
+                Uint64 interval = 1000 / server_update_rate;
+                if (frame_start_time - last_server_update_time >= interval) {
+                    check_input_update = true;
+                }
+            }
+        }
+
+        if (check_input_update && inputMapper.Update(server_dynamic_rate)) {
+            last_server_update_time = frame_start_time;
+            messages_sent_counter++;
+        }
+
+        if (frame_start_time - last_mps_update_time >= 1000) {
+            current_messages_per_second = (float)messages_sent_counter / ((frame_start_time - last_mps_update_time) / 1000.0f);
+            messages_sent_counter = 0;
+            last_mps_update_time = frame_start_time;
+        }
 
         // Start the Dear ImGui frame
         ImGui_ImplSDLRenderer3_NewFrame();
@@ -447,7 +599,7 @@ int main(int argc, char *argv[]) {
         inputMapper.DrawContent();
         outputMapper.DrawContent();
 
-        NetworkStatusWindow::Draw();
+        NetworkStatusWindow::Draw(server_update_rate, server_dynamic_rate, current_messages_per_second);
 
         // Rendering
         RenderFrame(renderer, window, vsync, framerate_limit, frame_start_time);
@@ -466,6 +618,10 @@ int main(int argc, char *argv[]) {
     // Save Network Server Configs
     OSCServer::GetInstance().SaveConfig(preferencesManager);
     WebSocketServer::GetInstance().SaveConfig(preferencesManager);
+
+    preferencesManager.SetInt("Network", "UpdateRate", server_update_rate);
+    preferencesManager.SetBool("Network", "DynamicRate", server_dynamic_rate);
+
     preferencesManager.Save();
 
     SDL_DestroyRenderer(renderer);

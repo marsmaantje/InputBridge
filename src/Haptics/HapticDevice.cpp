@@ -7,41 +7,52 @@ HapticDevice::~HapticDevice() {
     Close();
 }
 
-bool HapticDevice::Init() {
-    if (!m_joystick) return false;
+InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
+    if (!m_joystick) {
+        return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::DeviceNotFound);
+    }
 
     auto joystickID = SDL_GetJoystickID(m_joystick);
+    bool isHaptic = SDL_IsJoystickHaptic(m_joystick);
+    SDL_Log("HapticDevice::Init - Joystick ID %u, IsHaptic: %d", joystickID, isHaptic);
 
-    if (SDL_IsJoystickHaptic(m_joystick)) {
-        m_haptic = SDL_OpenHapticFromJoystick(m_joystick);
-        if (m_haptic) {
-            if (SDL_HapticRumbleSupported(m_haptic)) {
-                if (!SDL_InitHapticRumble(m_haptic)) {
+    if (isHaptic) {
+        m_haptic.Reset(SDL_OpenHapticFromJoystick(m_joystick));
+        if (!m_haptic) {
+            SDL_Log("Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
+            SDL_Log("Will continue - gamepad rumble fallback may still work");
+            // FIXED: Don't return error here - allow fallback to gamepad rumble
+            // Some controllers (like DualSense) work better with SDL_RumbleGamepad
+        } else {
+            if (SDL_HapticRumbleSupported(m_haptic.Get())) {
+                if (!SDL_InitHapticRumble(m_haptic.Get())) {
                     SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
                 }
             }
-            SDL_SetHapticGain(m_haptic, 100);
-            SDL_SetHapticAutocenter(m_haptic, 0);
-            m_running = true;
-            m_thread = std::thread(&HapticDevice::ThreadLoop, this);
-            return true;
-        } else {
-            SDL_Log("Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
+            SDL_SetHapticGain(m_haptic.Get(), 100);
+            SDL_SetHapticAutocenter(m_haptic.Get(), 0);
         }
     }
 
+    // Start the async thread for both SDL_Haptic devices (steering wheels) AND gamepads.
+    // Gamepads use SDL_RumbleGamepad but it still needs to be queued on the haptics thread
+    // to maintain thread safety and consistency with the async architecture.
     if (m_haptic || SDL_IsGamepad(joystickID)) {
         m_running = true;
         m_thread = std::thread(&HapticDevice::ThreadLoop, this);
-        return true;
     }
 
-    return false;
+    if (m_haptic || SDL_IsGamepad(joystickID)) {
+        return InputBridge::Result<bool, InputBridge::HapticError>::Ok(true);
+    }
+
+    return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::UnsupportedEffect);
 }
 
 bool HapticDevice::IsReady() const {
-    return m_haptic != nullptr;
+    return static_cast<bool>(m_haptic);
 }
+
 
 void HapticDevice::Close() {
     {
@@ -53,9 +64,8 @@ void HapticDevice::Close() {
 
     if (m_haptic) {
         StopAll();
-        SDL_CloseHaptic(m_haptic);
-        m_haptic = nullptr;
     }
+    m_haptic.Reset();  // RAII automatic cleanup
     m_constantEffectId = -1;
     m_periodicEffectId = -1;
     m_rumbleEffectId = -1;
@@ -88,15 +98,15 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
     if (!m_haptic) return -1;
 
     if (existingId != -1) {
-        if (SDL_UpdateHapticEffect(m_haptic, existingId, &effect)) {
+        if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
             return existingId;
         } else {
             // If update fails (e.g. type mismatch), destroy and recreate
-            SDL_DestroyHapticEffect(m_haptic, existingId);
+            SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
         }
     }
 
-    return SDL_CreateHapticEffect(m_haptic, &effect);
+    return SDL_CreateHapticEffect(m_haptic.Get(), &effect);
 }
 
 void HapticDevice::SetConstantForce(float level, float direction) {
@@ -113,7 +123,7 @@ void HapticDevice::SetConstantForce(float level, float direction) {
 
         m_constantEffectId = UploadEffect(effect, m_constantEffectId);
         if (m_constantEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic, m_constantEffectId, 1);
+            SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1);
         }
     });
 }
@@ -133,7 +143,7 @@ void HapticDevice::SetPeriodic(Uint16 type, float magnitude, int period, float d
 
         m_periodicEffectId = UploadEffect(effect, m_periodicEffectId);
         if (m_periodicEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic, m_periodicEffectId, 1);
+            SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1);
         }
     });
 }
@@ -167,7 +177,7 @@ void HapticDevice::SetCondition(Uint16 type, float saturation, float coefficient
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
             m_conditionEffects[type] = newId;
-            SDL_RunHapticEffect(m_haptic, newId, 1);
+            SDL_RunHapticEffect(m_haptic.Get(), newId, 1);
         }
     });
 }
@@ -185,7 +195,7 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
 
         m_rumbleEffectId = UploadEffect(effect, m_rumbleEffectId);
         if (m_rumbleEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic, m_rumbleEffectId, 1);
+            SDL_RunHapticEffect(m_haptic.Get(), m_rumbleEffectId, 1);
         }
     });
 }
@@ -193,12 +203,12 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
 void HapticDevice::UpdateEffect(SDL_HapticEffectID effectId, const SDL_HapticEffect& effect) {
     RunAsync([this, effectId, effect]() {
         if (!m_haptic) return;
-        SDL_UpdateHapticEffect(m_haptic, effectId, &effect);
+        SDL_UpdateHapticEffect(m_haptic.Get(), effectId, &effect);
     });
 }
 
 void HapticDevice::StopAll() {
     if (m_haptic) {
-        SDL_StopHapticEffects(m_haptic);
+        SDL_StopHapticEffects(m_haptic.Get());
     }
 }

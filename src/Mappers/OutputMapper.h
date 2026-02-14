@@ -10,10 +10,11 @@ struct HapticTarget;
 class PreferencesManager;
 
 struct HapticCommand {
-    enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION, GAIN } type;
+    enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION, GAIN, DUALSENSE_TRIGGER } type;
     int virtual_id;
     float fParams[8]; // Generic float storage
-    int iParams[4];   // Generic int storage
+    int iParams[10];  // Generic int storage - increased for more params
+    char sParams[2][32]; // String params: [0]=trigger ("left"/"right"/"both"), [1]=effect_type
 };
 
 class OutputMapper {
@@ -41,6 +42,11 @@ public:
     void QueuePeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
     void QueueCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms);
     void QueueSetGain(int virtual_id, int gain);
+    void QueueDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type, 
+                               int position, int strength, int end_position, 
+                               int amplitude, int frequency, int snap_force,
+                               int first_foot, int second_foot, int period,
+                               int amplitude_a, int amplitude_b);
 
 private:
     OutputMapper(const DeviceManager& deviceManager);
@@ -64,4 +70,9 @@ private:
     void TriggerPeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
     void TriggerCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms);
     void TriggerSetGain(int virtual_id, int gain);
+    void TriggerDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,
+                                 int position, int strength, int end_position,
+                                 int amplitude, int frequency, int snap_force,
+                                 int first_foot, int second_foot, int period,
+                                 int amplitude_a, int amplitude_b);
 };

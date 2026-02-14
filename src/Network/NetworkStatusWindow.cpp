@@ -3,8 +3,23 @@
 #include "WebSocketServer.h"
 #include "imgui.h"
 
-void NetworkStatusWindow::Draw() {
+void NetworkStatusWindow::Draw(int& update_rate, bool& dynamic_rate, float messages_per_second) {
     if (ImGui::Begin("Network Server")) {
+        ImGui::Text("Update Rate");
+        ImGui::SameLine();
+        ImGui::Checkbox("Dynamic Rate", &dynamic_rate);
+        if (dynamic_rate) {
+            ImGui::SameLine();
+            ImGui::Text("Messages/sec: %.1f", messages_per_second);
+        } else {
+            ImGui::SameLine();
+            const char* label = "Target Rate (Hz)";
+            float width = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemInnerSpacing.x;
+            if (width < 10.0f) width = 10.0f;
+            ImGui::SetNextItemWidth(width);
+            ImGui::SliderInt(label, &update_rate, 1, 200);
+        }
+        ImGui::Separator();
         if (ImGui::BeginTabBar("NetworkTabs")) {
             if (ImGui::BeginTabItem("OSC Server")) {
                 OSCServer::GetInstance().DrawContent();

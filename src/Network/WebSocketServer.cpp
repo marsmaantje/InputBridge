@@ -6,7 +6,6 @@
 #if ENABLE_WEBSOCKETS
 
 #include "Protocols/ProtocolManager.h"
-#include "Protocols/WebSocketProtocol.h"
 #include "imgui.h"
 #include <deque>
 #include <map>
@@ -40,12 +39,8 @@ WebSocketServer &WebSocketServer::GetInstance() {
 }
 
 WebSocketServer::WebSocketServer() : m_selectedDeviceId(0), m_Impl(new Impl) {
-    m_Impl->protocol = ProtocolManager::GetInstance().GetProtocol("WebSocket");
-    if (!m_Impl->protocol) {
-        m_Impl->protocol = std::make_shared<WebSocketProtocol>();
-        ProtocolManager::GetInstance().RegisterProtocol(m_Impl->protocol);
-    }
-    m_Impl->selectedProtocol = m_Impl->protocol->getProtocolName();
+    // Default to Marsmaantje (New)
+    SetProtocol("Marsmaantje (New)");
 }
 
 WebSocketServer::~WebSocketServer() {
@@ -100,7 +95,9 @@ void WebSocketServer::Start(int port) {
                                        m_Impl->protocol->parse(std::string(message));
                                    }
                                    // Echo the message back to C#
-                                   ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
+                                   // ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
+                                   // Note: The above line was problematic if "WebSocket" protocol doesn't exist.
+                                   // We rely on m_Impl->protocol now.
 
                                    if (m_OutputMapper) {
                                        try {
@@ -109,7 +106,7 @@ void WebSocketServer::Start(int port) {
                                            if (type == "haptic" || type == "gamepad" || type == "steering_wheel") {
                                                std::string effect = json.value("effect", "");
                                                int device = json.value("device", 0);
-                                               
+
                                                nlohmann::json data;
                                                if (json.contains("params")) {
                                                    data = json["params"];
@@ -122,10 +119,10 @@ void WebSocketServer::Start(int port) {
                                                if (effect == "rumble") {
                                                    float low = data.value("low", 0.0f);
                                                    if (data.contains("large_magnitude")) low = data.value("large_magnitude", 0.0f);
-                                                   
+
                                                    float high = data.value("high", 0.0f);
                                                    if (data.contains("small_magnitude")) high = data.value("small_magnitude", 0.0f);
-                                                   
+
                                                    int duration = data.value("duration", 0);
                                                    if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
 
@@ -139,7 +136,7 @@ void WebSocketServer::Start(int port) {
                                                } else if (effect == "periodic") {
                                                    int duration = data.value("duration", 0);
                                                    if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
-                                                   
+
                                                    m_OutputMapper->QueuePeriodic(device, data.value("strength", 0.0f), data.value("period", 0), data.value("magnitude", 0.0f), data.value("offset", 0.0f), data.value("phase", 0), duration);
                                                } else if (effect == "condition") {
                                                    int duration = data.value("duration", 0);
@@ -247,21 +244,15 @@ void WebSocketServer::SetSelectedDevice(int id) { m_selectedDeviceId = id; }
 
 int WebSocketServer::GetSelectedDevice() const { return m_selectedDeviceId; }
 
-void WebSocketServer::SetProtocolVersion(int version) {
+void WebSocketServer::SetProtocol(const std::string& name) {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
-    if (wsProtocol) {
-        wsProtocol->setProtocolVersion((WebSocketProtocol::ProtocolVersion)version);
-    }
+    m_Impl->protocol = ProtocolManager::GetInstance().GetProtocol(name);
+    if (m_Impl->protocol) m_Impl->selectedProtocol = name;
 }
 
-int WebSocketServer::GetProtocolVersion() const {
+std::string WebSocketServer::GetProtocol() const {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
-    if (wsProtocol) {
-        return (int)wsProtocol->getProtocolVersion();
-    }
-    return 0;
+    return m_Impl->selectedProtocol;
 }
 
 void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
@@ -345,11 +336,11 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
 
 void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
     int port = prefs.GetInt("WebSocket", "Port", 4269);
-    int protocol = prefs.GetInt("WebSocket", "Protocol", 0);
+    std::string protocol = prefs.GetString("WebSocket", "Protocol", "Marsmaantje (New)");
     bool enabled = prefs.GetBool("WebSocket", "Enabled", false);
 
     SetPort(port);
-    SetProtocolVersion(protocol);
+    SetProtocol(protocol);
 
     if (enabled) {
         Start(port);
@@ -358,19 +349,16 @@ void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
 
 void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
     int port;
-    int protocol = 0;
+    std::string protocol;
     bool running;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
         port = m_Impl->port;
         running = m_Impl->running;
-        auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
-        if (wsProtocol) {
-             protocol = (int)wsProtocol->getProtocolVersion();
-        }
+        protocol = m_Impl->selectedProtocol;
     }
     prefs.SetInt("WebSocket", "Port", port);
-    prefs.SetInt("WebSocket", "Protocol", protocol);
+    prefs.SetString("WebSocket", "Protocol", protocol);
     prefs.SetBool("WebSocket", "Enabled", running);
 }
 
@@ -416,18 +404,18 @@ void WebSocketServer::DrawContent() {
     // WebSocket Format selection
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
-        auto wsProtocol = std::dynamic_pointer_cast<WebSocketProtocol>(m_Impl->protocol);
-        if (wsProtocol) {
-            int currentFormat = (int)wsProtocol->getProtocolVersion();
-            if (ImGui::Combo(
-                    "Format", &currentFormat,
-                    [](void *, int idx, const char **out_text) {
-                        *out_text = WebSocketProtocol::GetVersionLabel(idx);
-                        return true;
-                    },
-                    nullptr, WebSocketProtocol::GetVersionCount())) {
-                wsProtocol->setProtocolVersion((WebSocketProtocol::ProtocolVersion)currentFormat);
-            }
+        std::vector<std::string> protocols = ProtocolManager::GetInstance().GetAvailableProtocols();
+        int currentIdx = -1;
+        for(int i=0; i<protocols.size(); ++i) {
+            if(protocols[i] == m_Impl->selectedProtocol) currentIdx = i;
+        }
+
+        if (ImGui::Combo("Format", &currentIdx, [](void* data, int idx, const char** out_text) {
+            auto* protos = (std::vector<std::string>*)data;
+            *out_text = (*protos)[idx].c_str();
+            return true;
+        }, &protocols, protocols.size())) {
+            SetProtocol(protocols[currentIdx]);
         }
     }
 

@@ -1,5 +1,5 @@
 #include "WebSocketProtocol.h"
-#include "../Mappers/OutputMapper.h"
+#include "Mappers/OutputMapper.h"
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -105,6 +105,28 @@ void WebSocketProtocol::parse(const std::string &message) {
             float small_magnitude = params.at("small_magnitude");
             int duration_ms = params.at("duration_ms");
             OutputMapper::GetInstance().QueueRumble(0, large_magnitude, small_magnitude, duration_ms);
+        } else if (type == "gamepad" && effect == "dualsense_trigger") {
+            // DualSense adaptive trigger effect
+            std::string trigger = params.value("trigger", "left");  // "left", "right", or "both"
+            std::string effect_type = params.value("effect_type", "off");  // off, feedback, weapon, vibration, bow, galloping, machine
+            
+            int position = params.value("position", 0);
+            int strength = params.value("strength", 5);
+            int end_position = params.value("end_position", 9);
+            int amplitude = params.value("amplitude", 5);
+            int frequency = params.value("frequency", 10);
+            int snap_force = params.value("snap_force", 5);
+            int first_foot = params.value("first_foot", 2);
+            int second_foot = params.value("second_foot", 7);
+            int period = params.value("period", 10);
+            int amplitude_a = params.value("amplitude_a", 4);
+            int amplitude_b = params.value("amplitude_b", 4);
+            
+            OutputMapper::GetInstance().QueueDualSenseTrigger(0, trigger.c_str(), effect_type.c_str(),
+                                                              position, strength, end_position,
+                                                              amplitude, frequency, snap_force,
+                                                              first_foot, second_foot, period,
+                                                              amplitude_a, amplitude_b);
         } else if (type == "steering_wheel") {
             if (effect == "constant") {
                 float strength = params.at("strength");
