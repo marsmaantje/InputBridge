@@ -47,10 +47,20 @@ class InputMapper {
         int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0
     };
 
+    struct ButtonToAnalogMapping {
+        std::string device_guid;
+        SDL_JoystickID instance_id = 0;
+        int button_index = 0;
+        std::string target_output_name;
+        float on_value = 1.0f;
+        float off_value = 0.0f;
+    };
+
     struct MappingProfile {
         std::string name;
         std::map<std::string, InputSource> outputToInput;
         std::vector<HapticTarget> hapticTargets;
+        std::vector<ButtonToAnalogMapping> buttonMappings;
     };
 
     static InputMapper &GetInstance();
