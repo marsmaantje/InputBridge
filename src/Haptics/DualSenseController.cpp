@@ -1,13 +1,6 @@
 /**
  * @file DualSenseController.cpp
- * @brief Implementation of Sony DualSense controller with WORKING adaptive triggers
- * 
- * This fixes the critical bugs in the original implementation:
- * 1. Corrected USB report size (63 bytes, not 48)
- * 2. Corrected Bluetooth trigger offsets (22/33, not 23/34)
- * 3. Fixed USB/Bluetooth detection logic
- * 4. Proper feature flag configuration
- * 5. Bluetooth sequence numbering
+ * @brief Implementation of Sony DualSense controller with adaptive triggers
  * 
  * @author InputBridge Team
  * @version 2.1
@@ -21,21 +14,19 @@
 #include <cstring>
 #include <cctype>
 
-using namespace ExtendInput::DataTools::DualSense;
-
 // ==================== OutputState Implementation ====================
 
 DualSense::OutputState::OutputState() 
     : rightRumble(0)
     , leftRumble(0)
-    , ledBrightness(255)
+    , ledBrightness(0)
     , playerLEDs(0)
     , muteLED(0)
 {
     rightTriggerEffect.fill(0);
     leftTriggerEffect.fill(0);
-    // Default LED color (blue)
-    ledColor = RGBColor(0, 0, 255);
+    // Black LED = don't change
+    ledColor = RGBColor(0, 0, 0);
 }
 
 void DualSense::OutputState::Reset() {
@@ -43,8 +34,8 @@ void DualSense::OutputState::Reset() {
     leftRumble = 0;
     rightTriggerEffect.fill(0);
     leftTriggerEffect.fill(0);
-    ledColor = RGBColor(0, 0, 255);
-    ledBrightness = 255;
+    ledColor = RGBColor(0, 0, 0);
+    ledBrightness = 0;
     playerLEDs = 0;
     muteLED = 0;
 }
@@ -83,7 +74,7 @@ bool DualSenseController::IsDualSense() const {
             (product == DUALSENSE_PRODUCT_ID || product == DUALSENSE_EDGE_PRODUCT_ID));
 }
 
-// ==================== Connection Detection (FIXED) ====================
+// ==================== Connection Detection ====================
 
 DualSense::ConnectionType DualSenseController::DetectConnectionType() const {
     if (!m_joystick) {
@@ -152,9 +143,11 @@ DualSense::ConnectionType DualSenseController::DetectConnectionType() const {
 }
 
 DualSense::ConnectionType DualSenseController::GetConnectionType() const {
+    // Detect on first call (cached)
     if (!m_connectionTypeDetected) {
+        // Cast away const to cache the result
         const_cast<DualSenseController*>(this)->m_connectionType = DetectConnectionType();
-        m_connectionTypeDetected = true;
+        const_cast<DualSenseController*>(this)->m_connectionTypeDetected = true;
     }
     return m_connectionType;
 }
@@ -203,31 +196,31 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
     
     // Apply the effect using DualSenseTriggerEffectGenerator
     if (effectType == "off") {
-        return DualSenseTriggerEffectGenerator::Off(triggerData, 0);
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(triggerData, 0);
     }
     else if (effectType == "feedback") {
         uint8_t position = getParam("position", 0, 0, 9);
         uint8_t strength = getParam("strength", 5, 0, 8);
-        return DualSenseTriggerEffectGenerator::Feedback(triggerData, 0, position, strength);
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Feedback(triggerData, 0, position, strength);
     }
     else if (effectType == "weapon") {
         uint8_t startPos = getParam("start_position", 2, 2, 7);
         uint8_t endPos = getParam("end_position", 7, 0, 8);
         uint8_t strength = getParam("strength", 5, 0, 8);
-        return DualSenseTriggerEffectGenerator::Weapon(triggerData, 0, startPos, endPos, strength);
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Weapon(triggerData, 0, startPos, endPos, strength);
     }
     else if (effectType == "vibration") {
         uint8_t position = getParam("position", 0, 0, 9);
         uint8_t amplitude = getParam("amplitude", 5, 0, 8);
         uint8_t frequency = getParam("frequency", 10, 0, 255);
-        return DualSenseTriggerEffectGenerator::Vibration(triggerData, 0, position, amplitude, frequency);
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Vibration(triggerData, 0, position, amplitude, frequency);
     }
     else if (effectType == "bow") {
         uint8_t startPos = getParam("start_position", 0, 0, 8);
         uint8_t endPos = getParam("end_position", 8, 0, 8);
         uint8_t strength = getParam("strength", 5, 0, 8);
         uint8_t snapForce = getParam("snap_force", 5, 0, 8);
-        return DualSenseTriggerEffectGenerator::Bow(triggerData, 0, startPos, endPos, strength, snapForce);
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Bow(triggerData, 0, startPos, endPos, strength, snapForce);
     }
     else if (effectType == "galloping") {
         uint8_t startPos = getParam("start_position", 0, 0, 9);
@@ -235,7 +228,7 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
         uint8_t firstFoot = getParam("first_foot", 2, 0, 6);
         uint8_t secondFoot = getParam("second_foot", 7, 0, 7);
         uint8_t frequency = getParam("frequency", 10, 0, 255);
-        return DualSenseTriggerEffectGenerator::Galloping(triggerData, 0, startPos, endPos,
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Galloping(triggerData, 0, startPos, endPos,
                                                           firstFoot, secondFoot, frequency);
     }
     else if (effectType == "machine") {
@@ -245,18 +238,18 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
         uint8_t amplitudeB = getParam("amplitude_b", 4, 0, 7);
         uint8_t frequency = getParam("frequency", 10, 0, 255);
         uint8_t period = getParam("period", 0, 0, 2);
-        return DualSenseTriggerEffectGenerator::Machine(triggerData, 0, startPos, endPos,
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Machine(triggerData, 0, startPos, endPos,
                                                         amplitudeA, amplitudeB, frequency, period);
     }
     else {
         SDL_Log("DualSenseController: Unknown effect type '%s'", effectType.c_str());
-        return DualSenseTriggerEffectGenerator::Off(triggerData, 0);
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(triggerData, 0);
     }
 }
 
 void DualSenseController::DisableTriggerEffects() {
-    DualSenseTriggerEffectGenerator::Off(m_outputState.leftTriggerEffect.data(), 0);
-    DualSenseTriggerEffectGenerator::Off(m_outputState.rightTriggerEffect.data(), 0);
+    ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.leftTriggerEffect.data(), 0);
+    ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.rightTriggerEffect.data(), 0);
     ApplyOutputState();
 }
 
@@ -285,7 +278,7 @@ void DualSenseController::SetRumble(uint8_t leftIntensity, uint8_t rightIntensit
     m_outputState.rightRumble = rightIntensity;
 }
 
-// ==================== Protocol Implementation (FIXED) ====================
+// ==================== Protocol Implementation ====================
 
 void DualSenseController::ApplyOutputState() {
     RunAsync([this]() {
@@ -305,7 +298,7 @@ void DualSenseController::ApplyOutputState() {
 }
 
 bool DualSenseController::SendUSBOutput() {
-    // FIXED: USB report is 63 bytes, not 48!
+    // USB report is 63 bytes (bluetooth 48)
     std::array<uint8_t, USB_REPORT_SIZE> data{};
     
     data[0] = USB_REPORT_ID;  // 0x02
@@ -315,8 +308,22 @@ bool DualSenseController::SendUSBOutput() {
     data[1] = USB_FLAG_ENABLE_HID | USB_FLAG_ENABLE_RUMBLE;
     
     // Feature flags byte 2 (offset 2)
-    // Enable LED color and player LEDs
-    data[2] = FLAG2_ENABLE_LED_COLOR | FLAG2_ENABLE_PLAYER_LEDS | FLAG2_ENABLE_HAPTICS;
+    // Only enable LED/player flags if they're actually being set
+    uint8_t flags2 = FLAG2_ENABLE_HAPTICS;  // Always enable haptics for triggers
+    
+    // Only enable LED if not black
+    if (m_outputState.ledColor.red != 0 || 
+        m_outputState.ledColor.green != 0 || 
+        m_outputState.ledColor.blue != 0) {
+        flags2 |= FLAG2_ENABLE_LED_COLOR;
+    }
+    
+    // Only enable player LEDs if set
+    if (m_outputState.playerLEDs != 0) {
+        flags2 |= FLAG2_ENABLE_PLAYER_LEDS;
+    }
+    
+    data[2] = flags2;
     
     // Rumble motors (offset 3-4)
     data[3] = m_outputState.rightRumble;
@@ -325,10 +332,10 @@ bool DualSenseController::SendUSBOutput() {
     // Mute LED (offset 9)
     data[9] = m_outputState.muteLED;
     
-    // FIXED: Right trigger at offset 11 (was correct)
+    // Right trigger at offset 11
     std::memcpy(&data[USB_RIGHT_TRIGGER_OFFSET], m_outputState.rightTriggerEffect.data(), 11);
     
-    // FIXED: Left trigger at offset 22 (was correct)
+    // Left trigger at offset 22
     std::memcpy(&data[USB_LEFT_TRIGGER_OFFSET], m_outputState.leftTriggerEffect.data(), 11);
     
     // LED color (offset 39-41)
@@ -358,12 +365,12 @@ bool DualSenseController::SendUSBOutput() {
 }
 
 bool DualSenseController::SendBluetoothOutput() {
-    // Bluetooth report is 78 bytes (correct)
+    // Bluetooth report is 78 bytes
     std::array<uint8_t, BT_REPORT_SIZE> data{};
     
     data[0] = BT_REPORT_ID;  // 0x31
     
-    // FIXED: Sequence byte (offset 1)
+    // Sequence byte (offset 1)
     // Increment sequence counter (0-15) and set enable flag
     m_bluetoothSequence = (m_bluetoothSequence + 1) & 0x0F;
     data[1] = 0x10 | m_bluetoothSequence;  // 0x10 = enable flag
@@ -372,7 +379,22 @@ bool DualSenseController::SendBluetoothOutput() {
     data[2] = BT_FLAG_ENABLE_RUMBLE_EMULATION;
     
     // Feature flags byte 2 (offset 3)
-    data[3] = FLAG2_ENABLE_LED_COLOR | FLAG2_ENABLE_PLAYER_LEDS | FLAG2_ENABLE_HAPTICS;
+    // Only enable LED/player flags if they're actually being set
+    uint8_t flags2 = FLAG2_ENABLE_HAPTICS;  // Always enable haptics for triggers
+    
+    // Only enable LED if not black
+    if (m_outputState.ledColor.red != 0 || 
+        m_outputState.ledColor.green != 0 || 
+        m_outputState.ledColor.blue != 0) {
+        flags2 |= FLAG2_ENABLE_LED_COLOR;
+    }
+    
+    // Only enable player LEDs if set
+    if (m_outputState.playerLEDs != 0) {
+        flags2 |= FLAG2_ENABLE_PLAYER_LEDS;
+    }
+    
+    data[3] = flags2;
     
     // Rumble motors (offset 4-5)
     data[4] = m_outputState.rightRumble;
@@ -381,7 +403,7 @@ bool DualSenseController::SendBluetoothOutput() {
     // Mute LED (offset 9)
     data[9] = m_outputState.muteLED;
     
-    // FIXED: Bluetooth uses different offsets!
+    // Bluetooth uses different offsets!
     // Right trigger at offset 22 (not 23!)
     std::memcpy(&data[BT_RIGHT_TRIGGER_OFFSET], m_outputState.rightTriggerEffect.data(), 11);
     

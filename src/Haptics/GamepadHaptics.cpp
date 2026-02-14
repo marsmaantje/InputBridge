@@ -1,11 +1,9 @@
 /**
- * @file GamepadHaptics.cpp (CRITICAL FIX - Steam Controller Freeze)
- * @brief Fixed implementation that doesn't block the haptic thread
- * 
- * CRITICAL FIX: Removed all blocking sleep() calls that were freezing the haptic thread!
+ * @file GamepadHaptics.cpp (Steam Controller Fix)
+ * @brief Fixed Steam Controller support - uses only standard rumble
  * 
  * @author InputBridge Team
- * @version 3.1
+ * @version 3.3
  * @date 2026-02-14
  */
 
@@ -13,7 +11,6 @@
 #include <SDL3/SDL_gamepad.h>
 #include <algorithm>
 #include <cstring>
-#include <chrono>
 
 // ==================== Initialization ====================
 
@@ -34,6 +31,8 @@ InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
     }
     else if (IsSteamController()) {
         SDL_Log("GamepadHaptics: Initialized as Steam Controller");
+        SDL_Log("  Note: Steam Controller uses standard rumble only");
+        SDL_Log("  Trackpad haptics not supported via SDL (requires Steam Input API)");
     }
     else {
         SDL_Log("GamepadHaptics: Initialized as generic gamepad");
@@ -134,56 +133,13 @@ int GamepadHaptics::Rumble(float largeMagnitude, float smallMagnitude, uint32_t 
     smallMagnitude = std::clamp(smallMagnitude, 0.0f, 1.0f);
     
     RunAsync([this, largeMagnitude, smallMagnitude, durationMs]() {
-        // CRITICAL FIX: Steam Controller special handling
-        // Added small delay between commands to prevent freeze
+        // FIXED: Steam Controller uses ONLY standard rumble
+        // Trackpad haptics are not supported via SDL (would need Steam Input API)
         if (IsSteamController()) {
-            SDL_Log("Steam Controller: Sending haptic pulses");
-            
-            // Send left pad pulse
-            if (largeMagnitude > 0.0f) {
-                SendSteamControllerHaptic(0, largeMagnitude, durationMs);
-            }
-            
-            // CRITICAL FIX: Small delay between commands prevents controller freeze
-            SDL_Delay(5);  // 5ms delay - doesn't block the thread significantly
-            
-            // Send right pad pulse
-            if (smallMagnitude > 0.0f) {
-                SendSteamControllerHaptic(1, smallMagnitude, durationMs);
-            }
-            
-            SDL_Log("Steam Controller: Haptic pulses sent successfully");
-            return;
+            SDL_Log("Steam Controller: Using standard rumble motor");
         }
         
-        // CRITICAL FIX: DualSense - Use rumble motors WITHOUT blocking sleep
-        if (m_dualSense) {
-            const uint8_t left = static_cast<uint8_t>(largeMagnitude * 255);
-            const uint8_t right = static_cast<uint8_t>(smallMagnitude * 255);
-            
-            m_dualSense->SetRumble(left, right);
-            m_dualSense->ApplyOutputState();
-            
-            // CRITICAL FIX: Don't block the thread with sleep!
-            // Instead, schedule a stop command after the duration
-            if (durationMs > 0) {
-                // Schedule stop on a separate timer (not blocking the haptic thread)
-                std::thread([this, durationMs]() {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(durationMs));
-                    
-                    // Stop rumble after duration
-                    RunAsync([this]() {
-                        if (m_dualSense) {
-                            m_dualSense->SetRumble(0, 0);
-                            m_dualSense->ApplyOutputState();
-                        }
-                    });
-                }).detach();
-            }
-            return;
-        }
-        
-        // Standard gamepad rumble
+        // ALL controllers (including Steam Controller) use standard SDL rumble
         SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
         SDL_Gamepad* gamepad = SDL_GetGamepadFromID(id);
         
@@ -194,6 +150,9 @@ int GamepadHaptics::Rumble(float largeMagnitude, float smallMagnitude, uint32_t 
             if (!SDL_RumbleGamepad(gamepad, lowFreq, highFreq, durationMs)) {
                 SDL_Log("GamepadHaptics::Rumble - SDL_RumbleGamepad failed: %s",
                        SDL_GetError());
+            } else {
+                SDL_Log("GamepadHaptics::Rumble - Success (low=%d, high=%d, duration=%dms)",
+                       lowFreq, highFreq, durationMs);
             }
         } else {
             SDL_Log("GamepadHaptics::Rumble - No gamepad handle available");
@@ -209,8 +168,8 @@ int GamepadHaptics::SendDualSenseTrigger(const char* trigger,
                                          const char* effectType,
                                          const std::map<std::string, int>& params) {
     if (!m_dualSense) {
-        // Silently ignore if not a DualSense
-        return 0;
+        SDL_Log("GamepadHaptics::SendDualSenseTrigger - Not a DualSense controller");
+        return -1;  // FIXED: Return error, not silent success
     }
     
     return m_dualSense->SetTriggerEffect(trigger, effectType, params);
@@ -229,69 +188,9 @@ int GamepadHaptics::SendXboxImpulseTrigger(uint8_t leftIntensity,
                                           uint8_t rightIntensity,
                                           uint32_t durationMs) {
     if (!m_xbox) {
-        // Silently ignore if not an Xbox controller
-        return 0;
+        SDL_Log("GamepadHaptics::SendXboxImpulseTrigger - Not an Xbox controller");
+        return -1;  // FIXED: Return error, not silent success
     }
     
     return m_xbox->SetImpulseTriggers(leftIntensity, rightIntensity, durationMs);
-}
-
-// ==================== Steam Controller (FIXED) ====================
-
-void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uint32_t durationMs) {
-    if (magnitude <= 0.0f) {
-        return;
-    }
-    
-    magnitude = std::clamp(magnitude, 0.0f, 1.0f);
-    
-    // CRITICAL FIX: Simplified struct to avoid alignment issues
-    #pragma pack(push, 1)
-    struct HapticPulseCommand {
-        uint8_t reportId;           // 0x87
-        uint8_t messageType;        // 11
-        uint8_t messageLength;      // sizeof(HapticPulseData)
-        uint8_t whichPad;           // 0=left, 1=right
-        uint16_t pulseDuration;     // microseconds
-        uint16_t pulseInterval;     // microseconds
-        uint16_t pulseCount;        // number of pulses
-        int16_t dBgain;            // gain
-        uint8_t priority;           // priority
-        uint8_t padding[53];        // Pad to 64 bytes
-    };
-    #pragma pack(pop)
-    
-    HapticPulseCommand cmd{};
-    cmd.reportId = STEAM_CONTROLLER_REPORT_ID;  // 0x87
-    cmd.messageType = STEAM_HAPTIC_PULSE_MSG_ID;  // 11
-    cmd.messageLength = 9;  // sizeof(whichPad + pulseDuration + ... + priority)
-    
-    cmd.whichPad = pad;
-    
-    // Calculate pulse parameters
-    cmd.pulseDuration = static_cast<uint16_t>(magnitude * 2000.0f);  // 0-2ms
-    cmd.pulseInterval = 3000;  // 3ms between pulses
-    
-    const uint16_t singlePulseCycleMs = 5;
-    uint16_t pulseCount = 1;
-    if (durationMs > singlePulseCycleMs) {
-        pulseCount = static_cast<uint16_t>(durationMs / singlePulseCycleMs);
-        // CRITICAL FIX: Cap pulse count to prevent excessive commands
-        pulseCount = std::min(pulseCount, static_cast<uint16_t>(200));
-    }
-    cmd.pulseCount = pulseCount;
-    
-    cmd.dBgain = 0;
-    cmd.priority = 0;
-    
-    SDL_Log("Steam Controller: Pad=%d, Duration=%dus, Interval=%dus, Count=%d",
-           pad, cmd.pulseDuration, cmd.pulseInterval, cmd.pulseCount);
-    
-    // CRITICAL FIX: Use non-blocking send with error handling
-    if (!SDL_SendJoystickEffect(m_joystick, reinterpret_cast<const uint8_t*>(&cmd), 64)) {
-        SDL_Log("Steam Controller: Send failed (pad %d) - %s", pad, SDL_GetError());
-        // Don't throw or return error - just log and continue
-    } else {
-        SDL_Log("Steam Controller: Command sent successfully (pad %d)", pad);
-    }
 }
