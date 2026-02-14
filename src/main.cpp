@@ -13,6 +13,7 @@
 #include "Devices/DeviceManager.h"
 #include "Devices/DeviceState.h"
 #include "Mappers/InputMapper.h"
+#include "Mappers/OutputMapper.h"
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
@@ -27,10 +28,416 @@
 #include "Visualizers/GenericVisualizer.h"
 #include "Visualizers/SteeringWheelVisualizer.h"
 #include "Visualizers/GamepadHapticsVisualizer.h"
+#include "Visualizers/WiimoteVisualizer.h"
 #include "Visualizers/SteeringWheelHapticsVisualizer.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
+
+void UpdateUIScale(SDL_Window *window, float& user_ui_scale, bool scale_with_window, int initial_width, PreferencesManager& preferencesManager) {
+    float scale = SDL_GetWindowDisplayScale(window);
+    float density = SDL_GetWindowPixelDensity(window);
+    if (density <= 0.0f) density = 1.0f;
+    if (scale <= 0.0f) scale = 1.0f;
+    float ui_scale = scale / density;
+
+    if (scale_with_window) {
+        int w, h;
+        SDL_GetWindowSize(window, &w, &h);
+        user_ui_scale = (float)w / (float)initial_width;
+        preferencesManager.SetFloat("UIScale", user_ui_scale);
+    }
+    ui_scale *= user_ui_scale;
+
+    ImGuiStyle &style = ImGui::GetStyle();
+    style = ImGuiStyle(); // Reset to default style to avoid compounding scales
+    ImGui::StyleColorsDark();
+    style.ScaleAllSizes(ui_scale);
+    if (style.WindowBorderHoverPadding <= 0.0f) style.WindowBorderHoverPadding = 1.0f;
+    ImGui::GetIO().FontGlobalScale = ui_scale;
+}
+
+void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
+    static GamepadVisualizer gamepad_viz;
+    static GenericVisualizer generic_viz;
+    static SteeringWheelVisualizer wheel_viz;
+    static FlightStickVisualizer flight_stick_viz;
+    static GamepadHapticsVisualizer gamepad_haptics_viz;
+    static SteeringWheelHapticsVisualizer wheel_haptics_viz;
+    static WiimoteVisualizer wiimote_viz;
+
+    std::string guid = DeviceManager::GetDeviceGUIDString(dev);
+    bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
+    std::string preferred_viz = preferencesManager.GetVisualizerPreference(guid);
+
+    if (apply_pref) {
+        preferencesManager.MarkPreferenceApplied(dev.instance_id);
+    }
+
+    auto TabItem = [&](const char *label, DeviceVisualizer &visualizer) {
+        ImGuiTabItemFlags flags = 0;
+        if (apply_pref && preferred_viz == label) {
+            flags |= ImGuiTabItemFlags_SetSelected;
+        }
+
+        if (ImGui::BeginTabItem(label, nullptr, flags)) {
+            visualizer.Draw(dev);
+            if (preferencesManager.GetVisualizerPreference(guid) != label) {
+                preferencesManager.SetVisualizerPreference(guid, label);
+                preferencesManager.Save();
+            }
+            ImGui::EndTabItem();
+        }
+    };
+
+    if (dev.is_gamepad) {
+        if (ImGui::BeginTabBar("DeviceMode")) {
+            // TabItem("Standard Layout", gamepad_viz);
+            TabItem("Raw Inputs", generic_viz);
+            if (ImGui::BeginTabItem("Haptic Test")) {
+                gamepad_haptics_viz.Draw(dev, deviceManager);
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+    } else {
+        if (ImGui::BeginTabBar("DeviceMode")) {
+            TabItem("Raw Inputs", generic_viz);
+
+            SDL_JoystickType type = SDL_GetJoystickType(dev.joystick);
+            if (type == SDL_JOYSTICK_TYPE_WHEEL || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
+                // TabItem("Steering Wheel", wheel_viz);
+            }
+            if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK || type == SDL_JOYSTICK_TYPE_THROTTLE || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
+                // TabItem("Flight Stick", flight_stick_viz);
+            }
+            if (dev.name.find("Nintendo") != std::string::npos || dev.name.find("Wiimote") != std::string::npos) {
+                TabItem("Wiimote", wiimote_viz);
+            }
+            if (type == SDL_JOYSTICK_TYPE_WHEEL) {
+                if (ImGui::BeginTabItem("Haptic Test")) {
+                    wheel_haptics_viz.Draw(dev, deviceManager);
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+    }
+}
+
+void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
+    ImGui::PushID((int)dev.instance_id);
+    std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
+    
+    bool header_open = ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+    // Draw battery indicator if available
+    if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2 rect_min = ImGui::GetItemRectMin();
+        ImVec2 rect_max = ImGui::GetItemRectMax();
+        
+        float icon_h = ImGui::GetTextLineHeight();
+        float icon_w = icon_h * 1.6f;
+        float pad = ImGui::GetStyle().FramePadding.x;
+        
+        ImVec2 icon_pos = ImVec2(rect_max.x - icon_w - pad, rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
+        
+        ImU32 bat_col = ImGui::GetColorU32(ImGuiCol_Text);
+        if (dev.battery_state == SDL_POWERSTATE_CHARGING || dev.battery_state == SDL_POWERSTATE_CHARGED) {
+            bat_col = IM_COL32(50, 255, 50, 255);
+        } else if (dev.battery_percent >= 0) {
+            if (dev.battery_percent <= 20) bat_col = IM_COL32(255, 50, 50, 255);
+            else if (dev.battery_percent <= 50) bat_col = IM_COL32(255, 200, 50, 255);
+            else bat_col = IM_COL32(50, 255, 50, 255);
+        }
+        
+        // Draw Battery Body
+        float body_w = icon_w * 0.85f;
+        float term_w = icon_w * 0.15f;
+        float term_h = icon_h * 0.4f;
+        
+        draw_list->AddRect(icon_pos, icon_pos + ImVec2(body_w, icon_h), bat_col, 0.0f, 0, 2.0f);
+        draw_list->AddRectFilled(icon_pos + ImVec2(body_w, (icon_h - term_h) * 0.5f), 
+                                 icon_pos + ImVec2(icon_w, (icon_h + term_h) * 0.5f), bat_col);
+                                 
+        // Draw Level
+        if (dev.battery_percent >= 0) {
+            float fill_pct = dev.battery_percent / 100.0f;
+            float fill_w = (body_w - 4.0f) * fill_pct;
+            if (fill_w > 0) {
+                draw_list->AddRectFilled(icon_pos + ImVec2(2.0f, 2.0f), 
+                                         icon_pos + ImVec2(2.0f + fill_w, icon_h - 2.0f), bat_col);
+            }
+        }
+        
+        // Charging indicator
+        if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
+            ImVec2 center = icon_pos + ImVec2(body_w * 0.5f, icon_h * 0.5f);
+            draw_list->AddLine(center + ImVec2(-3, 0), center + ImVec2(3, 0), IM_COL32(255,255,255,255), 2.0f);
+            draw_list->AddLine(center + ImVec2(0, -3), center + ImVec2(0, 3), IM_COL32(255,255,255,255), 2.0f);
+        }
+    }
+    
+    if (header_open) {
+        ImGui::Indent();
+        
+        // Show detailed battery info
+        if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+            const char* state_str = "Unknown";
+            switch (dev.battery_state) {
+                case SDL_POWERSTATE_ON_BATTERY: state_str = "On Battery"; break;
+                case SDL_POWERSTATE_NO_BATTERY: state_str = "No Battery"; break;
+                case SDL_POWERSTATE_CHARGING: state_str = "Charging"; break;
+                case SDL_POWERSTATE_CHARGED: state_str = "Fully Charged"; break;
+                default: break;
+            }
+            
+            ImGui::Text("Battery: %s", state_str);
+            if (dev.battery_percent >= 0) {
+                ImGui::SameLine();
+                ImGui::Text("(%d%%)", dev.battery_percent);
+                
+                // Draw battery level bar
+                float battery_fraction = dev.battery_percent / 100.0f;
+                ImVec4 bar_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f);
+                if (dev.battery_percent < 30) {
+                    bar_color = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+                } else if (dev.battery_percent < 70) {
+                    bar_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
+                }
+                
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
+                ImGui::ProgressBar(battery_fraction, ImVec2(-1, 0), "");
+                ImGui::PopStyleColor();
+            }
+        }
+        
+        DrawDeviceVisualizer(dev, deviceManager, preferencesManager);
+        ImGui::Unindent();
+    }
+    ImGui::PopID();
+}
+
+void DrawMainMenu(bool& done, bool& show_ui_settings) {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Exit")) {
+                done = true;
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Settings")) {
+            ImGui::MenuItem("UI Settings", NULL, &show_ui_settings);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+}
+
+void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, bool& scale_with_window, SDL_Window* window, int initial_width, int initial_height, PreferencesManager& preferencesManager) {
+    if (!show_ui_settings) return;
+
+    ImGui::Begin("UI Settings", &show_ui_settings, ImGuiWindowFlags_AlwaysAutoResize);
+    bool changed = false;
+    bool scale_changed = false;
+    if (ImGui::Button("-")) {
+        user_ui_scale -= 0.05f;
+        if (user_ui_scale < 0.5f) user_ui_scale = 0.5f;
+        scale_changed = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("+")) {
+        user_ui_scale += 0.05f;
+        if (user_ui_scale > 3.0f) user_ui_scale = 3.0f;
+        scale_changed = true;
+    }
+    ImGui::SameLine();
+    ImGui::Text("UI Scale: %.2f", user_ui_scale);
+
+    if (scale_changed) {
+        scale_with_window = false;
+        changed = true;
+    }
+    if (ImGui::Checkbox("Scale with Window", &scale_with_window)) changed = true;
+
+    if (ImGui::Button("Reset UI")) {
+        user_ui_scale = 1.0f;
+        scale_with_window = false;
+        SDL_SetWindowSize(window, initial_width, initial_height);
+        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        changed = true;
+    }
+
+    if (changed) {
+        preferencesManager.SetFloat("UIScale", user_ui_scale);
+        preferencesManager.SetBool("ScaleWithWindow", scale_with_window);
+        preferencesManager.Save();
+        UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+    }
+    ImGui::End();
+}
+
+void SetupDockSpace() {
+    ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+    static bool first_time = true;
+    if (first_time) {
+        first_time = false;
+        ImGui::DockBuilderRemoveNode(dockspace_id);
+        ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+        ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+        ImGuiID dock_id_left, dock_id_right;
+        ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.5f, &dock_id_left, &dock_id_right);
+        ImGuiID dock_id_right_top, dock_id_right_bottom;
+        ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
+        ImGui::DockBuilderDockWindow("Devices", dock_id_left);
+        ImGui::DockBuilderDockWindow("Network Server", dock_id_right_top);
+        ImGui::DockBuilderDockWindow("Output Mapper", dock_id_right_bottom);
+        ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
+        ImGui::DockBuilderFinish(dockspace_id);
+    }
+    ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+}
+
+void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& preferencesManager, bool& vsync, int& framerate_limit, SDL_Renderer* renderer, const ImGuiIO& io) {
+    ImGui::Begin("Devices");
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+    if (ImGui::Checkbox("VSync", &vsync)) {
+        SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
+    }
+    ImGui::SameLine();
+    const char* label = "Framerate Limit";
+    float width = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemInnerSpacing.x;
+    if (width < 10.0f) width = 10.0f;
+    ImGui::SetNextItemWidth(width);
+    ImGui::InputInt(label, &framerate_limit);
+    if (framerate_limit < 0) {
+        framerate_limit = 0;
+    }
+
+    static bool first_run = true;
+    static bool enable_battery_led = true;
+    if (first_run) {
+        enable_battery_led = preferencesManager.GetBool("EnableBatteryLED", true);
+        first_run = false;
+    }
+    if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
+        preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
+        preferencesManager.Save();
+    }
+
+    ImGui::Separator();
+    auto &devices = deviceManager.GetDevices();
+    ImGui::Text("Connected Devices: %d", (int)devices.size());
+
+    // Update battery info periodically (every 60 frames / ~1 second at 60fps)
+    static int frame_counter = 0;
+    if (frame_counter++ >= 60) {
+        frame_counter = 0;
+        for (auto &dev : const_cast<std::vector<DeviceState>&>(devices)) {
+            deviceManager.UpdateBatteryInfo(dev);
+
+            // Update LED based on battery level
+            if (enable_battery_led && dev.gamepad) {
+                Uint8 r = 0, g = 0, b = 0;
+                bool update_led = false;
+
+                if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
+                    // Blue for charging
+                    r = 0; g = 0; b = 255;
+                    update_led = true;
+                } else if (dev.battery_state == SDL_POWERSTATE_CHARGED) {
+                    // Green for fully charged
+                    r = 0; g = 255; b = 0;
+                    update_led = true;
+                } else if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+                    if (dev.battery_percent >= 70) {
+                        r = 0; g = 255; b = 0; // Green
+                    } else if (dev.battery_percent >= 30) {
+                        r = 255; g = 165; b = 0; // Yellow/Orange
+                    } else {
+                        r = 255; g = 0; b = 0; // Red
+                    }
+                    update_led = true;
+                }
+
+                if (update_led) {
+                    SDL_SetGamepadLED(dev.gamepad, r, g, b);
+                }
+            }
+        }
+    }
+
+    for (const auto &dev : devices) {
+        DrawDeviceItem(dev, deviceManager, preferencesManager);
+    }
+    ImGui::End();
+}
+
+void ProcessEvents(bool& done, SDL_Window* window, DeviceManager& deviceManager, PreferencesManager& preferencesManager, float& user_ui_scale, bool scale_with_window, int initial_width) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        ImGui_ImplSDL3_ProcessEvent(&event);
+        if (event.type == SDL_EVENT_QUIT)
+            done = true;
+        if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
+            event.window.windowID == SDL_GetWindowID(window))
+            done = true;
+
+        if (event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED &&
+            event.window.windowID == SDL_GetWindowID(window)) {
+            UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+        }
+        if (event.type == SDL_EVENT_WINDOW_RESIZED && scale_with_window &&
+            event.window.windowID == SDL_GetWindowID(window)) {
+            UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+        }
+
+        // Handle hot-plugging
+        if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
+            bool is_connected = false;
+            for (const auto &dev : deviceManager.GetDevices()) {
+                if (dev.instance_id == event.jdevice.which) {
+                    is_connected = true;
+                    break;
+                }
+            }
+            if (!is_connected) {
+                deviceManager.HandleDeviceAdded(event.jdevice.which);
+            }
+        }
+        if (event.type == SDL_EVENT_JOYSTICK_REMOVED) {
+            deviceManager.HandleDeviceRemoved(event.jdevice.which);
+            preferencesManager.ClearAppliedPreference(event.jdevice.which);
+        }
+    }
+}
+
+void RenderFrame(SDL_Renderer* renderer, SDL_Window* window, bool vsync, int framerate_limit, Uint64 frame_start_time) {
+    ImGui::Render();
+
+    int w, h, bbw, bbh;
+    SDL_GetWindowSize(window, &w, &h);
+    SDL_GetWindowSizeInPixels(window, &bbw, &bbh);
+    float scale_x = (w > 0) ? ((float)bbw / w) : 1.0f;
+    float scale_y = (h > 0) ? ((float)bbh / h) : 1.0f;
+    SDL_SetRenderScale(renderer, scale_x, scale_y);
+
+    SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
+    SDL_RenderClear(renderer);
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+    SDL_RenderPresent(renderer);
+
+    if (!vsync && framerate_limit > 0) {
+        Uint64 frame_end_time = SDL_GetTicks();
+        Uint64 frame_duration = frame_end_time - frame_start_time;
+        Uint64 target_duration = 1000 / framerate_limit;
+        if (frame_duration < target_duration) {
+            SDL_Delay((Uint32)(target_duration - frame_duration));
+        }
+    }
+}
 
 int main(int argc, char *argv[]) {
     // Register protocols
@@ -42,7 +449,11 @@ int main(int argc, char *argv[]) {
 #endif
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    // This tells SDL to use its own built-in driver for Steam Controllers
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "1");
+    // This ensures SDL handles the rumble translation itself
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM_HOME_LED, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, "1");
 
     // Setup SDL3 with Joystick and Gamepad support
@@ -111,31 +522,13 @@ int main(int argc, char *argv[]) {
     float user_ui_scale = preferencesManager.GetFloat("UIScale", 1.0f);
     bool scale_with_window = preferencesManager.GetBool("ScaleWithWindow", false);
 
-    auto UpdateUIScale = [&](SDL_Window *win) {
-        float scale = SDL_GetWindowDisplayScale(win);
-        float density = SDL_GetWindowPixelDensity(win);
-        if (density <= 0.0f) density = 1.0f;
-        if (scale <= 0.0f) scale = 1.0f;
-        float ui_scale = scale / density;
+    UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
 
-        if (scale_with_window) {
-            int w, h;
-            SDL_GetWindowSize(win, &w, &h);
-            user_ui_scale = (float)w / (float)initial_width;
-            preferencesManager.SetFloat("UIScale", user_ui_scale);
-        }
-        ui_scale *= user_ui_scale;
+    OutputMapper::Init(deviceManager);
+    OutputMapper& outputMapper = OutputMapper::GetInstance();
 
-        ImGuiStyle &style = ImGui::GetStyle();
-        style = ImGuiStyle(); // Reset to default style to avoid compounding scales
-        ImGui::StyleColorsDark();
-        style.ScaleAllSizes(ui_scale);
-        if (style.WindowBorderHoverPadding <= 0.0f) style.WindowBorderHoverPadding = 1.0f;
-        ImGui::GetIO().FontGlobalScale = ui_scale;
-    };
-    UpdateUIScale(window);
-
-    InputMapper inputMapper(deviceManager);
+    InputMapper::Init(deviceManager);
+    InputMapper& inputMapper = InputMapper::GetInstance();
     inputMapper.LoadConfig(preferencesManager);
 
     // Load Network Server Configs
@@ -148,43 +541,44 @@ int main(int argc, char *argv[]) {
     static bool show_ui_settings = false;
     SDL_SetRenderVSync(renderer, 1);
 
+    WebSocketServer::GetInstance().SetOutputMapper(&outputMapper);
+    OSCServer::GetInstance().SetOutputMapper(&outputMapper);
+
+    static int server_update_rate = preferencesManager.GetInt("Network", "UpdateRate", 60);
+    static bool server_dynamic_rate = preferencesManager.GetBool("Network", "DynamicRate", false);
+    static Uint64 last_server_update_time = 0;
+    static int messages_sent_counter = 0;
+    static float current_messages_per_second = 0.0f;
+    static Uint64 last_mps_update_time = SDL_GetTicks();
+
     while (!done) {
         Uint64 frame_start_time = SDL_GetTicks();
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            ImGui_ImplSDL3_ProcessEvent(&event);
-            if (event.type == SDL_EVENT_QUIT)
-                done = true;
-            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
-                event.window.windowID == SDL_GetWindowID(window))
-                done = true;
+        ProcessEvents(done, window, deviceManager, preferencesManager, user_ui_scale, scale_with_window, initial_width);
 
-            if (event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED &&
-                event.window.windowID == SDL_GetWindowID(window)) {
-                UpdateUIScale(window);
-            }
-            if (event.type == SDL_EVENT_WINDOW_RESIZED && scale_with_window &&
-                event.window.windowID == SDL_GetWindowID(window)) {
-                UpdateUIScale(window);
-            }
+        // Always update haptics to ensure low latency
+        outputMapper.Update();
 
-            // Handle hot-plugging
-            if (event.type == SDL_EVENT_JOYSTICK_ADDED) {
-                bool is_connected = false;
-                for (const auto &dev : deviceManager.GetDevices()) {
-                    if (dev.instance_id == event.jdevice.which) {
-                        is_connected = true;
-                        break;
-                    }
-                }
-                if (!is_connected) {
-                    deviceManager.HandleDeviceAdded(event.jdevice.which);
+        bool check_input_update = false;
+        if (server_dynamic_rate) {
+            check_input_update = true;
+        } else {
+            if (server_update_rate > 0) {
+                Uint64 interval = 1000 / server_update_rate;
+                if (frame_start_time - last_server_update_time >= interval) {
+                    check_input_update = true;
                 }
             }
-            if (event.type == SDL_EVENT_JOYSTICK_REMOVED) {
-                deviceManager.HandleDeviceRemoved(event.jdevice.which);
-                preferencesManager.ClearAppliedPreference(event.jdevice.which);
-            }
+        }
+
+        if (check_input_update && inputMapper.Update(server_dynamic_rate)) {
+            last_server_update_time = frame_start_time;
+            messages_sent_counter++;
+        }
+
+        if (frame_start_time - last_mps_update_time >= 1000) {
+            current_messages_per_second = (float)messages_sent_counter / ((frame_start_time - last_mps_update_time) / 1000.0f);
+            messages_sent_counter = 0;
+            last_mps_update_time = frame_start_time;
         }
 
         // Start the Dear ImGui frame
@@ -193,216 +587,22 @@ int main(int argc, char *argv[]) {
         ImGui::NewFrame();
 
         // Menu Bar
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Exit")) {
-                    done = true;
-                }
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Settings")) {
-                ImGui::MenuItem("UI Settings", NULL, &show_ui_settings);
-                ImGui::EndMenu();
-            }
-            ImGui::EndMainMenuBar();
-        }
+        DrawMainMenu(done, show_ui_settings);
 
-        if (show_ui_settings) {
-            ImGui::Begin("UI Settings", &show_ui_settings, ImGuiWindowFlags_AlwaysAutoResize);
-            bool changed = false;
-            bool scale_changed = false;
-            if (ImGui::Button("-")) {
-                user_ui_scale -= 0.05f;
-                if (user_ui_scale < 0.5f) user_ui_scale = 0.5f;
-                scale_changed = true;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("+")) {
-                user_ui_scale += 0.05f;
-                if (user_ui_scale > 3.0f) user_ui_scale = 3.0f;
-                scale_changed = true;
-            }
-            ImGui::SameLine();
-            ImGui::Text("UI Scale: %.2f", user_ui_scale);
-
-            if (scale_changed) {
-                scale_with_window = false;
-                changed = true;
-            }
-            if (ImGui::Checkbox("Scale with Window", &scale_with_window)) changed = true;
-
-            if (ImGui::Button("Reset UI")) {
-                user_ui_scale = 1.0f;
-                scale_with_window = false;
-                SDL_SetWindowSize(window, initial_width, initial_height);
-                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-                changed = true;
-            }
-            
-            if (changed) {
-                preferencesManager.SetFloat("UIScale", user_ui_scale);
-                preferencesManager.SetBool("ScaleWithWindow", scale_with_window);
-                preferencesManager.Save();
-                UpdateUIScale(window);
-            }
-            ImGui::End();
-        }
+        DrawSettingsWindow(show_ui_settings, user_ui_scale, scale_with_window, window, initial_width, initial_height, preferencesManager);
 
         // DockSpace
-        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-        static bool first_time = true;
-        if (first_time) {
-            first_time = false;
-            ImGui::DockBuilderRemoveNode(dockspace_id);
-            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
-            ImGuiID dock_id_left, dock_id_right;
-            ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.5f, &dock_id_left, &dock_id_right);
-            ImGuiID dock_id_right_top, dock_id_right_bottom;
-            ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
-            ImGui::DockBuilderDockWindow("InputBridge Status", dock_id_left);
-            ImGui::DockBuilderDockWindow("Network Server Status", dock_id_right_top);
-            ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
-            ImGui::DockBuilderFinish(dockspace_id);
-        }
-        ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+        SetupDockSpace();
 
-        ImGui::Begin("InputBridge Status");
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        DrawDevicesWindow(deviceManager, preferencesManager, vsync, framerate_limit, renderer, io);
 
-        if (ImGui::Checkbox("VSync", &vsync)) {
-            SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
-        }
-        ImGui::InputInt("Framerate Limit", &framerate_limit);
-        if (framerate_limit < 0) {
-            framerate_limit = 0;
-        }
+        inputMapper.DrawContent();
+        outputMapper.DrawContent();
 
-        ImGui::Separator();
-        const auto &devices = deviceManager.GetDevices();
-        ImGui::Text("Connected Devices: %d", (int)devices.size());
-
-        for (const auto &dev : devices) {
-            ImGui::PushID((int)dev.instance_id);
-            std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
-            if (ImGui::CollapsingHeader(
-                    label.c_str(),
-                    ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Indent();
-
-                HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
-                if (haptic) {
-                    if (haptic->IsReady()) {
-                        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Haptics: Ready");
-                    } else {
-                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Haptics: Not Available");
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Stop All Effects")) {
-                        haptic->StopAll();
-                    }
-                } else {
-                    ImGui::TextDisabled("Haptics: Not Supported");
-                }
-
-                static GamepadVisualizer gamepad_viz;
-                static GenericVisualizer generic_viz;
-                static SteeringWheelVisualizer wheel_viz;
-                static FlightStickVisualizer flight_stick_viz;
-                static GamepadHapticsVisualizer gamepad_haptics_viz;
-                static SteeringWheelHapticsVisualizer wheel_haptics_viz;
-
-                std::string guid = DeviceManager::GetDeviceGUIDString(dev);
-                bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
-                std::string preferred_viz = preferencesManager.GetVisualizerPreference(guid);
-
-                if (apply_pref) {
-                    preferencesManager.MarkPreferenceApplied(dev.instance_id);
-                }
-
-                auto TabItem = [&](const char *label, DeviceVisualizer &visualizer) {
-                    ImGuiTabItemFlags flags = 0;
-                    if (apply_pref && preferred_viz == label) {
-                        flags |= ImGuiTabItemFlags_SetSelected;
-                    }
-
-                    if (ImGui::BeginTabItem(label, nullptr, flags)) {
-                        visualizer.Draw(dev);
-                        if (preferencesManager.GetVisualizerPreference(guid) != label) {
-                            preferencesManager.SetVisualizerPreference(guid, label);
-                            preferencesManager.Save();
-                        }
-                        ImGui::EndTabItem();
-                    }
-                };
-
-                if (dev.is_gamepad) {
-                    if (ImGui::BeginTabBar("DeviceMode")) {
-                        // TabItem("Standard Layout", gamepad_viz);
-                        TabItem("Raw Inputs", generic_viz);
-                        ImGui::EndTabBar();
-                    }
-
-                    gamepad_haptics_viz.Draw(dev, deviceManager);
-                } else {
-                    if (ImGui::BeginTabBar("DeviceMode")) {
-                        TabItem("Raw Inputs", generic_viz);
-
-                        SDL_JoystickType type =
-                            SDL_GetJoystickType(dev.joystick);
-                        if (type == SDL_JOYSTICK_TYPE_WHEEL ||
-                            type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                            // TabItem("Steering Wheel", wheel_viz);
-                        }
-                        if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK ||
-                            type == SDL_JOYSTICK_TYPE_THROTTLE ||
-                            type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                            // TabItem("Flight Stick", flight_stick_viz);
-                        }
-                        ImGui::EndTabBar();
-                    }
-
-                    if (SDL_GetJoystickType(dev.joystick) == SDL_JOYSTICK_TYPE_WHEEL) {
-                        wheel_haptics_viz.Draw(dev, deviceManager);
-                    }
-                }
-
-                ImGui::Unindent();
-            }
-            ImGui::PopID();
-        }
-
-        inputMapper.DrawUI(preferencesManager);
-
-        //if (ImGui::Button("Exit"))
-        //    done = true;
-        ImGui::End();
-
-        NetworkStatusWindow::Draw();
+        NetworkStatusWindow::Draw(server_update_rate, server_dynamic_rate, current_messages_per_second);
 
         // Rendering
-        ImGui::Render();
-
-        int w, h, bbw, bbh;
-        SDL_GetWindowSize(window, &w, &h);
-        SDL_GetWindowSizeInPixels(window, &bbw, &bbh);
-        float scale_x = (w > 0) ? ((float)bbw / w) : 1.0f;
-        float scale_y = (h > 0) ? ((float)bbh / h) : 1.0f;
-        SDL_SetRenderScale(renderer, scale_x, scale_y);
-
-        SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
-        SDL_RenderClear(renderer);
-        ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-        SDL_RenderPresent(renderer);
-
-        if (!vsync && framerate_limit > 0) {
-            Uint64 frame_end_time = SDL_GetTicks();
-            Uint64 frame_duration = frame_end_time - frame_start_time;
-            Uint64 target_duration = 1000 / framerate_limit;
-            if (frame_duration < target_duration) {
-                SDL_Delay((Uint32)(target_duration - frame_duration));
-            }
-        }
+        RenderFrame(renderer, window, vsync, framerate_limit, frame_start_time);
     }
 
     // Cleanup
@@ -411,10 +611,17 @@ int main(int argc, char *argv[]) {
     ImGui::DestroyContext();
 
     inputMapper.SaveConfig(preferencesManager);
-    
+
+    InputMapper::Shutdown();
+    OutputMapper::Shutdown();
+
     // Save Network Server Configs
     OSCServer::GetInstance().SaveConfig(preferencesManager);
     WebSocketServer::GetInstance().SaveConfig(preferencesManager);
+
+    preferencesManager.SetInt("Network", "UpdateRate", server_update_rate);
+    preferencesManager.SetBool("Network", "DynamicRate", server_dynamic_rate);
+
     preferencesManager.Save();
 
     SDL_DestroyRenderer(renderer);

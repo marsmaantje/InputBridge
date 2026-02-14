@@ -1,6 +1,9 @@
 #include "Network/OSCServer.h"
+#include "Mappers/OutputMapper.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
+#include "Protocols/ProtocolManager.h"
+#include "Protocols/OSCBaseProtocol.h"
 #include <iostream>
 #include <string>
 #include <cstdarg>
@@ -13,10 +16,32 @@ OSCServer& OSCServer::GetInstance() {
     return instance;
 }
 
-OSCServer::OSCServer() = default;
+OSCServer::OSCServer() {
+    SetProtocol("OSC Default");
+}
 
 OSCServer::~OSCServer() {
     Stop();
+}
+
+int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    auto* server = (OSCServer*)user_data;
+    if (server->m_OutputMapper && argc >= 4) {
+        int id = argv[0]->i;
+        float low = argv[1]->f;
+        float high = argv[2]->f;
+        int duration = argv[3]->i;
+        server->m_OutputMapper->QueueRumble(id, low, high, duration);
+    }
+    return 0;
+}
+
+int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    auto* server = (OSCServer*)user_data;
+    if (server->m_OutputMapper && argc >= 3) {
+        server->m_OutputMapper->QueueConstantForce(argv[0]->i, argv[1]->f, argv[2]->i);
+    }
+    return 0;
 }
 
 bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port) {
@@ -24,7 +49,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     if (m_running) {
         return true;
     }
-    
+
     m_clients.clear();
 
     // Update internal state for UI
@@ -32,7 +57,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     m_send_host[sizeof(m_send_host) - 1] = '\0';
     m_send_port = send_port;
     m_recv_port = recv_port;
-    
+
     m_running_send_host = send_host;
     m_running_send_port = send_port;
     m_running_recv_port = recv_port;
@@ -54,6 +79,8 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
         return false;
     }
 
+    lo_server_thread_add_method(m_server_thread, "/haptic/rumble", "iffi", haptic_rumble_handler, this);
+    lo_server_thread_add_method(m_server_thread, "/haptic/constant", "ifi", haptic_constant_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);
 
@@ -61,7 +88,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     m_isConnected = true;
     std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
               << ", Listening on port " << recv_port << std::endl;
-    
+
     m_logs.push_back("OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port));
     if (m_logs.size() > 100) m_logs.pop_front();
 
@@ -126,19 +153,10 @@ static std::string formatFloat(float val, int precision) {
 }
 
 void OSCServer::SendWheel(float steer, float brake, float throttle, float pitch, float roll) {
-    if (m_protocolVersion == ProtocolVersion::Default) {
-        Send("/wheel/steer", "f", steer);
-        Send("/wheel/brake", "f", brake);
-        Send("/wheel/throttle", "f", throttle);
-        Send("/wheel/pitch", "f", pitch);
-        Send("/wheel/roll", "f", roll);
-    } else if (m_protocolVersion == ProtocolVersion::WaterSteeringWheelPy) {
-        Send("/wheel/steer", "f", steer);
-        Send("/wheel/brake", "f", brake);
-        Send("/wheel/throttle", "f", throttle);
-        Send("/wheel/pitch", "f", pitch);
-        Send("/wheel/roll", "f", roll);
-    } else if (m_protocolVersion == ProtocolVersion::MarsmaantjeNew) {
+    // Currently all OSC protocols use the same sending logic in this server implementation
+    // Ideally this would delegate to m_protocol->format_wheel, but we need to handle binary bundles.
+    // For now, we keep the logic here but it applies to all selected OSC protocols.
+    if (m_protocol) {
         Send("/wheel/steer", "f", steer);
         Send("/wheel/brake", "f", brake);
         Send("/wheel/throttle", "f", throttle);
@@ -153,17 +171,7 @@ void OSCServer::SendButtons(const std::vector<uint32_t>& buttons) {
     int b2 = buttons.size() > 2 ? static_cast<int>(buttons[2]) : 0;
     int b3 = buttons.size() > 3 ? static_cast<int>(buttons[3]) : 0;
 
-    if (m_protocolVersion == ProtocolVersion::Default) {
-        Send("/wheel/buttons/0", "i", b0);
-        Send("/wheel/buttons/1", "i", b1);
-        Send("/wheel/buttons/2", "i", b2);
-        Send("/wheel/buttons/3", "i", b3);
-    } else if (m_protocolVersion == ProtocolVersion::WaterSteeringWheelPy) {
-        Send("/wheel/buttons/0", "i", b0);
-        Send("/wheel/buttons/1", "i", b1);
-        Send("/wheel/buttons/2", "i", b2);
-        Send("/wheel/buttons/3", "i", b3);
-    } else if (m_protocolVersion == ProtocolVersion::MarsmaantjeNew) {
+    if (m_protocol) {
         Send("/wheel/buttons/0", "i", b0);
         Send("/wheel/buttons/1", "i", b1);
         Send("/wheel/buttons/2", "i", b2);
@@ -180,7 +188,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
     auto* server = static_cast<OSCServer*>(user_data);
     if (server) {
         std::lock_guard<std::mutex> lock(server->m_mutex);
-        
+
         lo_address src = lo_message_get_source(msg);
         if (src) {
             const char* hostname = lo_address_get_hostname(src);
@@ -190,30 +198,38 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 server->m_clients.insert(client);
             }
         }
-        
+
         server->m_logs.push_back("Recv: " + std::string(path));
         if (server->m_logs.size() > 100) server->m_logs.pop_front();
 
-        if (server->m_handler) {
-            server->m_handler(path, types, argv, argc);
+        // Delegate to protocol if it's an OSC protocol
+        if (server->m_protocol) {
+            auto oscProtocol = std::dynamic_pointer_cast<OSCBaseProtocol>(server->m_protocol);
+            if (oscProtocol) {
+                oscProtocol->handle_osc_message(path, types, argv, argc);
+            }
+        } else if (server->m_handler) {
+             server->m_handler(path, types, argv, argc);
         }
     }
     return 0;
 }
 
-void OSCServer::SetProtocolVersion(ProtocolVersion version) {
-    m_protocolVersion = version;
+void OSCServer::SetProtocol(const std::string& name) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_protocol = ProtocolManager::GetInstance().GetProtocol(name);
+    if (m_protocol) m_protocolName = name;
 }
 
-OSCServer::ProtocolVersion OSCServer::GetProtocolVersion() const {
-    return m_protocolVersion;
+std::string OSCServer::GetProtocol() const {
+    return m_protocolName;
 }
 
 void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     std::string send_host = prefs.GetString("OSC", "SendHost", "127.0.0.1");
     int send_port = prefs.GetInt("OSC", "SendPort", 9066);
     int recv_port = prefs.GetInt("OSC", "RecvPort", 9068);
-    int protocol = prefs.GetInt("OSC", "Protocol", (int)ProtocolVersion::Default);
+    std::string protocol = prefs.GetString("OSC", "Protocol", "OSC Default");
     bool enabled = prefs.GetBool("OSC", "Enabled", false);
 
     {
@@ -222,8 +238,9 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
         m_send_host[sizeof(m_send_host) - 1] = '\0';
         m_send_port = send_port;
         m_recv_port = recv_port;
-        m_protocolVersion = (ProtocolVersion)protocol;
     }
+
+    SetProtocol(protocol);
 
     if (enabled) {
         Start(send_host, send_port, recv_port);
@@ -235,7 +252,7 @@ void OSCServer::SaveConfig(PreferencesManager& prefs) {
     prefs.SetString("OSC", "SendHost", m_send_host);
     prefs.SetInt("OSC", "SendPort", m_send_port);
     prefs.SetInt("OSC", "ReceivePort", m_recv_port);
-    prefs.SetInt("OSC", "Protocol", (int)m_protocolVersion);
+    prefs.SetString("OSC", "Protocol", m_protocolName);
     prefs.SetBool("OSC", "Enabled", m_running);
 }
 
@@ -248,14 +265,17 @@ int OSCServer::GetSelectedDevice() const {
 }
 
 const char* OSCServer::GetSendHost() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_send_host;
 }
 
 int OSCServer::GetSendPort() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_send_port;
 }
 
 int OSCServer::GetReceivePort() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_recv_port;
 }
 
@@ -265,14 +285,22 @@ void OSCServer::DrawContent() {
     ImGui::InputInt("Send Port", &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 
-    int currentProtocol = (int)m_protocolVersion;
-    const char* protocols[] = { "Default", "Water SteeringWheel Py", "Marsmaantje (new)" };
-    if (ImGui::Combo("Protocol", &currentProtocol, protocols, IM_ARRAYSIZE(protocols))) {
-        m_protocolVersion = (ProtocolVersion)currentProtocol;
+    std::vector<std::string> protocols = ProtocolManager::GetInstance().GetAvailableProtocols();
+    int currentIdx = -1;
+    for(int i=0; i<protocols.size(); ++i) {
+        if(protocols[i] == m_protocolName) currentIdx = i;
+    }
+
+    if (ImGui::Combo("Protocol", &currentIdx, [](void* data, int idx, const char** out_text) {
+        auto* protos = (std::vector<std::string>*)data;
+        *out_text = (*protos)[idx].c_str();
+        return true;
+    }, &protocols, protocols.size())) {
+        SetProtocol(protocols[currentIdx]);
     }
 
     if (IsRunning()) {
-        bool settingsChanged = (m_send_port != m_running_send_port) || 
+        bool settingsChanged = (m_send_port != m_running_send_port) ||
                                (m_recv_port != m_running_recv_port) ||
                                (m_running_send_host != m_send_host);
 
@@ -333,4 +361,8 @@ void OSCServer::DrawContent() {
             ImGui::SetScrollHereY(1.0f);
     }
     ImGui::EndChild();
+}
+
+void OSCServer::SetOutputMapper(OutputMapper* mapper) {
+    m_OutputMapper = mapper;
 }

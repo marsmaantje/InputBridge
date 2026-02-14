@@ -7,9 +7,13 @@
 #include <mutex>
 #include <deque>
 #include <set>
+#include <memory>
 #include <vector>
 
 class PreferencesManager;
+class OutputMapper;
+class IProtocol;
+class OSCBaseProtocol;
 
 // Callback for incoming OSC messages
 using OSCHandler = std::function<void(const char* path, const char* types, lo_arg** argv, int argc)>;
@@ -45,17 +49,21 @@ public:
     int GetReceivePort() const;
 
     void SetHandler(OSCHandler handler);
-    
+
     void DrawContent();
 
-    void SetProtocolVersion(ProtocolVersion version);
-    ProtocolVersion GetProtocolVersion() const;
+    void SetProtocol(const std::string& name);
+    std::string GetProtocol() const;
 
     void LoadConfig(const PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs);
 
+    void SetOutputMapper(OutputMapper* mapper);
+
 private:
     static int generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_rumble_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_constant_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
     lo_address m_send_address = nullptr;
     lo_server_thread m_server_thread = nullptr;
@@ -63,7 +71,7 @@ private:
     std::atomic<bool> m_running = false;
     std::atomic<bool> m_isConnected = false;
     std::atomic<int> m_selectedDeviceId = 0;
-    
+
     // UI State
     char m_send_host[128] = "127.0.0.1";
     int m_send_port = 9066;
@@ -75,8 +83,10 @@ private:
     int m_running_recv_port = 0;
 
     OSCHandler m_handler;
-    std::mutex m_mutex;
-    ProtocolVersion m_protocolVersion = ProtocolVersion::Default;
+    mutable std::mutex m_mutex;  // mutable for const methods
+    std::shared_ptr<IProtocol> m_protocol;
+    std::string m_protocolName = "OSC Default";
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;
+    OutputMapper* m_OutputMapper = nullptr;
 };

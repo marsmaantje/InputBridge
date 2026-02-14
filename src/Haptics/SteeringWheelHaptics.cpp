@@ -5,7 +5,7 @@ int SteeringWheelHaptics::SetGain(int gain) {
         if (!m_haptic) {
             return;
         }
-        SDL_SetHapticGain(m_haptic, gain);
+        SDL_SetHapticGain(m_haptic.Get(), gain);
     });
     return 0;
 }
@@ -29,7 +29,7 @@ int SteeringWheelHaptics::PlayConstant(float strength, uint32_t duration_ms) {
 
         m_constantEffectId = UploadEffect(effect, m_constantEffectId);
         if (m_constantEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic, m_constantEffectId, 1);
+            SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1);
         }
     });
     return 0;
@@ -55,7 +55,7 @@ int SteeringWheelHaptics::PlayPeriodic(float strength, uint32_t period, float ma
 
         m_periodicEffectId = UploadEffect(effect, m_periodicEffectId);
         if (m_periodicEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic, m_periodicEffectId, 1);
+            SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1);
         }
     });
     return 0;
@@ -91,7 +91,7 @@ int SteeringWheelHaptics::PlayCondition(float right_sat, float left_sat, float r
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
             m_conditionEffects[effect.type] = newId;
-            SDL_RunHapticEffect(m_haptic, newId, 1);
+            SDL_RunHapticEffect(m_haptic.Get(), newId, 1);
         }
     });
     return 0;

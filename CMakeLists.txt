@@ -39,7 +39,18 @@ set(WITH_CPP_TESTS OFF CACHE BOOL "Disable liblo C++ tests" FORCE)
 set(WITH_STATIC ON CACHE BOOL "Enable liblo static lib" FORCE)
 
 # liblo's CMakeLists.txt is located in the 'cmake' subdirectory
+if(DEFINED CMAKE_WARN_DEPRECATED)
+    set(CMAKE_WARN_DEPRECATED_OLD ${CMAKE_WARN_DEPRECATED})
+else()
+    unset(CMAKE_WARN_DEPRECATED_OLD)
+endif()
+set(CMAKE_WARN_DEPRECATED OFF)
 add_subdirectory(lib/liblo/cmake lib/liblo)
+if(DEFINED CMAKE_WARN_DEPRECATED_OLD)
+    set(CMAKE_WARN_DEPRECATED ${CMAKE_WARN_DEPRECATED_OLD})
+else()
+    unset(CMAKE_WARN_DEPRECATED)
+endif()
 
 # Create an alias 'lo' to the static library target 'liblo_static'
 # This ensures compatibility with the rest of the project that links against 'lo'
@@ -69,6 +80,11 @@ if(ENABLE_WEBSOCKETS)
         set(uwebsockets_lib_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/uWebSockets_download)
     else()
         include(FetchContent)
+
+        # Suppress warning about FetchContent_Populate being deprecated (CMake 3.30+)
+        if(POLICY CMP0169)
+            cmake_policy(SET CMP0169 OLD)
+        endif()
 
         # Libuv (Required for uSockets on Windows)
         if(WIN32)
@@ -201,21 +217,37 @@ add_executable(InputBridge
     # ... put source files here ...
     src/main.cpp
     src/Devices/DeviceManager.cpp
+    src/Devices/DeviceFactory.cpp
+    # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
     src/Haptics/SteeringWheelHaptics.cpp
     src/Haptics/DualSenseTriggerEffectGenerator.cpp
+    src/Haptics/DualSenseController.cpp
+    src/Haptics/XboxController.cpp
+    # Settings
     src/Preferences/Preferences.cpp
+    # Input device visualizers
     src/Visualizers/GenericVisualizer.cpp
     src/Visualizers/GamepadVisualizer.cpp
     src/Visualizers/GamepadHapticsVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
+    src/Visualizers/WiimoteVisualizer.cpp
+    # Networking
     src/Network/NetworkStatusWindow.cpp
+    # Device input and protocol output mappings
     src/Mappers/InputMapper.cpp
+    src/Mappers/OutputMapper.cpp
+    # Webseerver and OSC protocol
     src/Protocols/OSCProtocol.cpp
     src/Protocols/ProtocolManager.cpp
+    src/Protocols/WebSocketProtocol.cpp
+    src/Protocols/MarsmaantjeOldProtocol.cpp
+    src/Protocols/MarsmaantjeNewProtocol.cpp
+    src/Protocols/OSCBaseProtocol.cpp
+    src/Protocols/OSCDefaultProtocol.cpp
 )
 
 if(ENABLE_WEBSOCKETS)
