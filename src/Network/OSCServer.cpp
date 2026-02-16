@@ -285,18 +285,36 @@ void OSCServer::DrawContent() {
     ImGui::InputInt("Send Port", &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 
-    std::vector<std::string> protocols = ProtocolManager::GetInstance().GetAvailableProtocols();
-    int currentIdx = -1;
-    for(int i=0; i<protocols.size(); ++i) {
-        if(protocols[i] == m_protocolName) currentIdx = i;
+    std::string currentProtocolName;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        currentProtocolName = m_protocolName;
     }
 
+    std::vector<std::string> all_protocols = ProtocolManager::GetInstance().GetAvailableProtocols();
+    std::vector<std::string> protocols;
+    for (const auto& p : all_protocols) {
+        if (p.find("OSC") != std::string::npos) {
+            protocols.push_back(p);
+        }
+    }
+
+    int currentIdx = -1;
+    for(int i=0; i<protocols.size(); ++i) {
+        if(protocols[i] == currentProtocolName) currentIdx = i;
+    }
+
+    std::string newProtocol;
     if (ImGui::Combo("Protocol", &currentIdx, [](void* data, int idx, const char** out_text) {
         auto* protos = (std::vector<std::string>*)data;
         *out_text = (*protos)[idx].c_str();
         return true;
     }, &protocols, protocols.size())) {
-        SetProtocol(protocols[currentIdx]);
+        newProtocol = protocols[currentIdx];
+    }
+
+    if (!newProtocol.empty()) {
+        SetProtocol(newProtocol);
     }
 
     if (IsRunning()) {

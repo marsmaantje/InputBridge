@@ -402,9 +402,17 @@ void WebSocketServer::DrawContent() {
     }
 
     // WebSocket Format selection
+    std::string newProtocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
-        std::vector<std::string> protocols = ProtocolManager::GetInstance().GetAvailableProtocols();
+        std::vector<std::string> all_protocols = ProtocolManager::GetInstance().GetAvailableProtocols();
+        std::vector<std::string> protocols;
+        for (const auto& p : all_protocols) {
+            if (p.find("OSC") == std::string::npos) {
+                protocols.push_back(p);
+            }
+        }
+
         int currentIdx = -1;
         for(int i=0; i<protocols.size(); ++i) {
             if(protocols[i] == m_Impl->selectedProtocol) currentIdx = i;
@@ -415,8 +423,12 @@ void WebSocketServer::DrawContent() {
             *out_text = (*protos)[idx].c_str();
             return true;
         }, &protocols, protocols.size())) {
-            SetProtocol(protocols[currentIdx]);
+            newProtocol = protocols[currentIdx];
         }
+    }
+
+    if (!newProtocol.empty()) {
+        SetProtocol(newProtocol);
     }
 
     if (running) {
