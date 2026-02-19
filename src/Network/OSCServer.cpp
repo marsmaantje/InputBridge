@@ -309,111 +309,115 @@ int OSCServer::GetReceivePort() const {
 }
 
 void OSCServer::DrawContent() {
-    // Currently disabled, since its remains localhost anyway
-    //ImGui::InputText("Send Host", m_send_host, sizeof(m_send_host));
     ImGui::InputInt("Send Port", &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 
-    // ── Protocol / Definition combo ───────────────────────────────────────────
-    // Build a combined list:
-    //   Group 1 – built-in OSC protocols from ProtocolManager
-    //   Group 2 – user-defined OSC definitions from ProtocolRegistry
+    // ── Read current selection state under lock ───────────────────────────────
+    std::string currentDefId, currentProtoName;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        currentDefId     = m_selectedDefinitionId;
+        currentProtoName = m_protocolName;
+    }
+
+    // ── Build combo entries ───────────────────────────────────────────────────
+    // Each entry carries enough info to act on selection.
+    // isDefinition==false  → built-in protocol (protocolName non-empty)
+    //                         or visual separator (protocolName empty)
+    // isDefinition==true   → user-defined ProtocolRegistry definition
     struct ComboEntry {
         std::string displayName;
         bool        isDefinition = false;
-        std::string protocolName;  // for built-ins
-        std::string definitionId;  // for definitions
+        bool        isSeparator  = false;
+        std::string protocolName;
+        std::string definitionId;
     };
-
     std::vector<ComboEntry> entries;
 
-    // Built-in protocols
-    {
-        auto all = ProtocolManager::GetInstance().GetAvailableProtocols();
-        for (const auto& p : all) {
-            if (p.find("OSC") != std::string::npos) {
-                ComboEntry e;
-                e.displayName  = p;
-                e.isDefinition = false;
-                e.protocolName = p;
-                entries.push_back(e);
-            }
-        }
-    }
-
-    // User-defined OSC definitions from ProtocolRegistry
-    {
-        const auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
-        bool firstDef = true;
-        for (const auto& def : defs) {
-            if (def.transport != ProtocolTransport::OSC) continue;
+    // Group 1: built-in OSC protocols from ProtocolManager
+    for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols()) {
+        if (p.find("OSC") != std::string::npos) {
             ComboEntry e;
-            // Prefix with direction arrow so users can tell them apart
-            const char* dir = (def.direction == ProtocolDirection::Output) ? " [Out]" : " [In]";
-            e.displayName  = def.name + dir;
-            e.isDefinition = true;
-            e.definitionId = def.id;
-            if (firstDef) {
-                // Visual separator: add a disabled "--- Custom ---" entry
-                ComboEntry sep;
-                sep.displayName  = "--- Custom Protocols ---";
-                sep.isDefinition = false;
-                sep.protocolName = ""; // empty = separator, not selectable
-                entries.push_back(sep);
-                firstDef = false;
-            }
+            e.displayName  = p;
+            e.protocolName = p;
             entries.push_back(e);
         }
     }
 
-    // Determine current selection index
-    std::string currentDefId, currentProtoName;
+    // Group 2: user-defined OSC definitions from ProtocolRegistry
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        currentDefId    = m_selectedDefinitionId;
-        currentProtoName = m_protocolName;
+        const auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
+        bool addedSep = false;
+        for (const auto& def : defs) {
+            if (def.transport != ProtocolTransport::OSC) continue;
+            if (!addedSep) {
+                ComboEntry sep;
+                sep.displayName  = "--- Custom ---";
+                sep.isSeparator  = true;
+                entries.push_back(sep);
+                addedSep = true;
+            }
+            ComboEntry e;
+            e.displayName  = def.name +
+                             (def.direction == ProtocolDirection::Output ? " [Out]" : " [In]");
+            e.isDefinition = true;
+            e.definitionId = def.id;
+            entries.push_back(e);
+        }
     }
 
+    // ── Find current selection index ──────────────────────────────────────────
     int currentIdx = 0;
     for (int i = 0; i < (int)entries.size(); ++i) {
         const auto& e = entries[i];
-        if (e.isDefinition && e.definitionId == currentDefId && !currentDefId.empty()) {
-            currentIdx = i; break;
-        }
-        if (!e.isDefinition && !e.isDefinition && e.protocolName == currentProtoName && currentDefId.empty()) {
+        if (e.isSeparator) continue;
+        if (e.isDefinition && !currentDefId.empty() && e.definitionId == currentDefId) {
             currentIdx = i;
+            break;
+        }
+        if (!e.isDefinition && currentDefId.empty() && e.protocolName == currentProtoName) {
+            currentIdx = i;
+            // don't break – a definition match above takes priority
         }
     }
 
-    // Draw combo
-    auto comboGetter = [](void* data, int idx, const char** out) {
-        auto* vec = reinterpret_cast<std::vector<ComboEntry>*>(data);
-        *out = (*vec)[idx].displayName.c_str();
-        return true;
-    };
-
+    // ── Draw combo ────────────────────────────────────────────────────────────
     int newIdx = currentIdx;
-    if (ImGui::Combo("Protocol", &newIdx, comboGetter, &entries, (int)entries.size())) {
+    if (ImGui::BeginCombo("Protocol", entries.empty() ? "" : entries[currentIdx].displayName.c_str())) {
+        for (int i = 0; i < (int)entries.size(); ++i) {
+            const auto& e = entries[i];
+            if (e.isSeparator) {
+                ImGui::Separator();
+                ImGui::TextDisabled("%s", e.displayName.c_str());
+                continue;
+            }
+            bool selected = (i == currentIdx);
+            if (ImGui::Selectable(e.displayName.c_str(), selected)) {
+                newIdx = i;
+            }
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    // ── Apply selection if changed ────────────────────────────────────────────
+    if (newIdx != currentIdx && newIdx >= 0 && newIdx < (int)entries.size()) {
         const auto& chosen = entries[newIdx];
-        // Don't allow selecting the separator entry
-        if (chosen.protocolName.empty() && !chosen.isDefinition) {
-            // separator – revert
-        } else if (chosen.isDefinition) {
-            // Clear built-in selection and apply definition (which syncs host/port)
-            SetDefinition(chosen.definitionId);
-        } else {
-            // Built-in selected – clear any definition selection
-            SetDefinition("");
-            SetProtocol(chosen.protocolName);
+        if (!chosen.isSeparator) {
+            if (chosen.isDefinition) {
+                SetDefinition(chosen.definitionId);
+            } else {
+                SetDefinition("");
+                SetProtocol(chosen.protocolName);
+            }
         }
     }
 
-    // If a definition is selected, show a small info hint about where its settings come from
+    // Hint when a user-defined definition is active
     if (!currentDefId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(currentDefId);
-        if (def) {
+        if (const auto* def = ProtocolRegistry::GetInstance().FindById(currentDefId)) {
             ImGui::SameLine();
-            ImGui::TextDisabled("(from definition – host/ports synced)");
+            ImGui::TextDisabled("(ports from definition)");
         }
     }
 
@@ -422,7 +426,6 @@ void OSCServer::DrawContent() {
         bool settingsChanged = (m_send_port != m_running_send_port) ||
                                (m_recv_port != m_running_recv_port) ||
                                (m_running_send_host != m_send_host);
-
         if (settingsChanged) {
             if (ImGui::Button("Restart to apply")) {
                 Stop();
@@ -430,22 +433,14 @@ void OSCServer::DrawContent() {
             }
             ImGui::SameLine();
         }
-
-        if (ImGui::Button("Stop OSC")) {
-            Stop();
-        }
+        if (ImGui::Button("Stop OSC")) Stop();
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0, 1, 0, 1), "Running");
         ImGui::SameLine();
-        if (m_isConnected) {
-            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Connected");
-        } else {
-            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Send Error");
-        }
+        ImGui::TextColored(m_isConnected ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1),
+                           m_isConnected ? "Connected" : "Send Error");
     } else {
-        if (ImGui::Button("Start OSC")) {
-            Start(m_send_host, m_send_port, m_recv_port);
-        }
+        if (ImGui::Button("Start OSC")) Start(m_send_host, m_send_port, m_recv_port);
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1, 0, 0, 1), "Stopped");
     }
@@ -454,7 +449,7 @@ void OSCServer::DrawContent() {
     std::set<std::string> clients;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        logs = m_logs;
+        logs    = m_logs;
         clients = m_clients;
     }
 
@@ -462,22 +457,16 @@ void OSCServer::DrawContent() {
     ImGui::Text("Known Clients (Sources): %d", (int)clients.size());
     if (ImGui::TreeNode("Client List")) {
         if (ImGui::BeginChild("Clients", ImVec2(0, 100), true)) {
-            for (const auto &client : clients) {
-                ImGui::TextUnformatted(client.c_str());
-            }
+            for (const auto& c : clients) ImGui::TextUnformatted(c.c_str());
         }
         ImGui::EndChild();
         ImGui::TreePop();
     }
-
     ImGui::Separator();
     ImGui::Text("Log");
     if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
-        for (const auto &log : logs) {
-            ImGui::TextUnformatted(log.c_str());
-        }
-        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-            ImGui::SetScrollHereY(1.0f);
+        for (const auto& l : logs) ImGui::TextUnformatted(l.c_str());
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
     }
     ImGui::EndChild();
 }

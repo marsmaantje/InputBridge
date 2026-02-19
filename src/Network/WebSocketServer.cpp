@@ -438,6 +438,7 @@ void WebSocketServer::DrawContent() {
     struct ComboEntry {
         std::string displayName;
         bool        isDefinition = false;
+        bool        isSeparator  = false;
         std::string protocolName;
         std::string definitionId;
     };
@@ -445,82 +446,69 @@ void WebSocketServer::DrawContent() {
     std::vector<ComboEntry> entries;
 
     // Built-in WebSocket-compatible protocols (exclude OSC-only ones)
-    {
-        auto all = ProtocolManager::GetInstance().GetAvailableProtocols();
-        for (const auto& p : all) {
-            if (p.find("OSC") == std::string::npos) {
-                ComboEntry e;
-                e.displayName  = p;
-                e.isDefinition = false;
-                e.protocolName = p;
-                entries.push_back(e);
-            }
+    for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols()) {
+        if (p.find("OSC") == std::string::npos) {
+            ComboEntry e; e.displayName = p; e.protocolName = p;
+            entries.push_back(e);
         }
     }
 
     // User-defined WebSocket definitions from ProtocolRegistry
     {
-        const auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
-        bool firstDef = true;
-        for (const auto& def : defs) {
+        bool addedSep = false;
+        for (const auto& def : ProtocolRegistry::GetInstance().GetDefinitions()) {
             if (def.transport != ProtocolTransport::WebSocket) continue;
-            if (firstDef) {
-                ComboEntry sep;
-                sep.displayName  = "--- Custom Protocols ---";
-                sep.isDefinition = false;
-                sep.protocolName = ""; // separator – not selectable
-                entries.push_back(sep);
-                firstDef = false;
+            if (!addedSep) {
+                ComboEntry sep; sep.displayName = "--- Custom ---"; sep.isSeparator = true;
+                entries.push_back(sep); addedSep = true;
             }
             ComboEntry e;
-            const char* dir = (def.direction == ProtocolDirection::Output) ? " [Out]" : " [In]";
-            e.displayName  = def.name + dir;
+            e.displayName  = def.name + (def.direction == ProtocolDirection::Output ? " [Out]" : " [In]");
             e.isDefinition = true;
             e.definitionId = def.id;
             entries.push_back(e);
         }
     }
 
-    // Determine current index
+    // Find current selection index
     int currentIdx = 0;
     for (int i = 0; i < (int)entries.size(); ++i) {
         const auto& e = entries[i];
-        if (e.isDefinition && e.definitionId == currentDefId && !currentDefId.empty()) {
-            currentIdx = i; break;
-        }
-        if (!e.isDefinition && e.protocolName == currentProto && currentDefId.empty()) {
-            currentIdx = i;
-        }
+        if (e.isSeparator) continue;
+        if (e.isDefinition && !currentDefId.empty() && e.definitionId == currentDefId) { currentIdx = i; break; }
+        if (!e.isDefinition && currentDefId.empty() && e.protocolName == currentProto)  { currentIdx = i; }
     }
 
-    auto comboGetter = [](void* data, int idx, const char** out) {
-        auto* vec = reinterpret_cast<std::vector<ComboEntry>*>(data);
-        *out = (*vec)[idx].displayName.c_str();
-        return true;
-    };
-
+    // Draw combo using BeginCombo so separators render properly
+    const char* preview = entries.empty() ? "" : entries[currentIdx].displayName.c_str();
     int newIdx = currentIdx;
-    if (ImGui::Combo("Format", &newIdx, comboGetter, &entries, (int)entries.size())) {
+    if (ImGui::BeginCombo("Format", preview)) {
+        for (int i = 0; i < (int)entries.size(); ++i) {
+            const auto& e = entries[i];
+            if (e.isSeparator) {
+                ImGui::Separator();
+                ImGui::TextDisabled("%s", e.displayName.c_str());
+                continue;
+            }
+            bool sel = (i == currentIdx);
+            if (ImGui::Selectable(e.displayName.c_str(), sel)) newIdx = i;
+            if (sel) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    if (newIdx != currentIdx && !entries[newIdx].isSeparator) {
         const auto& chosen = entries[newIdx];
-        if (chosen.protocolName.empty() && !chosen.isDefinition) {
-            // separator – ignore
-        } else if (chosen.isDefinition) {
+        if (chosen.isDefinition) {
             SetDefinition(chosen.definitionId);
-            // Re-read port after sync
             portInput = GetPort();
         } else {
-            SetDefinition("");
-            SetProtocol(chosen.protocolName);
+            SetDefinition(""); SetProtocol(chosen.protocolName);
         }
     }
 
-    // Hint when a definition is active
-    if (!currentDefId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(currentDefId);
-        if (def) {
-            ImGui::SameLine();
-            ImGui::TextDisabled("(port synced from definition)");
-        }
+    if (!currentDefId.empty() && ProtocolRegistry::GetInstance().FindById(currentDefId)) {
+        ImGui::SameLine(); ImGui::TextDisabled("(port from definition)");
     }
 
     // ── Status / start / stop ────────────────────────────────────────────────

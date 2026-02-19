@@ -532,12 +532,12 @@ int main(int argc, char *argv[]) {
     InputMapper& inputMapper = InputMapper::GetInstance();
     inputMapper.LoadConfig(preferencesManager);
 
+    // Load protocol definitions FIRST so servers can restore their saved definition selection
+    ProtocolRegistry::GetInstance().LoadAll();
+
     // Load Network Server Configs
     OSCServer::GetInstance().LoadConfig(preferencesManager);
     WebSocketServer::GetInstance().LoadConfig(preferencesManager);
-
-    // Load protocol definitions and field catalogs from disk
-    ProtocolRegistry::GetInstance().LoadAll();
 
     bool done = false;
     bool vsync = true;
