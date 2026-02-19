@@ -55,6 +55,12 @@ public:
     void SetProtocol(const std::string& name);
     std::string GetProtocol() const;
 
+    /** Select a user-defined protocol from ProtocolRegistry by its definition ID.
+     *  Passing an empty string clears the definition selection (falls back to
+     *  the built-in protocol set via SetProtocol). */
+    void SetDefinition(const std::string& definitionId);
+    std::string GetDefinitionId() const;
+
     void LoadConfig(const PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs);
 
@@ -86,6 +92,7 @@ private:
     mutable std::mutex m_mutex;  // mutable for const methods
     std::shared_ptr<IProtocol> m_protocol;
     std::string m_protocolName = "OSC Default";
+    std::string m_selectedDefinitionId; // "" = no definition selected (built-in only)
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;
     OutputMapper* m_OutputMapper = nullptr;

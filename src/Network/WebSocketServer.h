@@ -29,6 +29,11 @@ class WebSocketServer {
     void SetProtocol(const std::string& name);
     std::string GetProtocol() const;
 
+    /** Select a user-defined WebSocket protocol from ProtocolRegistry by its
+     *  definition ID.  Passing an empty string reverts to the built-in selection. */
+    void SetDefinition(const std::string& definitionId);
+    std::string GetDefinitionId() const;
+
     void Broadcast(const std::string &address, float value);
     void Broadcast(const std::string &address, int value);
     void Broadcast(const std::string &address, const std::string &value);
@@ -59,6 +64,9 @@ class WebSocketServer {
 
     void SetProtocol(const std::string& name) {}
     std::string GetProtocol() const { return ""; }
+
+    void SetDefinition(const std::string& definitionId) {}
+    std::string GetDefinitionId() const { return ""; }
 
     void Broadcast(const std::string &address, float value) {}
     void Broadcast(const std::string &address, int value) {}

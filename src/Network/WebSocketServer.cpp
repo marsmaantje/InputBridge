@@ -6,6 +6,7 @@
 #if ENABLE_WEBSOCKETS
 
 #include "Protocols/ProtocolManager.h"
+#include "Protocols/ProtocolRegistry.h"
 #include "imgui.h"
 #include <deque>
 #include <map>
@@ -26,6 +27,7 @@ struct WebSocketServer::Impl {
     std::map<void *, std::string> clients;
     std::shared_ptr<IProtocol> protocol;
     std::string selectedProtocol;
+    std::string selectedDefinitionId; // "" = no user-defined definition active
 
     std::thread thread;
     uWS::App *app = nullptr;
@@ -255,6 +257,24 @@ std::string WebSocketServer::GetProtocol() const {
     return m_Impl->selectedProtocol;
 }
 
+void WebSocketServer::SetDefinition(const std::string& definitionId) {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    m_Impl->selectedDefinitionId = definitionId;
+
+    if (!definitionId.empty()) {
+        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
+        if (def) {
+            // Sync port from the definition into the UI field
+            m_Impl->port = def->wssPort;
+        }
+    }
+}
+
+std::string WebSocketServer::GetDefinitionId() const {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    return m_Impl->selectedDefinitionId;
+}
+
 void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
 
@@ -337,10 +357,16 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
 void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
     int port = prefs.GetInt("WebSocket", "Port", 4269);
     std::string protocol = prefs.GetString("WebSocket", "Protocol", "Marsmaantje (New)");
+    std::string defId = prefs.GetString("WebSocket", "DefinitionId", "");
     bool enabled = prefs.GetBool("WebSocket", "Enabled", false);
 
     SetPort(port);
     SetProtocol(protocol);
+
+    // Restore definition selection (ProtocolRegistry must be loaded first)
+    if (!defId.empty()) {
+        SetDefinition(defId);
+    }
 
     if (enabled) {
         Start(port);
@@ -350,15 +376,18 @@ void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
 void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
     int port;
     std::string protocol;
+    std::string defId;
     bool running;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
-        port = m_Impl->port;
-        running = m_Impl->running;
+        port     = m_Impl->port;
+        running  = m_Impl->running;
         protocol = m_Impl->selectedProtocol;
+        defId    = m_Impl->selectedDefinitionId;
     }
     prefs.SetInt("WebSocket", "Port", port);
     prefs.SetString("WebSocket", "Protocol", protocol);
+    prefs.SetString("WebSocket", "DefinitionId", defId);
     prefs.SetBool("WebSocket", "Enabled", running);
 }
 
@@ -385,15 +414,19 @@ void WebSocketServer::DrawContent() {
     bool restartPending;
     std::deque<std::string> logs;
     std::map<void *, std::string> clients;
+    std::string currentDefId;
+    std::string currentProto;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
-        running = m_Impl->running;
-        currentPort = m_Impl->port;
-        clientCount = (int)m_Impl->clients.size();
-        runningPort = m_Impl->runningPort;
-        restartPending = m_Impl->restartPending;
-        logs = m_Impl->logs;
-        clients = m_Impl->clients;
+        running         = m_Impl->running;
+        currentPort     = m_Impl->port;
+        clientCount     = (int)m_Impl->clients.size();
+        runningPort     = m_Impl->runningPort;
+        restartPending  = m_Impl->restartPending;
+        logs            = m_Impl->logs;
+        clients         = m_Impl->clients;
+        currentDefId    = m_Impl->selectedDefinitionId;
+        currentProto    = m_Impl->selectedProtocol;
     }
 
     int portInput = currentPort;
@@ -401,36 +434,96 @@ void WebSocketServer::DrawContent() {
         SetPort(portInput);
     }
 
-    // WebSocket Format selection
-    std::string newProtocol;
+    // ── Protocol / Definition combo ─────────────────────────────────────────
+    struct ComboEntry {
+        std::string displayName;
+        bool        isDefinition = false;
+        std::string protocolName;
+        std::string definitionId;
+    };
+
+    std::vector<ComboEntry> entries;
+
+    // Built-in WebSocket-compatible protocols (exclude OSC-only ones)
     {
-        std::lock_guard<std::mutex> lock(m_Impl->mutex);
-        std::vector<std::string> all_protocols = ProtocolManager::GetInstance().GetAvailableProtocols();
-        std::vector<std::string> protocols;
-        for (const auto& p : all_protocols) {
+        auto all = ProtocolManager::GetInstance().GetAvailableProtocols();
+        for (const auto& p : all) {
             if (p.find("OSC") == std::string::npos) {
-                protocols.push_back(p);
+                ComboEntry e;
+                e.displayName  = p;
+                e.isDefinition = false;
+                e.protocolName = p;
+                entries.push_back(e);
             }
         }
+    }
 
-        int currentIdx = -1;
-        for(int i=0; i<protocols.size(); ++i) {
-            if(protocols[i] == m_Impl->selectedProtocol) currentIdx = i;
-        }
-
-        if (ImGui::Combo("Format", &currentIdx, [](void* data, int idx, const char** out_text) {
-            auto* protos = (std::vector<std::string>*)data;
-            *out_text = (*protos)[idx].c_str();
-            return true;
-        }, &protocols, protocols.size())) {
-            newProtocol = protocols[currentIdx];
+    // User-defined WebSocket definitions from ProtocolRegistry
+    {
+        const auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
+        bool firstDef = true;
+        for (const auto& def : defs) {
+            if (def.transport != ProtocolTransport::WebSocket) continue;
+            if (firstDef) {
+                ComboEntry sep;
+                sep.displayName  = "--- Custom Protocols ---";
+                sep.isDefinition = false;
+                sep.protocolName = ""; // separator – not selectable
+                entries.push_back(sep);
+                firstDef = false;
+            }
+            ComboEntry e;
+            const char* dir = (def.direction == ProtocolDirection::Output) ? " [Out]" : " [In]";
+            e.displayName  = def.name + dir;
+            e.isDefinition = true;
+            e.definitionId = def.id;
+            entries.push_back(e);
         }
     }
 
-    if (!newProtocol.empty()) {
-        SetProtocol(newProtocol);
+    // Determine current index
+    int currentIdx = 0;
+    for (int i = 0; i < (int)entries.size(); ++i) {
+        const auto& e = entries[i];
+        if (e.isDefinition && e.definitionId == currentDefId && !currentDefId.empty()) {
+            currentIdx = i; break;
+        }
+        if (!e.isDefinition && e.protocolName == currentProto && currentDefId.empty()) {
+            currentIdx = i;
+        }
     }
 
+    auto comboGetter = [](void* data, int idx, const char** out) {
+        auto* vec = reinterpret_cast<std::vector<ComboEntry>*>(data);
+        *out = (*vec)[idx].displayName.c_str();
+        return true;
+    };
+
+    int newIdx = currentIdx;
+    if (ImGui::Combo("Format", &newIdx, comboGetter, &entries, (int)entries.size())) {
+        const auto& chosen = entries[newIdx];
+        if (chosen.protocolName.empty() && !chosen.isDefinition) {
+            // separator – ignore
+        } else if (chosen.isDefinition) {
+            SetDefinition(chosen.definitionId);
+            // Re-read port after sync
+            portInput = GetPort();
+        } else {
+            SetDefinition("");
+            SetProtocol(chosen.protocolName);
+        }
+    }
+
+    // Hint when a definition is active
+    if (!currentDefId.empty()) {
+        const auto* def = ProtocolRegistry::GetInstance().FindById(currentDefId);
+        if (def) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(port synced from definition)");
+        }
+    }
+
+    // ── Status / start / stop ────────────────────────────────────────────────
     if (running) {
         ImGui::TextColored(ImVec4(0, 1, 0, 1), "Status: Running (Port %d)", runningPort);
         if (runningPort != currentPort) {

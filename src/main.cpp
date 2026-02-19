@@ -20,6 +20,7 @@
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
 #include "Protocols/ProtocolManager.h"
+#include "Protocols/ProtocolRegistry.h"
 #if ENABLE_WEBSOCKETS
 #include "Protocols/WebSocketProtocol.h"
 #endif
@@ -535,6 +536,9 @@ int main(int argc, char *argv[]) {
     OSCServer::GetInstance().LoadConfig(preferencesManager);
     WebSocketServer::GetInstance().LoadConfig(preferencesManager);
 
+    // Load protocol definitions and field catalogs from disk
+    ProtocolRegistry::GetInstance().LoadAll();
+
     bool done = false;
     bool vsync = true;
     int framerate_limit = 60;
@@ -618,6 +622,9 @@ int main(int argc, char *argv[]) {
     // Save Network Server Configs
     OSCServer::GetInstance().SaveConfig(preferencesManager);
     WebSocketServer::GetInstance().SaveConfig(preferencesManager);
+
+    // Persist any unsaved protocol definitions
+    ProtocolRegistry::GetInstance().SaveAll();
 
     preferencesManager.SetInt("Network", "UpdateRate", server_update_rate);
     preferencesManager.SetBool("Network", "DynamicRate", server_dynamic_rate);

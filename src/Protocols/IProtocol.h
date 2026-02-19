@@ -1,6 +1,17 @@
 #pragma once
 #include <string>
 
+/**
+ * Base protocol interface.
+ *
+ * Direction terminology used throughout the protocol subsystem:
+ *   Output  – data that flows from the server TO the client (input / sensor data).
+ *   Input   – data that flows FROM the client TO the server (haptic commands, etc.).
+ *
+ * The transport-agnostic ProtocolDefinition (see Protocols/ProtocolDefinition.h)
+ * governs which fields are enabled and how they are addressed at runtime.
+ * IProtocol implementations handle low-level serialisation only.
+ */
 class IProtocol {
   public:
     virtual ~IProtocol() = default;
