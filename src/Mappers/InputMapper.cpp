@@ -5,6 +5,7 @@
 #include "Network/OSCServer.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/ProtocolDefinition.h"
+#include "Protocols/ProtocolManager.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include <algorithm>
@@ -14,6 +15,8 @@
 #include <filesystem>
 #include <memory>
 #include <SDL3/SDL_filesystem.h>
+#include <sstream>
+#include <iomanip>
 
 using json = nlohmann::json;
 
@@ -536,33 +539,141 @@ std::string InputMapper::GetOutputPreview() {
         return "No active profile selected.";
     const auto &profile = m_Profiles[m_SelectedProfileIndex];
     const ProtocolDefinition* outDef = GetActiveOutputDefinition();
-    std::string out;
+    
+    std::stringstream ss;
+
+    // 1. Calculate current values
+    std::map<std::string, float> analogValues;
+    std::map<std::string, bool> digitalValues;
+
     if (outDef) {
-        out = "Protocol: " + outDef->name + "\n\nAnalog:\n";
-        for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
-            auto it=profile.outputToInput.find(pf->fieldId);
-            float v=it!=profile.outputToInput.end()?ProcessAxis(it->second):0.f;
-            char buf[80]; snprintf(buf,sizeof(buf),"  %-24s %.4f\n",fd->label.c_str(),v); out+=buf;
+        for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+            auto it = profile.outputToInput.find(pf->fieldId);
+            analogValues[pf->fieldId] = it != profile.outputToInput.end() ? ProcessAxis(it->second) : 0.f;
         }
-        out+="\nDigital:\n";
-        for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            bool pressed=false;
-            for (const auto& dm : profile.digitalMappings)
-                if (dm.target_field_id==pf->fieldId && dm.instance_id!=0) {
-                    SDL_Joystick* j=GetJoystickByID(dm.instance_id,m_DeviceManager);
-                    if (j && SDL_GetJoystickButton(j,dm.button_index)) { pressed=true; break; }
-                }
-            char buf[80]; snprintf(buf,sizeof(buf),"  %-24s %s\n",fd->label.c_str(),pressed?"PRESSED":"released"); out+=buf;
+        for (const auto& bm : profile.buttonMappings) {
+            if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
+            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+            if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name] = bm.on_value;
+        }
+        
+        for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+            digitalValues[pf->fieldId] = false;
+        }
+        for (const auto& dm : profile.digitalMappings) {
+            if (dm.instance_id == 0 || dm.target_field_id.empty()) continue;
+            SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+            if (j && SDL_GetJoystickButton(j, dm.button_index)) digitalValues[dm.target_field_id] = true;
         }
     } else {
-        out = "(legacy – no output protocol selected)\n\n";
-        for (const auto& name : m_GenericOutputs) {
-            auto it=profile.outputToInput.find(name);
-            float v=it!=profile.outputToInput.end()?ProcessAxis(it->second):0.f;
-            char buf[64]; snprintf(buf,sizeof(buf),"%-12s %.4f\n",name.c_str(),v); out+=buf;
+        for (const auto& name : m_GenericOutputs) analogValues[name] = 0.f;
+        for (const auto& [k, src] : profile.outputToInput) analogValues[k] = ProcessAxis(src);
+        for (const auto& bm : profile.buttonMappings) {
+            if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
+            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+            if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name] = bm.on_value;
         }
     }
-    return out;
+
+    // 2. Generate Preview String
+    auto& osc = OSCServer::GetInstance();
+#ifdef ENABLE_WEBSOCKETS
+    auto& ws = WebSocketServer::GetInstance();
+#endif
+
+    if (outDef) {
+        ss << "Active Definition: " << outDef->name << "\n\n";
+
+        // OSC
+        std::string oscDefId = osc.GetOutputDefinitionId();
+        if (osc.IsRunning()) {
+            if (!oscDefId.empty() && oscDefId == outDef->id) {
+                ss << "[OSC Output]\n";
+                for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+                    ss << "  " << pf->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
+                }
+                for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+                    ss << "  " << pf->oscPath << " " << (digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                }
+            } else {
+                ss << "[OSC Output] (Running, but definition mismatch)\n";
+            }
+            ss << "\n";
+        }
+
+#ifdef ENABLE_WEBSOCKETS
+        // WebSocket
+        std::string wsDefId = ws.GetOutputDefinitionId();
+        if (ws.IsRunning()) {
+            if (!wsDefId.empty() && wsDefId == outDef->id) {
+                ss << "[WebSocket Output]\n";
+                std::string protoName = ws.GetProtocol();
+                auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
+                if (protocol) {
+                    for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+                        ss << "  " << protocol->format(pf->wsKey, analogValues[pf->fieldId]) << "\n";
+                    }
+                    for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+                        ss << "  " << protocol->format(pf->wsKey, digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                    }
+                } else {
+                    ss << "  (Unknown Protocol)\n";
+                }
+            } else {
+                ss << "[WebSocket Output] (Running, but definition mismatch)\n";
+            }
+        }
+#endif
+
+    } else {
+        // Legacy
+        ss << "Legacy Mode (No Output Definition Selected)\n\n";
+        
+        float s = analogValues["Steering"];
+        float t = analogValues["Throttle"];
+        float b = analogValues["Brake"];
+        float pi = analogValues["Pitch"];
+        float ro = analogValues["Roll"];
+
+        if (osc.IsRunning()) {
+            ss << "[OSC Output]\n";
+            ss << "  /wheel/steer " << std::fixed << std::setprecision(4) << s << "\n";
+            ss << "  /wheel/throttle " << t << "\n";
+            ss << "  /wheel/brake " << b << "\n";
+            ss << "  /wheel/pitch " << pi << "\n";
+            ss << "  /wheel/roll " << ro << "\n";
+            ss << "  (Buttons not previewed in legacy mode)\n\n";
+        }
+
+#ifdef ENABLE_WEBSOCKETS
+        if (ws.IsRunning()) {
+            ss << "[WebSocket Output]\n";
+            std::string protoName = ws.GetProtocol();
+            auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
+            if (protocol) {
+                ss << "  " << protocol->format_wheel(s, b, t, pi, ro) << "\n";
+            } else {
+                ss << "  (Unknown Protocol)\n";
+            }
+        }
+#endif
+    }
+
+    if (!osc.IsRunning() 
+#ifdef ENABLE_WEBSOCKETS
+        && !ws.IsRunning()
+#endif
+    ) {
+        ss << "(No servers running)\n\nRaw Values:\n";
+        for(auto const& [key, val] : analogValues) {
+            ss << "  " << key << ": " << std::fixed << std::setprecision(4) << val << "\n";
+        }
+        for(auto const& [key, val] : digitalValues) {
+            ss << "  " << key << ": " << (val ? "ON" : "OFF") << "\n";
+        }
+    }
+
+    return ss.str();
 }
 
 void InputMapper::LoadProfiles() {
