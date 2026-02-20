@@ -58,6 +58,14 @@ public:
     /** Select a user-defined protocol from ProtocolRegistry by its definition ID.
      *  Passing an empty string clears the definition selection (falls back to
      *  the built-in protocol set via SetProtocol). */
+    /** Select user-defined output (server→client) and input (client→server)
+     *  protocol definitions independently.  Pass "" to clear a selection. */
+    void SetOutputDefinition(const std::string& definitionId);
+    void SetInputDefinition(const std::string& definitionId);
+    std::string GetOutputDefinitionId() const;
+    std::string GetInputDefinitionId() const;
+
+    // Legacy kept for compatibility
     void SetDefinition(const std::string& definitionId);
     std::string GetDefinitionId() const;
 
@@ -92,7 +100,8 @@ private:
     mutable std::mutex m_mutex;  // mutable for const methods
     std::shared_ptr<IProtocol> m_protocol;
     std::string m_protocolName = "OSC Default";
-    std::string m_selectedDefinitionId; // "" = no definition selected (built-in only)
+    std::string m_outputDefinitionId; // selected output (server→client) definition
+    std::string m_inputDefinitionId;  // selected input  (client→server) definition
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;
     OutputMapper* m_OutputMapper = nullptr;

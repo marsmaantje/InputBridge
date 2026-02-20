@@ -228,7 +228,7 @@ std::string OSCServer::GetProtocol() const {
 
 void OSCServer::SetDefinition(const std::string& definitionId) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_selectedDefinitionId = definitionId;
+    m_outputDefinitionId = definitionId;
 
     if (!definitionId.empty()) {
         const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
@@ -244,15 +244,48 @@ void OSCServer::SetDefinition(const std::string& definitionId) {
 
 std::string OSCServer::GetDefinitionId() const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_selectedDefinitionId;
+    return m_outputDefinitionId;
+}
+
+void OSCServer::SetOutputDefinition(const std::string& definitionId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_outputDefinitionId = definitionId;
+    if (!definitionId.empty()) {
+        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
+        if (def) {
+            strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
+            m_send_host[sizeof(m_send_host) - 1] = '\0';
+            m_send_port = def->oscSendPort;
+        }
+    }
+}
+
+void OSCServer::SetInputDefinition(const std::string& definitionId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_inputDefinitionId = definitionId;
+    if (!definitionId.empty()) {
+        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
+        if (def) m_recv_port = def->oscRecvPort;
+    }
+}
+
+std::string OSCServer::GetOutputDefinitionId() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_outputDefinitionId;
+}
+
+std::string OSCServer::GetInputDefinitionId() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_inputDefinitionId;
 }
 
 void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     std::string send_host = prefs.GetString("OSC", "SendHost", "127.0.0.1");
     int send_port = prefs.GetInt("OSC", "SendPort", 9066);
     int recv_port = prefs.GetInt("OSC", "RecvPort", 9068);
-    std::string protocol = prefs.GetString("OSC", "Protocol", "OSC Default");
-    std::string defId = prefs.GetString("OSC", "DefinitionId", "");
+    std::string protocol   = prefs.GetString("OSC", "Protocol", "OSC Default");
+    std::string outDefId   = prefs.GetString("OSC", "OutputDefinitionId", "");
+    std::string inDefId    = prefs.GetString("OSC", "InputDefinitionId",  "");
     bool enabled = prefs.GetBool("OSC", "Enabled", false);
 
     {
@@ -265,10 +298,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
 
     SetProtocol(protocol);
 
-    // Restore definition selection (ProtocolRegistry must be loaded first)
-    if (!defId.empty()) {
-        SetDefinition(defId);
-    }
+    if (!outDefId.empty()) SetOutputDefinition(outDefId);
+    if (!inDefId.empty())  SetInputDefinition(inDefId);
 
     if (enabled) {
         Start(send_host, send_port, recv_port);
@@ -277,12 +308,13 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
 
 void OSCServer::SaveConfig(PreferencesManager& prefs) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    prefs.SetString("OSC", "SendHost", m_send_host);
-    prefs.SetInt("OSC", "SendPort", m_send_port);
-    prefs.SetInt("OSC", "ReceivePort", m_recv_port);
-    prefs.SetString("OSC", "Protocol", m_protocolName);
-    prefs.SetString("OSC", "DefinitionId", m_selectedDefinitionId);
-    prefs.SetBool("OSC", "Enabled", m_running);
+    prefs.SetString("OSC", "SendHost",           m_send_host);
+    prefs.SetInt   ("OSC", "SendPort",            m_send_port);
+    prefs.SetInt   ("OSC", "ReceivePort",         m_recv_port);
+    prefs.SetString("OSC", "Protocol",            m_protocolName);
+    prefs.SetString("OSC", "OutputDefinitionId",  m_outputDefinitionId);
+    prefs.SetString("OSC", "InputDefinitionId",   m_inputDefinitionId);
+    prefs.SetBool  ("OSC", "Enabled",             m_running);
 }
 
 void OSCServer::SetSelectedDevice(int id) {
@@ -309,119 +341,103 @@ int OSCServer::GetReceivePort() const {
 }
 
 void OSCServer::DrawContent() {
-    ImGui::InputInt("Send Port", &m_send_port);
+    ImGui::InputInt("Send Port",    &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 
-    // ── Read current selection state under lock ───────────────────────────────
-    std::string currentDefId, currentProtoName;
+    // ── Read state under lock ─────────────────────────────────────────────────
+    std::string outDefId, inDefId, currentProto;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        currentDefId     = m_selectedDefinitionId;
-        currentProtoName = m_protocolName;
+        outDefId     = m_outputDefinitionId;
+        inDefId      = m_inputDefinitionId;
+        currentProto = m_protocolName;
     }
 
-    // ── Build combo entries ───────────────────────────────────────────────────
-    // Each entry carries enough info to act on selection.
-    // isDefinition==false  → built-in protocol (protocolName non-empty)
-    //                         or visual separator (protocolName empty)
-    // isDefinition==true   → user-defined ProtocolRegistry definition
-    struct ComboEntry {
-        std::string displayName;
-        bool        isDefinition = false;
-        bool        isSeparator  = false;
+    // ── Combo helpers ─────────────────────────────────────────────────────────
+    struct Entry {
+        std::string label;
+        bool isSeparator  = false;
+        bool isDefinition = false;
         std::string protocolName;
         std::string definitionId;
     };
-    std::vector<ComboEntry> entries;
 
-    // Group 1: built-in OSC protocols from ProtocolManager
-    for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols()) {
-        if (p.find("OSC") != std::string::npos) {
-            ComboEntry e;
-            e.displayName  = p;
-            e.protocolName = p;
-            entries.push_back(e);
-        }
-    }
+    // Built-in OSC protocols
+    std::vector<std::string> builtins;
+    for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols())
+        if (p.find("OSC") != std::string::npos)
+            builtins.push_back(p);
 
-    // Group 2: user-defined OSC definitions from ProtocolRegistry
-    {
-        const auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
+    auto buildEntries = [&](ProtocolDirection dir) {
+        std::vector<Entry> v;
+        for (const auto& p : builtins) { Entry e; e.label = p; e.protocolName = p; v.push_back(e); }
         bool addedSep = false;
-        for (const auto& def : defs) {
+        for (const auto& def : ProtocolRegistry::GetInstance().GetDefinitions()) {
             if (def.transport != ProtocolTransport::OSC) continue;
-            if (!addedSep) {
-                ComboEntry sep;
-                sep.displayName  = "--- Custom ---";
-                sep.isSeparator  = true;
-                entries.push_back(sep);
-                addedSep = true;
+            if (def.direction != dir) continue;
+            if (!addedSep) { Entry s; s.label = "--- Custom ---"; s.isSeparator = true; v.push_back(s); addedSep = true; }
+            Entry e; e.label = def.name; e.isDefinition = true; e.definitionId = def.id; v.push_back(e);
+        }
+        return v;
+    };
+
+    auto findIdx = [&](const std::vector<Entry>& v, const std::string& selDefId) {
+        int idx = 0;
+        for (int i = 0; i < (int)v.size(); ++i) {
+            if (v[i].isSeparator) continue;
+            if (v[i].isDefinition && !selDefId.empty() && v[i].definitionId == selDefId) { idx = i; break; }
+            if (!v[i].isDefinition && selDefId.empty() && v[i].protocolName == currentProto) { idx = i; }
+        }
+        return idx;
+    };
+
+    auto drawCombo = [&](const char* label, std::vector<Entry>& v, int& curIdx, int& newIdx) {
+        const char* preview = v.empty() ? "(none)" : v[curIdx].label.c_str();
+        if (ImGui::BeginCombo(label, preview)) {
+            for (int i = 0; i < (int)v.size(); ++i) {
+                const auto& e = v[i];
+                if (e.isSeparator) { ImGui::Separator(); ImGui::TextDisabled("Custom Protocols"); continue; }
+                bool sel = (i == curIdx);
+                if (ImGui::Selectable(e.label.c_str(), sel)) newIdx = i;
+                if (sel) ImGui::SetItemDefaultFocus();
             }
-            ComboEntry e;
-            e.displayName  = def.name +
-                             (def.direction == ProtocolDirection::Output ? " [Out]" : " [In]");
-            e.isDefinition = true;
-            e.definitionId = def.id;
-            entries.push_back(e);
+            ImGui::EndCombo();
         }
+    };
+
+    // ── Output protocol (server → client) ─────────────────────────────────────
+    {
+        auto entries = buildEntries(ProtocolDirection::Output);
+        int curIdx = findIdx(entries, outDefId);
+        int newIdx = curIdx;
+        ImGui::Text("Output (send to client)");
+        drawCombo("##osc_out", entries, curIdx, newIdx);
+        if (newIdx != curIdx && !entries[newIdx].isSeparator) {
+            const auto& c = entries[newIdx];
+            if (c.isDefinition) SetOutputDefinition(c.definitionId);
+            else                { SetOutputDefinition(""); SetProtocol(c.protocolName); }
+        }
+        if (!outDefId.empty() && ProtocolRegistry::GetInstance().FindById(outDefId))
+            { ImGui::SameLine(); ImGui::TextDisabled("(ports synced)"); }
     }
 
-    // ── Find current selection index ──────────────────────────────────────────
-    int currentIdx = 0;
-    for (int i = 0; i < (int)entries.size(); ++i) {
-        const auto& e = entries[i];
-        if (e.isSeparator) continue;
-        if (e.isDefinition && !currentDefId.empty() && e.definitionId == currentDefId) {
-            currentIdx = i;
-            break;
+    // ── Input protocol (client → server) ──────────────────────────────────────
+    {
+        auto entries = buildEntries(ProtocolDirection::Input);
+        int curIdx = findIdx(entries, inDefId);
+        int newIdx = curIdx;
+        ImGui::Text("Input (receive from client)");
+        drawCombo("##osc_in", entries, curIdx, newIdx);
+        if (newIdx != curIdx && !entries[newIdx].isSeparator) {
+            const auto& c = entries[newIdx];
+            if (c.isDefinition) SetInputDefinition(c.definitionId);
+            else                { SetInputDefinition(""); SetProtocol(c.protocolName); }
         }
-        if (!e.isDefinition && currentDefId.empty() && e.protocolName == currentProtoName) {
-            currentIdx = i;
-            // don't break – a definition match above takes priority
-        }
+        if (!inDefId.empty() && ProtocolRegistry::GetInstance().FindById(inDefId))
+            { ImGui::SameLine(); ImGui::TextDisabled("(recv port synced)"); }
     }
 
-    // ── Draw combo ────────────────────────────────────────────────────────────
-    int newIdx = currentIdx;
-    if (ImGui::BeginCombo("Protocol", entries.empty() ? "" : entries[currentIdx].displayName.c_str())) {
-        for (int i = 0; i < (int)entries.size(); ++i) {
-            const auto& e = entries[i];
-            if (e.isSeparator) {
-                ImGui::Separator();
-                ImGui::TextDisabled("%s", e.displayName.c_str());
-                continue;
-            }
-            bool selected = (i == currentIdx);
-            if (ImGui::Selectable(e.displayName.c_str(), selected)) {
-                newIdx = i;
-            }
-            if (selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-
-    // ── Apply selection if changed ────────────────────────────────────────────
-    if (newIdx != currentIdx && newIdx >= 0 && newIdx < (int)entries.size()) {
-        const auto& chosen = entries[newIdx];
-        if (!chosen.isSeparator) {
-            if (chosen.isDefinition) {
-                SetDefinition(chosen.definitionId);
-            } else {
-                SetDefinition("");
-                SetProtocol(chosen.protocolName);
-            }
-        }
-    }
-
-    // Hint when a user-defined definition is active
-    if (!currentDefId.empty()) {
-        if (const auto* def = ProtocolRegistry::GetInstance().FindById(currentDefId)) {
-            ImGui::SameLine();
-            ImGui::TextDisabled("(ports from definition)");
-        }
-    }
-
-    // ── Start / stop controls ─────────────────────────────────────────────────
+    // ── Start / stop ──────────────────────────────────────────────────────────
     if (IsRunning()) {
         bool settingsChanged = (m_send_port != m_running_send_port) ||
                                (m_recv_port != m_running_recv_port) ||
@@ -435,14 +451,14 @@ void OSCServer::DrawContent() {
         }
         if (ImGui::Button("Stop OSC")) Stop();
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0, 1, 0, 1), "Running");
+        ImGui::TextColored(ImVec4(0,1,0,1), "Running");
         ImGui::SameLine();
         ImGui::TextColored(m_isConnected ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1),
                            m_isConnected ? "Connected" : "Send Error");
     } else {
         if (ImGui::Button("Start OSC")) Start(m_send_host, m_send_port, m_recv_port);
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Stopped");
+        ImGui::TextColored(ImVec4(1,0,0,1), "Stopped");
     }
 
     std::deque<std::string> logs;
@@ -456,9 +472,8 @@ void OSCServer::DrawContent() {
     ImGui::Separator();
     ImGui::Text("Known Clients (Sources): %d", (int)clients.size());
     if (ImGui::TreeNode("Client List")) {
-        if (ImGui::BeginChild("Clients", ImVec2(0, 100), true)) {
+        if (ImGui::BeginChild("Clients", ImVec2(0, 100), true))
             for (const auto& c : clients) ImGui::TextUnformatted(c.c_str());
-        }
         ImGui::EndChild();
         ImGui::TreePop();
     }
