@@ -29,6 +29,7 @@ ProtocolRegistry::ProtocolRegistry() {
 void ProtocolRegistry::LoadAll() {
     EnsureDirectories();
     LoadFieldCatalog();
+    LoadPresets();
     LoadDefinitionFiles();
 }
 
@@ -50,6 +51,70 @@ void ProtocolRegistry::ReloadFieldCatalog() {
     PopulateBuiltinOutputFields();
     PopulateBuiltinInputFields();
     LoadFieldCatalog();
+}
+
+void ProtocolRegistry::AddOutputField(const FieldDescriptor& fd) {
+    for (auto& f : m_outputFields) {
+        if (f.id == fd.id) return; // Already exists
+    }
+    m_outputFields.push_back(fd);
+    SaveFieldCatalog();
+}
+
+void ProtocolRegistry::DeleteOutputField(const std::string& id) {
+    auto it = std::remove_if(m_outputFields.begin(), m_outputFields.end(),
+                             [&](const FieldDescriptor& fd) { return fd.id == id && !fd.isBuiltIn; });
+    if (it != m_outputFields.end()) {
+        m_outputFields.erase(it, m_outputFields.end());
+        SaveFieldCatalog();
+    }
+}
+
+void ProtocolRegistry::SaveFieldCatalog() {
+    json j;
+    json arr = json::array();
+    for (const auto& fd : m_outputFields) {
+        if (fd.isBuiltIn) continue;
+        json item;
+        item["id"] = fd.id;
+        item["label"] = fd.label;
+        item["category"] = fd.category;
+        item["type"] = (fd.type == FieldType::DigitalButton) ? "digital" : "analog";
+        item["oscPath"] = fd.defaultOscPath;
+        item["wsKey"] = fd.defaultWsKey;
+        arr.push_back(item);
+    }
+    j["output_fields"] = arr;
+
+    std::string path = GetProtocolsDir() + "input_fields.json";
+    std::ofstream ofs(path);
+    if (ofs) ofs << j.dump(4);
+}
+
+const std::vector<FieldPreset>& ProtocolRegistry::GetPresets() const {
+    return m_presets;
+}
+
+void ProtocolRegistry::SavePreset(const std::string& name, const std::vector<std::string>& fieldIds) {
+    for (auto& p : m_presets) {
+        if (p.name == name) {
+            p.fieldIds = fieldIds;
+            SavePresets();
+            return;
+        }
+    }
+    FieldPreset p;
+    p.name = name;
+    p.fieldIds = fieldIds;
+    m_presets.push_back(p);
+    SavePresets();
+}
+
+void ProtocolRegistry::DeletePreset(const std::string& name) {
+    m_presets.erase(std::remove_if(m_presets.begin(), m_presets.end(),
+                                   [&](const FieldPreset& p) { return p.name == name; }),
+                    m_presets.end());
+    SavePresets();
 }
 
 std::vector<ProtocolDefinition>& ProtocolRegistry::GetDefinitions() {
@@ -83,6 +148,97 @@ std::string ProtocolRegistry::CreateDefinition(const std::string& name,
     m_definitions.push_back(def);
     SaveDefinition(m_definitions.back());
     return def.id;
+}
+
+std::string ProtocolRegistry::DuplicateDefinition(const std::string& srcId, const std::string& newName, ProtocolTransport newTransport) {
+    ProtocolDefinition* src = FindById(srcId);
+    if (!src) return "";
+
+    ProtocolDefinition def = *src;
+    def.id = GenerateId();
+    def.name = newName;
+    def.transport = newTransport;
+    def.active = false; // Don't activate duplicate immediately
+
+    m_definitions.push_back(def);
+    SaveDefinition(m_definitions.back());
+    return def.id;
+}
+
+bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string& path) {
+    const ProtocolDefinition* def = FindById(id);
+    if (!def) return false;
+
+    json j;
+    j["id"]        = def->id;
+    j["name"]      = def->name;
+    j["transport"] = (def->transport == ProtocolTransport::OSC) ? "osc" : "websocket";
+    j["direction"] = (def->direction == ProtocolDirection::Output) ? "output" : "input";
+    j["active"]    = false; // Don't activate exported protocols by default
+
+    j["osc"]["host"]     = def->oscHost;
+    j["osc"]["sendPort"] = def->oscSendPort;
+    j["osc"]["recvPort"] = def->oscRecvPort;
+    j["ws"]["port"]      = def->wssPort;
+
+    json fieldsArr = json::array();
+    for (const auto& f : def->fields) {
+        json fj;
+        fj["fieldId"] = f.fieldId;
+        fj["oscPath"] = f.oscPath;
+        fj["wsKey"]   = f.wsKey;
+        fj["enabled"] = f.enabled;
+        fieldsArr.push_back(fj);
+    }
+    j["fields"] = fieldsArr;
+
+    std::ofstream ofs(path);
+    if (!ofs) return false;
+    ofs << j.dump(4);
+    return true;
+}
+
+std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) return "";
+
+    try {
+        json j = json::parse(ifs);
+        ProtocolDefinition def;
+        def.id = GenerateId(); // Always generate a new ID to avoid conflicts
+        def.name = j.value("name", "Imported Protocol");
+        
+        std::string ts = j.value("transport", "osc");
+        def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
+
+        std::string dir_s = j.value("direction", "output");
+        def.direction = (dir_s == "input") ? ProtocolDirection::Input : ProtocolDirection::Output;
+
+        def.active = false;
+
+        if (j.contains("osc")) {
+            def.oscHost     = j["osc"].value("host",     "127.0.0.1");
+            def.oscSendPort = j["osc"].value("sendPort", 9066);
+            def.oscRecvPort = j["osc"].value("recvPort", 9068);
+        }
+        if (j.contains("ws")) {
+            def.wssPort = j["ws"].value("port", 4269);
+        }
+        if (j.contains("fields") && j["fields"].is_array()) {
+            for (const auto& fj : j["fields"]) {
+                ProtocolField f;
+                f.fieldId = fj.value("fieldId", "");
+                f.oscPath = fj.value("oscPath",  "");
+                f.wsKey   = fj.value("wsKey",    "");
+                f.enabled = fj.value("enabled",  true);
+                if (!f.fieldId.empty())
+                    def.fields.push_back(f);
+            }
+        }
+        m_definitions.push_back(def);
+        SaveDefinition(def);
+        return def.id;
+    } catch (...) { return ""; }
 }
 
 void ProtocolRegistry::DeleteDefinition(const std::string& id) {
@@ -180,6 +336,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
                 fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
                 fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
                 fd.defaultWsKey   = item.value("wsKey",    fd.id);
+                fd.isBuiltIn      = false;
 
                 // Only add if not already present (built-ins take precedence by id)
                 bool exists = false;
@@ -192,6 +349,42 @@ void ProtocolRegistry::LoadFieldCatalog() {
     } catch (const std::exception& e) {
         std::cerr << "[ProtocolRegistry] Failed to parse input_fields.json: " << e.what() << "\n";
     }
+}
+
+void ProtocolRegistry::LoadPresets() {
+    m_presets.clear();
+    std::string path = GetProtocolsDir() + "presets.json";
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) return;
+
+    try {
+        json j = json::parse(ifs);
+        if (j.contains("presets") && j["presets"].is_array()) {
+            for (const auto& item : j["presets"]) {
+                FieldPreset p;
+                p.name = item.value("name", "Unnamed");
+                if (item.contains("fields") && item["fields"].is_array()) {
+                    for (const auto& f : item["fields"]) p.fieldIds.push_back(f.get<std::string>());
+                }
+                m_presets.push_back(p);
+            }
+        }
+    } catch (...) {}
+}
+
+void ProtocolRegistry::SavePresets() {
+    json j;
+    json arr = json::array();
+    for (const auto& p : m_presets) {
+        json item;
+        item["name"] = p.name;
+        item["fields"] = p.fieldIds;
+        arr.push_back(item);
+    }
+    j["presets"] = arr;
+    std::string path = GetProtocolsDir() + "presets.json";
+    std::ofstream ofs(path);
+    if (ofs) ofs << j.dump(4);
 }
 
 void ProtocolRegistry::LoadDefinitionFiles() {
@@ -282,6 +475,7 @@ void ProtocolRegistry::PopulateBuiltinOutputFields() {
         fd.type           = type;
         fd.defaultOscPath = oscPath;
         fd.defaultWsKey   = wsKey;
+        fd.isBuiltIn      = true;
         m_outputFields.push_back(fd);
     };
 
@@ -345,6 +539,7 @@ void ProtocolRegistry::PopulateBuiltinInputFields() {
         fd.type           = FieldType::AnalogAxis; // haptic values are floats
         fd.defaultOscPath = oscPath;
         fd.defaultWsKey   = wsKey;
+        fd.isBuiltIn      = true;
         m_inputFields.push_back(fd);
     };
 

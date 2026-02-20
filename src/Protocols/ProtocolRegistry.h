@@ -13,6 +13,11 @@
  *
  * Call LoadAll() once at startup and SaveAll() / SaveDefinition() as needed.
  */
+struct FieldPreset {
+    std::string name;
+    std::vector<std::string> fieldIds;
+};
+
 class ProtocolRegistry {
 public:
     static ProtocolRegistry& GetInstance();
@@ -26,6 +31,15 @@ public:
     const std::vector<FieldDescriptor>& GetInputFields()  const;  // haptic/rumble ← received from client
     void ReloadFieldCatalog(); // re-read input_fields.json without touching definitions
 
+    void AddOutputField(const FieldDescriptor& fd);
+    void DeleteOutputField(const std::string& id);
+    void SaveFieldCatalog();
+
+    // ── Presets ──────────────────────────────────────────────────────────────
+    const std::vector<FieldPreset>& GetPresets() const;
+    void SavePreset(const std::string& name, const std::vector<std::string>& fieldIds);
+    void DeletePreset(const std::string& name);
+
     // ── Protocol definitions ─────────────────────────────────────────────────
     std::vector<ProtocolDefinition>&       GetDefinitions();
     const std::vector<ProtocolDefinition>& GetDefinitions() const;
@@ -37,6 +51,11 @@ public:
     std::string CreateDefinition(const std::string& name,
                                  ProtocolTransport  transport,
                                  ProtocolDirection  direction);
+
+    std::string DuplicateDefinition(const std::string& srcId, const std::string& newName, ProtocolTransport newTransport);
+
+    bool ExportDefinition(const std::string& id, const std::string& path);
+    std::string ImportDefinition(const std::string& path);
 
     /** Remove a definition and delete its file from disk. */
     void DeleteDefinition(const std::string& id);
@@ -59,6 +78,8 @@ private:
 
     void LoadFieldCatalog();
     void LoadDefinitionFiles();
+    void LoadPresets();
+    void SavePresets();
     void EnsureDirectories();
     void WriteDefaultFieldCatalog();
     void PopulateBuiltinOutputFields();
@@ -69,4 +90,5 @@ private:
     std::vector<FieldDescriptor> m_outputFields; // data the server can send out
     std::vector<FieldDescriptor> m_inputFields;  // haptic / rumble data the server can receive
     std::vector<ProtocolDefinition> m_definitions;
+    std::vector<FieldPreset> m_presets;
 };

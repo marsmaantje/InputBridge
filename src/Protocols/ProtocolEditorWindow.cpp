@@ -72,6 +72,11 @@ void ProtocolEditorWindow::Draw(bool& open) {
 
     // ── Modals ───────────────────────────────────────────────────────────────
     DrawNewProtocolModal();
+    DrawDuplicateProtocolModal();
+    DrawCreateFieldModal();
+    DrawSavePresetModal();
+    DrawExportProtocolModal();
+    DrawImportProtocolModal();
 
     ImGui::End();
 }
@@ -84,6 +89,11 @@ void ProtocolEditorWindow::DrawProtocolList() {
 
     ImGui::Text("Protocols (%d)", (int)defs.size());
     ImGui::Separator();
+
+    if (ImGui::Button("Import...")) {
+        s_showImportModal = true;
+        s_importPath[0] = '\0';
+    }
 
     for (int i = 0; i < (int)defs.size(); ++i) {
         const auto& def = defs[i];
@@ -110,6 +120,21 @@ void ProtocolEditorWindow::DrawProtocolList() {
                     s_selectedIndex = (int)reg.GetDefinitions().size() - 1;
                 ImGui::EndPopup();
                 break; // list invalidated
+            }
+            if (ImGui::MenuItem("Duplicate")) {
+                s_showDupModal = true;
+                s_dupSourceId = def.id;
+                std::string copyName = def.name + " (Copy)";
+                std::strncpy(s_dupName, copyName.c_str(), sizeof(s_dupName));
+                s_dupName[sizeof(s_dupName)-1] = '\0';
+                s_dupTransport = (def.transport == ProtocolTransport::OSC) ? 0 : 1;
+                ImGui::EndPopup();
+            }
+            if (ImGui::MenuItem("Export...")) {
+                s_showExportModal = true;
+                s_exportId = def.id;
+                std::string filename = def.name + ".json";
+                std::strncpy(s_exportPath, filename.c_str(), sizeof(s_exportPath));
             }
             ImGui::EndPopup();
         }
@@ -228,6 +253,11 @@ void ProtocolEditorWindow::DrawEditor() {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(200.0f);
     ImGui::InputTextWithHint("##fieldfilter", "Filter fields...", s_fieldFilter, sizeof(s_fieldFilter));
+    ImGui::SameLine();
+    if (ImGui::Button("Save as Preset")) {
+        s_showSavePresetModal = true;
+        std::strncpy(s_presetName, "New Preset", sizeof(s_presetName));
+    }
 
     ImGui::BeginChild("##FieldArea", ImVec2(0, 0), false);
 
@@ -241,12 +271,23 @@ void ProtocolEditorWindow::DrawEditor() {
 
 // ─── Field pickers ────────────────────────────────────────────────────────────
 
-static void DrawFieldTable(ProtocolDefinition& def,
+void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                            const std::vector<FieldDescriptor>& catalog,
                            bool isOsc,
                            const char* filter,
                            bool& pendingSave) {
     auto& reg = ProtocolRegistry::GetInstance();
+
+    if (ImGui::Button("+ Create Field")) {
+        s_showCreateFieldModal = true;
+        s_cfId[0] = '\0';
+        s_cfLabel[0] = '\0';
+        std::strcpy(s_cfCategory, "Custom");
+        s_cfType = 0;
+        std::strcpy(s_cfOsc, "/custom/");
+        std::strcpy(s_cfWs, "custom_");
+    }
+    ImGui::Separator();
 
     // Group by category
     std::string currentCat;
@@ -320,6 +361,28 @@ static void DrawFieldTable(ProtocolDefinition& def,
                 existing->wsKey   = fd.defaultWsKey;
                 pendingSave = true;
             }
+
+            // Duplicate/Delete for custom fields
+            if (!fd.isBuiltIn) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Dup##d")) {
+                    s_showCreateFieldModal = true;
+                    std::string newId = fd.id + "_copy";
+                    std::strncpy(s_cfId, newId.c_str(), sizeof(s_cfId));
+                    std::strncpy(s_cfLabel, fd.label.c_str(), sizeof(s_cfLabel));
+                    std::strncpy(s_cfCategory, fd.category.c_str(), sizeof(s_cfCategory));
+                    s_cfType = (fd.type == FieldType::DigitalButton) ? 1 : 0;
+                    std::strncpy(s_cfOsc, fd.defaultOscPath.c_str(), sizeof(s_cfOsc));
+                    std::strncpy(s_cfWs, fd.defaultWsKey.c_str(), sizeof(s_cfWs));
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Del##d")) {
+                    reg.DeleteOutputField(fd.id);
+                    // If this field was enabled in current def, it will be ignored on load
+                    // but we should probably mark pending save to clean up the definition
+                    pendingSave = true;
+                }
+            }
         }
 
         ImGui::PopID();
@@ -375,6 +438,18 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
         const char* directions[] = { "Output (server → client)", "Input (client → server)" };
         ImGui::Combo("Direction",    &s_newDirection, directions, 2);
 
+        // Presets
+        auto& presets = ProtocolRegistry::GetInstance().GetPresets();
+        if (!presets.empty()) {
+            if (ImGui::BeginCombo("Preset", (s_newPresetIdx == 0) ? "None" : presets[s_newPresetIdx-1].name.c_str())) {
+                if (ImGui::Selectable("None", s_newPresetIdx == 0)) s_newPresetIdx = 0;
+                for (int i = 0; i < (int)presets.size(); ++i) {
+                    if (ImGui::Selectable(presets[i].name.c_str(), s_newPresetIdx == i + 1)) s_newPresetIdx = i + 1;
+                }
+                ImGui::EndCombo();
+            }
+        }
+
         ImGui::Separator();
 
         bool nameOk = (s_newName[0] != '\0');
@@ -385,6 +460,21 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
 
             std::string id = ProtocolRegistry::GetInstance()
                                  .CreateDefinition(s_newName, transport, direction);
+
+            // Apply preset if selected
+            if (s_newPresetIdx > 0 && s_newPresetIdx <= (int)presets.size()) {
+                auto* def = ProtocolRegistry::GetInstance().FindById(id);
+                if (def) {
+                    const auto& p = presets[s_newPresetIdx - 1];
+                    for (const auto& fid : p.fieldIds) {
+                        ProtocolField pf;
+                        pf.fieldId = fid;
+                        pf.enabled = true;
+                        def->fields.push_back(pf);
+                    }
+                    ProtocolRegistry::GetInstance().SaveDefinition(*def);
+                }
+            }
 
             // Select the new definition
             auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
@@ -400,6 +490,162 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
             ImGui::CloseCurrentPopup();
         }
 
+        ImGui::EndPopup();
+    }
+}
+
+void ProtocolEditorWindow::DrawDuplicateProtocolModal() {
+    if (s_showDupModal) {
+        ImGui::OpenPopup("Duplicate Protocol##modal");
+        s_showDupModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Duplicate Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::InputText("Name", s_dupName, sizeof(s_dupName));
+        const char* transports[] = { "OSC", "WebSocket" };
+        ImGui::Combo("Transport", &s_dupTransport, transports, 2);
+
+        ImGui::Separator();
+        if (ImGui::Button("Duplicate", ImVec2(120, 0))) {
+            auto transport = (s_dupTransport == 1) ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
+            std::string id = ProtocolRegistry::GetInstance().DuplicateDefinition(s_dupSourceId, s_dupName, transport);
+            
+            // Select new
+            auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
+            for (int i = 0; i < (int)defs.size(); ++i) {
+                if (defs[i].id == id) { s_selectedIndex = i; break; }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+void ProtocolEditorWindow::DrawCreateFieldModal() {
+    if (s_showCreateFieldModal) {
+        ImGui::OpenPopup("Create/Edit Field##modal");
+        s_showCreateFieldModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Create/Edit Field##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::InputText("ID", s_cfId, sizeof(s_cfId));
+        ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel));
+        ImGui::InputText("Category", s_cfCategory, sizeof(s_cfCategory));
+        const char* types[] = { "Analog Axis", "Digital Button" };
+        ImGui::Combo("Type", &s_cfType, types, 2);
+        ImGui::InputText("Default OSC Path", s_cfOsc, sizeof(s_cfOsc));
+        ImGui::InputText("Default WS Key", s_cfWs, sizeof(s_cfWs));
+
+        ImGui::Separator();
+        
+        bool idExists = false;
+        for (const auto& f : ProtocolRegistry::GetInstance().GetOutputFields()) {
+            if (f.id == s_cfId) { idExists = true; break; }
+        }
+        if (idExists) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ID already exists!");
+
+        bool ok = (s_cfId[0] != '\0') && !idExists;
+        if (!ok) ImGui::BeginDisabled();
+        
+        if (ImGui::Button("Save Field", ImVec2(120, 0))) {
+            FieldDescriptor fd;
+            fd.id = s_cfId;
+            fd.label = s_cfLabel;
+            fd.category = s_cfCategory;
+            fd.type = (s_cfType == 1) ? FieldType::DigitalButton : FieldType::AnalogAxis;
+            fd.defaultOscPath = s_cfOsc;
+            fd.defaultWsKey = s_cfWs;
+            fd.isBuiltIn = false;
+            
+            ProtocolRegistry::GetInstance().AddOutputField(fd);
+            ImGui::CloseCurrentPopup();
+        }
+        if (!ok) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+void ProtocolEditorWindow::DrawExportProtocolModal() {
+    if (s_showExportModal) {
+        ImGui::OpenPopup("Export Protocol##modal");
+        s_showExportModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Export Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Export to JSON file");
+        ImGui::InputText("File Path", s_exportPath, sizeof(s_exportPath));
+        
+        ImGui::Separator();
+        if (ImGui::Button("Export", ImVec2(120, 0))) {
+            ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+void ProtocolEditorWindow::DrawImportProtocolModal() {
+    if (s_showImportModal) {
+        ImGui::OpenPopup("Import Protocol##modal");
+        s_showImportModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Import Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Import from JSON file");
+        ImGui::InputText("File Path", s_importPath, sizeof(s_importPath));
+        
+        ImGui::Separator();
+        if (ImGui::Button("Import", ImVec2(120, 0))) {
+            std::string id = ProtocolRegistry::GetInstance().ImportDefinition(s_importPath);
+            auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
+            for (int i = 0; i < (int)defs.size(); ++i) {
+                if (defs[i].id == id) { s_selectedIndex = i; break; }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+void ProtocolEditorWindow::DrawSavePresetModal() {
+    if (s_showSavePresetModal) {
+        ImGui::OpenPopup("Save Preset##modal");
+        s_showSavePresetModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Save Preset##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Save current enabled fields as a preset");
+        ImGui::InputText("Preset Name", s_presetName, sizeof(s_presetName));
+        
+        ImGui::Separator();
+        if (ImGui::Button("Save", ImVec2(120, 0))) {
+            auto& reg = ProtocolRegistry::GetInstance();
+            auto& defs = reg.GetDefinitions();
+            if (s_selectedIndex >= 0 && s_selectedIndex < (int)defs.size()) {
+                const auto& def = defs[s_selectedIndex];
+                std::vector<std::string> fields;
+                for (const auto& f : def.fields) {
+                    if (f.enabled) fields.push_back(f.fieldId);
+                }
+                reg.SavePreset(s_presetName, fields);
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 }

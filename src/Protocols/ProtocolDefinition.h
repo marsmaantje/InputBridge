@@ -16,6 +16,7 @@ struct FieldDescriptor {
     FieldType   type;
     std::string defaultOscPath;  // suggested OSC address, e.g. "/input/steering"
     std::string defaultWsKey;    // suggested WebSocket JSON key, e.g. "steering"
+    bool        isBuiltIn = false;
 };
 
 // ─── A single field slot inside a protocol definition ──────────────────────
