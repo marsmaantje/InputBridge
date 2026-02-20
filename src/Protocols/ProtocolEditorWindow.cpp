@@ -34,7 +34,8 @@ void ProtocolEditorWindow::Draw(bool& open) {
 
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Protocol Editor", &open,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                      ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
         return;
     }
