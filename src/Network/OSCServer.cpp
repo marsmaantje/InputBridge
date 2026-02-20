@@ -45,6 +45,30 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
     return 0;
 }
 
+int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    auto* server = (OSCServer*)user_data;
+    if (server->m_OutputMapper && argc >= 7) {
+        server->m_OutputMapper->QueuePeriodic(argv[0]->i, argv[1]->f, argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->i, argv[6]->i);
+    }
+    return 0;
+}
+
+int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    auto* server = (OSCServer*)user_data;
+    if (server->m_OutputMapper && argc >= 8) {
+        server->m_OutputMapper->QueueCondition(argv[0]->i, argv[1]->f, argv[2]->f, argv[3]->f, argv[4]->f, argv[5]->f, argv[6]->f, argv[7]->i);
+    }
+    return 0;
+}
+
+int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    auto* server = (OSCServer*)user_data;
+    if (server->m_OutputMapper && argc >= 2) {
+        server->m_OutputMapper->QueueSetGain(argv[0]->i, argv[1]->i);
+    }
+    return 0;
+}
+
 bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_running) {
@@ -82,6 +106,9 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
 
     lo_server_thread_add_method(m_server_thread, "/haptic/rumble", "iffi", haptic_rumble_handler, this);
     lo_server_thread_add_method(m_server_thread, "/haptic/constant", "ifi", haptic_constant_handler, this);
+    lo_server_thread_add_method(m_server_thread, "/haptic/periodic", "ififfii", haptic_periodic_handler, this);
+    lo_server_thread_add_method(m_server_thread, "/haptic/condition", "iffffffi", haptic_condition_handler, this);
+    lo_server_thread_add_method(m_server_thread, "/haptic/gain", "ii", haptic_gain_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);
 

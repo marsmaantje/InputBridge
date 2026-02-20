@@ -78,6 +78,9 @@ private:
     static int generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_rumble_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_constant_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_periodic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_condition_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_gain_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
     lo_address m_send_address = nullptr;
     lo_server_thread m_server_thread = nullptr;

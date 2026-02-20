@@ -84,9 +84,11 @@ named protocol configuration.
     "osc": { "host": "127.0.0.1", "sendPort": 9066, "recvPort": 9068 },
     "ws": { "port": 4270 },
     "fields": [
-        { "fieldId": "haptic_rumble_low",  "oscPath": "/haptic/rumble_low",  "wsKey": "rumble_low",  "enabled": true },
-        { "fieldId": "haptic_rumble_high", "oscPath": "/haptic/rumble_high", "wsKey": "rumble_high", "enabled": true },
-        { "fieldId": "haptic_const_force", "oscPath": "/haptic/const_force", "wsKey": "const_force", "enabled": true }
+        { "fieldId": "haptic_rumble",    "oscPath": "/haptic/rumble",    "wsKey": "rumble",    "enabled": true },
+        { "fieldId": "haptic_constant",  "oscPath": "/haptic/constant",  "wsKey": "constant",  "enabled": true },
+        { "fieldId": "haptic_periodic",  "oscPath": "/haptic/periodic",  "wsKey": "periodic",  "enabled": true },
+        { "fieldId": "haptic_condition", "oscPath": "/haptic/condition", "wsKey": "condition", "enabled": true },
+        { "fieldId": "haptic_gain",      "oscPath": "/haptic/gain",      "wsKey": "gain",      "enabled": true }
     ]
 }
 ```
@@ -126,13 +128,10 @@ named protocol configuration.
 
 | ID | Label |
 |----|-------|
-| `haptic_rumble_low`  | Rumble – Low Frequency |
-| `haptic_rumble_high` | Rumble – High Frequency |
-| `haptic_rumble_dur`  | Rumble – Duration (ms) |
-| `haptic_const_force` | Constant Force |
-| `haptic_const_dur`   | Constant Force Duration |
-| `haptic_spring`      | Spring / Centering |
-| `haptic_damper`      | Damper |
-| `haptic_friction`    | Friction |
+| `haptic_rumble`      | Rumble |
+| `haptic_constant`    | Constant Force |
+| `haptic_periodic`    | Periodic Effect |
+| `haptic_condition`   | Condition Effect |
+| `haptic_gain`        | Global Gain |
 | `rumble_left`        | Rumble Left Motor |
 | `rumble_right`       | Rumble Right Motor |

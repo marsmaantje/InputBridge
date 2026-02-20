@@ -349,14 +349,11 @@ void ProtocolRegistry::PopulateBuiltinInputFields() {
     };
 
     // ── Haptic feedback fields (received from client) ─────────────────────
-    addField("haptic_rumble_low",  "Rumble – Low Frequency",  "Haptic", "/haptic/rumble_low",  "rumble_low");
-    addField("haptic_rumble_high", "Rumble – High Frequency", "Haptic", "/haptic/rumble_high", "rumble_high");
-    addField("haptic_rumble_dur",  "Rumble – Duration (ms)",  "Haptic", "/haptic/rumble_dur",  "rumble_dur");
-    addField("haptic_const_force", "Constant Force",          "Haptic", "/haptic/const_force", "const_force");
-    addField("haptic_const_dur",   "Constant Force Duration", "Haptic", "/haptic/const_dur",   "const_dur");
-    addField("haptic_spring",      "Spring / Centering",      "Haptic", "/haptic/spring",      "spring");
-    addField("haptic_damper",      "Damper",                  "Haptic", "/haptic/damper",      "damper");
-    addField("haptic_friction",    "Friction",                "Haptic", "/haptic/friction",    "friction");
+    addField("haptic_rumble",      "Rumble",                  "Haptic", "/haptic/rumble",      "rumble");
+    addField("haptic_constant",    "Constant Force",          "Haptic", "/haptic/constant",    "constant");
+    addField("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
+    addField("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
+    addField("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
 
     // ── Rumble (simple gamepad) ───────────────────────────────────────────
     addField("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");
