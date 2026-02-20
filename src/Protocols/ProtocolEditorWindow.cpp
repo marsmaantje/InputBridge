@@ -163,8 +163,10 @@ void ProtocolEditorWindow::DrawEditor() {
         }
         ImGui::SameLine();
         if (def.direction == ProtocolDirection::Output || def.direction == ProtocolDirection::Input) {
+            ImGui::PushItemWidth(100.0f);
             if (ImGui::InputInt("Send Port##oscsend", &def.oscSendPort)) s_pendingSave = true;
             ImGui::SameLine();
+            ImGui::PushItemWidth(100.0f);
             if (ImGui::InputInt("Recv Port##oscrecv", &def.oscRecvPort)) s_pendingSave = true;
         }
         ImGui::PopItemWidth();
