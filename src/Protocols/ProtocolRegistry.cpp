@@ -286,7 +286,7 @@ void ProtocolRegistry::PopulateBuiltinOutputFields() {
     };
 
     // ── Analog axes ──────────────────────────────────────────────────────────
-    addField("axis_steering",   "Steering / Yaw",  "Analog Axes", FieldType::AnalogAxis, "/input/steering",   "steering");
+    addField("axis_steering",   "Steering / Yaw",  "Analog Axes", FieldType::AnalogAxis, "/input/yaw",        "yaw");
     addField("axis_throttle",   "Throttle",        "Analog Axes", FieldType::AnalogAxis, "/input/throttle",   "throttle");
     addField("axis_clutch",     "Clutch",          "Analog Axes", FieldType::AnalogAxis, "/input/clutch",     "clutch");
     addField("axis_brake",      "Brake",           "Analog Axes", FieldType::AnalogAxis, "/input/brake",      "brake");

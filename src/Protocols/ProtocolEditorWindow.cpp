@@ -156,7 +156,7 @@ void ProtocolEditorWindow::DrawEditor() {
         char hostBuf[128];
         std::strncpy(hostBuf, def.oscHost.c_str(), sizeof(hostBuf));
         hostBuf[sizeof(hostBuf)-1] = '\0';
-        ImGui::PushItemWidth(180.0f);
+        ImGui::PushItemWidth(140.0f);
         if (ImGui::InputText("Host##oschost", hostBuf, sizeof(hostBuf))) {
             def.oscHost = hostBuf;
             s_pendingSave = true;
