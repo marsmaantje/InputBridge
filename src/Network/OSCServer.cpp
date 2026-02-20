@@ -228,7 +228,7 @@ std::string OSCServer::GetProtocol() const {
 
 void OSCServer::SetDefinition(const std::string& definitionId) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_outputDefinitionId = definitionId;
+    m_selectedDefinitionId = definitionId;
 
     if (!definitionId.empty()) {
         const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
@@ -244,7 +244,7 @@ void OSCServer::SetDefinition(const std::string& definitionId) {
 
 std::string OSCServer::GetDefinitionId() const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_outputDefinitionId;
+    return m_selectedDefinitionId;
 }
 
 void OSCServer::SetOutputDefinition(const std::string& definitionId) {

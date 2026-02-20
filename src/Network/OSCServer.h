@@ -100,6 +100,7 @@ private:
     mutable std::mutex m_mutex;  // mutable for const methods
     std::shared_ptr<IProtocol> m_protocol;
     std::string m_protocolName = "OSC Default";
+    std::string m_selectedDefinitionId; // legacy single-slot
     std::string m_outputDefinitionId; // selected output (server→client) definition
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
     std::deque<std::string> m_logs;

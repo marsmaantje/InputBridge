@@ -38,29 +38,40 @@ struct HapticTarget {
 
 class InputMapper {
   public:
+    // Maps a device axis to a named analog output channel (field id or legacy name)
     struct InputSource {
         std::string deviceGuid;
-        SDL_JoystickID instance_id = 0; // Resolved at runtime
+        SDL_JoystickID instance_id = 0;
         int axisIndex = -1;
         bool invert = false;
         float deadzone = 0.05f;
         int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0
     };
 
+    // Maps a device button to an analog output channel (on/off float values)
     struct ButtonToAnalogMapping {
         std::string device_guid;
         SDL_JoystickID instance_id = 0;
         int button_index = 0;
-        std::string target_output_name;
+        std::string target_output_name; // field id or legacy name
         float on_value = 1.0f;
         float off_value = 0.0f;
     };
 
+    // Maps a device button to a digital output channel (field id from definition)
+    struct ButtonToDigitalMapping {
+        std::string device_guid;
+        SDL_JoystickID instance_id = 0;
+        int button_index = 0;
+        std::string target_field_id; // FieldDescriptor::id
+    };
+
     struct MappingProfile {
         std::string name;
-        std::map<std::string, InputSource> outputToInput;
-        std::vector<HapticTarget> hapticTargets;
-        std::vector<ButtonToAnalogMapping> buttonMappings;
+        std::map<std::string, InputSource>   outputToInput;      // fieldId → axis source
+        std::vector<HapticTarget>            hapticTargets;
+        std::vector<ButtonToAnalogMapping>   buttonMappings;     // button → analog field
+        std::vector<ButtonToDigitalMapping>  digitalMappings;    // button → digital field
     };
 
     static InputMapper &GetInstance();
@@ -99,6 +110,7 @@ class InputMapper {
     InputExclusiveMode m_ExclusiveModeHandler;
 #endif
 
+    // Legacy fallback outputs when no definition is selected
     const std::vector<std::string> m_GenericOutputs = {
         "Steering", "Throttle", "Brake", "Clutch", "Handbrake", "Pitch", "Roll"};
 
