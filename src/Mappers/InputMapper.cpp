@@ -323,16 +323,26 @@ void InputMapper::DrawContent() {
             for (const auto& d : m_DeviceManager.GetDevices())
                 if (d.instance_id == src.instance_id) { preview = d.name + " - Axis " + std::to_string(src.axisIndex); break; }
 
-        float bindW = ImGui::CalcTextSize("Bind").x + ImGui::GetStyle().FramePadding.x * 2 + ImGui::GetStyle().ItemSpacing.x;
+        ImGuiStyle& style = ImGui::GetStyle();
+        float sp = style.ItemSpacing.x;
+        float bindW = ImGui::CalcTextSize("Bind").x + style.FramePadding.x * 2;
+        
+        float xw = 0.f, iw = 0.f, dw = 0.f, rw = 0.f;
         bool hasSrc = src.axisIndex != -1;
         if (hasSrc) {
-            float sp = ImGui::GetStyle().ItemSpacing.x;
-            float xw = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x*2 + sp;
-            float iw = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize("Inv").x + sp;
-            float dw = 80.f + sp; float rw = 80.f + sp;
-            ImGui::SetNextItemWidth(colW - xw - iw - dw - rw - bindW);
+            xw = ImGui::CalcTextSize("X").x + style.FramePadding.x * 2;
+            iw = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x + ImGui::CalcTextSize("Inv").x;
+            dw = 80.f;
+            rw = 60.f;
+        }
+
+        float minComboW = 120.0f;
+        float totalFixedW = bindW + (hasSrc ? (sp + xw + sp + iw + sp + dw + sp + rw) : 0);
+        
+        if (colW >= minComboW + sp + totalFixedW) {
+            ImGui::SetNextItemWidth(colW - sp - totalFixedW);
         } else {
-            ImGui::SetNextItemWidth(colW - bindW);
+            ImGui::SetNextItemWidth(colW > minComboW + sp + bindW ? colW - sp - bindW : colW);
         }
 
         if (ImGui::BeginCombo(comboId, preview.c_str())) {
@@ -351,7 +361,12 @@ void InputMapper::DrawContent() {
             ImGui::EndCombo();
         }
 
-        ImGui::SameLine();
+        auto advance = [&](float w) {
+            ImGui::SameLine();
+            if (ImGui::GetContentRegionAvail().x < w) ImGui::NewLine();
+        };
+
+        advance(bindW);
         bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == id;
         if (isListening) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
@@ -363,16 +378,16 @@ void InputMapper::DrawContent() {
         ImGui::SetItemTooltip("Press to detect axis input");
 
         if (hasSrc) {
-            ImGui::SameLine();
+            advance(xw);
             if (ImGui::Button("X")) { src = {}; changed = true; }
             ImGui::SetItemTooltip("Clear");
-            ImGui::SameLine();
+            advance(iw);
             if (ImGui::Checkbox("Inv", &src.invert)) changed = true;
             ImGui::SetItemTooltip("Invert");
-            ImGui::SameLine(); ImGui::SetNextItemWidth(80);
+            advance(dw); ImGui::SetNextItemWidth(dw);
             if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 0.5f, "%.3f")) changed = true;
             ImGui::SetItemTooltip("Deadzone");
-            ImGui::SameLine(); ImGui::SetNextItemWidth(60);
+            advance(rw); ImGui::SetNextItemWidth(rw);
             const char* ranges[] = {"-1..1","0..1","-1..0"};
             if (ImGui::Combo("Range", &src.outputRange, ranges, 3)) changed = true;
         }
