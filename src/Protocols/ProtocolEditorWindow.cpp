@@ -128,7 +128,6 @@ void ProtocolEditorWindow::DrawProtocolList() {
                 std::strncpy(s_dupName, copyName.c_str(), sizeof(s_dupName));
                 s_dupName[sizeof(s_dupName)-1] = '\0';
                 s_dupTransport = (def.transport == ProtocolTransport::OSC) ? 0 : 1;
-                ImGui::EndPopup();
             }
             if (ImGui::MenuItem("Export...")) {
                 s_showExportModal = true;
