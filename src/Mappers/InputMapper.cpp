@@ -156,7 +156,7 @@ void InputMapper::UpdateListening() {
                 }
             }
         }
-    } else if (m_ListeningState.type == ListeningState::Button) {
+    } else if (m_ListeningState.type == ListeningState::Digital) {
         for (const auto& dev : devices) {
             if (!dev.joystick) continue;
             for (int i = 0; i < dev.num_buttons; ++i) {
@@ -168,6 +168,8 @@ void InputMapper::UpdateListening() {
                             dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
                             dm.instance_id = dev.instance_id;
                             dm.button_index = i;
+                            dm.hat_index = -1;
+                            dm.hat_mask = 0;
                             updated = true;
                         }
                     } else if (m_ListeningState.targetName == "button_analog") {
@@ -179,6 +181,28 @@ void InputMapper::UpdateListening() {
                             updated = true;
                         }
                     }
+                    if (updated) SaveCurrentProfile();
+                    CancelListening();
+                    return;
+                }
+            }
+            // Check Hats
+            for (int i = 0; i < dev.num_hats; ++i) {
+                Uint8 hat = SDL_GetJoystickHat(dev.joystick, i);
+                if (hat != SDL_HAT_CENTERED) {
+                    bool updated = false;
+                    if (m_ListeningState.targetName == "digital") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
+                            auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
+                            dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            dm.instance_id = dev.instance_id;
+                            dm.button_index = -1;
+                            dm.hat_index = i;
+                            dm.hat_mask = hat;
+                            updated = true;
+                        }
+                    }
+                    // Note: ButtonToAnalogMapping doesn't support hats yet in this implementation
                     if (updated) SaveCurrentProfile();
                     CancelListening();
                     return;
@@ -304,8 +328,8 @@ void InputMapper::DrawContent() {
         if (hasSrc) {
             float sp = ImGui::GetStyle().ItemSpacing.x;
             float xw = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x*2 + sp;
-            float iw = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize("Invert").x + sp;
-            float dw = 80.f + sp; float rw = 100.f + sp;
+            float iw = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize("Inv").x + sp;
+            float dw = 80.f + sp; float rw = 80.f + sp;
             ImGui::SetNextItemWidth(colW - xw - iw - dw - rw - bindW);
         } else {
             ImGui::SetNextItemWidth(colW - bindW);
@@ -343,11 +367,12 @@ void InputMapper::DrawContent() {
             if (ImGui::Button("X")) { src = {}; changed = true; }
             ImGui::SetItemTooltip("Clear");
             ImGui::SameLine();
-            if (ImGui::Checkbox("Invert", &src.invert)) changed = true;
+            if (ImGui::Checkbox("Inv", &src.invert)) changed = true;
+            ImGui::SetItemTooltip("Invert");
             ImGui::SameLine(); ImGui::SetNextItemWidth(80);
             if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 0.5f, "%.3f")) changed = true;
             ImGui::SetItemTooltip("Deadzone");
-            ImGui::SameLine(); ImGui::SetNextItemWidth(100);
+            ImGui::SameLine(); ImGui::SetNextItemWidth(60);
             const char* ranges[] = {"-1..1","0..1","-1..0"};
             if (ImGui::Combo("Range", &src.outputRange, ranges, 3)) changed = true;
         }
@@ -433,8 +458,17 @@ void InputMapper::DrawContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    if (ImGui::InputInt("##db", &dm.button_index)) rc=true;
+                    
+                    std::string btnLabel = "None";
+                    if (dm.button_index != -1) btnLabel = "Button " + std::to_string(dm.button_index);
+                    else if (dm.hat_index != -1) {
+                        btnLabel = "Hat " + std::to_string(dm.hat_index);
+                        if (dm.hat_mask & SDL_HAT_UP) btnLabel += " Up";
+                        if (dm.hat_mask & SDL_HAT_DOWN) btnLabel += " Down";
+                        if (dm.hat_mask & SDL_HAT_LEFT) btnLabel += " Left";
+                        if (dm.hat_mask & SDL_HAT_RIGHT) btnLabel += " Right";
+                    }
+                    ImGui::Text("%s", btnLabel.c_str());
 
                     ImGui::TableSetColumnIndex(2);
                     std::string flabel = dm.target_field_id.empty() ? "None" : dm.target_field_id;
@@ -450,13 +484,13 @@ void InputMapper::DrawContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(3);
-                    bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Button && m_ListeningState.targetName == "digital" && m_ListeningState.listIndex == i;
+                    bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Digital && m_ListeningState.targetName == "digital" && m_ListeningState.listIndex == i;
                     if (isListening) {
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
                         if (ImGui::Button("Stop")) CancelListening();
                         ImGui::PopStyleColor();
                     } else {
-                        if (ImGui::Button("Bind")) StartListening(ListeningState::Button, "digital", i);
+                        if (ImGui::Button("Bind")) StartListening(ListeningState::Digital, "digital", i);
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Delete")) toDelete = i;
@@ -533,13 +567,13 @@ void InputMapper::DrawContent() {
             ImGui::SetNextItemWidth(-FLT_MIN);
             if (ImGui::DragFloat("##boff",&bm.off_value,0.01f, -1.f, 1.f)) rc=true;
             ImGui::TableSetColumnIndex(5);
-            bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Button && m_ListeningState.targetName == "button_analog" && m_ListeningState.listIndex == i;
+            bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Digital && m_ListeningState.targetName == "button_analog" && m_ListeningState.listIndex == i;
             if (isListening) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
                 if (ImGui::Button("Stop")) CancelListening();
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::Button("Bind")) StartListening(ListeningState::Button, "button_analog", i);
+                if (ImGui::Button("Bind")) StartListening(ListeningState::Digital, "button_analog", i);
             }
             ImGui::SameLine();
             if (ImGui::Button("Delete")) bToDelete=i;
@@ -614,7 +648,10 @@ bool InputMapper::Update(bool dynamic_rate) {
         for (const auto& dm : profile.digitalMappings) {
             if (dm.instance_id==0||dm.target_field_id.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (j && SDL_GetJoystickButton(j, dm.button_index)) digitalValues[dm.target_field_id]=true;
+            if (j) {
+                if (dm.button_index != -1 && SDL_GetJoystickButton(j, dm.button_index)) digitalValues[dm.target_field_id]=true;
+                else if (dm.hat_index != -1 && (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask)) digitalValues[dm.target_field_id]=true;
+            }
         }
     }
 
@@ -713,7 +750,10 @@ std::string InputMapper::GetOutputPreview() {
         for (const auto& dm : profile.digitalMappings) {
             if (dm.instance_id == 0 || dm.target_field_id.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (j && SDL_GetJoystickButton(j, dm.button_index)) digitalValues[dm.target_field_id] = true;
+            if (j) {
+                if (dm.button_index != -1 && SDL_GetJoystickButton(j, dm.button_index)) digitalValues[dm.target_field_id] = true;
+                else if (dm.hat_index != -1 && (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask)) digitalValues[dm.target_field_id] = true;
+            }
         }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name] = 0.f;
@@ -866,7 +906,9 @@ void InputMapper::LoadProfiles() {
                 if (data.contains("digital_mappings"))
                     for (const auto& item : data["digital_mappings"]) {
                         ButtonToDigitalMapping dm;
-                        dm.device_guid=item.value("device_guid",""); dm.button_index=item.value("button_index",0);
+                        dm.device_guid=item.value("device_guid",""); dm.button_index=item.value("button_index",-1);
+                        dm.hat_index=item.value("hat_index",-1);
+                        dm.hat_mask=item.value("hat_mask",0);
                         dm.target_field_id=item.value("target_field_id","");
                         p.digitalMappings.push_back(dm);
                     }
@@ -896,9 +938,12 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
             data["button_mappings"].push_back({{"device_guid",bm.device_guid},{"button_index",bm.button_index},
                 {"target_output_name",bm.target_output_name},{"on_value",bm.on_value},{"off_value",bm.off_value}});
         data["digital_mappings"]=json::array();
-        for (const auto& dm : profile.digitalMappings)
-            data["digital_mappings"].push_back({{"device_guid",dm.device_guid},{"button_index",dm.button_index},
-                {"target_field_id",dm.target_field_id}});
+        for (const auto& dm : profile.digitalMappings) {
+            json j = {{"device_guid",dm.device_guid}, {"target_field_id",dm.target_field_id}};
+            if (dm.hat_index != -1) { j["hat_index"]=dm.hat_index; j["hat_mask"]=dm.hat_mask; }
+            else { j["button_index"]=dm.button_index; }
+            data["digital_mappings"].push_back(j);
+        }
         std::ofstream o(path); if (o) o<<data.dump(4);
     } catch (const std::exception& ex) { SDL_Log("Failed to save profile: %s",ex.what()); }
 }

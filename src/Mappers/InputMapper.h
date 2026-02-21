@@ -62,7 +62,9 @@ class InputMapper {
     struct ButtonToDigitalMapping {
         std::string device_guid;
         SDL_JoystickID instance_id = 0;
-        int button_index = 0;
+        int button_index = -1;
+        int hat_index = -1;
+        int hat_mask = 0;
         std::string target_field_id; // FieldDescriptor::id
     };
 
@@ -111,7 +113,7 @@ class InputMapper {
 
     struct ListeningState {
         bool active = false;
-        enum Type { None, Axis, Button } type = None;
+        enum Type { None, Axis, Digital } type = None;
         std::string targetName; // Field ID for axes, or category for lists
         int listIndex = -1;     // Index in the list (for digital/button mappings)
 
