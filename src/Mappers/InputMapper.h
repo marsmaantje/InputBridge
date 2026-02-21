@@ -93,6 +93,8 @@ class InputMapper {
     void SaveProfile(const MappingProfile &profile) const;
     void HandleDeviceConnectionChange();
     std::vector<HapticTarget>* GetCurrentHapticTargets();
+    
+    void CancelListening();
 
   private:
     InputMapper(const DeviceManager &deviceManager);
@@ -107,6 +109,21 @@ class InputMapper {
     std::map<std::string, float> m_LastOutputValues;
     Uint64 m_LastBroadcastTime = 0;
 
+    struct ListeningState {
+        bool active = false;
+        enum Type { None, Axis, Button } type = None;
+        std::string targetName; // Field ID for axes, or category for lists
+        int listIndex = -1;     // Index in the list (for digital/button mappings)
+
+        struct AxisState {
+            SDL_JoystickID instance_id;
+            int axis_index;
+            Sint16 value;
+        };
+        std::vector<AxisState> initialAxes;
+    };
+    ListeningState m_ListeningState;
+
 #ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_ExclusiveModeHandler;
 #endif
@@ -116,6 +133,8 @@ class InputMapper {
         "Steering", "Throttle", "Brake", "Clutch", "Handbrake", "Pitch", "Roll"};
 
     float ProcessAxis(const InputSource &config);
+    void StartListening(ListeningState::Type type, const std::string& name, int index = -1);
+    void UpdateListening();
 #ifdef ENABLE_EXCLUSIVE_INPUT
     void ApplyExclusiveMode();
 #endif

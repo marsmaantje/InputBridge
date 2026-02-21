@@ -100,8 +100,92 @@ void InputMapper::SaveCurrentProfile() const {
         SaveProfile(m_Profiles[m_SelectedProfileIndex]);
 }
 
+void InputMapper::CancelListening() {
+    m_ListeningState.active = false;
+    m_ListeningState.initialAxes.clear();
+}
+
+void InputMapper::StartListening(ListeningState::Type type, const std::string& name, int index) {
+    m_ListeningState.active = true;
+    m_ListeningState.type = type;
+    m_ListeningState.targetName = name;
+    m_ListeningState.listIndex = index;
+    m_ListeningState.initialAxes.clear();
+
+    if (type == ListeningState::Axis) {
+        for (const auto& dev : m_DeviceManager.GetDevices()) {
+            if (!dev.joystick) continue;
+            for (int i = 0; i < dev.num_axes; ++i) {
+                m_ListeningState.initialAxes.push_back({dev.instance_id, i, SDL_GetJoystickAxis(dev.joystick, i)});
+            }
+        }
+    }
+}
+
+void InputMapper::UpdateListening() {
+    if (!m_ListeningState.active) return;
+    if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= (int)m_Profiles.size()) {
+        CancelListening();
+        return;
+    }
+    MappingProfile &profile = m_Profiles[m_SelectedProfileIndex];
+    const auto& devices = m_DeviceManager.GetDevices();
+
+    if (m_ListeningState.type == ListeningState::Axis) {
+        for (const auto& dev : devices) {
+            if (!dev.joystick) continue;
+            for (int i = 0; i < dev.num_axes; ++i) {
+                Sint16 val = SDL_GetJoystickAxis(dev.joystick, i);
+                Sint16 baseline = 0;
+                bool found = false;
+                for (const auto& as : m_ListeningState.initialAxes) {
+                    if (as.instance_id == dev.instance_id && as.axis_index == i) {
+                        baseline = as.value;
+                        found = true;
+                        break;
+                    }
+                }
+                if (found && std::abs((int)val - (int)baseline) > 10000) {
+                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    src.deviceGuid = DeviceManager::GetDeviceGUIDString(dev);
+                    src.instance_id = dev.instance_id;
+                    src.axisIndex = i;
+                    CancelListening();
+                    return;
+                }
+            }
+        }
+    } else if (m_ListeningState.type == ListeningState::Button) {
+        for (const auto& dev : devices) {
+            if (!dev.joystick) continue;
+            for (int i = 0; i < dev.num_buttons; ++i) {
+                if (SDL_GetJoystickButton(dev.joystick, i)) {
+                    if (m_ListeningState.targetName == "digital") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
+                            auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
+                            dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            dm.instance_id = dev.instance_id;
+                            dm.button_index = i;
+                        }
+                    } else if (m_ListeningState.targetName == "button_analog") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.buttonMappings.size()) {
+                            auto& bm = profile.buttonMappings[m_ListeningState.listIndex];
+                            bm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            bm.instance_id = dev.instance_id;
+                            bm.button_index = i;
+                        }
+                    }
+                    CancelListening();
+                    return;
+                }
+            }
+        }
+    }
+}
+
 void InputMapper::DrawContent() {
     HandleDeviceConnectionChange();
+    UpdateListening();
     ImGui::Begin("Input Mapper");
 
     // Profile management
@@ -210,15 +294,16 @@ void InputMapper::DrawContent() {
             for (const auto& d : m_DeviceManager.GetDevices())
                 if (d.instance_id == src.instance_id) { preview = d.name + " - Axis " + std::to_string(src.axisIndex); break; }
 
+        float bindW = ImGui::CalcTextSize("Bind").x + ImGui::GetStyle().FramePadding.x * 2 + ImGui::GetStyle().ItemSpacing.x;
         bool hasSrc = src.axisIndex != -1;
         if (hasSrc) {
             float sp = ImGui::GetStyle().ItemSpacing.x;
             float xw = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x*2 + sp;
             float iw = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize("Invert").x + sp;
             float dw = 80.f + sp; float rw = 100.f + sp;
-            ImGui::SetNextItemWidth(colW - xw - iw - dw - rw);
+            ImGui::SetNextItemWidth(colW - xw - iw - dw - rw - bindW);
         } else {
-            ImGui::SetNextItemWidth(colW);
+            ImGui::SetNextItemWidth(colW - bindW);
         }
 
         if (ImGui::BeginCombo(comboId, preview.c_str())) {
@@ -236,6 +321,18 @@ void InputMapper::DrawContent() {
                 }
             ImGui::EndCombo();
         }
+
+        ImGui::SameLine();
+        bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == id;
+        if (isListening) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+            if (ImGui::Button("Stop")) CancelListening();
+            ImGui::PopStyleColor();
+        } else {
+            if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, id);
+        }
+        ImGui::SetItemTooltip("Press to detect axis input");
+
         if (hasSrc) {
             ImGui::SameLine();
             if (ImGui::Button("X")) { src = {}; changed = true; }
@@ -309,7 +406,7 @@ void InputMapper::DrawContent() {
                 ImGui::TableSetupColumn("Device",        ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("Button Index",  ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableSetupColumn("Digital Field", ImGuiTableColumnFlags_WidthFixed, 170.f);
-                ImGui::TableSetupColumn("",              ImGuiTableColumnFlags_WidthFixed, 55.f);
+                ImGui::TableSetupColumn("",              ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableHeadersRow();
 
                 for (int i = 0; i < (int)profile.digitalMappings.size(); ++i) {
@@ -348,6 +445,15 @@ void InputMapper::DrawContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(3);
+                    bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Button && m_ListeningState.targetName == "digital" && m_ListeningState.listIndex == i;
+                    if (isListening) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+                        if (ImGui::Button("Stop")) CancelListening();
+                        ImGui::PopStyleColor();
+                    } else {
+                        if (ImGui::Button("Bind")) StartListening(ListeningState::Button, "digital", i);
+                    }
+                    ImGui::SameLine();
                     if (ImGui::Button("Delete")) toDelete = i;
                     if (rc) changed = true;
                     ImGui::PopID();
@@ -371,7 +477,7 @@ void InputMapper::DrawContent() {
         ImGui::TableSetupColumn("Target",   ImGuiTableColumnFlags_WidthFixed, 150.f);
         ImGui::TableSetupColumn("On Val",   ImGuiTableColumnFlags_WidthFixed, 60.f);
         ImGui::TableSetupColumn("Off Val",  ImGuiTableColumnFlags_WidthFixed, 60.f);
-        ImGui::TableSetupColumn("",         ImGuiTableColumnFlags_WidthFixed, 55.f);
+        ImGui::TableSetupColumn("",         ImGuiTableColumnFlags_WidthFixed, 90.f);
         ImGui::TableHeadersRow();
 
         for (int i = 0; i < (int)profile.buttonMappings.size(); ++i) {
@@ -422,6 +528,15 @@ void InputMapper::DrawContent() {
             ImGui::SetNextItemWidth(-FLT_MIN);
             if (ImGui::DragFloat("##boff",&bm.off_value,0.01f, -1.f, 1.f)) rc=true;
             ImGui::TableSetColumnIndex(5);
+            bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Button && m_ListeningState.targetName == "button_analog" && m_ListeningState.listIndex == i;
+            if (isListening) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+                if (ImGui::Button("Stop")) CancelListening();
+                ImGui::PopStyleColor();
+            } else {
+                if (ImGui::Button("Bind")) StartListening(ListeningState::Button, "button_analog", i);
+            }
+            ImGui::SameLine();
             if (ImGui::Button("Delete")) bToDelete=i;
             if (rc) changed=true;
             ImGui::PopID();
