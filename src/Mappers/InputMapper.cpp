@@ -327,23 +327,14 @@ void InputMapper::DrawContent() {
         float sp = style.ItemSpacing.x;
         float bindW = ImGui::CalcTextSize("Bind").x + style.FramePadding.x * 2;
         
-        float xw = 0.f, iw = 0.f, dw = 0.f, rw = 0.f;
+        float dw = 0.f, rw = 0.f;
         bool hasSrc = src.axisIndex != -1;
         if (hasSrc) {
-            xw = ImGui::CalcTextSize("X").x + style.FramePadding.x * 2;
-            iw = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x + ImGui::CalcTextSize("Inv").x;
             dw = 80.f;
             rw = 60.f;
         }
 
-        float minComboW = 120.0f;
-        float totalFixedW = bindW + (hasSrc ? (sp + xw + sp + iw + sp + dw + sp + rw) : 0);
-        
-        if (colW >= minComboW + sp + totalFixedW) {
-            ImGui::SetNextItemWidth(colW - sp - totalFixedW);
-        } else {
-            ImGui::SetNextItemWidth(colW > minComboW + sp + bindW ? colW - sp - bindW : colW);
-        }
+        ImGui::SetNextItemWidth(std::max(1.0f, colW - sp - bindW));
 
         if (ImGui::BeginCombo(comboId, preview.c_str())) {
             if (ImGui::Selectable("None", !hasSrc)) { src = {}; changed = true; }
@@ -361,33 +352,30 @@ void InputMapper::DrawContent() {
             ImGui::EndCombo();
         }
 
-        auto advance = [&](float w) {
-            ImGui::SameLine();
-            if (ImGui::GetContentRegionAvail().x < w) ImGui::NewLine();
-        };
-
-        advance(bindW);
+        ImGui::SameLine();
         bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == id;
         if (isListening) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
-            if (ImGui::Button("Stop")) CancelListening();
+            if (ImGui::Button("Waiting...")) CancelListening();
             ImGui::PopStyleColor();
+            ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
         } else {
             if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, id);
+            ImGui::SetItemTooltip("Click to bind an axis.");
         }
-        ImGui::SetItemTooltip("Press to detect axis input");
 
         if (hasSrc) {
-            advance(xw);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
             if (ImGui::Button("X")) { src = {}; changed = true; }
+            ImGui::PopStyleColor();
             ImGui::SetItemTooltip("Clear");
-            advance(iw);
+            ImGui::SameLine();
             if (ImGui::Checkbox("Inv", &src.invert)) changed = true;
             ImGui::SetItemTooltip("Invert");
-            advance(dw); ImGui::SetNextItemWidth(dw);
+            ImGui::SameLine(); ImGui::SetNextItemWidth(dw);
             if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 0.5f, "%.3f")) changed = true;
             ImGui::SetItemTooltip("Deadzone");
-            advance(rw); ImGui::SetNextItemWidth(rw);
+            ImGui::SameLine(); ImGui::SetNextItemWidth(rw);
             const char* ranges[] = {"-1..1","0..1","-1..0"};
             if (ImGui::Combo("Range", &src.outputRange, ranges, 3)) changed = true;
         }
@@ -502,10 +490,12 @@ void InputMapper::DrawContent() {
                     bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Digital && m_ListeningState.targetName == "digital" && m_ListeningState.listIndex == i;
                     if (isListening) {
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
-                        if (ImGui::Button("Stop")) CancelListening();
+                        if (ImGui::Button("Waiting...")) CancelListening();
                         ImGui::PopStyleColor();
+                        ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
                     } else {
                         if (ImGui::Button("Bind")) StartListening(ListeningState::Digital, "digital", i);
+                        ImGui::SetItemTooltip("Click to bind a button.");
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Delete")) toDelete = i;
@@ -585,10 +575,12 @@ void InputMapper::DrawContent() {
             bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Digital && m_ListeningState.targetName == "button_analog" && m_ListeningState.listIndex == i;
             if (isListening) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
-                if (ImGui::Button("Stop")) CancelListening();
+                if (ImGui::Button("Waiting...")) CancelListening();
                 ImGui::PopStyleColor();
+                ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
             } else {
                 if (ImGui::Button("Bind")) StartListening(ListeningState::Digital, "button_analog", i);
+                ImGui::SetItemTooltip("Click to bind a button.");
             }
             ImGui::SameLine();
             if (ImGui::Button("Delete")) bToDelete=i;
