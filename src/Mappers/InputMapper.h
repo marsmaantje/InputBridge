@@ -11,6 +11,7 @@
 
 class DeviceManager;
 class PreferencesManager;
+struct ProtocolDefinition;
 
 // Moved from OutputMapper.h
 struct HapticTarget {
@@ -107,6 +108,8 @@ class InputMapper {
     int m_SelectedProfileIndex = -1;
     char m_NewProfileName[128] = "";
     char m_RenameProfileName[128] = "";
+    
+    int m_SelectedProtocolView = 0; // 0: OSC, 1: WebSocket
 
     std::map<std::string, float> m_LastOutputValues;
     Uint64 m_LastBroadcastTime = 0;
@@ -134,6 +137,7 @@ class InputMapper {
     const std::vector<std::string> m_GenericOutputs = {
         "Steering", "Throttle", "Brake", "Clutch", "Handbrake", "Pitch", "Roll"};
 
+    const ProtocolDefinition* GetActiveOutputDefinition();
     float ProcessAxis(const InputSource &config);
     void StartListening(ListeningState::Type type, const std::string& name, int index = -1);
     void UpdateListening();

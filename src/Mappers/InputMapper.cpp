@@ -44,17 +44,6 @@ std::filesystem::path GetMappingsDirectory() {
     return base ? std::filesystem::path(base) / "mappings" : std::filesystem::path("mappings");
 }
 
-// Returns the active output ProtocolDefinition for whichever server has one selected.
-const ProtocolDefinition* GetActiveOutputDefinition() {
-    const std::string oscId = OSCServer::GetInstance().GetOutputDefinitionId();
-    if (!oscId.empty()) return ProtocolRegistry::GetInstance().FindById(oscId);
-#ifdef ENABLE_WEBSOCKETS
-    const std::string wsId = WebSocketServer::GetInstance().GetOutputDefinitionId();
-    if (!wsId.empty())  return ProtocolRegistry::GetInstance().FindById(wsId);
-#endif
-    return nullptr;
-}
-
 const FieldDescriptor* FindFieldDescriptor(const std::string& id) {
     for (const auto& fd : ProtocolRegistry::GetInstance().GetOutputFields())
         if (fd.id == id) return &fd;
@@ -79,6 +68,22 @@ FieldPairs GetEnabledFields(const ProtocolDefinition& def, FieldType type) {
 InputMapper::InputMapper(const DeviceManager &dm) : m_DeviceManager(dm) {}
 InputMapper::~InputMapper() {}
 
+const ProtocolDefinition* InputMapper::GetActiveOutputDefinition() {
+    std::string oscId = OSCServer::GetInstance().GetOutputDefinitionId();
+#ifdef ENABLE_WEBSOCKETS
+    std::string wsId = WebSocketServer::GetInstance().GetOutputDefinitionId();
+#else
+    std::string wsId = "";
+#endif
+
+    if (m_SelectedProtocolView == 0) { // OSC
+        if (!oscId.empty()) return ProtocolRegistry::GetInstance().FindById(oscId);
+    } else { // WebSocket
+        if (!wsId.empty()) return ProtocolRegistry::GetInstance().FindById(wsId);
+    }
+    return nullptr;
+}
+
 void InputMapper::LoadConfig(PreferencesManager &prefs) {
     LoadProfiles();
     std::string last = prefs.GetString("InputMapper", "LastProfile", "");
@@ -86,6 +91,7 @@ void InputMapper::LoadConfig(PreferencesManager &prefs) {
         if (m_Profiles[i].name == last) { m_SelectedProfileIndex = i; break; }
     if (m_SelectedProfileIndex != -1)
         OutputMapper::GetInstance().SetActiveHapticTargets(&m_Profiles[m_SelectedProfileIndex].hapticTargets);
+    m_SelectedProtocolView = prefs.GetInt("InputMapper", "SelectedProtocolView", 0);
     HandleDeviceConnectionChange();
 }
 
@@ -93,6 +99,7 @@ void InputMapper::SaveConfig(PreferencesManager &prefs) const {
     prefs.SetString("InputMapper", "LastProfile",
         m_SelectedProfileIndex >= 0 && m_SelectedProfileIndex < (int)m_Profiles.size()
             ? m_Profiles[m_SelectedProfileIndex].name : "");
+    prefs.SetInt("InputMapper", "SelectedProtocolView", m_SelectedProtocolView);
 }
 
 void InputMapper::SaveCurrentProfile() const {
@@ -313,6 +320,38 @@ void InputMapper::DrawContent() {
     bool changed = false;
     MappingProfile &profile = m_Profiles[m_SelectedProfileIndex];
     ImGui::Text("'%s' Mappings", profile.name.c_str());
+
+    {
+        bool oscActive = !OSCServer::GetInstance().GetOutputDefinitionId().empty();
+        bool oscRunning = OSCServer::GetInstance().IsRunning();
+#ifdef ENABLE_WEBSOCKETS
+        bool wsActive = !WebSocketServer::GetInstance().GetOutputDefinitionId().empty();
+        bool wsRunning = WebSocketServer::GetInstance().IsRunning();
+#else
+        bool wsActive = false;
+        bool wsRunning = false;
+#endif
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120);
+        if (ImGui::BeginCombo("##protoview", m_SelectedProtocolView == 0 ? "OSC" : "WebSocket")) {
+            if (ImGui::Selectable("OSC", m_SelectedProtocolView == 0)) m_SelectedProtocolView = 0;
+            if (oscActive) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0,1,0,1), "(Active)"); }
+            
+            if (ImGui::Selectable("WebSocket", m_SelectedProtocolView == 1)) m_SelectedProtocolView = 1;
+            if (wsActive) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0,1,0,1), "(Active)"); }
+            
+            ImGui::EndCombo();
+        }
+        
+        ImGui::SameLine();
+        bool isRunning = (m_SelectedProtocolView == 0) ? oscRunning : wsRunning;
+        if (isRunning) ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "[Running]");
+        else           ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "[Stopped]");
+
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("Select which protocol definition to use for mapping and preview.\nOnly one definition drives the input mapping at a time.");
+    }
 
     const ProtocolDefinition* outDef = GetActiveOutputDefinition();
 
@@ -781,47 +820,43 @@ std::string InputMapper::GetOutputPreview() {
     if (outDef) {
         ss << "Active Definition: " << outDef->name << "\n\n";
 
-        // OSC
-        std::string oscDefId = osc.GetOutputDefinitionId();
-        if (osc.IsRunning()) {
-            if (!oscDefId.empty() && oscDefId == outDef->id) {
-                ss << "[OSC Output]\n";
+        if (m_SelectedProtocolView == 0) { // OSC
+            std::string oscDefId = osc.GetOutputDefinitionId();
+            ss << "[OSC Output]";
+            if (!osc.IsRunning()) ss << " (Stopped)";
+            else if (oscDefId != outDef->id) ss << " (Definition Mismatch)";
+            ss << "\n";
+
+            for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+                ss << "  " << pf->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
+            }
+            for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+                ss << "  " << pf->oscPath << " " << (digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+            }
+        } else { // WebSocket
+#ifdef ENABLE_WEBSOCKETS
+            std::string wsDefId = ws.GetOutputDefinitionId();
+            ss << "[WebSocket Output]";
+            if (!ws.IsRunning()) ss << " (Stopped)";
+            else if (wsDefId != outDef->id) ss << " (Definition Mismatch)";
+            ss << "\n";
+
+            std::string protoName = ws.GetProtocol();
+            auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
+            if (protocol) {
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
-                    ss << "  " << pf->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
+                    ss << "  " << protocol->format(pf->wsKey, analogValues[pf->fieldId]) << "\n";
                 }
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                    ss << "  " << pf->oscPath << " " << (digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                    ss << "  " << protocol->format(pf->wsKey, digitalValues[pf->fieldId] ? 1 : 0) << "\n";
                 }
             } else {
-                ss << "[OSC Output] (Running, but definition mismatch)\n";
+                ss << "  (Unknown Protocol)\n";
             }
-            ss << "\n";
-        }
-
-#ifdef ENABLE_WEBSOCKETS
-        // WebSocket
-        std::string wsDefId = ws.GetOutputDefinitionId();
-        if (ws.IsRunning()) {
-            if (!wsDefId.empty() && wsDefId == outDef->id) {
-                ss << "[WebSocket Output]\n";
-                std::string protoName = ws.GetProtocol();
-                auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
-                if (protocol) {
-                    for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
-                        ss << "  " << protocol->format(pf->wsKey, analogValues[pf->fieldId]) << "\n";
-                    }
-                    for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                        ss << "  " << protocol->format(pf->wsKey, digitalValues[pf->fieldId] ? 1 : 0) << "\n";
-                    }
-                } else {
-                    ss << "  (Unknown Protocol)\n";
-                }
-            } else {
-                ss << "[WebSocket Output] (Running, but definition mismatch)\n";
-            }
-        }
+#else
+            ss << "WebSockets disabled.\n";
 #endif
-
+        }
     } else {
         // Legacy
         ss << "Legacy Mode (No Output Definition Selected)\n\n";
@@ -832,19 +867,21 @@ std::string InputMapper::GetOutputPreview() {
         float pi = analogValues["Pitch"];
         float ro = analogValues["Roll"];
 
-        if (osc.IsRunning()) {
-            ss << "[OSC Output]\n";
+        if (m_SelectedProtocolView == 0) {
+            ss << "[OSC Output]";
+            if (!osc.IsRunning()) ss << " (Stopped)";
+            ss << "\n";
             ss << "  /wheel/steer " << std::fixed << std::setprecision(4) << s << "\n";
             ss << "  /wheel/throttle " << t << "\n";
             ss << "  /wheel/brake " << b << "\n";
             ss << "  /wheel/pitch " << pi << "\n";
             ss << "  /wheel/roll " << ro << "\n";
             ss << "  (Buttons not previewed in legacy mode)\n\n";
-        }
-
+        } else {
 #ifdef ENABLE_WEBSOCKETS
-        if (ws.IsRunning()) {
-            ss << "[WebSocket Output]\n";
+            ss << "[WebSocket Output]";
+            if (!ws.IsRunning()) ss << " (Stopped)";
+            ss << "\n";
             std::string protoName = ws.GetProtocol();
             auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
             if (protocol) {
@@ -852,21 +889,9 @@ std::string InputMapper::GetOutputPreview() {
             } else {
                 ss << "  (Unknown Protocol)\n";
             }
-        }
+#else
+            ss << "WebSockets disabled.\n";
 #endif
-    }
-
-    if (!osc.IsRunning() 
-#ifdef ENABLE_WEBSOCKETS
-        && !ws.IsRunning()
-#endif
-    ) {
-        ss << "(No servers running)\n\nRaw Values:\n";
-        for(auto const& [key, val] : analogValues) {
-            ss << "  " << key << ": " << std::fixed << std::setprecision(4) << val << "\n";
-        }
-        for(auto const& [key, val] : digitalValues) {
-            ss << "  " << key << ": " << (val ? "ON" : "OFF") << "\n";
         }
     }
 
