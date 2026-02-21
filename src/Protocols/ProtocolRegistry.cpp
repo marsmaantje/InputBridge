@@ -565,6 +565,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_hazard",      "Hazard",          "Digital: Lights", FieldType::DigitalButton, "/input/hazard",      "hazard");
 
     // ── Digital: Other ───────────────────────────────────────────────────────
+    addOut("btn_engine",      "Engine",          "Digital: Other",  FieldType::DigitalButton, "/input/engine",      "engine");
     addOut("btn_horn",        "Horn",            "Digital: Other",  FieldType::DigitalButton, "/input/horn",        "horn");
     addOut("btn_cam_switch",  "Camera Switch",   "Digital: Other",  FieldType::DigitalButton, "/input/cam_switch",  "cam_switch");
     addOut("btn_landing_gear","Landing Gear",    "Digital: Other",  FieldType::DigitalButton, "/input/landing_gear","landing_gear");
