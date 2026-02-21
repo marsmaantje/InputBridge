@@ -150,6 +150,7 @@ void InputMapper::UpdateListening() {
                     src.deviceGuid = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id = dev.instance_id;
                     src.axisIndex = i;
+                    SaveCurrentProfile();
                     CancelListening();
                     return;
                 }
@@ -160,12 +161,14 @@ void InputMapper::UpdateListening() {
             if (!dev.joystick) continue;
             for (int i = 0; i < dev.num_buttons; ++i) {
                 if (SDL_GetJoystickButton(dev.joystick, i)) {
+                    bool updated = false;
                     if (m_ListeningState.targetName == "digital") {
                         if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
                             auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
                             dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
                             dm.instance_id = dev.instance_id;
                             dm.button_index = i;
+                            updated = true;
                         }
                     } else if (m_ListeningState.targetName == "button_analog") {
                         if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.buttonMappings.size()) {
@@ -173,8 +176,10 @@ void InputMapper::UpdateListening() {
                             bm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
                             bm.instance_id = dev.instance_id;
                             bm.button_index = i;
+                            updated = true;
                         }
                     }
+                    if (updated) SaveCurrentProfile();
                     CancelListening();
                     return;
                 }
