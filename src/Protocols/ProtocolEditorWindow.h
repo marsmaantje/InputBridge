@@ -40,6 +40,7 @@ private:
     static void DrawSavePresetModal();
     static void DrawExportProtocolModal();
     static void DrawImportProtocolModal();
+    static void DrawRenameCategoryModal();
 
     // State shared between sub-sections
     static inline int  s_selectedIndex    = -1;
@@ -66,6 +67,11 @@ private:
     static inline int   s_cfType = 0; // 0=Analog, 1=Digital
     static inline char  s_cfOsc[128] = "/custom/";
     static inline char  s_cfWs[128] = "custom_";
+
+    // "Rename category" modal state
+    static inline bool  s_showRenameCatModal = false;
+    static inline char  s_renCatOldName[64] = "";
+    static inline char  s_renCatNewName[64] = "";
 
     // "Save preset" modal state
     static inline bool  s_showSavePresetModal = false;

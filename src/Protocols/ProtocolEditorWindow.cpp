@@ -77,6 +77,7 @@ void ProtocolEditorWindow::Draw(bool& open) {
     DrawSavePresetModal();
     DrawExportProtocolModal();
     DrawImportProtocolModal();
+    DrawRenameCategoryModal();
 
     ImGui::End();
 }
@@ -297,6 +298,16 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
             currentCat = fd.category;
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f), "%s", currentCat.c_str());
+            ImGui::SameLine();
+            ImGui::PushID(currentCat.c_str());
+            if (ImGui::SmallButton("Rename")) {
+                s_showRenameCatModal = true;
+                std::strncpy(s_renCatOldName, currentCat.c_str(), sizeof(s_renCatOldName));
+                s_renCatOldName[sizeof(s_renCatOldName)-1] = '\0';
+                std::strncpy(s_renCatNewName, currentCat.c_str(), sizeof(s_renCatNewName));
+                s_renCatNewName[sizeof(s_renCatNewName)-1] = '\0';
+            }
+            ImGui::PopID();
             ImGui::Separator();
         }
 
@@ -515,6 +526,38 @@ void ProtocolEditorWindow::DrawDuplicateProtocolModal() {
             for (int i = 0; i < (int)defs.size(); ++i) {
                 if (defs[i].id == id) { s_selectedIndex = i; break; }
             }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+void ProtocolEditorWindow::DrawRenameCategoryModal() {
+    if (s_showRenameCatModal) {
+        ImGui::OpenPopup("Rename Category##modal");
+        s_showRenameCatModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Rename Category##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Rename category \"%s\" to:", s_renCatOldName);
+        ImGui::InputText("New Name", s_renCatNewName, sizeof(s_renCatNewName));
+
+        ImGui::Separator();
+        if (ImGui::Button("Rename", ImVec2(120, 0))) {
+            auto& reg = ProtocolRegistry::GetInstance();
+            // const_cast is used here because we cannot modify the ProtocolRegistry header to add a non-const accessor
+            auto& outFields = const_cast<std::vector<FieldDescriptor>&>(reg.GetOutputFields());
+            for (auto& fd : outFields)
+                if (fd.category == s_renCatOldName) fd.category = s_renCatNewName;
+            
+            auto& inFields = const_cast<std::vector<FieldDescriptor>&>(reg.GetInputFields());
+            for (auto& fd : inFields)
+                if (fd.category == s_renCatOldName) fd.category = s_renCatNewName;
+
+            reg.SaveFieldCatalog();
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
