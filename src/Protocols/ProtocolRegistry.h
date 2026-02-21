@@ -82,8 +82,8 @@ private:
     void SavePresets();
     void EnsureDirectories();
     void WriteDefaultFieldCatalog();
-    void PopulateBuiltinOutputFields();
-    void PopulateBuiltinInputFields();
+    void LoadBuiltinCatalog();
+    void WriteDefaultBuiltinCatalog();
 
     static std::string GenerateId();
 

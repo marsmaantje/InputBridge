@@ -20,8 +20,8 @@ ProtocolRegistry& ProtocolRegistry::GetInstance() {
 }
 
 ProtocolRegistry::ProtocolRegistry() {
-    PopulateBuiltinOutputFields();
-    PopulateBuiltinInputFields();
+    EnsureDirectories();
+    LoadBuiltinCatalog();
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -48,8 +48,7 @@ const std::vector<FieldDescriptor>& ProtocolRegistry::GetInputFields() const {
 }
 
 void ProtocolRegistry::ReloadFieldCatalog() {
-    PopulateBuiltinOutputFields();
-    PopulateBuiltinInputFields();
+    LoadBuiltinCatalog();
     LoadFieldCatalog();
 }
 
@@ -441,8 +440,9 @@ void ProtocolRegistry::LoadDefinitionFiles() {
 
 void ProtocolRegistry::WriteDefaultFieldCatalog() {
     EnsureDirectories();
-    std::string path = GetProtocolsDir() + "input_fields.json";
 
+    /*
+    std::string path = GetProtocolsDir() + "input_fields.json";
     // Write a commented example so users know the format
     json j;
     j["_comment"] = "Add custom output fields here. Built-in fields are always available.";
@@ -459,100 +459,151 @@ void ProtocolRegistry::WriteDefaultFieldCatalog() {
 
     std::ofstream ofs(path);
     if (ofs) ofs << j.dump(4);
+    */
 }
 
 // ─── Built-in field catalogs ─────────────────────────────────────────────────
 
-void ProtocolRegistry::PopulateBuiltinOutputFields() {
+void ProtocolRegistry::LoadBuiltinCatalog() {
     m_outputFields.clear();
+    m_inputFields.clear();
 
-    auto addField = [&](const char* id, const char* label, const char* cat,
-                        FieldType type, const char* oscPath, const char* wsKey) {
-        FieldDescriptor fd;
-        fd.id             = id;
-        fd.label          = label;
-        fd.category       = cat;
-        fd.type           = type;
-        fd.defaultOscPath = oscPath;
-        fd.defaultWsKey   = wsKey;
-        fd.isBuiltIn      = true;
-        m_outputFields.push_back(fd);
+    std::string path = GetProtocolsDir() + "builtin_fields.json";
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) {
+        WriteDefaultBuiltinCatalog();
+        ifs.open(path);
+        if (!ifs.is_open()) return;
+    }
+
+    try {
+        json j = json::parse(ifs);
+        if (j.contains("output_fields") && j["output_fields"].is_array()) {
+            for (const auto& item : j["output_fields"]) {
+                FieldDescriptor fd;
+                fd.id             = item.value("id",       "");
+                fd.label          = item.value("label",    fd.id);
+                fd.category       = item.value("category", "Custom");
+                std::string type  = item.value("type",     "analog");
+                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
+                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
+                fd.defaultWsKey   = item.value("wsKey",    fd.id);
+                fd.isBuiltIn      = true;
+                if (!fd.id.empty()) m_outputFields.push_back(fd);
+            }
+        }
+        if (j.contains("input_fields") && j["input_fields"].is_array()) {
+            for (const auto& item : j["input_fields"]) {
+                FieldDescriptor fd;
+                fd.id             = item.value("id",       "");
+                fd.label          = item.value("label",    fd.id);
+                fd.category       = item.value("category", "Haptic");
+                std::string type  = item.value("type",     "analog");
+                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
+                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
+                fd.defaultWsKey   = item.value("wsKey",    fd.id);
+                fd.isBuiltIn      = true;
+                if (!fd.id.empty()) m_inputFields.push_back(fd);
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[ProtocolRegistry] Failed to parse builtin_fields.json: " << e.what() << "\n";
+    }
+}
+
+void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
+    json j;
+    j["_comment"] = "Default built-in fields. Delete this file to regenerate defaults.";
+    
+    json outArr = json::array();
+    auto addOut = [&](const char* id, const char* label, const char* cat, FieldType type, const char* oscPath, const char* wsKey) {
+        json item;
+        item["id"] = id;
+        item["label"] = label;
+        item["category"] = cat;
+        item["type"] = (type == FieldType::DigitalButton) ? "digital" : "analog";
+        item["oscPath"] = oscPath;
+        item["wsKey"] = wsKey;
+        outArr.push_back(item);
     };
 
     // ── Analog axes ──────────────────────────────────────────────────────────
-    addField("axis_steering",   "Steering / Yaw",  "Analog Axes", FieldType::AnalogAxis, "/input/yaw",        "yaw");
-    addField("axis_throttle",   "Throttle",        "Analog Axes", FieldType::AnalogAxis, "/input/throttle",   "throttle");
-    addField("axis_clutch",     "Clutch",          "Analog Axes", FieldType::AnalogAxis, "/input/clutch",     "clutch");
-    addField("axis_brake",      "Brake",           "Analog Axes", FieldType::AnalogAxis, "/input/brake",      "brake");
-    addField("axis_handbrake",  "Handbrake",       "Analog Axes", FieldType::AnalogAxis, "/input/handbrake",  "handbrake");
-    addField("axis_pitch",      "Pitch",           "Analog Axes", FieldType::AnalogAxis, "/input/pitch",      "pitch");
-    addField("axis_roll",       "Roll",            "Analog Axes", FieldType::AnalogAxis, "/input/roll",       "roll");
-    addField("axis_collective", "Collective",      "Analog Axes", FieldType::AnalogAxis, "/input/collective", "collective");
+    addOut("axis_steering",   "Steering / Yaw",  "Analog Axes", FieldType::AnalogAxis, "/input/yaw",        "yaw");
+    addOut("axis_throttle",   "Throttle",        "Analog Axes", FieldType::AnalogAxis, "/input/throttle",   "throttle");
+    addOut("axis_clutch",     "Clutch",          "Analog Axes", FieldType::AnalogAxis, "/input/clutch",     "clutch");
+    addOut("axis_brake",      "Brake",           "Analog Axes", FieldType::AnalogAxis, "/input/brake",      "brake");
+    addOut("axis_handbrake",  "Handbrake",       "Analog Axes", FieldType::AnalogAxis, "/input/handbrake",  "handbrake");
+    addOut("axis_pitch",      "Pitch",           "Analog Axes", FieldType::AnalogAxis, "/input/pitch",      "pitch");
+    addOut("axis_roll",       "Roll",            "Analog Axes", FieldType::AnalogAxis, "/input/roll",       "roll");
+    addOut("axis_collective", "Collective",      "Analog Axes", FieldType::AnalogAxis, "/input/collective", "collective");
 
     // ── Digital: Vehicle ─────────────────────────────────────────────────────
-    addField("btn_gear_up",     "Gear Up",         "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_up",   "gear_up");
-    addField("btn_gear_down",   "Gear Down",       "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_down", "gear_down");
-    addField("btn_neutral",     "Neutral",         "Digital: Vehicle", FieldType::DigitalButton, "/input/neutral",   "neutral");
-    addField("btn_reverse",     "Reverse",         "Digital: Vehicle", FieldType::DigitalButton, "/input/reverse",   "reverse");
-    addField("btn_gear_1",      "1st Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_1",    "gear_1");
-    addField("btn_gear_2",      "2nd Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_2",    "gear_2");
-    addField("btn_gear_3",      "3rd Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_3",    "gear_3");
-    addField("btn_gear_4",      "4th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_4",    "gear_4");
-    addField("btn_gear_5",      "5th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_5",    "gear_5");
-    addField("btn_gear_6",      "6th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_6",    "gear_6");
-    addField("btn_drive_fwd",   "Drive FWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/fwd",       "fwd");
-    addField("btn_drive_bwd",   "Drive BWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/bwd",       "bwd");
-    addField("btn_drive_awd",   "Drive AWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/awd",       "awd");
-    addField("btn_drive_4wd",   "Drive 4WD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/4wd",       "4wd");
-    addField("btn_difflock_f",  "Diff-lock Front", "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_front", "difflock_front");
-    addField("btn_difflock_b",  "Diff-lock Rear",  "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_rear",  "difflock_rear");
+    addOut("btn_gear_up",     "Gear Up",         "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_up",   "gear_up");
+    addOut("btn_gear_down",   "Gear Down",       "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_down", "gear_down");
+    addOut("btn_neutral",     "Neutral",         "Digital: Vehicle", FieldType::DigitalButton, "/input/neutral",   "neutral");
+    addOut("btn_reverse",     "Reverse",         "Digital: Vehicle", FieldType::DigitalButton, "/input/reverse",   "reverse");
+    addOut("btn_gear_1",      "1st Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_1",    "gear_1");
+    addOut("btn_gear_2",      "2nd Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_2",    "gear_2");
+    addOut("btn_gear_3",      "3rd Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_3",    "gear_3");
+    addOut("btn_gear_4",      "4th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_4",    "gear_4");
+    addOut("btn_gear_5",      "5th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_5",    "gear_5");
+    addOut("btn_gear_6",      "6th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_6",    "gear_6");
+    addOut("btn_drive_fwd",   "Drive FWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/fwd",       "fwd");
+    addOut("btn_drive_bwd",   "Drive BWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/bwd",       "bwd");
+    addOut("btn_drive_awd",   "Drive AWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/awd",       "awd");
+    addOut("btn_drive_4wd",   "Drive 4WD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/4wd",       "4wd");
+    addOut("btn_difflock_f",  "Diff-lock Front", "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_front", "difflock_front");
+    addOut("btn_difflock_b",  "Diff-lock Rear",  "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_rear",  "difflock_rear");
 
     // ── Digital: Lights ──────────────────────────────────────────────────────
-    addField("btn_lights",      "Lights",          "Digital: Lights", FieldType::DigitalButton, "/input/lights",      "lights");
-    addField("btn_beam",        "Low/High Beam",   "Digital: Lights", FieldType::DigitalButton, "/input/beam",        "beam");
-    addField("btn_parking",     "Parking Light",   "Digital: Lights", FieldType::DigitalButton, "/input/parking",     "parking");
-    addField("btn_fog",         "Fog Light",       "Digital: Lights", FieldType::DigitalButton, "/input/fog",         "fog");
-    addField("btn_turn_left",   "Turn Left",       "Digital: Lights", FieldType::DigitalButton, "/input/turn_left",   "turn_left");
-    addField("btn_turn_right",  "Turn Right",      "Digital: Lights", FieldType::DigitalButton, "/input/turn_right",  "turn_right");
-    addField("btn_hazard",      "Hazard",          "Digital: Lights", FieldType::DigitalButton, "/input/hazard",      "hazard");
+    addOut("btn_lights",      "Lights",          "Digital: Lights", FieldType::DigitalButton, "/input/lights",      "lights");
+    addOut("btn_beam",        "Low/High Beam",   "Digital: Lights", FieldType::DigitalButton, "/input/beam",        "beam");
+    addOut("btn_parking",     "Parking Light",   "Digital: Lights", FieldType::DigitalButton, "/input/parking",     "parking");
+    addOut("btn_fog",         "Fog Light",       "Digital: Lights", FieldType::DigitalButton, "/input/fog",         "fog");
+    addOut("btn_turn_left",   "Turn Left",       "Digital: Lights", FieldType::DigitalButton, "/input/turn_left",   "turn_left");
+    addOut("btn_turn_right",  "Turn Right",      "Digital: Lights", FieldType::DigitalButton, "/input/turn_right",  "turn_right");
+    addOut("btn_hazard",      "Hazard",          "Digital: Lights", FieldType::DigitalButton, "/input/hazard",      "hazard");
 
     // ── Digital: Other ───────────────────────────────────────────────────────
-    addField("btn_horn",        "Horn",            "Digital: Other",  FieldType::DigitalButton, "/input/horn",        "horn");
-    addField("btn_cam_switch",  "Camera Switch",   "Digital: Other",  FieldType::DigitalButton, "/input/cam_switch",  "cam_switch");
-    addField("btn_landing_gear","Landing Gear",    "Digital: Other",  FieldType::DigitalButton, "/input/landing_gear","landing_gear");
-    addField("btn_boost",       "Boost / Special", "Digital: Other",  FieldType::DigitalButton, "/input/boost",       "boost");
-    addField("btn_jump",        "Jump",            "Digital: Other",  FieldType::DigitalButton, "/input/jump",        "jump");
-    addField("btn_weapon_main", "Weapon Main",     "Digital: Other",  FieldType::DigitalButton, "/input/weapon_main", "weapon_main");
-    addField("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
-    addField("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
-}
+    addOut("btn_horn",        "Horn",            "Digital: Other",  FieldType::DigitalButton, "/input/horn",        "horn");
+    addOut("btn_cam_switch",  "Camera Switch",   "Digital: Other",  FieldType::DigitalButton, "/input/cam_switch",  "cam_switch");
+    addOut("btn_landing_gear","Landing Gear",    "Digital: Other",  FieldType::DigitalButton, "/input/landing_gear","landing_gear");
+    addOut("btn_boost",       "Boost / Special", "Digital: Other",  FieldType::DigitalButton, "/input/boost",       "boost");
+    addOut("btn_jump",        "Jump",            "Digital: Other",  FieldType::DigitalButton, "/input/jump",        "jump");
+    addOut("btn_weapon_main", "Weapon Main",     "Digital: Other",  FieldType::DigitalButton, "/input/weapon_main", "weapon_main");
+    addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
+    addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
 
-void ProtocolRegistry::PopulateBuiltinInputFields() {
-    m_inputFields.clear();
+    j["output_fields"] = outArr;
 
-    auto addField = [&](const char* id, const char* label, const char* cat,
-                        const char* oscPath, const char* wsKey) {
-        FieldDescriptor fd;
-        fd.id             = id;
-        fd.label          = label;
-        fd.category       = cat;
-        fd.type           = FieldType::AnalogAxis; // haptic values are floats
-        fd.defaultOscPath = oscPath;
-        fd.defaultWsKey   = wsKey;
-        fd.isBuiltIn      = true;
-        m_inputFields.push_back(fd);
+    json inArr = json::array();
+    auto addIn = [&](const char* id, const char* label, const char* cat, const char* oscPath, const char* wsKey) {
+        json item;
+        item["id"] = id;
+        item["label"] = label;
+        item["category"] = cat;
+        item["type"] = "analog";
+        item["oscPath"] = oscPath;
+        item["wsKey"] = wsKey;
+        inArr.push_back(item);
     };
 
     // ── Haptic feedback fields (received from client) ─────────────────────
-    addField("haptic_rumble",      "Rumble",                  "Haptic", "/haptic/rumble",      "rumble");
-    addField("haptic_constant",    "Constant Force",          "Haptic", "/haptic/constant",    "constant");
-    addField("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
-    addField("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
-    addField("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
+    addIn("haptic_rumble",      "Rumble",                  "Haptic", "/haptic/rumble",      "rumble");
+    addIn("haptic_constant",    "Constant Force",          "Haptic", "/haptic/constant",    "constant");
+    addIn("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
+    addIn("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
+    addIn("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
 
     // ── Rumble (simple gamepad) ───────────────────────────────────────────
-    addField("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");
-    addField("rumble_right", "Rumble Right Motor", "Rumble", "/rumble/right", "rumble_right");
+    addIn("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");
+    addIn("rumble_right", "Rumble Right Motor", "Rumble", "/rumble/right", "rumble_right");
+
+    j["input_fields"] = inArr;
+
+    std::string path = GetProtocolsDir() + "builtin_fields.json";
+    std::ofstream ofs(path);
+    if (ofs) ofs << j.dump(4);
 }
 
 // ─── ID generation ───────────────────────────────────────────────────────────
