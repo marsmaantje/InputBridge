@@ -102,6 +102,7 @@ class InputMapper {
     std::vector<MappingProfile> m_Profiles;
     int m_SelectedProfileIndex = -1;
     char m_NewProfileName[128] = "";
+    char m_RenameProfileName[128] = "";
 
     std::map<std::string, float> m_LastOutputValues;
     Uint64 m_LastBroadcastTime = 0;

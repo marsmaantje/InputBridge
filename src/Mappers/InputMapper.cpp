@@ -127,8 +127,9 @@ void InputMapper::DrawContent() {
         float avail = ImGui::GetContentRegionAvail().x;
         float spc   = ImGui::GetStyle().ItemSpacing.x;
         float cw    = ImGui::CalcTextSize("Create New").x + ImGui::GetStyle().FramePadding.x * 2;
+        float renw  = ImGui::CalcTextSize("Rename").x     + ImGui::GetStyle().FramePadding.x * 2;
         float dw    = ImGui::CalcTextSize("Delete").x    + ImGui::GetStyle().FramePadding.x * 2;
-        float iw    = avail - cw - spc - (m_SelectedProfileIndex != -1 ? dw + spc : 0);
+        float iw    = avail - cw - spc - (m_SelectedProfileIndex != -1 ? dw + spc + renw + spc : 0);
         ImGui::SetNextItemWidth(std::max(1.f, iw));
         ImGui::InputTextWithHint("##npn", "New Profile Name", m_NewProfileName, sizeof(m_NewProfileName));
         ImGui::SameLine();
@@ -141,6 +142,35 @@ void InputMapper::DrawContent() {
             m_NewProfileName[0] = '\0';
         }
         if (m_SelectedProfileIndex != -1) {
+            ImGui::SameLine();
+            if (ImGui::Button("Rename")) {
+                std::strncpy(m_RenameProfileName, m_Profiles[m_SelectedProfileIndex].name.c_str(), sizeof(m_RenameProfileName));
+                m_RenameProfileName[sizeof(m_RenameProfileName)-1] = '\0';
+                ImGui::OpenPopup("Rename Profile");
+            }
+            if (ImGui::BeginPopupModal("Rename Profile", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::InputText("New Name", m_RenameProfileName, sizeof(m_RenameProfileName));
+                if (ImGui::Button("Save", ImVec2(120, 0))) {
+                    std::string newName = m_RenameProfileName;
+                    std::string oldName = m_Profiles[m_SelectedProfileIndex].name;
+                    if (!newName.empty() && newName != oldName) {
+                        auto dir = GetMappingsDirectory();
+                        auto oldPath = dir / (oldName + ".json");
+                        auto newPath = dir / (newName + ".json");
+                        m_Profiles[m_SelectedProfileIndex].name = newName;
+                        SaveProfile(m_Profiles[m_SelectedProfileIndex]);
+                        std::error_code ec;
+                        if (std::filesystem::exists(oldPath, ec)) {
+                            if (!std::filesystem::exists(newPath, ec) || !std::filesystem::equivalent(oldPath, newPath, ec))
+                                std::filesystem::remove(oldPath, ec);
+                        }
+                    }
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
             ImGui::SameLine();
             if (ImGui::Button("Delete")) ImGui::OpenPopup("Delete Profile?");
             if (ImGui::BeginPopupModal("Delete Profile?", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
