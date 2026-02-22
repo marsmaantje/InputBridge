@@ -10,6 +10,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <cctype>
+#include <cstdio>
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -668,8 +669,11 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Create/Edit Field##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId)))
+        bool idChanged = false;
+        if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId))) {
             s_cfIdManuallyModified = true;
+            idChanged = true;
+        }
         if (ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel))) {
             if (!s_cfIdManuallyModified) {
                 std::string slug;
@@ -682,7 +686,13 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
                 }
                 if (slug.length() >= sizeof(s_cfId)) slug.resize(sizeof(s_cfId) - 1);
                 std::strncpy(s_cfId, slug.c_str(), sizeof(s_cfId));
+                idChanged = true;
             }
+        }
+
+        if (idChanged) {
+            std::snprintf(s_cfOsc, sizeof(s_cfOsc), "/custom/%s", s_cfId);
+            std::snprintf(s_cfWs, sizeof(s_cfWs), "custom_%s", s_cfId);
         }
 
         // Collect existing categories
@@ -718,8 +728,9 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         ImGui::Separator();
         
         bool idExists = false;
-        for (const auto& f : ProtocolRegistry::GetInstance().GetOutputFields()) {
-            if (f.id == s_cfId) { idExists = true; break; }
+        for (const auto& f : reg.GetOutputFields()) { if (f.id == s_cfId) { idExists = true; break; } }
+        if (!idExists) {
+            for (const auto& f : reg.GetInputFields()) { if (f.id == s_cfId) { idExists = true; break; } }
         }
         if (idExists) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ID already exists!");
 
