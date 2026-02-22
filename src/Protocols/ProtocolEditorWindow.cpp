@@ -5,6 +5,12 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <vector>
+#include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
+namespace fs = std::filesystem;
+using json = nlohmann::json;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,9 +33,82 @@ static bool MatchesFilter(const FieldDescriptor& fd, const char* filter) {
     return contains(fd.label, filter) || contains(fd.category, filter) || contains(fd.id, filter);
 }
 
+static const char* s_settingsFile = "protocol_editor_settings.json";
+
+static void LoadSettings(std::string& importDir, std::string& exportDir) {
+    if (!fs::exists(s_settingsFile)) return;
+    try {
+        std::ifstream i(s_settingsFile);
+        json j;
+        i >> j;
+        if (j.contains("importDir")) importDir = j["importDir"];
+        if (j.contains("exportDir")) exportDir = j["exportDir"];
+    } catch (...) {}
+}
+
+static void SaveSettings(const std::string& importDir, const std::string& exportDir) {
+    try {
+        json j;
+        j["importDir"] = importDir;
+        j["exportDir"] = exportDir;
+        std::ofstream o(s_settingsFile);
+        o << j.dump(4);
+    } catch (...) {}
+}
+
+static bool DrawFileBrowser(std::string& currentDir, char* pathBuf, size_t pathBufSize) {
+    bool changed = false;
+    if (ImGui::Button("Up")) {
+        std::error_code ec;
+        fs::path p = fs::absolute(fs::path(currentDir), ec);
+        if (!ec && p.has_parent_path()) { currentDir = p.parent_path().string(); changed = true; }
+    }
+    ImGui::SameLine();
+    ImGui::Text("Dir: %s", currentDir.c_str());
+
+    ImGui::BeginChild("##filebrowser", ImVec2(0, -40), true);
+    try {
+        fs::path path(currentDir);
+        if (fs::exists(path) && fs::is_directory(path)) {
+            std::vector<fs::directory_entry> dirs, files;
+            for (const auto& entry : fs::directory_iterator(path)) {
+                if (entry.is_directory()) dirs.push_back(entry);
+                else if (entry.is_regular_file() && entry.path().extension() == ".json") files.push_back(entry);
+            }
+            auto sort_entries = [](const fs::directory_entry& a, const fs::directory_entry& b) {
+                return a.path().filename() < b.path().filename();
+            };
+            std::sort(dirs.begin(), dirs.end(), sort_entries);
+            std::sort(files.begin(), files.end(), sort_entries);
+
+            for (const auto& entry : dirs) {
+                if (ImGui::Selectable(("[Dir] " + entry.path().filename().string()).c_str())) {
+                    currentDir = entry.path().string();
+                    changed = true;
+                }
+            }
+            for (const auto& entry : files) {
+                if (ImGui::Selectable(entry.path().filename().string().c_str())) {
+                    std::string absPath = fs::absolute(entry.path()).string();
+                    std::strncpy(pathBuf, absPath.c_str(), pathBufSize);
+                    pathBuf[pathBufSize-1] = '\0';
+                }
+            }
+        }
+    } catch (...) { ImGui::TextColored(ImVec4(1,0,0,1), "Error reading directory"); }
+    ImGui::EndChild();
+    return changed;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 void ProtocolEditorWindow::Draw(bool& open) {
+    static bool s_settingsLoaded = false;
+    if (!s_settingsLoaded) {
+        LoadSettings(s_importCurrentDir, s_exportCurrentDir);
+        s_settingsLoaded = true;
+    }
+
     if (!open) return;
 
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
@@ -620,10 +699,16 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
     }
 
     bool open = true;
-    if (ImGui::BeginPopupModal("Export Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+    if (ImGui::BeginPopupModal("Export Protocol##modal", &open)) {
         ImGui::Text("Export to JSON file");
         ImGui::InputText("File Path", s_exportPath, sizeof(s_exportPath));
         
+        ImGui::Separator();
+        if (DrawFileBrowser(s_exportCurrentDir, s_exportPath, sizeof(s_exportPath))) {
+            SaveSettings(s_importCurrentDir, s_exportCurrentDir);
+        }
+
         ImGui::Separator();
         if (ImGui::Button("Export", ImVec2(120, 0))) {
             ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
@@ -642,9 +727,15 @@ void ProtocolEditorWindow::DrawImportProtocolModal() {
     }
 
     bool open = true;
-    if (ImGui::BeginPopupModal("Import Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+    if (ImGui::BeginPopupModal("Import Protocol##modal", &open)) {
         ImGui::Text("Import from JSON file");
         ImGui::InputText("File Path", s_importPath, sizeof(s_importPath));
+
+        ImGui::Separator();
+        if (DrawFileBrowser(s_importCurrentDir, s_importPath, sizeof(s_importPath))) {
+            SaveSettings(s_importCurrentDir, s_exportCurrentDir);
+        }
         
         ImGui::Separator();
         if (ImGui::Button("Import", ImVec2(120, 0))) {

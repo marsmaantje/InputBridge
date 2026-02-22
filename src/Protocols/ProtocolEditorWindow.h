@@ -81,10 +81,12 @@ private:
     static inline bool  s_showExportModal = false;
     static inline char  s_exportPath[256] = "";
     static inline std::string s_exportId;
+    static inline std::string s_exportCurrentDir = ".";
 
     // "Import protocol" modal state
     static inline bool  s_showImportModal = false;
     static inline char  s_importPath[256] = "";
+    static inline std::string s_importCurrentDir = ".";
 
     // Filter / search state
     static inline char  s_fieldFilter[128] = {};
