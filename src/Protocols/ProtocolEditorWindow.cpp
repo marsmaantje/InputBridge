@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <cctype>
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -370,31 +371,41 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
 
     // Group by category
     std::string currentCat;
+    bool isCatOpen = false;
     for (const auto& fd : catalog) {
         if (!MatchesFilter(fd, filter)) continue;
 
         if (fd.category != currentCat) {
-            currentCat = fd.category;
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f), "%s", currentCat.c_str());
-            ImGui::SameLine();
-            ImGui::PushID(currentCat.c_str());
-            if (ImGui::SmallButton("Rename")) {
-                s_showRenameCatModal = true;
-                std::strncpy(s_renCatOldName, currentCat.c_str(), sizeof(s_renCatOldName));
-                s_renCatOldName[sizeof(s_renCatOldName)-1] = '\0';
-                std::strncpy(s_renCatNewName, currentCat.c_str(), sizeof(s_renCatNewName));
-                s_renCatNewName[sizeof(s_renCatNewName)-1] = '\0';
+            if (isCatOpen) {
+                ImGui::TreePop();
             }
-            ImGui::PopID();
+            currentCat = fd.category;
+            isCatOpen = false;
             ImGui::Separator();
+            if (ImGui::TreeNode(currentCat.c_str())) {
+                isCatOpen = true;
+                ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f), "%s", currentCat.c_str());
+                ImGui::SameLine();
+                ImGui::PushID(currentCat.c_str());
+                if (ImGui::SmallButton("Rename")) {
+                    s_showRenameCatModal = true;
+                    std::strncpy(s_renCatOldName, currentCat.c_str(), sizeof(s_renCatOldName));
+                    s_renCatOldName[sizeof(s_renCatOldName)-1] = '\0';
+                    std::strncpy(s_renCatNewName, currentCat.c_str(), sizeof(s_renCatNewName));
+                    s_renCatNewName[sizeof(s_renCatNewName)-1] = '\0';
+                }
+                ImGui::PopID();
+                ImGui::Separator();
+            }
         }
 
+        if (!isCatOpen) continue;
+
+        ImGui::PushID(fd.id.c_str());
         ProtocolField* existing = FindField(def, fd.id);
         bool enabled = existing && existing->enabled;
 
         // ── Enabled checkbox ─────────────────────────────────────────────
-        ImGui::PushID(fd.id.c_str());
         if (ImGui::Checkbox("##en", &enabled)) {
             if (!existing) {
                 // Add new entry
@@ -475,6 +486,9 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
         }
 
         ImGui::PopID();
+    }
+    if (isCatOpen) {
+        ImGui::TreePop();
     }
 }
 
@@ -649,13 +663,53 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
     if (s_showCreateFieldModal) {
         ImGui::OpenPopup("Create/Edit Field##modal");
         s_showCreateFieldModal = false;
+        s_cfIdManuallyModified = false;
     }
 
     bool open = true;
     if (ImGui::BeginPopupModal("Create/Edit Field##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::InputText("ID", s_cfId, sizeof(s_cfId));
-        ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel));
-        ImGui::InputText("Category", s_cfCategory, sizeof(s_cfCategory));
+        if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId)))
+            s_cfIdManuallyModified = true;
+        if (ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel))) {
+            if (!s_cfIdManuallyModified) {
+                std::string slug;
+                for (char* p = s_cfLabel; *p; ++p) {
+                    char c = *p;
+                    if (std::isalnum((unsigned char)c)) slug += (char)std::tolower((unsigned char)c);
+                    else if (c == ' ' || c == '-' || c == '_') {
+                        if (!slug.empty() && slug.back() != '_') slug += '_';
+                    }
+                }
+                if (slug.length() >= sizeof(s_cfId)) slug.resize(sizeof(s_cfId) - 1);
+                std::strncpy(s_cfId, slug.c_str(), sizeof(s_cfId));
+            }
+        }
+
+        // Collect existing categories
+        std::vector<std::string> categories;
+        auto& reg = ProtocolRegistry::GetInstance();
+        for (const auto& f : reg.GetOutputFields())
+            if (std::find(categories.begin(), categories.end(), f.category) == categories.end()) categories.push_back(f.category);
+        for (const auto& f : reg.GetInputFields())
+            if (std::find(categories.begin(), categories.end(), f.category) == categories.end()) categories.push_back(f.category);
+        std::sort(categories.begin(), categories.end());
+
+        float buttonSize = ImGui::GetFrameHeight();
+        float itemWidth = ImGui::CalcItemWidth();
+        ImGui::SetNextItemWidth(itemWidth - buttonSize - ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::InputText("##Category", s_cfCategory, sizeof(s_cfCategory));
+        ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::SetNextItemWidth(buttonSize);
+        if (ImGui::BeginCombo("Category", nullptr, ImGuiComboFlags_NoPreview)) {
+            for (const auto& cat : categories) {
+                if (ImGui::Selectable(cat.c_str())) {
+                    std::strncpy(s_cfCategory, cat.c_str(), sizeof(s_cfCategory));
+                    s_cfCategory[sizeof(s_cfCategory)-1] = '\0';
+                }
+            }
+            ImGui::EndCombo();
+        }
+
         const char* types[] = { "Analog Axis", "Digital Button" };
         ImGui::Combo("Type", &s_cfType, types, 2);
         ImGui::InputText("Default OSC Path", s_cfOsc, sizeof(s_cfOsc));

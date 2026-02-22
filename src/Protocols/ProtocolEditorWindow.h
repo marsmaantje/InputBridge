@@ -67,6 +67,7 @@ private:
     static inline int   s_cfType = 0; // 0=Analog, 1=Digital
     static inline char  s_cfOsc[128] = "/custom/";
     static inline char  s_cfWs[128] = "custom_";
+    static inline bool  s_cfIdManuallyModified = false;
 
     // "Rename category" modal state
     static inline bool  s_showRenameCatModal = false;
