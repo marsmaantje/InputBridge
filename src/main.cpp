@@ -17,6 +17,7 @@
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "Protocols/OSCProtocol.h"
+#include "Protocols/ProtocolEditorWindow.h"
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
 #include "Protocols/ProtocolManager.h"
@@ -220,14 +221,32 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
     ImGui::PopID();
 }
 
-void DrawMainMenu(bool& done, bool& show_ui_settings) {
+void DrawMainMenu(bool& done, bool& show_ui_settings, bool& show_protocol_editor) {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Import Protocol...")) {
+                show_protocol_editor = true;
+                ProtocolEditorWindow::ShowImportDialog();
+            }
+            
+            if (ImGui::MenuItem("Export Protocol...")) {
+                show_protocol_editor = true;
+                ProtocolEditorWindow::ShowExportDialog();
+            }
+            
+            ImGui::Separator();
+            
             if (ImGui::MenuItem("Exit")) {
                 done = true;
             }
             ImGui::EndMenu();
         }
+        
+        if (ImGui::BeginMenu("Tools")) {
+            ImGui::MenuItem("Protocol Editor", NULL, &show_protocol_editor);
+            ImGui::EndMenu();
+        }
+        
         if (ImGui::BeginMenu("Settings")) {
             ImGui::MenuItem("UI Settings", NULL, &show_ui_settings);
             ImGui::EndMenu();
@@ -543,6 +562,7 @@ int main(int argc, char *argv[]) {
     bool vsync = true;
     int framerate_limit = 60;
     static bool show_ui_settings = false;
+    static bool show_protocol_editor = false;
     SDL_SetRenderVSync(renderer, 1);
 
     WebSocketServer::GetInstance().SetOutputMapper(&outputMapper);
@@ -591,9 +611,12 @@ int main(int argc, char *argv[]) {
         ImGui::NewFrame();
 
         // Menu Bar
-        DrawMainMenu(done, show_ui_settings);
+        DrawMainMenu(done, show_ui_settings, show_protocol_editor);
 
         DrawSettingsWindow(show_ui_settings, user_ui_scale, scale_with_window, window, initial_width, initial_height, preferencesManager);
+        
+        // Protocol Editor
+        ProtocolEditorWindow::Draw(show_protocol_editor);
 
         // DockSpace
         SetupDockSpace();

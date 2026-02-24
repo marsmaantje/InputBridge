@@ -216,6 +216,11 @@ add_executable(InputBridge
     WIN32 MACOSX_BUNDLE
     # ... put source files here ...
     src/main.cpp
+    # Core utilities
+    src/Core/UndoRedo.cpp
+    src/Core/BackupManager.cpp
+    src/Core/ProtocolValidator.cpp
+    # Device management
     src/Devices/DeviceManager.cpp
     src/Devices/DeviceFactory.cpp
     # Haptic and force feedback
@@ -250,6 +255,8 @@ add_executable(InputBridge
     src/Protocols/OSCDefaultProtocol.cpp
     src/Protocols/ProtocolEditorWindow.cpp
     src/Protocols/ProtocolRegistry.cpp
+    # Utilities
+    src/Utils/FileDialog.cpp
 )
 
 if(ENABLE_WEBSOCKETS)
@@ -331,7 +338,8 @@ if(WIN32)
         # Link in correct order: dinput8 -> dxguid
         target_link_libraries(InputBridge PRIVATE dinput8 dxguid)
     endif()
-    target_link_libraries(InputBridge PRIVATE ws2_32)
+    # Windows native file dialogs and networking
+    target_link_libraries(InputBridge PRIVATE ws2_32 comdlg32)
 endif()
 
 if(APPLE AND ENABLE_EXCLUSIVE_INPUT)
