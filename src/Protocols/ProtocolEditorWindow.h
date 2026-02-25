@@ -3,16 +3,14 @@
 /**
  * ProtocolEditorWindow
  *
- * Comprehensive protocol editor with advanced features:
- *   • Browse and manage OSC / WebSocket protocols
- *   • Create, edit, duplicate, and delete protocols
- *   • Undo/Redo support for all operations
- *   • Drag & Drop protocol import
- *   • Category management (create, rename, delete, merge)
- *   • Protocol templates system
- *   • Pre-import validation
- *   • Automatic backups before destructive operations
- *   • Native file dialogs with ImGui fallback
+ * Full-screen ImGui window that lets users:
+ *   • Browse the list of defined OSC / WebSocket protocols
+ *   • Create new protocol definitions (input or output, OSC or WebSocket)
+ *   • Edit name, transport settings (host / port)
+ *   • Toggle individual data fields on/off and override their OSC path / WS key
+ *   • Delete protocol definitions
+ *   • Import/export protocols via native file dialogs or ImGui browser
+ *   • Manage categories (rename/delete)
  *
  * All changes are persisted immediately to the protocols/definitions/ folder
  * via ProtocolRegistry.
@@ -41,18 +39,17 @@ public:
      * Trigger export dialog for selected protocol from external code.
      */
     static void ShowExportDialog();
-    
+
     /**
-     * Handle drag-and-drop file.
-     * 
-     * @param filePath Path to dropped file
+     * Handle a file path dropped onto the window via drag-and-drop.
      */
     static void HandleDroppedFile(const std::string& filePath);
 
 private:
-    // ── Main sections ────────────────────────────────────────────────────────
-    static void DrawToolbar();
+    // ── Left panel ───────────────────────────────────────────────────────────
     static void DrawProtocolList();
+
+    // ── Right panel ──────────────────────────────────────────────────────────
     static void DrawEditor();
     static void DrawOutputFieldPicker();
     static void DrawInputFieldPicker();
@@ -62,22 +59,22 @@ private:
                                const char* filter,
                                bool& pendingSave);
 
-    // ── Modal dialogs ────────────────────────────────────────────────────────
+    // ── Modals ───────────────────────────────────────────────────────────────
     static void DrawNewProtocolModal();
     static void DrawDuplicateProtocolModal();
     static void DrawCreateFieldModal();
     static void DrawSavePresetModal();
-    static void DrawLoadPresetModal();
     static void DrawExportProtocolModal();
     static void DrawImportProtocolModal();
     static void DrawRenameCategoryModal();
     static void DrawDeleteCategoryModal();
     static void DrawMergeCategoryModal();
     static void DrawSaveTemplateModal();
+    static void DrawLoadPresetModal();
     static void DrawLoadTemplateModal();
     static void DrawValidationResultModal();
     static void DrawBackupManagerModal();
-    
+
     // ── Helper functions ─────────────────────────────────────────────────────
     static void LoadSettings();
     static void SaveSettings();
@@ -86,31 +83,29 @@ private:
     static std::vector<std::string> GetAllCategories();
     static void CreateBackupBeforeOperation(const std::string& operationName);
     static bool ValidateAndImportProtocol(const std::string& filePath);
-    
-    // ── Undo/Redo commands ───────────────────────────────────────────────────
+
+    // ── Undo/Redo command executors ──────────────────────────────────────────
     static void ExecuteDeleteCategory(const std::string& categoryName);
     static void ExecuteRenameCategory(const std::string& oldName, const std::string& newName);
     static void ExecuteMergeCategories(const std::string& sourceCategory, const std::string& targetCategory);
-    
+
     // ── State variables ──────────────────────────────────────────────────────
-    
+
     // Core managers
     static inline UndoRedoManager s_undoManager{50};
-    static inline BackupManager s_backupManager{"./backups", 10};
-    
-    // General state
+    static inline BackupManager   s_backupManager{"./backups", 10};
+
+    // Selection and general state
     static inline int  s_selectedIndex    = -1;
     static inline bool s_showNewModal     = false;
     static inline bool s_pendingSave      = false;
     static inline bool s_settingsLoaded   = false;
-    static inline bool s_dragDropActive   = false;
 
     // New protocol modal state
     static inline char  s_newName[128]     = "New Protocol";
     static inline int   s_newTransport     = 0; // 0=OSC, 1=WebSocket
     static inline int   s_newDirection     = 0; // 0=Output, 1=Input
     static inline int   s_newPresetIdx     = 0; // 0=None
-    static inline int   s_newTemplateIdx   = 0; // 0=None
 
     // Duplicate protocol modal state
     static inline bool  s_showDupModal     = false;
@@ -139,8 +134,16 @@ private:
 
     // Merge category modal state
     static inline bool  s_showMergeCatModal = false;
-    static inline char  s_mergeSrcCat[64] = "";
-    static inline char  s_mergeTgtCat[64] = "";
+    static inline char  s_mergeSrcCat[64]   = "";
+    static inline char  s_mergeTgtCat[64]   = "";
+
+    // Validation result modal state
+    static inline bool        s_showValidationModal = false;
+    static inline std::string s_validationMessage;
+    static inline bool        s_validationIsError   = false;
+
+    // Backup manager modal state
+    static inline bool s_showBackupModal = false;
 
     // Save preset modal state
     static inline bool  s_showSavePresetModal = false;
@@ -148,14 +151,14 @@ private:
 
     // Load preset modal state
     static inline bool  s_showLoadPresetModal = false;
-    static inline int   s_loadPresetIdx = -1;
+    static inline int   s_loadPresetIdx       = -1;
 
-    // Template modal state
+    // Save/Load template modal state
     static inline bool  s_showSaveTemplateModal = false;
     static inline bool  s_showLoadTemplateModal = false;
-    static inline char  s_templateName[128] = "New Template";
-    static inline char  s_templateDesc[256] = "";
-    static inline int   s_loadTemplateIdx = -1;
+    static inline char  s_templateName[128]     = "New Template";
+    static inline char  s_templateDesc[256]     = "";
+    static inline int   s_loadTemplateIdx       = -1;
 
     // Export protocol modal state
     static inline bool  s_showExportModal = false;
@@ -168,15 +171,16 @@ private:
     static inline char  s_importPath[256] = "";
     static inline std::string s_importCurrentDir = ".";
 
-    // Validation result modal state
-    static inline bool  s_showValidationModal = false;
-    static inline std::string s_validationMessage;
-    static inline bool  s_validationIsError = false;
-    
-    // Backup manager modal state
-    static inline bool  s_showBackupModal = false;
-
     // Filter / search state
     static inline char  s_fieldFilter[128] = {};
-};
 
+    // ── File Browser state (ImGui fallback) ──────────────────────────────────
+    static inline std::vector<std::string> s_fbBackHistory;
+    static inline std::vector<std::string> s_fbForwardHistory;
+    static inline char   s_fbSearch[128]    = {};
+    static inline bool   s_fbPathEditMode   = false;
+    static inline char   s_fbPathEdit[512]  = {};
+    static inline int    s_fbSortCol        = 0;    // 0=Name, 1=Date, 2=Type, 3=Size
+    static inline bool   s_fbSortDesc       = false;
+    static inline std::string s_fbSelectedEntry;    // highlighted filename
+};
