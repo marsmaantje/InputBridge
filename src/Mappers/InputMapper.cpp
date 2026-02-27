@@ -20,6 +20,13 @@
 
 using json = nlohmann::json;
 
+NLOHMANN_JSON_SERIALIZE_ENUM(InputMapper::ButtonToDigitalMapping::Mode, {
+    {InputMapper::ButtonToDigitalMapping::Mode::Momentary, "momentary"},
+    {InputMapper::ButtonToDigitalMapping::Mode::Toggle,    "toggle"},
+    {InputMapper::ButtonToDigitalMapping::Mode::SetOn,     "set_on"},
+    {InputMapper::ButtonToDigitalMapping::Mode::SetOff,    "set_off"},
+})
+
 std::unique_ptr<InputMapper> InputMapper::s_Instance;
 
 InputMapper &InputMapper::GetInstance() { return *s_Instance; }
@@ -477,8 +484,8 @@ void InputMapper::DrawContent() {
             if (ImGui::BeginTable("t_digital", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
                 ImGui::TableSetupColumn("Device",        ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("Button Index",  ImGuiTableColumnFlags_WidthFixed, 90.f);
-                ImGui::TableSetupColumn("Digital Field", ImGuiTableColumnFlags_WidthFixed, 170.f);
-                ImGui::TableSetupColumn("Toggle",        ImGuiTableColumnFlags_WidthFixed, 50.f);
+                ImGui::TableSetupColumn("Digital Field", ImGuiTableColumnFlags_WidthFixed, 150.f);
+                ImGui::TableSetupColumn("Mode",          ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableSetupColumn("",              ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableHeadersRow();
 
@@ -527,8 +534,11 @@ void InputMapper::DrawContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(3);
-                    if (ImGui::Checkbox("##toggle", &dm.is_toggle)) changed = true;
-                    if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("Toggle mode: Press to switch on/off");
+                    const char* modes[] = { "Momentary", "Toggle", "Set On", "Set Off" };
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::Combo("##mode", (int*)&dm.mode, modes, IM_ARRAYSIZE(modes))) {
+                        changed = true;
+                    }
 
                     ImGui::TableSetColumnIndex(4);
                     bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Digital && m_ListeningState.targetName == "digital" && m_ListeningState.listIndex == i;
@@ -695,24 +705,53 @@ bool InputMapper::Update(bool dynamic_rate) {
     // Collect digital values
     std::map<std::string,bool> digitalValues;
     if (outDef) {
-        for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) digitalValues[pf->fieldId]=false;
+        // 1. Update states from all buttons and update last_physical_state
         for (auto& dm : profile.digitalMappings) {
             if (dm.instance_id==0||dm.target_field_id.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (j)
-            {
-                bool pressed = false;
-                if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
-                else if (dm.hat_index != -1) pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-
-                if (dm.is_toggle)
-                {
-                    if (pressed && !dm.last_physical_state) dm.toggle_state = !dm.toggle_state;
-                    dm.last_physical_state = pressed;
-                }
-                if (dm.is_toggle ? dm.toggle_state : pressed)
-                    digitalValues[dm.target_field_id] = true;
+            if (!j) {
+                dm.last_physical_state = false; // Device disconnected
+                continue;
             }
+
+            bool pressed = false;
+            if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+            else if (dm.hat_index != -1) pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+
+            if (dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+                if (pressed && !dm.last_physical_state) { // on rising edge
+                    auto it = profile.digitalToggleStates.find(dm.target_field_id);
+                    bool currentState = (it != profile.digitalToggleStates.end()) ? it->second : false;
+
+                    switch (dm.mode) {
+                        case ButtonToDigitalMapping::Mode::Toggle:
+                            profile.digitalToggleStates[dm.target_field_id] = !currentState;
+                            break;
+                        case ButtonToDigitalMapping::Mode::SetOn:
+                            profile.digitalToggleStates[dm.target_field_id] = true;
+                            break;
+                        case ButtonToDigitalMapping::Mode::SetOff:
+                            profile.digitalToggleStates[dm.target_field_id] = false;
+                            break;
+                        default: break;
+                    }
+                }
+            }
+            dm.last_physical_state = pressed;
+        }
+
+        // 2. Determine final value for each field
+        for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+            auto it = profile.digitalToggleStates.find(pf->fieldId);
+            bool value = (it != profile.digitalToggleStates.end()) ? it->second : false;
+            for (const auto& dm : profile.digitalMappings) {
+                if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
+                if (dm.last_physical_state) {
+                    value = true;
+                    break;
+                }
+            }
+            digitalValues[pf->fieldId] = value;
         }
     }
 
@@ -800,28 +839,28 @@ std::string InputMapper::GetOutputPreview() {
             analogValues[pf->fieldId] = it != profile.outputToInput.end() ? ProcessAxis(it->second) : 0.f;
         }
         for (const auto& bm : profile.buttonMappings) {
-            if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
+            if (bm.instance_id == 0 || bm.target_output_name.empty()) continue; // NOLINT(readability-misleading-indentation)
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
             if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name] = bm.on_value;
         }
         
+        // Determine final value for each field for preview
         for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            digitalValues[pf->fieldId] = false;
-        }
-        for (const auto& dm : profile.digitalMappings) {
-            if (dm.instance_id == 0 || dm.target_field_id.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (j)
-            {
-                bool pressed = false;
-                if (dm.button_index != -1)
-                    pressed = SDL_GetJoystickButton(j, dm.button_index);
-                else if (dm.hat_index != -1)
-                    pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-
-                if (dm.is_toggle ? dm.toggle_state : pressed)
-                    digitalValues[dm.target_field_id] = true;
+            auto it = profile.digitalToggleStates.find(pf->fieldId);
+            bool value = (it != profile.digitalToggleStates.end()) ? it->second : false;
+            for (const auto& dm : profile.digitalMappings) {
+                if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
+                if (dm.instance_id == 0) continue;
+                SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+                if (j) {
+                    bool pressed = (dm.button_index != -1) ? SDL_GetJoystickButton(j, dm.button_index) : (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+                    if (pressed) {
+                        value = true;
+                        break;
+                    }
+                }
             }
+            digitalValues[pf->fieldId] = value;
         }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name] = 0.f;
@@ -964,9 +1003,18 @@ void InputMapper::LoadProfiles() {
                         dm.hat_index=item.value("hat_index",-1);
                         dm.hat_mask=item.value("hat_mask",0);
                         dm.target_field_id=item.value("target_field_id","");
-                        dm.is_toggle=item.value("is_toggle", false);
+                        if (item.contains("mode")) {
+                            dm.mode = item.value("mode", ButtonToDigitalMapping::Mode::Momentary);
+                        } else if (item.value("is_toggle", false)) {
+                            dm.mode = ButtonToDigitalMapping::Mode::Toggle;
+                        }
                         p.digitalMappings.push_back(dm);
                     }
+                if (data.contains("digital_toggle_states")) {
+                    for (const auto& [key, val] : data["digital_toggle_states"].items()) {
+                        if (val.is_boolean()) p.digitalToggleStates[key] = val.get<bool>();
+                    }
+                }
                 m_Profiles.push_back(p);
             } catch (const std::exception& ex) { SDL_Log("Failed to parse profile %s: %s",e.path().string().c_str(),ex.what()); }
         }
@@ -994,11 +1042,12 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
                 {"target_output_name",bm.target_output_name},{"on_value",bm.on_value},{"off_value",bm.off_value}});
         data["digital_mappings"]=json::array();
         for (const auto& dm : profile.digitalMappings) {
-            json j = {{"device_guid",dm.device_guid}, {"target_field_id",dm.target_field_id}, {"is_toggle", dm.is_toggle}};
+            json j = {{"device_guid",dm.device_guid}, {"target_field_id",dm.target_field_id}, {"mode", dm.mode}};
             if (dm.hat_index != -1) { j["hat_index"]=dm.hat_index; j["hat_mask"]=dm.hat_mask; }
             else { j["button_index"]=dm.button_index; }
             data["digital_mappings"].push_back(j);
         }
+        data["digital_toggle_states"] = profile.digitalToggleStates;
         std::ofstream o(path); if (o) o<<data.dump(4);
     } catch (const std::exception& ex) { SDL_Log("Failed to save profile: %s",ex.what()); }
 }

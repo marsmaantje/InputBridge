@@ -67,8 +67,10 @@ class InputMapper {
         int hat_index = -1;
         int hat_mask = 0;
         std::string target_field_id; // FieldDescriptor::id
-        bool is_toggle = false;
-        bool toggle_state = false;
+
+        enum class Mode { Momentary, Toggle, SetOn, SetOff };
+        Mode mode = Mode::Momentary;
+
         bool last_physical_state = false;
     };
 
@@ -78,6 +80,7 @@ class InputMapper {
         std::vector<HapticTarget>            hapticTargets;
         std::vector<ButtonToAnalogMapping>   buttonMappings;     // button → analog field
         std::vector<ButtonToDigitalMapping>  digitalMappings;    // button → digital field
+        std::map<std::string, bool>          digitalToggleStates;
     };
 
     static InputMapper &GetInstance();
