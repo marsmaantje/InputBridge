@@ -474,10 +474,11 @@ void InputMapper::DrawContent() {
             if (ImGui::Button("Add Digital Mapping")) { profile.digitalMappings.push_back({}); changed = true; }
 
             int toDelete = -1;
-            if (ImGui::BeginTable("t_digital", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+            if (ImGui::BeginTable("t_digital", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
                 ImGui::TableSetupColumn("Device",        ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("Button Index",  ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableSetupColumn("Digital Field", ImGuiTableColumnFlags_WidthFixed, 170.f);
+                ImGui::TableSetupColumn("Toggle",        ImGuiTableColumnFlags_WidthFixed, 50.f);
                 ImGui::TableSetupColumn("",              ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableHeadersRow();
 
@@ -526,6 +527,10 @@ void InputMapper::DrawContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(3);
+                    if (ImGui::Checkbox("##toggle", &dm.is_toggle)) changed = true;
+                    if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("Toggle mode: Press to switch on/off");
+
+                    ImGui::TableSetColumnIndex(4);
                     bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Digital && m_ListeningState.targetName == "digital" && m_ListeningState.listIndex == i;
                     if (isListening) {
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
@@ -662,7 +667,7 @@ float InputMapper::ProcessAxis(const InputSource &cfg) {
 
 bool InputMapper::Update(bool dynamic_rate) {
     if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= (int)m_Profiles.size()) return false;
-    const auto &profile = m_Profiles[m_SelectedProfileIndex];
+    auto &profile = m_Profiles[m_SelectedProfileIndex];
     const ProtocolDefinition* outDef = GetActiveOutputDefinition();
 
     // Collect analog values
@@ -691,12 +696,22 @@ bool InputMapper::Update(bool dynamic_rate) {
     std::map<std::string,bool> digitalValues;
     if (outDef) {
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) digitalValues[pf->fieldId]=false;
-        for (const auto& dm : profile.digitalMappings) {
+        for (auto& dm : profile.digitalMappings) {
             if (dm.instance_id==0||dm.target_field_id.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (j) {
-                if (dm.button_index != -1 && SDL_GetJoystickButton(j, dm.button_index)) digitalValues[dm.target_field_id]=true;
-                else if (dm.hat_index != -1 && (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask)) digitalValues[dm.target_field_id]=true;
+            if (j)
+            {
+                bool pressed = false;
+                if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                else if (dm.hat_index != -1) pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+
+                if (dm.is_toggle)
+                {
+                    if (pressed && !dm.last_physical_state) dm.toggle_state = !dm.toggle_state;
+                    dm.last_physical_state = pressed;
+                }
+                if (dm.is_toggle ? dm.toggle_state : pressed)
+                    digitalValues[dm.target_field_id] = true;
             }
         }
     }
@@ -796,9 +811,16 @@ std::string InputMapper::GetOutputPreview() {
         for (const auto& dm : profile.digitalMappings) {
             if (dm.instance_id == 0 || dm.target_field_id.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (j) {
-                if (dm.button_index != -1 && SDL_GetJoystickButton(j, dm.button_index)) digitalValues[dm.target_field_id] = true;
-                else if (dm.hat_index != -1 && (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask)) digitalValues[dm.target_field_id] = true;
+            if (j)
+            {
+                bool pressed = false;
+                if (dm.button_index != -1)
+                    pressed = SDL_GetJoystickButton(j, dm.button_index);
+                else if (dm.hat_index != -1)
+                    pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+
+                if (dm.is_toggle ? dm.toggle_state : pressed)
+                    digitalValues[dm.target_field_id] = true;
             }
         }
     } else {
@@ -942,6 +964,7 @@ void InputMapper::LoadProfiles() {
                         dm.hat_index=item.value("hat_index",-1);
                         dm.hat_mask=item.value("hat_mask",0);
                         dm.target_field_id=item.value("target_field_id","");
+                        dm.is_toggle=item.value("is_toggle", false);
                         p.digitalMappings.push_back(dm);
                     }
                 m_Profiles.push_back(p);
@@ -971,7 +994,7 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
                 {"target_output_name",bm.target_output_name},{"on_value",bm.on_value},{"off_value",bm.off_value}});
         data["digital_mappings"]=json::array();
         for (const auto& dm : profile.digitalMappings) {
-            json j = {{"device_guid",dm.device_guid}, {"target_field_id",dm.target_field_id}};
+            json j = {{"device_guid",dm.device_guid}, {"target_field_id",dm.target_field_id}, {"is_toggle", dm.is_toggle}};
             if (dm.hat_index != -1) { j["hat_index"]=dm.hat_index; j["hat_mask"]=dm.hat_mask; }
             else { j["button_index"]=dm.button_index; }
             data["digital_mappings"].push_back(j);

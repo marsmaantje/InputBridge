@@ -67,6 +67,9 @@ class InputMapper {
         int hat_index = -1;
         int hat_mask = 0;
         std::string target_field_id; // FieldDescriptor::id
+        bool is_toggle = false;
+        bool toggle_state = false;
+        bool last_physical_state = false;
     };
 
     struct MappingProfile {
