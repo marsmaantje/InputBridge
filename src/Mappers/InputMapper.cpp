@@ -797,7 +797,7 @@ bool InputMapper::Update(bool dynamic_rate) {
             int val = digitalValues.count(pf->fieldId) && digitalValues[pf->fieldId] ? 1 : 0;
             if (osc.IsRunning() && oscDef)
                 for (const auto& op : oscDef->fields)
-                    if (op.fieldId==pf->fieldId && op.enabled) { osc.Send(op.oscPath.c_str(),"i",val); break; }
+                    if (op.fieldId==pf->fieldId && op.enabled) { osc.Send(op.oscPath.c_str(), val ? "T" : "F"); break; }
 #ifdef ENABLE_WEBSOCKETS
             if (ws.IsRunning() && wsDef)
                 for (const auto& wp : wsDef->fields)
@@ -892,7 +892,7 @@ std::string InputMapper::GetOutputPreview() {
                 ss << "  " << pf->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
             }
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                ss << "  " << pf->oscPath << " " << (digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                ss << "  " << pf->oscPath << " " << (digitalValues[pf->fieldId] ? "T" : "F") << "\n";
             }
         } else { // WebSocket
 #ifdef ENABLE_WEBSOCKETS
