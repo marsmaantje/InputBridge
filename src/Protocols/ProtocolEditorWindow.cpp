@@ -1468,6 +1468,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         ImGui::OpenPopup("Create/Edit Field##modal");
         s_showCreateFieldModal = false;
         s_cfIdManuallyModified = false;
+        s_cfLabelManuallyModified = false;
     }
 
     bool open = true;
@@ -1477,9 +1478,13 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId))) {
             s_cfIdManuallyModified = true;
             idChanged = true;
+            if (!s_cfLabelManuallyModified) {
+                std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
+            }
         }
         
         if (ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel))) {
+            s_cfLabelManuallyModified = true;
             if (!s_cfIdManuallyModified) {
                 // Auto-generate ID from label
                 std::string slug;
@@ -1574,6 +1579,10 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         }
 
         if (ImGui::Button("Save Field", ImVec2(120, 0))) {
+            if (s_cfLabel[0] == '\0') {
+                std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
+            }
+
             FieldDescriptor fd;
             fd.id = s_cfId;
             fd.label = s_cfLabel;

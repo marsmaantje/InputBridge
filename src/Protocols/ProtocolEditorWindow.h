@@ -128,6 +128,7 @@ private:
     static inline char  s_cfOsc[128] = "/custom/";
     static inline char  s_cfWs[128] = "custom_";
     static inline bool  s_cfIdManuallyModified = false;
+    static inline bool  s_cfLabelManuallyModified = false;
 
     // Rename category modal state
     static inline bool  s_showRenameCatModal = false;
