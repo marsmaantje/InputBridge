@@ -1002,6 +1002,7 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                                            bool& pendingSave) {
     // Group fields by category
     std::vector<std::string> categories;
+    auto& registry = ProtocolRegistry::GetInstance();
     for (const auto& fd : catalog) {
         if (std::find(categories.begin(), categories.end(), fd.category) == categories.end()) {
             categories.push_back(fd.category);
@@ -1010,7 +1011,9 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
     std::sort(categories.begin(), categories.end());
 
     // Draw categorized fields
+    bool fieldDeleted = false;
     for (const auto& category : categories) {
+        if (fieldDeleted) break;
         // Count fields in this category that match filter
         int matchCount = 0;
         for (const auto& fd : catalog) {
@@ -1054,6 +1057,32 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                 ImGui::SameLine();
                 ImGui::TextUnformatted(fd.label.c_str());
 
+                if (!fd.isBuiltIn) {
+                    ImGui::SameLine();
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
+                    if (ImGui::Button("X")) {
+                        CreateBackupBeforeOperation("delete field '" + fd.id + "'");
+
+                        std::vector<RemovedProtocolField> removedFields;
+                        for (auto& def : registry.GetDefinitions()) {
+                            for (const auto& pf : def.fields) {
+                                if (pf.fieldId == fd.id) {
+                                    removedFields.push_back({def.id, pf});
+                                }
+                            }
+                        }
+
+                        ExecuteDeleteField(fd, std::move(removedFields));
+                        fieldDeleted = true;
+                    }
+                    ImGui::PopStyleColor(3);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Delete custom field '%s' from catalog.\nThis will also remove it from all protocols that use it.\nThis action can be undone.", fd.label.c_str());
+                    }
+                }
+
                 // Show override controls if enabled
                 if (isEnabled && pf) {
                     ImGui::Indent();
@@ -1080,6 +1109,9 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                 }
 
                 ImGui::PopID();
+                if (fieldDeleted) {
+                    break;
+                }
             }
             ImGui::TreePop();
         }
@@ -1759,6 +1791,41 @@ bool ProtocolEditorWindow::ValidateAndImportProtocol(const std::string& filePath
 // ═══════════════════════════════════════════════════════════════════════════
 // Undo/Redo Command Executors
 // ═══════════════════════════════════════════════════════════════════════════
+
+void ProtocolEditorWindow::ExecuteDeleteField(const FieldDescriptor& fieldToDelete, std::vector<RemovedProtocolField>&& removedFields) {
+    auto& registry = ProtocolRegistry::GetInstance();
+
+    s_undoManager.ExecuteCommand(std::make_unique<LambdaCommand>(
+        "Delete field '" + fieldToDelete.label + "'",
+        [&registry, id = fieldToDelete.id]() {
+            // Delete from catalog
+            registry.DeleteOutputField(id);
+
+            // Delete from all definitions
+            for (auto& def : registry.GetDefinitions()) {
+                auto& fields = def.fields;
+                auto it = std::remove_if(fields.begin(), fields.end(),
+                    [&](const ProtocolField& pf) { return pf.fieldId == id; });
+                if (it != fields.end()) {
+                    fields.erase(it, fields.end());
+                    registry.SaveDefinition(def);
+                }
+            }
+        },
+        [&registry, fieldToDelete, removedFields = std::move(removedFields)]() {
+            // Restore to catalog
+            registry.AddOutputField(fieldToDelete);
+
+            // Restore to definitions
+            for (const auto& rf : removedFields) {
+                if (auto* def = registry.FindById(rf.defId)) {
+                    def->fields.push_back(rf.field);
+                    registry.SaveDefinition(*def);
+                }
+            }
+        }
+    ));
+}
 
 void ProtocolEditorWindow::ExecuteDeleteCategory(const std::string& categoryName) {
     auto& registry = ProtocolRegistry::GetInstance();

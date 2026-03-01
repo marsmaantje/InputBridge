@@ -21,6 +21,11 @@
 #include "../Core/BackupManager.h"
 #include "ProtocolDefinition.h"
 
+struct RemovedProtocolField {
+    std::string defId;
+    ProtocolField field;
+};
+
 class ProtocolEditorWindow {
 public:
     /**
@@ -85,6 +90,7 @@ private:
     static bool ValidateAndImportProtocol(const std::string& filePath);
 
     // ── Undo/Redo command executors ──────────────────────────────────────────
+    static void ExecuteDeleteField(const FieldDescriptor& fieldToDelete, std::vector<RemovedProtocolField>&& removedFields);
     static void ExecuteDeleteCategory(const std::string& categoryName);
     static void ExecuteRenameCategory(const std::string& oldName, const std::string& newName);
     static void ExecuteMergeCategories(const std::string& sourceCategory, const std::string& targetCategory);
