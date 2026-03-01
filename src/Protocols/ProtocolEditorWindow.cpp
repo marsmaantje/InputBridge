@@ -1063,23 +1063,59 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
                     if (ImGui::Button("X")) {
-                        CreateBackupBeforeOperation("delete field '" + fd.id + "'");
-
-                        std::vector<RemovedProtocolField> removedFields;
-                        for (auto& def : registry.GetDefinitions()) {
-                            for (const auto& pf : def.fields) {
-                                if (pf.fieldId == fd.id) {
-                                    removedFields.push_back({def.id, pf});
+                        bool usedElsewhere = false;
+                        for (const auto& d : registry.GetDefinitions()) {
+                            if (d.id == def.id) continue;
+                            for (const auto& f : d.fields) {
+                                if (f.fieldId == fd.id) {
+                                    usedElsewhere = true;
+                                    break;
                                 }
                             }
+                            if (usedElsewhere) break;
                         }
 
-                        ExecuteDeleteField(fd, std::move(removedFields));
-                        fieldDeleted = true;
+                        if (usedElsewhere) {
+                            if (pf) {
+                                CreateBackupBeforeOperation("remove field '" + fd.id + "' from protocol");
+                                ProtocolField fieldCopy = *pf;
+                                std::string defId = def.id;
+                                std::string fieldId = fd.id;
+                                s_undoManager.ExecuteCommand(std::make_unique<LambdaCommand>(
+                                    "Remove field '" + fd.label + "'",
+                                    [&registry, defId, fieldId]() {
+                                        if (auto* d = registry.FindById(defId)) {
+                                            auto it = std::remove_if(d->fields.begin(), d->fields.end(),
+                                                [&](const ProtocolField& f) { return f.fieldId == fieldId; });
+                                            if (it != d->fields.end()) {
+                                                d->fields.erase(it, d->fields.end());
+                                                registry.SaveDefinition(*d);
+                                            }
+                                        }
+                                    },
+                                    [&registry, defId, fieldCopy]() {
+                                        if (auto* d = registry.FindById(defId)) {
+                                            d->fields.push_back(fieldCopy);
+                                            registry.SaveDefinition(*d);
+                                        }
+                                    }
+                                ));
+                            }
+                        } else {
+                            CreateBackupBeforeOperation("delete field '" + fd.id + "'");
+                            std::vector<RemovedProtocolField> removedFields;
+                            for (auto& d : registry.GetDefinitions()) {
+                                for (const auto& f : d.fields) {
+                                    if (f.fieldId == fd.id) removedFields.push_back({d.id, f});
+                                }
+                            }
+                            ExecuteDeleteField(fd, std::move(removedFields));
+                            fieldDeleted = true;
+                        }
                     }
                     ImGui::PopStyleColor(3);
                     if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Delete custom field '%s' from catalog.\nThis will also remove it from all protocols that use it.\nThis action can be undone.", fd.label.c_str());
+                        ImGui::SetTooltip("Delete custom field '%s'.\nIf unused by other protocols, it will be removed from the catalog.\nOtherwise, it is only removed from this protocol.", fd.label.c_str());
                     }
                 }
 
