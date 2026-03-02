@@ -1,0 +1,23 @@
+{
+    "_comment": "InputBridge external field catalog. Add custom output fields here.",
+    "_note": "Built-in fields (analog axes, vehicle/lights/other buttons, haptic feedback) are always available regardless of this file.",
+    "output_fields": [
+        {
+            "_comment_template": "Copy and modify this block to add a custom field.",
+            "id":       "custom_axis_1",
+            "label":    "Custom Axis 1",
+            "category": "Custom",
+            "type":     "analog",
+            "oscPath":  "/custom/axis1",
+            "wsKey":    "custom_axis1"
+        },
+        {
+            "id":       "custom_button_1",
+            "label":    "Custom Button 1",
+            "category": "Custom",
+            "type":     "digital",
+            "oscPath":  "/custom/button1",
+            "wsKey":    "custom_button1"
+        }
+    ]
+}

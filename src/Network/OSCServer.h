@@ -55,6 +55,20 @@ public:
     void SetProtocol(const std::string& name);
     std::string GetProtocol() const;
 
+    /** Select a user-defined protocol from ProtocolRegistry by its definition ID.
+     *  Passing an empty string clears the definition selection (falls back to
+     *  the built-in protocol set via SetProtocol). */
+    /** Select user-defined output (server→client) and input (client→server)
+     *  protocol definitions independently.  Pass "" to clear a selection. */
+    void SetOutputDefinition(const std::string& definitionId);
+    void SetInputDefinition(const std::string& definitionId);
+    std::string GetOutputDefinitionId() const;
+    std::string GetInputDefinitionId() const;
+
+    // Legacy kept for compatibility
+    void SetDefinition(const std::string& definitionId);
+    std::string GetDefinitionId() const;
+
     void LoadConfig(const PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs);
 
@@ -64,6 +78,9 @@ private:
     static int generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_rumble_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_constant_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_periodic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_condition_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_gain_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
     lo_address m_send_address = nullptr;
     lo_server_thread m_server_thread = nullptr;
@@ -86,6 +103,9 @@ private:
     mutable std::mutex m_mutex;  // mutable for const methods
     std::shared_ptr<IProtocol> m_protocol;
     std::string m_protocolName = "OSC Default";
+    std::string m_selectedDefinitionId; // legacy single-slot
+    std::string m_outputDefinitionId; // selected output (server→client) definition
+    std::string m_inputDefinitionId;  // selected input  (client→server) definition
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;
     OutputMapper* m_OutputMapper = nullptr;

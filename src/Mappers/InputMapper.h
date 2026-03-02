@@ -11,6 +11,7 @@
 
 class DeviceManager;
 class PreferencesManager;
+struct ProtocolDefinition;
 
 // Moved from OutputMapper.h
 struct HapticTarget {
@@ -38,29 +39,48 @@ struct HapticTarget {
 
 class InputMapper {
   public:
+    // Maps a device axis to a named analog output channel (field id or legacy name)
     struct InputSource {
         std::string deviceGuid;
-        SDL_JoystickID instance_id = 0; // Resolved at runtime
+        SDL_JoystickID instance_id = 0;
         int axisIndex = -1;
         bool invert = false;
         float deadzone = 0.05f;
         int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0
     };
 
+    // Maps a device button to an analog output channel (on/off float values)
     struct ButtonToAnalogMapping {
         std::string device_guid;
         SDL_JoystickID instance_id = 0;
         int button_index = 0;
-        std::string target_output_name;
+        std::string target_output_name; // field id or legacy name
         float on_value = 1.0f;
         float off_value = 0.0f;
     };
 
+    // Maps a device button to a digital output channel (field id from definition)
+    struct ButtonToDigitalMapping {
+        std::string device_guid;
+        SDL_JoystickID instance_id = 0;
+        int button_index = -1;
+        int hat_index = -1;
+        int hat_mask = 0;
+        std::string target_field_id; // FieldDescriptor::id
+
+        enum class Mode { Momentary, Toggle, SetOn, SetOff };
+        Mode mode = Mode::Momentary;
+
+        bool last_physical_state = false;
+    };
+
     struct MappingProfile {
         std::string name;
-        std::map<std::string, InputSource> outputToInput;
-        std::vector<HapticTarget> hapticTargets;
-        std::vector<ButtonToAnalogMapping> buttonMappings;
+        std::map<std::string, InputSource>   outputToInput;      // fieldId → axis source
+        std::vector<HapticTarget>            hapticTargets;
+        std::vector<ButtonToAnalogMapping>   buttonMappings;     // button → analog field
+        std::vector<ButtonToDigitalMapping>  digitalMappings;    // button → digital field
+        std::map<std::string, bool>          digitalToggleStates;
     };
 
     static InputMapper &GetInstance();
@@ -82,6 +102,8 @@ class InputMapper {
     void SaveProfile(const MappingProfile &profile) const;
     void HandleDeviceConnectionChange();
     std::vector<HapticTarget>* GetCurrentHapticTargets();
+    
+    void CancelListening();
 
   private:
     InputMapper(const DeviceManager &deviceManager);
@@ -91,18 +113,40 @@ class InputMapper {
     std::vector<MappingProfile> m_Profiles;
     int m_SelectedProfileIndex = -1;
     char m_NewProfileName[128] = "";
+    char m_RenameProfileName[128] = "";
+    
+    int m_SelectedProtocolView = 0; // 0: OSC, 1: WebSocket
 
     std::map<std::string, float> m_LastOutputValues;
     Uint64 m_LastBroadcastTime = 0;
+
+    struct ListeningState {
+        bool active = false;
+        enum Type { None, Axis, Digital } type = None;
+        std::string targetName; // Field ID for axes, or category for lists
+        int listIndex = -1;     // Index in the list (for digital/button mappings)
+
+        struct AxisState {
+            SDL_JoystickID instance_id;
+            int axis_index;
+            Sint16 value;
+        };
+        std::vector<AxisState> initialAxes;
+    };
+    ListeningState m_ListeningState;
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_ExclusiveModeHandler;
 #endif
 
+    // Legacy fallback outputs when no definition is selected
     const std::vector<std::string> m_GenericOutputs = {
         "Steering", "Throttle", "Brake", "Clutch", "Handbrake", "Pitch", "Roll"};
 
+    const ProtocolDefinition* GetActiveOutputDefinition();
     float ProcessAxis(const InputSource &config);
+    void StartListening(ListeningState::Type type, const std::string& name, int index = -1);
+    void UpdateListening();
 #ifdef ENABLE_EXCLUSIVE_INPUT
     void ApplyExclusiveMode();
 #endif
