@@ -206,7 +206,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
         ProtocolDefinition def;
         def.id = GenerateId(); // Always generate a new ID to avoid conflicts
         def.name = j.value("name", "Imported Protocol");
-        
+
         std::string ts = j.value("transport", "osc");
         def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
 
@@ -514,7 +514,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
 void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     json j;
     j["_comment"] = "Default built-in fields. Delete this file to regenerate defaults.";
-    
+
     json outArr = json::array();
     auto addOut = [&](const char* id, const char* label, const char* cat, FieldType type, const char* oscPath, const char* wsKey) {
         json item;
@@ -554,6 +554,53 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_drive_4wd",   "Drive 4WD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/4wd",       "4wd");
     addOut("btn_difflock_f",  "Diff-lock Front", "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_front", "difflock_front");
     addOut("btn_difflock_b",  "Diff-lock Rear",  "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_rear",  "difflock_rear");
+
+    // ── Eye Tracking ─────────────────────────────────────────────────────────
+    addOut("et_eye_lid_left",   "Eye Lid Left",   "Eye Tracking", FieldType::AnalogAxis, "/avatar/parameters/LeftEyeLid",  "LeftEyeLid");
+    addOut("et_eye_lid_right",  "Eye Lid Right",  "Eye Tracking", FieldType::AnalogAxis, "/avatar/parameters/RightEyeLid", "RightEyeLid");
+    addOut("et_eye_left_x",     "Eye Left X",     "Eye Tracking", FieldType::AnalogAxis, "/avatar/parameters/EyeLeftX",    "EyeLeftX");
+    addOut("et_eye_left_y",     "Eye Left Y",     "Eye Tracking", FieldType::AnalogAxis, "/avatar/parameters/EyeLeftY",    "EyeLeftY");
+    addOut("et_eye_right_x",    "Eye Right X",    "Eye Tracking", FieldType::AnalogAxis, "/avatar/parameters/EyeRightX",   "EyeRightX");
+    addOut("et_eye_right_y",    "Eye Right Y",    "Eye Tracking", FieldType::AnalogAxis, "/avatar/parameters/EyeRightY",   "EyeRightY");
+
+    // ── Face Tracking ────────────────────────────────────────────────────────
+    addOut("ft_jaw_right",          "Jaw Right",            "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/JawRight",           "JawRight");
+    addOut("ft_jaw_left",           "Jaw Left",             "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/JawLeft",            "JawLeft");
+    addOut("ft_jaw_forward",        "Jaw Forward",          "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/JawForward",         "JawForward");
+    addOut("ft_jaw_open",           "Jaw Open",             "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/JawOpen",            "JawOpen");
+    addOut("ft_mouth_ape_shape",    "Mouth Ape Shape",      "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthApeShape",      "MouthApeShape");
+    addOut("ft_mouth_upper_right",  "Mouth Upper Right",    "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthUpperRight",    "MouthUpperRight");
+    addOut("ft_mouth_upper_left",   "Mouth Upper Left",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthUpperLeft",     "MouthUpperLeft");
+    addOut("ft_mouth_lower_right",  "Mouth Lower Right",    "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthLowerRight",    "MouthLowerRight");
+    addOut("ft_mouth_lower_left",   "Mouth Lower Left",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthLowerLeft",     "MouthLowerLeft");
+    addOut("ft_mouth_upper_overturn","Mouth Upper Overturn","Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthUpperOverturn", "MouthUpperOverturn");
+    addOut("ft_mouth_lower_overturn","Mouth Lower Overturn","Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthLowerOverturn", "MouthLowerOverturn");
+    addOut("ft_mouth_pout",         "Mouth Pout",           "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthPout",          "MouthPout");
+    addOut("ft_mouth_smile_right",  "Mouth Smile Right",    "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthSmileRight",    "MouthSmileRight");
+    addOut("ft_mouth_smile_left",   "Mouth Smile Left",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthSmileLeft",     "MouthSmileLeft");
+    addOut("ft_mouth_sad_right",    "Mouth Sad Right",      "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthSadRight",      "MouthSadRight");
+    addOut("ft_mouth_sad_left",     "Mouth Sad Left",       "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthSadLeft",       "MouthSadLeft");
+    addOut("ft_cheek_puff_right",   "Cheek Puff Right",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/CheekPuffRight",     "CheekPuffRight");
+    addOut("ft_cheek_puff_left",    "Cheek Puff Left",      "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/CheekPuffLeft",      "CheekPuffLeft");
+    addOut("ft_cheek_suck",         "Cheek Suck",           "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/CheekSuck",          "CheekSuck");
+    addOut("ft_mouth_upper_upright","Mouth Upper UpRight",  "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthUpperUpRight",  "MouthUpperUpRight");
+    addOut("ft_mouth_upper_upleft", "Mouth Upper UpLeft",   "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthUpperUpLeft",   "MouthUpperUpLeft");
+    addOut("ft_mouth_lower_downright","Mouth Lower DownRight","Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthLowerDownRight","MouthLowerDownRight");
+    addOut("ft_mouth_lower_downleft","Mouth Lower DownLeft","Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthLowerDownLeft", "MouthLowerDownLeft");
+    addOut("ft_mouth_upper_inside", "Mouth Upper Inside",   "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthUpperInside",   "MouthUpperInside");
+    addOut("ft_mouth_lower_inside", "Mouth Lower Inside",   "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthLowerInside",   "MouthLowerInside");
+    addOut("ft_mouth_lower_overlay","Mouth Lower Overlay",  "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthLowerOverlay",  "MouthLowerOverlay");
+    addOut("ft_tongue_longstep1",   "Tongue LongStep1",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueLongStep1",    "TongueLongStep1");
+    addOut("ft_tongue_left",        "Tongue Left",          "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueLeft",         "TongueLeft");
+    addOut("ft_tongue_right",       "Tongue Right",         "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueRight",        "TongueRight");
+    addOut("ft_tongue_up",          "Tongue Up",            "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueUp",           "TongueUp");
+    addOut("ft_tongue_down",        "Tongue Down",          "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueDown",         "TongueDown");
+    addOut("ft_tongue_roll",        "Tongue Roll",          "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueRoll",         "TongueRoll");
+    addOut("ft_tongue_longstep2",   "Tongue LongStep2",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueLongStep2",    "TongueLongStep2");
+    addOut("ft_tongue_upright_morph","Tongue UpRight Morph","Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueUpRightMorph", "TongueUpRightMorph");
+    addOut("ft_tongue_upleft_morph", "Tongue UpLeft Morph", "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueUpLeftMorph",  "TongueUpLeftMorph");
+    addOut("ft_tongue_downright_morph","Tongue DownRight Morph","Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueDownRightMorph","TongueDownRightMorph");
+    addOut("ft_tongue_downleft_morph","Tongue DownLeft Morph","Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueDownLeftMorph", "TongueDownLeftMorph");
 
     // ── Digital: Lights ──────────────────────────────────────────────────────
     addOut("btn_lights",      "Lights",          "Digital: Lights", FieldType::DigitalButton, "/input/lights",      "lights");
