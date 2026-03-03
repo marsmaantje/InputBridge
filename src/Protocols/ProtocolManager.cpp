@@ -3,6 +3,7 @@
 #include "Protocols/MarsmaantjeOldProtocol.h"
 #include "Protocols/MarsmaantjeNewProtocol.h"
 #include "Protocols/OSCDefaultProtocol.h"
+#include "Protocols/OSCSteamLinkProtocol.h"
 
 struct ProtocolManager::Impl {
     std::map<std::string, std::shared_ptr<IProtocol>> protocols;
@@ -18,6 +19,7 @@ ProtocolManager::ProtocolManager() : m_Impl(new Impl) {
     RegisterProtocol(std::make_shared<MarsmaantjeOldProtocol>());
     RegisterProtocol(std::make_shared<MarsmaantjeNewProtocol>());
     RegisterProtocol(std::make_shared<OSCDefaultProtocol>());
+    RegisterProtocol(std::make_shared<OSCSteamLinkProtocol>());
 }
 
 ProtocolManager::~ProtocolManager() { delete m_Impl; }
