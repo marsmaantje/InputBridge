@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <random>
 #include <SDL3/SDL_filesystem.h>
+#include "Protocols/OSCSteamLinkProtocol.h"
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -31,6 +32,11 @@ void ProtocolRegistry::LoadAll() {
     LoadFieldCatalog();
     LoadPresets();
     LoadDefinitionFiles();
+
+    // Ensure built-in SteamLink OSC definition exists
+    if (!FindById("builtin_steamlink")) {
+        m_definitions.push_back(OSCSteamLinkProtocol::CreateDefaultDefinition());
+    }
 }
 
 void ProtocolRegistry::SaveAll() {
