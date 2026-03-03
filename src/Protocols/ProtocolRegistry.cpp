@@ -575,22 +575,6 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
     addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
 
-    // ── Face Tracking ────────────────────────────────────────────────────────
-    addOut("ft_jaw_open",     "Jaw Open",        "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/JawOpen",     "JawOpen");
-    addOut("ft_mouth_pout",   "Mouth Pout",      "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthPout",   "MouthPout");
-    addOut("ft_tongue_out",   "Tongue Out",      "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/TongueOut",   "TongueOut");
-    addOut("ft_cheeks_puff",  "Cheeks Puff",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/CheeksPuff",  "CheeksPuff");
-    addOut("ft_mouth_smile",  "Mouth Smile",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthSmile",  "MouthSmile");
-    addOut("ft_mouth_frown",  "Mouth Frown",     "Face Tracking", FieldType::AnalogAxis, "/avatar/parameters/MouthFrown",  "MouthFrown");
-
-    // ── Eye Tracking ─────────────────────────────────────────────────────────
-    addOut("et_eye_left_x",   "Eye Left X",      "Eye Tracking",  FieldType::AnalogAxis, "/avatar/parameters/EyeLeftX",    "EyeLeftX");
-    addOut("et_eye_left_y",   "Eye Left Y",      "Eye Tracking",  FieldType::AnalogAxis, "/avatar/parameters/EyeLeftY",    "EyeLeftY");
-    addOut("et_eye_right_x",  "Eye Right X",     "Eye Tracking",  FieldType::AnalogAxis, "/avatar/parameters/EyeRightX",   "EyeRightX");
-    addOut("et_eye_right_y",  "Eye Right Y",     "Eye Tracking",  FieldType::AnalogAxis, "/avatar/parameters/EyeRightY",   "EyeRightY");
-    addOut("et_eyelid_left",  "Eye Lid Left",    "Eye Tracking",  FieldType::AnalogAxis, "/avatar/parameters/EyeLidLeft",  "EyeLidLeft");
-    addOut("et_eyelid_right", "Eye Lid Right",   "Eye Tracking",  FieldType::AnalogAxis, "/avatar/parameters/EyeLidRight", "EyeLidRight");
-
     j["output_fields"] = outArr;
 
     json inArr = json::array();

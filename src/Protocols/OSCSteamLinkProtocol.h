@@ -6,6 +6,7 @@
 
 class OSCSteamLinkProtocol : public OSCBaseProtocol {
 public:
+    OSCSteamLinkProtocol();
     std::string getProtocolName() const override;
     std::string format(const std::string &address, float value) override;
     std::string format(const std::string &address, int value) override;
