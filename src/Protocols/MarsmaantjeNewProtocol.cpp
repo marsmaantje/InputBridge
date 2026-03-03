@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <map>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -30,24 +31,34 @@ std::string MarsmaantjeNewProtocol::format(const std::string &address, const std
     return address + ":" + value;
 }
 
-std::string MarsmaantjeNewProtocol::format_wheel(float wheel, float brake, float throttle, float pitch, float roll) {
+std::string MarsmaantjeNewProtocol::format_wheel(const std::map<std::string, float>& values) {
     std::string msg;
     msg.reserve(64);
-    msg += "y";
-    msg += formatFloat(wheel, 8);
-    msg += ";";
-    msg += "b";
-    msg += formatFloat(brake, 5);
-    msg += ";";
-    msg += "t";
-    msg += formatFloat(throttle, 5);
-    msg += ";";
-    msg += "p";
-    msg += formatFloat(pitch, 8);
-    msg += ";";
-    msg += "r";
-    msg += formatFloat(roll, 8);
-    msg += ";";
+    if (values.count("wheel") && values.at("wheel") != 0.0f) {
+        msg += "y";
+        msg += formatFloat(values.at("wheel"), 8);
+        msg += ";";
+    }
+    if (values.count("brake") && values.at("brake") != 0.0f) {
+        msg += "b";
+        msg += formatFloat(values.at("brake"), 5);
+        msg += ";";
+    }
+    if (values.count("throttle") && values.at("throttle") != 0.0f) {
+        msg += "t";
+        msg += formatFloat(values.at("throttle"), 5);
+        msg += ";";
+    }
+    if (values.count("pitch") && values.at("pitch") != 0.0f) {
+        msg += "p";
+        msg += formatFloat(values.at("pitch"), 8);
+        msg += ";";
+    }
+    if (values.count("roll") && values.at("roll") != 0.0f) {
+        msg += "r";
+        msg += formatFloat(values.at("roll"), 8);
+        msg += ";";
+    }
     return msg;
 }
 

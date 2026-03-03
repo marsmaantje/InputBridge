@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <map>
 
 /**
  * Base protocol interface.
@@ -24,6 +25,6 @@ class IProtocol {
     virtual std::string format(const std::string &address, const std::string &value) = 0;
 
     // Specific message formatters
-    virtual std::string format_wheel(float wheel, float brake, float throttle, float pitch, float roll) = 0;
+    virtual std::string format_wheel(const std::map<std::string, float>& values) = 0;
     virtual void parse(const std::string& message) = 0;
 };

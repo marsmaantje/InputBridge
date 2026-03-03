@@ -17,7 +17,7 @@ std::string OSCSteamLinkProtocol::format(const std::string &address, const std::
     return address + ":" + value;
 }
 
-std::string OSCSteamLinkProtocol::format_wheel(float wheel, float brake, float throttle, float pitch, float roll) {
+std::string OSCSteamLinkProtocol::format_wheel(const std::map<std::string, float>& values) {
     return "";
 }
 

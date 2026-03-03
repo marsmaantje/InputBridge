@@ -343,13 +343,13 @@ void InputMapper::DrawContent() {
         if (ImGui::BeginCombo("##protoview", m_SelectedProtocolView == 0 ? "OSC" : "WebSocket")) {
             if (ImGui::Selectable("OSC", m_SelectedProtocolView == 0)) m_SelectedProtocolView = 0;
             if (oscActive) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0,1,0,1), "(Active)"); }
-            
+
             if (ImGui::Selectable("WebSocket", m_SelectedProtocolView == 1)) m_SelectedProtocolView = 1;
             if (wsActive) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0,1,0,1), "(Active)"); }
-            
+
             ImGui::EndCombo();
         }
-        
+
         ImGui::SameLine();
         bool isRunning = (m_SelectedProtocolView == 0) ? oscRunning : wsRunning;
         if (isRunning) ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "[Running]");
@@ -372,7 +372,7 @@ void InputMapper::DrawContent() {
         ImGuiStyle& style = ImGui::GetStyle();
         float sp = style.ItemSpacing.x;
         float bindW = ImGui::CalcTextSize("Bind").x + style.FramePadding.x * 2;
-        
+
         float dw = 0.f, rw = 0.f;
         bool hasSrc = src.axisIndex != -1;
         if (hasSrc) {
@@ -508,7 +508,7 @@ void InputMapper::DrawContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(1);
-                    
+
                     std::string btnLabel = "None";
                     if (dm.button_index != -1) btnLabel = "Button " + std::to_string(dm.button_index);
                     else if (dm.hat_index != -1) {
@@ -826,7 +826,7 @@ std::string InputMapper::GetOutputPreview() {
         return "No active profile selected.";
     const auto &profile = m_Profiles[m_SelectedProfileIndex];
     const ProtocolDefinition* outDef = GetActiveOutputDefinition();
-    
+
     std::stringstream ss;
 
     // 1. Calculate current values
@@ -843,7 +843,7 @@ std::string InputMapper::GetOutputPreview() {
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
             if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name] = bm.on_value;
         }
-        
+
         // Determine final value for each field for preview
         for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
             auto it = profile.digitalToggleStates.find(pf->fieldId);
@@ -921,12 +921,19 @@ std::string InputMapper::GetOutputPreview() {
     } else {
         // Legacy
         ss << "Legacy Mode (No Output Definition Selected)\n\n";
-        
+
         float s = analogValues["Steering"];
         float t = analogValues["Throttle"];
         float b = analogValues["Brake"];
         float pi = analogValues["Pitch"];
         float ro = analogValues["Roll"];
+
+        std::map<std::string, float> wheelValues;
+        if (analogValues.count("Steering")) wheelValues["wheel"] = s;
+        if (analogValues.count("Throttle")) wheelValues["throttle"] = t;
+        if (analogValues.count("Brake")) wheelValues["brake"] = b;
+        if (analogValues.count("Pitch")) wheelValues["pitch"] = pi;
+        if (analogValues.count("Roll")) wheelValues["roll"] = ro;
 
         if (m_SelectedProtocolView == 0) {
             ss << "[OSC Output]";
@@ -946,7 +953,7 @@ std::string InputMapper::GetOutputPreview() {
             std::string protoName = ws.GetProtocol();
             auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
             if (protocol) {
-                ss << "  " << protocol->format_wheel(s, b, t, pi, ro) << "\n";
+                ss << "  " << protocol->format_wheel(wheelValues) << "\n";
             } else {
                 ss << "  (Unknown Protocol)\n";
             }

@@ -1,6 +1,7 @@
 #pragma once
 #include "IProtocol.h"
 #include <nlohmann/json.hpp>
+#include <map>
 
 class WebSocketProtocol : public IProtocol {
   public:
@@ -17,7 +18,7 @@ class WebSocketProtocol : public IProtocol {
     std::string format(const std::string &address, int value) override;
     std::string format(const std::string &address, const std::string &value) override;
 
-    std::string format_wheel(float wheel, float brake, float throttle, float pitch, float roll) override;
+    std::string format_wheel(const std::map<std::string, float>& values) override;
 
     void parse(const std::string& message) override;
 

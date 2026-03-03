@@ -2,6 +2,7 @@
 
 #include "Protocols/IProtocol.h"
 #include "Network/OSCServer.h"
+#include <map>
 
 class OSCProtocol : public IProtocol {
 public:
@@ -14,7 +15,7 @@ public:
     std::string format(const std::string &address, float value) override;
     std::string format(const std::string &address, int value) override;
     std::string format(const std::string &address, const std::string &value) override;
-    std::string format_wheel(float wheel, float brake, float throttle, float pitch, float roll) override;
+    std::string format_wheel(const std::map<std::string, float>& values) override;
     void parse(const std::string& message) override;
 
 private:
