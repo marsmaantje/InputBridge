@@ -373,7 +373,13 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
         protocol = m_Impl->protocol;
     }
     if (protocol) {
-        std::string msg = protocol->format_wheel(wheel, brake, throttle, pitch, roll);
+        std::map<std::string, float> values = {
+            {"wheel", wheel},
+            {"brake", brake},
+            {"throttle", throttle},
+            {"pitch", pitch},
+            {"roll", roll}};
+        std::string msg = protocol->format_wheel(values);
         if (!msg.empty()) {
             uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
             Broadcast(msg, opCode);
