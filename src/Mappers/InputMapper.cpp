@@ -6,6 +6,7 @@
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/ProtocolDefinition.h"
 #include "Protocols/ProtocolManager.h"
+#include "Protocols/OSCSteamLinkProtocol.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include <algorithm>
@@ -85,6 +86,12 @@ const ProtocolDefinition* InputMapper::GetActiveOutputDefinition() {
 
     if (m_SelectedProtocolView == 0) { // OSC
         if (!oscId.empty()) return ProtocolRegistry::GetInstance().FindById(oscId);
+
+        if (OSCServer::GetInstance().GetProtocol() == "SteamLink OSC") {
+            static ProtocolDefinition s_steamLinkDef;
+            s_steamLinkDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
+            return &s_steamLinkDef;
+        }
     } else { // WebSocket
         if (!wsId.empty()) return ProtocolRegistry::GetInstance().FindById(wsId);
     }

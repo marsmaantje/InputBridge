@@ -1,7 +1,7 @@
 #include "Protocols/OSCSteamLinkProtocol.h"
 #include "Protocols/ProtocolRegistry.h"
 
-OSCSteamLinkProtocol::OSCSteamLinkProtocol() {
+static void RegisterSteamLinkFields() {
     auto& reg = ProtocolRegistry::GetInstance();
     auto add = [&](const char* id, const char* label, const char* cat, const char* oscPath, const char* wsKey) {
         FieldDescriptor fd;
@@ -30,6 +30,16 @@ OSCSteamLinkProtocol::OSCSteamLinkProtocol() {
     add("et_eye_right_y",  "Eye Right Y",     "Eye Tracking",  "/avatar/parameters/EyeRightY",   "EyeRightY");
     add("et_eyelid_left",  "Eye Lid Left",    "Eye Tracking",  "/avatar/parameters/EyeLidLeft",  "EyeLidLeft");
     add("et_eyelid_right", "Eye Lid Right",   "Eye Tracking",  "/avatar/parameters/EyeLidRight", "EyeLidRight");
+}
+
+// Ensure fields are registered at startup, so they appear in InputMapper
+// even if the protocol instance hasn't been created yet.
+static struct SteamLinkFieldRegistrar {
+    SteamLinkFieldRegistrar() { RegisterSteamLinkFields(); }
+} g_SteamLinkFieldRegistrar;
+
+OSCSteamLinkProtocol::OSCSteamLinkProtocol() {
+    RegisterSteamLinkFields();
 }
 
 std::string OSCSteamLinkProtocol::getProtocolName() const {
