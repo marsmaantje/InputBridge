@@ -22,6 +22,16 @@ static void RegisterSteamLinkFields() {
     add("ft_cheeks_puff",  "Cheeks Puff",     "Face Tracking", "/avatar/parameters/CheeksPuff",  "CheeksPuff");
     add("ft_mouth_smile",  "Mouth Smile",     "Face Tracking", "/avatar/parameters/MouthSmile",  "MouthSmile");
     add("ft_mouth_frown",  "Mouth Frown",     "Face Tracking", "/avatar/parameters/MouthFrown",  "MouthFrown");
+    add("ft_mouth_left",   "Mouth Left",      "Face Tracking", "/avatar/parameters/MouthLeft",   "MouthLeft");
+    add("ft_mouth_right",  "Mouth Right",     "Face Tracking", "/avatar/parameters/MouthRight",  "MouthRight");
+    add("ft_jaw_left",     "Jaw Left",        "Face Tracking", "/avatar/parameters/JawLeft",     "JawLeft");
+    add("ft_jaw_right",    "Jaw Right",       "Face Tracking", "/avatar/parameters/JawRight",    "JawRight");
+    add("ft_mouth_upper_up", "Mouth Upper Up", "Face Tracking", "/avatar/parameters/MouthUpperUp", "MouthUpperUp");
+    add("ft_mouth_lower_down", "Mouth Lower Down", "Face Tracking", "/avatar/parameters/MouthLowerDown", "MouthLowerDown");
+    add("ft_tongue_up",    "Tongue Up",       "Face Tracking", "/avatar/parameters/TongueUp",    "TongueUp");
+    add("ft_tongue_left",  "Tongue Left",     "Face Tracking", "/avatar/parameters/TongueLeft",  "TongueLeft");
+    add("ft_tongue_right", "Tongue Right",    "Face Tracking", "/avatar/parameters/TongueRight", "TongueRight");
+    add("ft_tongue_roll",  "Tongue Roll",     "Face Tracking", "/avatar/parameters/TongueRoll",  "TongueRoll");
 
     // ── Eye Tracking ─────────────────────────────────────────────────────────
     add("et_eye_left_x",   "Eye Left X",      "Eye Tracking",  "/avatar/parameters/EyeLeftX",    "EyeLeftX");
