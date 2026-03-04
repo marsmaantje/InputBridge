@@ -7,6 +7,7 @@
 #include "Protocols/ProtocolDefinition.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/OSCSteamLinkProtocol.h"
+#include "Protocols/OSCProjectBabbleProtocol.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include <algorithm>
@@ -87,10 +88,16 @@ const ProtocolDefinition* InputMapper::GetActiveOutputDefinition() {
     if (m_SelectedProtocolView == 0) { // OSC
         if (!oscId.empty()) return ProtocolRegistry::GetInstance().FindById(oscId);
 
-        if (OSCServer::GetInstance().GetProtocol() == "SteamLink OSC") {
+        std::string protocol = OSCServer::GetInstance().GetProtocol();
+        if (protocol == "SteamLink OSC") {
             static ProtocolDefinition s_steamLinkDef;
             s_steamLinkDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
             return &s_steamLinkDef;
+        }
+        if (protocol == "Project Babble OSC") {
+            static ProtocolDefinition s_projectBabbleDef;
+            s_projectBabbleDef = OSCProjectBabbleProtocol::CreateDefaultDefinition();
+            return &s_projectBabbleDef;
         }
     } else { // WebSocket
         if (!wsId.empty()) return ProtocolRegistry::GetInstance().FindById(wsId);
@@ -782,7 +789,23 @@ bool InputMapper::Update(bool dynamic_rate) {
 #endif
 
     if (outDef) {
-        const auto* oscDef = ProtocolRegistry::GetInstance().FindById(osc.GetOutputDefinitionId());
+        const ProtocolDefinition* oscDef = nullptr;
+        if (m_SelectedProtocolView == 0) {
+            oscDef = outDef;
+        } else {
+            std::string oscId = osc.GetOutputDefinitionId();
+            if (!oscId.empty()) oscDef = ProtocolRegistry::GetInstance().FindById(oscId);
+            else {
+                std::string protocol = osc.GetProtocol();
+                if (protocol == "SteamLink OSC") {
+                    static ProtocolDefinition s_steamLinkDef; s_steamLinkDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
+                    oscDef = &s_steamLinkDef;
+                } else if (protocol == "Project Babble OSC") {
+                    static ProtocolDefinition s_projectBabbleDef; s_projectBabbleDef = OSCProjectBabbleProtocol::CreateDefaultDefinition();
+                    oscDef = &s_projectBabbleDef;
+                }
+            }
+        }
 #ifdef ENABLE_WEBSOCKETS
         const auto* wsDef  = ProtocolRegistry::GetInstance().FindById(ws.GetOutputDefinitionId());
 #else
@@ -892,7 +915,13 @@ std::string InputMapper::GetOutputPreview() {
             std::string oscDefId = osc.GetOutputDefinitionId();
             ss << "[OSC Output]";
             if (!osc.IsRunning()) ss << " (Stopped)";
-            else if (oscDefId != outDef->id) ss << " (Definition Mismatch)";
+            else if (oscDefId != outDef->id) {
+                bool match = false;
+                if (oscDefId.empty()) {
+                    if (osc.GetProtocol() == outDef->name) match = true;
+                }
+                if (!match) ss << " (Definition Mismatch)";
+            }
             ss << "\n";
 
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
