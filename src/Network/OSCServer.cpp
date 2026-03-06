@@ -231,8 +231,15 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         if (server->m_logs.size() > 100) server->m_logs.pop_front();
 
         // Delegate to protocol if it's an OSC protocol
-        if (server->m_protocol) {
-            auto oscProtocol = std::dynamic_pointer_cast<OSCBaseProtocol>(server->m_protocol);
+        std::shared_ptr<IProtocol> proto = server->m_protocol;
+        std::string legacyInput = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
+        if (!legacyInput.empty()) {
+            auto p = ProtocolManager::GetInstance().GetProtocol(legacyInput);
+            if (p) proto = p;
+        }
+
+        if (proto) {
+            auto oscProtocol = std::dynamic_pointer_cast<OSCBaseProtocol>(proto);
             if (oscProtocol) {
                 oscProtocol->handle_osc_message(path, types, argv, argc);
             }
@@ -311,6 +318,7 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     int send_port = prefs.GetInt("OSC", "SendPort", 9066);
     int recv_port = prefs.GetInt("OSC", "RecvPort", 9068);
     std::string protocol   = prefs.GetString("OSC", "Protocol", "OSC Default");
+    std::string inputProtocol = prefs.GetString("OSC", "InputProtocol", "");
     std::string outDefId   = prefs.GetString("OSC", "OutputDefinitionId", "");
     std::string inDefId    = prefs.GetString("OSC", "InputDefinitionId",  "");
     bool enabled = prefs.GetBool("OSC", "Enabled", false);
@@ -324,6 +332,9 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     }
 
     SetProtocol(protocol);
+
+    if (!inputProtocol.empty()) ProtocolManager::GetInstance().SetActiveInputLegacyProtocol(inputProtocol);
+    else ProtocolManager::GetInstance().SetActiveInputLegacyProtocol(protocol);
 
     if (!outDefId.empty()) SetOutputDefinition(outDefId);
     if (!inDefId.empty())  SetInputDefinition(inDefId);
@@ -339,6 +350,7 @@ void OSCServer::SaveConfig(PreferencesManager& prefs) {
     prefs.SetInt   ("OSC", "SendPort",            m_send_port);
     prefs.SetInt   ("OSC", "ReceivePort",         m_recv_port);
     prefs.SetString("OSC", "Protocol",            m_protocolName);
+    prefs.SetString("OSC", "InputProtocol",       ProtocolManager::GetInstance().GetActiveInputLegacyProtocol());
     prefs.SetString("OSC", "OutputDefinitionId",  m_outputDefinitionId);
     prefs.SetString("OSC", "InputDefinitionId",   m_inputDefinitionId);
     prefs.SetBool  ("OSC", "Enabled",             m_running);
@@ -380,6 +392,9 @@ void OSCServer::DrawContent() {
         currentProto = m_protocolName;
     }
 
+    std::string currentInputProto = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
+    if (currentInputProto.empty()) currentInputProto = currentProto;
+
     // ── Combo helpers ─────────────────────────────────────────────────────────
     struct Entry {
         std::string label;
@@ -408,12 +423,12 @@ void OSCServer::DrawContent() {
         return v;
     };
 
-    auto findIdx = [&](const std::vector<Entry>& v, const std::string& selDefId) {
+    auto findIdx = [&](const std::vector<Entry>& v, const std::string& selDefId, const std::string& selProto) {
         int idx = 0;
         for (int i = 0; i < (int)v.size(); ++i) {
             if (v[i].isSeparator) continue;
             if (v[i].isDefinition && !selDefId.empty() && v[i].definitionId == selDefId) { idx = i; break; }
-            if (!v[i].isDefinition && selDefId.empty() && v[i].protocolName == currentProto) { idx = i; }
+            if (!v[i].isDefinition && selDefId.empty() && v[i].protocolName == selProto) { idx = i; }
         }
         return idx;
     };
@@ -435,7 +450,7 @@ void OSCServer::DrawContent() {
     // ── Output protocol (server → client) ─────────────────────────────────────
     {
         auto entries = buildEntries(ProtocolDirection::Output);
-        int curIdx = findIdx(entries, outDefId);
+        int curIdx = findIdx(entries, outDefId, currentProto);
         int newIdx = curIdx;
         ImGui::Text("Output (send to client)");
         drawCombo("##osc_out", entries, curIdx, newIdx);
@@ -451,14 +466,17 @@ void OSCServer::DrawContent() {
     // ── Input protocol (client → server) ──────────────────────────────────────
     {
         auto entries = buildEntries(ProtocolDirection::Input);
-        int curIdx = findIdx(entries, inDefId);
+        int curIdx = findIdx(entries, inDefId, currentInputProto);
         int newIdx = curIdx;
         ImGui::Text("Input (receive from client)");
         drawCombo("##osc_in", entries, curIdx, newIdx);
         if (newIdx != curIdx && !entries[newIdx].isSeparator) {
             const auto& c = entries[newIdx];
-            if (c.isDefinition) SetInputDefinition(c.definitionId);
-            else                { SetInputDefinition(""); SetProtocol(c.protocolName); }
+            if (c.isDefinition) {
+                SetInputDefinition(c.definitionId);
+                ProtocolManager::GetInstance().SetActiveInputLegacyProtocol("");
+            }
+            else { SetInputDefinition(""); ProtocolManager::GetInstance().SetActiveInputLegacyProtocol(c.protocolName); }
         }
         if (!inDefId.empty() && ProtocolRegistry::GetInstance().FindById(inDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(recv port synced)"); }

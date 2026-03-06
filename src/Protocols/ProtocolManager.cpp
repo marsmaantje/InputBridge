@@ -8,6 +8,8 @@
 
 struct ProtocolManager::Impl {
     std::map<std::string, std::shared_ptr<IProtocol>> protocols;
+    std::string activeInputProtocolId;
+    std::string activeInputLegacyProtocol;
 };
 
 ProtocolManager &ProtocolManager::GetInstance() {
@@ -47,4 +49,20 @@ std::vector<std::string> ProtocolManager::GetAvailableProtocols() const {
         names.push_back(pair.first);
     }
     return names;
+}
+
+void ProtocolManager::SetActiveInputProtocolId(const std::string& id) {
+    m_Impl->activeInputProtocolId = id;
+}
+
+std::string ProtocolManager::GetActiveInputProtocolId() const {
+    return m_Impl->activeInputProtocolId;
+}
+
+void ProtocolManager::SetActiveInputLegacyProtocol(const std::string& name) {
+    m_Impl->activeInputLegacyProtocol = name;
+}
+
+std::string ProtocolManager::GetActiveInputLegacyProtocol() const {
+    return m_Impl->activeInputLegacyProtocol;
 }

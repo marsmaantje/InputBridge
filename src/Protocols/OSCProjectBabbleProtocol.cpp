@@ -19,7 +19,7 @@ static void RegisterProjectBabbleFields() {
     add("pb_jaw_open",       "Jaw Open",          "Babble Face", "/avatar/parameters/JawOpen",       "JawOpen");
     add("pb_jaw_left",       "Jaw Left",          "Babble Face", "/avatar/parameters/JawLeft",       "JawLeft");
     add("pb_jaw_right",      "Jaw Right",         "Babble Face", "/avatar/parameters/JawRight",      "JawRight");
-    add("pb_jaw_fwd",        "Jaw Forward",       "Babble Face", "/avatar/parameters/JawFwd",        "JawFwd");
+    add("pb_jaw_fwd",        "Jaw Forward",       "Babble Face", "/avatar/parameters/JawForward",    "JawForward");
     add("pb_mouth_funnel",   "Mouth Funnel",      "Babble Face", "/avatar/parameters/MouthFunnel",   "MouthFunnel");
     add("pb_mouth_pucker",   "Mouth Pucker",      "Babble Face", "/avatar/parameters/MouthPucker",   "MouthPucker");
     add("pb_mouth_close",    "Mouth Close",       "Babble Face", "/avatar/parameters/MouthClose",    "MouthClose");

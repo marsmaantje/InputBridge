@@ -81,6 +81,13 @@ class InputMapper {
         std::vector<ButtonToAnalogMapping>   buttonMappings;     // button → analog field
         std::vector<ButtonToDigitalMapping>  digitalMappings;    // button → digital field
         std::map<std::string, bool>          digitalToggleStates;
+
+        // Protocol selections
+        std::string oscOutputProtocolId;
+        std::string oscInputProtocolId;
+        std::string wsOutputProtocolId;
+        std::string wsInputProtocolId;
+        int selectedProtocolView = 0;
     };
 
     static InputMapper &GetInstance();
@@ -147,6 +154,7 @@ class InputMapper {
     float ProcessAxis(const InputSource &config);
     void StartListening(ListeningState::Type type, const std::string& name, int index = -1);
     void UpdateListening();
+    void UpdateActiveProtocols();
 #ifdef ENABLE_EXCLUSIVE_INPUT
     void ApplyExclusiveMode();
 #endif

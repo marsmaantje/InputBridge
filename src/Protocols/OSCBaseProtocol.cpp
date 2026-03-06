@@ -1,6 +1,8 @@
 #include "Protocols/OSCBaseProtocol.h"
 #include "Network/OSCServer.h"
 #include "Devices/DeviceManager.h"
+#include "Protocols/ProtocolManager.h"
+#include "Protocols/ProtocolRegistry.h"
 #include "Haptics/GamepadHaptics.h"
 #include "Haptics/SteeringWheelHaptics.h"
 #include <cstring>
@@ -10,7 +12,26 @@
 void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc) {
     std::string_view path_sv(path);
 
-    if (path_sv == "/inputbridge/haptics/rumble" && std::strcmp(types, "iffi") == 0 && argc == 4) {
+    std::string activeId = ProtocolManager::GetInstance().GetActiveInputProtocolId();
+    const ProtocolDefinition* def = nullptr;
+    if (!activeId.empty()) def = ProtocolRegistry::GetInstance().FindById(activeId);
+
+    std::string fieldId;
+    if (def) {
+        for (const auto& field : def->fields) {
+            if (field.enabled && field.oscPath == path_sv) {
+                fieldId = field.fieldId;
+                break;
+            }
+        }
+    }
+
+    // Helper to check if we matched a field or if we should fallback to legacy path
+    auto match = [&](const char* legacyPath, const char* fid) {
+        return (fieldId == fid) || (fieldId.empty() && path_sv == legacyPath);
+    };
+
+    if (match("/inputbridge/haptics/rumble", "haptic_rumble") && std::strcmp(types, "iffi") == 0 && argc == 4) {
         int deviceId = OSCServer::GetInstance().GetSelectedDevice();
         float low_freq = argv[1]->f;
         float high_freq = argv[2]->f;
@@ -24,7 +45,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
             }
         }
     }
-    else if (path_sv == "/inputbridge/haptics/force" && std::strcmp(types, "ifi") == 0 && argc == 3) {
+    else if (match("/inputbridge/haptics/force", "haptic_constant") && std::strcmp(types, "ifi") == 0 && argc == 3) {
         int deviceId = OSCServer::GetInstance().GetSelectedDevice();
         float strength = argv[1]->f;
         int duration_int = argv[2]->i;
@@ -37,7 +58,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
             }
         }
     }
-    else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "ififfii") == 0 && argc == 7) {
+    else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "ififfii") == 0 && argc == 7) {
         int deviceId = OSCServer::GetInstance().GetSelectedDevice();
         float strength = argv[1]->f;
         int period = argv[2]->i;
@@ -54,7 +75,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
             }
         }
     }
-    else if (path_sv == "/inputbridge/haptics/condition" && std::strcmp(types, "iffffffi") == 0 && argc == 8) {
+    else if (match("/inputbridge/haptics/condition", "haptic_condition") && std::strcmp(types, "iffffffi") == 0 && argc == 8) {
         int deviceId = OSCServer::GetInstance().GetSelectedDevice();
         float right_sat = argv[1]->f;
         float left_sat = argv[2]->f;
@@ -72,7 +93,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
             }
         }
     }
-    else if (path_sv == "/inputbridge/haptics/gain" && std::strcmp(types, "ii") == 0 && argc == 2) {
+    else if (match("/inputbridge/haptics/gain", "haptic_gain") && std::strcmp(types, "ii") == 0 && argc == 2) {
         int deviceId = OSCServer::GetInstance().GetSelectedDevice();
         int gain = argv[1]->i;
 
