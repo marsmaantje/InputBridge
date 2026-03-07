@@ -23,7 +23,7 @@ int SteeringWheelHaptics::PlayConstant(float strength, uint32_t duration_ms) {
 
         effect.type = SDL_HAPTIC_CONSTANT;
         effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
-        effect.constant.direction.dir[0] = 1; // Play on the X axis
+        effect.constant.direction.dir[0] = -1; // Play on the X axis
         effect.constant.level = static_cast<Sint16>(clamped_strength * 32767.0f);
         effect.constant.length = duration_ms;
 
