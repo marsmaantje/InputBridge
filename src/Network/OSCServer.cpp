@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstring>
 #include <atomic>
+#include <thread>
 
 static std::atomic<bool> s_isDestroyed{false};
 
@@ -167,21 +168,34 @@ void OSCServer::Stop() {
 
         address_to_free = m_send_address;
         m_send_address = nullptr;
+
+        // Clear the client list immediately so the UI shows no clients
+        // as soon as Stop() is called, rather than keeping stale entries
+        // until the next Start().
+        m_clients.clear();
     }
 
-    if (thread_to_stop) {
-        lo_server_thread_stop(thread_to_stop);
-        lo_server_thread_free(thread_to_stop);
+    // lo_server_thread_stop() blocks until the liblo receive thread exits.
+    // With active clients continuously sending UDP packets this can stall
+    // the caller (the UI/main thread) for a noticeable period.  Move the
+    // blocking teardown onto a detached thread so the UI stays responsive.
+    // Both handles are captured by value; the OSCServer singleton outlives
+    // the detached thread, so the final log append is safe.
+    if (thread_to_stop || address_to_free) {
+        std::thread([this, thread_to_stop, address_to_free]() {
+            if (thread_to_stop) {
+                lo_server_thread_stop(thread_to_stop);
+                lo_server_thread_free(thread_to_stop);
+            }
+            if (address_to_free) {
+                lo_address_free(address_to_free);
+            }
+            std::lock_guard<std::mutex> lock(m_mutex);
+            std::cout << "OSC server stopped." << std::endl;
+            m_logs.push_back("OSC server stopped.");
+            if (m_logs.size() > 100) m_logs.pop_front();
+        }).detach();
     }
-
-    if (address_to_free) {
-        lo_address_free(address_to_free);
-    }
-
-    std::lock_guard<std::mutex> lock(m_mutex);
-    std::cout << "OSC server stopped." << std::endl;
-    m_logs.push_back("OSC server stopped.");
-    if (m_logs.size() > 100) m_logs.pop_front();
 }
 
 bool OSCServer::IsRunning() const {

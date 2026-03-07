@@ -15,4 +15,10 @@ struct DeviceState {
     // Battery information
     SDL_PowerState battery_state = SDL_POWERSTATE_UNKNOWN;
     int battery_percent = -1;  // -1 means unknown, 0-100 otherwise
+    // Set to true after the very first battery query so UpdateBatteryInfo()
+    // only logs on genuine state/percent changes from that point on.
+    // Without this flag the "first read" detection based on value comparison
+    // would repeatedly fire for devices that permanently report UNKNOWN/-1
+    // (e.g. wired steering wheels without a battery).
+    bool battery_initialized = false;
 };

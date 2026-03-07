@@ -103,72 +103,69 @@ HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
 void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
     SDL_PowerState old_state = dev.battery_state;
     int old_percent = dev.battery_percent;
-    
+
     if (dev.gamepad) {
-        // Get battery info from gamepad
         int percent = 0;
         dev.battery_state = SDL_GetGamepadPowerInfo(dev.gamepad, &percent);
         dev.battery_percent = percent;
-        
-        // Log battery info when state or percent changes significantly.
-        bool state_changed = (old_state != dev.battery_state);
+
+        bool state_changed   = (old_state != dev.battery_state);
+        // Only compare percents when both readings are valid numbers.
         bool percent_changed = (dev.battery_percent >= 0 && old_percent >= 0 &&
                                 abs(old_percent - dev.battery_percent) >= 5);
-        // On the very first read old_percent is -1, so always log then.
-        bool first_read = (old_percent == -1 && old_state == SDL_POWERSTATE_UNKNOWN);
-        
-        if (first_read || state_changed || percent_changed) {
+
+        if (!dev.battery_initialized || state_changed || percent_changed) {
+            dev.battery_initialized = true;
+
             const char* state_str;
             switch (dev.battery_state) {
-                case SDL_POWERSTATE_UNKNOWN: state_str = "UNKNOWN"; break;
+                case SDL_POWERSTATE_UNKNOWN:    state_str = "UNKNOWN";    break;
                 case SDL_POWERSTATE_ON_BATTERY: state_str = "ON_BATTERY"; break;
                 case SDL_POWERSTATE_NO_BATTERY: state_str = "NO_BATTERY"; break;
-                case SDL_POWERSTATE_CHARGING: state_str = "CHARGING"; break;
-                case SDL_POWERSTATE_CHARGED: state_str = "CHARGED"; break;
-                default: state_str = "INVALID"; break;
+                case SDL_POWERSTATE_CHARGING:   state_str = "CHARGING";   break;
+                case SDL_POWERSTATE_CHARGED:    state_str = "CHARGED";    break;
+                default:                        state_str = "INVALID";    break;
             }
-            
-            if (dev.battery_state == SDL_POWERSTATE_UNKNOWN || dev.battery_state == SDL_POWERSTATE_NO_BATTERY) {
-                SDL_Log("Battery [%s]: State=%s (battery info not available)", 
+
+            if (dev.battery_state == SDL_POWERSTATE_UNKNOWN ||
+                dev.battery_state == SDL_POWERSTATE_NO_BATTERY) {
+                SDL_Log("Battery [%s]: State=%s (battery info not available)",
                         dev.name.c_str(), state_str);
                 if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
                     SDL_Log("  Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
                 }
             } else {
-                SDL_Log("Battery [%s]: State=%s, Percent=%d%%", 
+                SDL_Log("Battery [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
-            first_read = false; // suppress unused-variable warning
         }
     } else if (dev.joystick) {
-        // Get battery info from joystick
         int percent = 0;
         dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
         dev.battery_percent = percent;
 
-        // Mirror the same first-read / state-changed / percent-changed logic.
-        bool state_changed = (old_state != dev.battery_state);
+        bool state_changed   = (old_state != dev.battery_state);
         bool percent_changed = (dev.battery_percent >= 0 && old_percent >= 0 &&
                                 abs(old_percent - dev.battery_percent) >= 5);
-        bool first_read_js = (old_percent == -1 && old_state == SDL_POWERSTATE_UNKNOWN);
 
-        if (first_read_js || state_changed || percent_changed) {
+        if (!dev.battery_initialized || state_changed || percent_changed) {
+            dev.battery_initialized = true;
+
             const char* state_str;
             switch (dev.battery_state) {
-                case SDL_POWERSTATE_UNKNOWN: state_str = "UNKNOWN"; break;
+                case SDL_POWERSTATE_UNKNOWN:    state_str = "UNKNOWN";    break;
                 case SDL_POWERSTATE_ON_BATTERY: state_str = "ON_BATTERY"; break;
                 case SDL_POWERSTATE_NO_BATTERY: state_str = "NO_BATTERY"; break;
-                case SDL_POWERSTATE_CHARGING: state_str = "CHARGING"; break;
-                case SDL_POWERSTATE_CHARGED: state_str = "CHARGED"; break;
-                default: state_str = "INVALID"; break;
+                case SDL_POWERSTATE_CHARGING:   state_str = "CHARGING";   break;
+                case SDL_POWERSTATE_CHARGED:    state_str = "CHARGED";    break;
+                default:                        state_str = "INVALID";    break;
             }
 
             SDL_Log("Battery (Joystick) [%s]: State=%s, Percent=%d%%",
                     dev.name.c_str(), state_str, percent);
-            first_read_js = false; // suppress unused-variable warning
         }
     } else {
-        dev.battery_state = SDL_POWERSTATE_UNKNOWN;
+        dev.battery_state   = SDL_POWERSTATE_UNKNOWN;
         dev.battery_percent = -1;
     }
 }
