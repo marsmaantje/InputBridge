@@ -137,7 +137,7 @@ void HapticDevice::SetConstantForce(float level, float direction) {
 
         m_constantEffectId = UploadEffect(effect, m_constantEffectId);
         if (m_constantEffectId != -1) {
-            if (!SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1)) {
+            if (SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1) < 0) {
                 SDL_Log("HapticDevice::SetConstantForce - Run failed: %s", SDL_GetError());
             }
         }
@@ -159,7 +159,9 @@ void HapticDevice::SetPeriodic(Uint16 type, float magnitude, int period, float d
 
         m_periodicEffectId = UploadEffect(effect, m_periodicEffectId);
         if (m_periodicEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1);
+            if (SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1) < 0) {
+                SDL_Log("HapticDevice::SetPeriodic - Run failed: %s", SDL_GetError());
+            }
         }
     });
 }
@@ -193,7 +195,9 @@ void HapticDevice::SetCondition(Uint16 type, float saturation, float coefficient
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
             m_conditionEffects[type] = newId;
-            SDL_RunHapticEffect(m_haptic.Get(), newId, 1);
+            if (SDL_RunHapticEffect(m_haptic.Get(), newId, 1) < 0) {
+                SDL_Log("HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
+            }
         }
     });
 }
@@ -211,7 +215,9 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
 
         m_rumbleEffectId = UploadEffect(effect, m_rumbleEffectId);
         if (m_rumbleEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic.Get(), m_rumbleEffectId, 1);
+            if (SDL_RunHapticEffect(m_haptic.Get(), m_rumbleEffectId, 1) < 0) {
+                SDL_Log("HapticDevice::SetRumble - Run failed: %s", SDL_GetError());
+            }
         }
     });
 }
