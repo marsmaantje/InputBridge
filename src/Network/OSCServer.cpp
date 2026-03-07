@@ -11,6 +11,9 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <atomic>
+
+static std::atomic<bool> s_isDestroyed{false};
 
 OSCServer& OSCServer::GetInstance() {
     static OSCServer instance;
@@ -18,54 +21,77 @@ OSCServer& OSCServer::GetInstance() {
 }
 
 OSCServer::OSCServer() {
+    s_isDestroyed = false;
     SetProtocol("OSC Default");
 }
 
 OSCServer::~OSCServer() {
     Stop();
+    s_isDestroyed = true;
 }
 
 int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    auto* server = (OSCServer*)user_data;
-    if (server->m_OutputMapper && argc >= 4) {
-        int id = argv[0]->i;
-        float low = argv[1]->f;
-        float high = argv[2]->f;
-        int duration = argv[3]->i;
-        server->m_OutputMapper->QueueRumble(id, low, high, duration);
-    }
+    // All static handlers are called from the liblo background thread (a plain C thread).
+    // Any uncaught C++ exception propagating into that thread is undefined behaviour and
+    // will typically terminate the process.  Guard every handler with try/catch.
+    // Also check s_isDestroyed to avoid touching the OSCServer object after it has been
+    // destroyed (belt-and-suspenders alongside lo_server_thread_stop in Stop()).
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        if (argc >= 4) {
+            int id = argv[0]->i;
+            float low = argv[1]->f;
+            float high = argv[2]->f;
+            int duration = argv[3]->i;
+            server->m_OutputMapper->QueueRumble(id, low, high, duration);
+        }
+    } catch (...) {}
     return 0;
 }
 
 int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    auto* server = (OSCServer*)user_data;
-    if (server->m_OutputMapper && argc >= 3) {
-        server->m_OutputMapper->QueueConstantForce(argv[0]->i, argv[1]->f, argv[2]->i);
-    }
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        if (argc >= 3)
+            server->m_OutputMapper->QueueConstantForce(argv[0]->i, argv[1]->f, argv[2]->i);
+    } catch (...) {}
     return 0;
 }
 
 int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    auto* server = (OSCServer*)user_data;
-    if (server->m_OutputMapper && argc >= 7) {
-        server->m_OutputMapper->QueuePeriodic(argv[0]->i, argv[1]->f, argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->i, argv[6]->i);
-    }
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        if (argc >= 7)
+            server->m_OutputMapper->QueuePeriodic(argv[0]->i, argv[1]->f, argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->i, argv[6]->i);
+    } catch (...) {}
     return 0;
 }
 
 int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    auto* server = (OSCServer*)user_data;
-    if (server->m_OutputMapper && argc >= 8) {
-        server->m_OutputMapper->QueueCondition(argv[0]->i, argv[1]->f, argv[2]->f, argv[3]->f, argv[4]->f, argv[5]->f, argv[6]->f, argv[7]->i);
-    }
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        if (argc >= 8)
+            server->m_OutputMapper->QueueCondition(argv[0]->i, argv[1]->f, argv[2]->f, argv[3]->f, argv[4]->f, argv[5]->f, argv[6]->f, argv[7]->i);
+    } catch (...) {}
     return 0;
 }
 
 int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    auto* server = (OSCServer*)user_data;
-    if (server->m_OutputMapper && argc >= 2) {
-        server->m_OutputMapper->QueueSetGain(argv[0]->i, argv[1]->i);
-    }
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        if (argc >= 2)
+            server->m_OutputMapper->QueueSetGain(argv[0]->i, argv[1]->i);
+    } catch (...) {}
     return 0;
 }
 
@@ -124,24 +150,35 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
 }
 
 void OSCServer::Stop() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_running) {
-        return;
-    }
+    lo_server_thread thread_to_stop = nullptr;
+    lo_address address_to_free = nullptr;
 
-    m_running = false;
-    m_isConnected = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_running) {
+            return;
+        }
 
-    if (m_server_thread) {
-        lo_server_thread_stop(m_server_thread);
-        lo_server_thread_free(m_server_thread);
+        m_running = false;
+        m_isConnected = false;
+
+        thread_to_stop = m_server_thread;
         m_server_thread = nullptr;
-    }
 
-    if (m_send_address) {
-        lo_address_free(m_send_address);
+        address_to_free = m_send_address;
         m_send_address = nullptr;
     }
+
+    if (thread_to_stop) {
+        lo_server_thread_stop(thread_to_stop);
+        lo_server_thread_free(thread_to_stop);
+    }
+
+    if (address_to_free) {
+        lo_address_free(address_to_free);
+    }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
     std::cout << "OSC server stopped." << std::endl;
     m_logs.push_back("OSC server stopped.");
     if (m_logs.size() > 100) m_logs.pop_front();
@@ -152,10 +189,9 @@ bool OSCServer::IsRunning() const {
 }
 
 void OSCServer::Send(const std::string& path, const char* types, ...) {
-    if (!m_running) return;
-    // Note: We assume Stop() is not called concurrently with Send() for simplicity,
-    // or that m_send_address access is safe enough for this context.
-    if (!m_send_address) return;
+    if (s_isDestroyed) return;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_running || !m_send_address) return;
 
     va_list ap;
     va_start(ap, types);
@@ -213,40 +249,62 @@ void OSCServer::SetHandler(OSCHandler handler) {
 }
 
 int OSCServer::generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data) {
-    auto* server = static_cast<OSCServer*>(user_data);
-    if (server) {
-        std::lock_guard<std::mutex> lock(server->m_mutex);
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server) return 0;
 
-        lo_address src = lo_message_get_source(msg);
-        if (src) {
-            const char* hostname = lo_address_get_hostname(src);
-            const char* port = lo_address_get_port(src);
-            if (hostname && port) {
-                std::string client = std::string(hostname) + ":" + std::string(port);
-                server->m_clients.insert(client);
+        // --- Snapshot all state we need under the lock, then release it.
+        // Holding m_mutex while doing protocol dispatch or ProtocolManager calls
+        // can stall Send(), Stop(), and the UI thread, and creates a lock-order
+        // dependency (m_mutex → ProtocolManager::m_mutex) that can deadlock if
+        // the main thread ever takes those locks in the opposite order.
+        std::shared_ptr<IProtocol>  protoCopy;
+        OSCHandler                  handlerCopy;
+        bool                        isRunning;
+        std::string                 legacyInputProto;
+
+        {
+            std::lock_guard<std::mutex> lock(server->m_mutex);
+            isRunning  = server->m_running;
+
+            // Track the source client while we still hold the lock
+            lo_address src = lo_message_get_source(msg);
+            if (src) {
+                const char* hostname = lo_address_get_hostname(src);
+                const char* port     = lo_address_get_port(src);
+                if (hostname && port) {
+                    server->m_clients.insert(std::string(hostname) + ":" + std::string(port));
+                }
             }
+
+            server->m_logs.push_back("Recv: " + std::string(path));
+            if (server->m_logs.size() > 100) server->m_logs.pop_front();
+
+            protoCopy    = server->m_protocol;
+            handlerCopy  = server->m_handler;
+        }
+        // m_mutex is now released — safe to do slow work below.
+
+        if (!isRunning) return 0;
+
+        // Resolve the active legacy input protocol outside the lock so we don't
+        // hold m_mutex while calling into ProtocolManager.
+        legacyInputProto = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
+        if (!legacyInputProto.empty()) {
+            auto p = ProtocolManager::GetInstance().GetProtocol(legacyInputProto);
+            if (p) protoCopy = p;
         }
 
-        server->m_logs.push_back("Recv: " + std::string(path));
-        if (server->m_logs.size() > 100) server->m_logs.pop_front();
-
-        // Delegate to protocol if it's an OSC protocol
-        std::shared_ptr<IProtocol> proto = server->m_protocol;
-        std::string legacyInput = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
-        if (!legacyInput.empty()) {
-            auto p = ProtocolManager::GetInstance().GetProtocol(legacyInput);
-            if (p) proto = p;
-        }
-
-        if (proto) {
-            auto oscProtocol = std::dynamic_pointer_cast<OSCBaseProtocol>(proto);
+        if (protoCopy) {
+            auto oscProtocol = std::dynamic_pointer_cast<OSCBaseProtocol>(protoCopy);
             if (oscProtocol) {
                 oscProtocol->handle_osc_message(path, types, argv, argc);
             }
-        } else if (server->m_handler) {
-             server->m_handler(path, types, argv, argc);
+        } else if (handlerCopy) {
+            handlerCopy(path, types, argv, argc);
         }
-    }
+    } catch (...) {}
     return 0;
 }
 
