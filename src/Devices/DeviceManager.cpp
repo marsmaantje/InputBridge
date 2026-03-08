@@ -127,14 +127,11 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
                 default:                        state_str = "INVALID";    break;
             }
 
-            if (dev.battery_state == SDL_POWERSTATE_UNKNOWN ||
-                dev.battery_state == SDL_POWERSTATE_NO_BATTERY) {
+            if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
                 SDL_Log("Battery [%s]: State=%s (battery info not available)",
                         dev.name.c_str(), state_str);
-                if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
-                    SDL_Log("  Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
-                }
-            } else {
+                SDL_Log("  Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
+            } else if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
                 SDL_Log("Battery [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
@@ -161,8 +158,10 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
                 default:                        state_str = "INVALID";    break;
             }
 
-            SDL_Log("Battery (Joystick) [%s]: State=%s, Percent=%d%%",
-                    dev.name.c_str(), state_str, percent);
+            if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY && dev.battery_state != SDL_POWERSTATE_UNKNOWN) {
+                SDL_Log("Battery (Joystick) [%s]: State=%s, Percent=%d%%",
+                        dev.name.c_str(), state_str, percent);
+            }
         }
     } else {
         dev.battery_state   = SDL_POWERSTATE_UNKNOWN;
