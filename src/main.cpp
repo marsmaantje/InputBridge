@@ -65,11 +65,15 @@ void UpdateUIScale(SDL_Window *window, float& user_ui_scale, float& user_font_sc
 // Rebuild the ImGui font atlas after a theme font change.
 // Must be called BEFORE ImGui_ImplSDLRenderer3_NewFrame().
 // Falls back to the built-in default font if the requested file cannot be loaded.
+//
+// The SDL3 renderer backend advertises ImGuiBackendFlags_RendererHasTextures,
+// meaning it manages the font atlas GPU texture automatically.  Calling
+// io.Fonts->Build() marks the atlas as dirty; the backend will upload the new
+// texture on the next frame without any explicit Create/Destroy calls needed.
 void RebuildFontAtlas() {
     ImGuiIO& io = ImGui::GetIO();
     ThemeManager& theme = ThemeManager::GetInstance();
 
-    // Tear down the existing GPU-side font texture.
     io.Fonts->Clear();
 
     const std::string& fontPath = theme.GetResolvedFontPath();
@@ -661,19 +665,25 @@ int main(int argc, char *argv[]) {
     float user_font_scale = preferencesManager.GetFloat("FontScale", 1.0f);
     bool scale_with_window = preferencesManager.GetBool("ScaleWithWindow", false);
 
-    UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
-
-    // Scan the themes/ subfolder, then restore the previously saved selection.
-    // ScanThemesDirectory must run first so LoadFromPreferences can update the
-    // combo-box index when the saved path is found in the scanned list.
+    // Scan and restore the saved theme BEFORE UpdateUIScale.
+    // UpdateUIScale resets ImGuiStyle and then calls ThemeManager::Reapply()
+    // before running ScaleAllSizes(ui_scale).  If the theme is loaded here,
+    // Reapply() correctly overlays the theme's style values (e.g. rounding)
+    // onto the fresh default style, and ScaleAllSizes then scales them properly.
+    // Loading the theme AFTER UpdateUIScale causes ApplyData to write absolute
+    // values directly onto the already-DPI-scaled style — so rounding at startup
+    // would differ from rounding after switching themes at runtime.
     {
         std::string scanBase = base_path ? std::string(base_path) : ".";
         ThemeManager::GetInstance().ScanThemesDirectory(scanBase);
     }
     ThemeManager::GetInstance().LoadFromPreferences(preferencesManager);
 
-    // If the restored theme specifies a custom font, build the atlas now
-    // before the first frame so the correct font is used from the start.
+    UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
+
+    // Rebuild the font atlas if the restored theme specifies a custom font.
+    // Must happen after UpdateUIScale (which sets FontGlobalScale) but before
+    // the first frame.
     if (ThemeManager::GetInstance().HasPendingFontChange())
         RebuildFontAtlas();
 
