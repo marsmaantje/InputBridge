@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <map>
 
 using json = nlohmann::json;
 
@@ -41,38 +42,54 @@ std::string WebSocketProtocol::format(const std::string &address, const std::str
     return address + ":" + value;
 }
 
-std::string WebSocketProtocol::format_wheel(float wheel, float brake, float throttle, float pitch, float roll) {
+std::string WebSocketProtocol::format_wheel(const std::map<std::string, float>& values) {
     std::string msg;
     msg.reserve(64);
 
     switch (m_version) {
     case ProtocolVersion::MarsmaantjeOld:
-        msg += 0x01;
-        msg += formatFloat(wheel, 4);
-        msg += ";";
-        msg += 0x02;
-        msg += formatFloat(brake, 3);
-        msg += ";";
-        msg += 0x03;
-        msg += formatFloat(throttle, 3);
-        msg += ";";
+        if (values.count("wheel")) {
+            msg += (char)0x01;
+            msg += formatFloat(values.at("wheel"), 4);
+            msg += ";";
+        }
+        if (values.count("brake")) {
+            msg += 0x02;
+            msg += formatFloat(values.at("brake"), 3);
+            msg += ";";
+        }
+        if (values.count("throttle")) {
+            msg += 0x03;
+            msg += formatFloat(values.at("throttle"), 3);
+            msg += ";";
+        }
         break;
     case ProtocolVersion::MarsmaantjeNew:
-        msg += "y";
-        msg += formatFloat(wheel, 8);
-        msg += ";";
-        msg += "b";
-        msg += formatFloat(brake, 5);
-        msg += ";";
-        msg += "t";
-        msg += formatFloat(throttle, 5);
-        msg += ";";
-        msg += "p";
-        msg += formatFloat(pitch, 8);
-        msg += ";";
-        msg += "r";
-        msg += formatFloat(roll, 8);
-        msg += ";";
+        if (values.count("wheel")) {
+            msg += "y";
+            msg += formatFloat(values.at("wheel"), 8);
+            msg += ";";
+        }
+        if (values.count("brake")) {
+            msg += "b";
+            msg += formatFloat(values.at("brake"), 5);
+            msg += ";";
+        }
+        if (values.count("throttle")) {
+            msg += "t";
+            msg += formatFloat(values.at("throttle"), 5);
+            msg += ";";
+        }
+        if (values.count("pitch")) {
+            msg += "p";
+            msg += formatFloat(values.at("pitch"), 8);
+            msg += ";";
+        }
+        if (values.count("roll")) {
+            msg += "r";
+            msg += formatFloat(values.at("roll"), 8);
+            msg += ";";
+        }
         break;
     }
 
@@ -88,7 +105,7 @@ void WebSocketProtocol::parse(const std::string &message) {
         float value = -std::stof(msg);
 
         OutputMapper::GetInstance().QueueConstantForce(0, value * 50, -1);
-        
+
     } catch (const std::exception &e) {
         // Not a valid float message, ignore
     }
@@ -109,7 +126,7 @@ void WebSocketProtocol::parse(const std::string &message) {
             // DualSense adaptive trigger effect
             std::string trigger = params.value("trigger", "left");  // "left", "right", or "both"
             std::string effect_type = params.value("effect_type", "off");  // off, feedback, weapon, vibration, bow, galloping, machine
-            
+
             int position = params.value("position", 0);
             int strength = params.value("strength", 5);
             int end_position = params.value("end_position", 9);
@@ -121,7 +138,7 @@ void WebSocketProtocol::parse(const std::string &message) {
             int period = params.value("period", 10);
             int amplitude_a = params.value("amplitude_a", 4);
             int amplitude_b = params.value("amplitude_b", 4);
-            
+
             OutputMapper::GetInstance().QueueDualSenseTrigger(0, trigger.c_str(), effect_type.c_str(),
                                                               position, strength, end_position,
                                                               amplitude, frequency, snap_force,

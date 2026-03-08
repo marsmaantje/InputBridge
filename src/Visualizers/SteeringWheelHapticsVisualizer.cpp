@@ -19,6 +19,19 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
                 SDL_RumbleGamepadTriggers(dev.gamepad, 0, 0, 0);
             }
         }
+        ImGui::SameLine();
+        /*
+        if (ImGui::Button("Reset Device")) {
+            haptic->Close();
+            if (!haptic->Init().IsOk()) {
+                SDL_Log("SteeringWheelHapticsVisualizer: Reset Device failed to re-initialize haptics");
+            }
+            if (dev.gamepad) {
+                SDL_RumbleGamepad(dev.gamepad, 0, 0, 0);
+                SDL_RumbleGamepadTriggers(dev.gamepad, 0, 0, 0);
+            }
+        }
+        */
     } else {
         ImGui::TextDisabled("Haptics not available");
     }

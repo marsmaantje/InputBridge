@@ -93,17 +93,30 @@ void WebSocketServer::Start(int port) {
                                },
                            .message =
                                [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
-                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                                   m_Impl->logs.push_back("Client data: " + std::string(message));
-                                   if (m_Impl->protocol) {
-                                       m_Impl->protocol->parse(std::string(message));
+                                   // Snapshot the state we need under the lock, then release it
+                                   // before doing any heavy work (JSON parsing, OutputMapper calls).
+                                   // Holding m_Impl->mutex during those calls:
+                                   //   1. Stalls Broadcast / Stop / DrawContent on the main thread.
+                                   //   2. Creates a lock-order hazard: WS mutex → OutputMapper mutex.
+                                   //      If the main thread ever takes those in the opposite order,
+                                   //      a deadlock results.
+                                   std::shared_ptr<IProtocol> protoCopy;
+                                   OutputMapper* mapperCopy = nullptr;
+                                   {
+                                       std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                       m_Impl->logs.push_back("Client data: " + std::string(message));
+                                       if (m_Impl->logs.size() > 100)
+                                           m_Impl->logs.pop_front();
+                                       protoCopy = m_Impl->protocol;
+                                       mapperCopy = m_OutputMapper;
                                    }
-                                   // Echo the message back to C#
-                                   // ProtocolManager::GetInstance().GetProtocol("WebSocket")->parse(std::string(message));
-                                   // Note: The above line was problematic if "WebSocket" protocol doesn't exist.
-                                   // We rely on m_Impl->protocol now.
+                                   // Mutex is released — do slow work now.
 
-                                   if (m_OutputMapper) {
+                                   if (protoCopy) {
+                                       protoCopy->parse(std::string(message));
+                                   }
+
+                                   if (mapperCopy) {
                                        try {
                                            auto json = nlohmann::json::parse(message);
                                            std::string type = json.value("type", "");
@@ -130,23 +143,23 @@ void WebSocketServer::Start(int port) {
                                                    int duration = data.value("duration", 0);
                                                    if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
 
-                                                   m_OutputMapper->QueueRumble(device, low, high, duration);
+                                                   mapperCopy->QueueRumble(device, low, high, duration);
                                                } else if (effect == "constant") {
                                                    float strength = data.value("strength", 0.0f);
                                                    int duration = data.value("duration", 0);
                                                    if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
 
-                                                   m_OutputMapper->QueueConstantForce(device, strength, duration);
+                                                   mapperCopy->QueueConstantForce(device, strength, duration);
                                                } else if (effect == "periodic") {
                                                    int duration = data.value("duration", 0);
                                                    if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
 
-                                                   m_OutputMapper->QueuePeriodic(device, data.value("strength", 0.0f), data.value("period", 0), data.value("magnitude", 0.0f), data.value("offset", 0.0f), data.value("phase", 0), duration);
+                                                   mapperCopy->QueuePeriodic(device, data.value("strength", 0.0f), data.value("period", 0), data.value("magnitude", 0.0f), data.value("offset", 0.0f), data.value("phase", 0), duration);
                                                } else if (effect == "condition") {
                                                    int duration = data.value("duration", 0);
                                                    if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
 
-                                                   m_OutputMapper->QueueCondition(device, data.value("right_sat", 0.0f), data.value("left_sat", 0.0f), data.value("right_coeff", 0.0f), data.value("left_coeff", 0.0f), data.value("deadband", 0.0f), data.value("center", 0.0f), duration);
+                                                   mapperCopy->QueueCondition(device, data.value("right_sat", 0.0f), data.value("left_sat", 0.0f), data.value("right_coeff", 0.0f), data.value("left_coeff", 0.0f), data.value("deadband", 0.0f), data.value("center", 0.0f), duration);
                                                }
                                            }
                                        } catch (...) {}
@@ -317,10 +330,17 @@ void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
         // Move the actual sending into the uWS Thread via defer
         m_Impl->loop->defer([targets, msg, opCode, this]() {
             for (void *ptr : targets) {
-                // Cast back to the specific WebSocket type used in Start()
+                // Guard against use-after-free: a client that was in `targets`
+                // when the snapshot was taken may have disconnected by the time
+                // this deferred callback runs on the uWS thread.  The close
+                // handler removes the entry from m_Impl->clients, so any pointer
+                // absent here has already been freed by uWS.
+                {
+                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                    if (m_Impl->clients.find(ptr) == m_Impl->clients.end())
+                        continue;
+                }
                 auto *ws = (uWS::WebSocket<false, true, int> *)ptr;
-
-                /* Direct send instead of publish */
                 ws->send(msg, opCode);
             }
         });
@@ -373,7 +393,13 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
         protocol = m_Impl->protocol;
     }
     if (protocol) {
-        std::string msg = protocol->format_wheel(wheel, brake, throttle, pitch, roll);
+        std::map<std::string, float> values = {
+            {"wheel", wheel},
+            {"brake", brake},
+            {"throttle", throttle},
+            {"pitch", pitch},
+            {"roll", roll}};
+        std::string msg = protocol->format_wheel(values);
         if (!msg.empty()) {
             uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
             Broadcast(msg, opCode);

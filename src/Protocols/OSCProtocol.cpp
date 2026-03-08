@@ -4,6 +4,7 @@
 #include "Haptics/SteeringWheelHaptics.h"
 #include <string_view>
 #include <cstring>
+#include <map>
 
 OSCProtocol::OSCProtocol() {
     OSCServer::GetInstance().SetHandler([this](const char* path, const char* types, lo_arg** argv, int argc) {
@@ -18,7 +19,7 @@ OSCProtocol::~OSCProtocol() {
 std::string OSCProtocol::format(const std::string &address, float value) { return ""; }
 std::string OSCProtocol::format(const std::string &address, int value) { return ""; }
 std::string OSCProtocol::format(const std::string &address, const std::string &value) { return ""; }
-std::string OSCProtocol::format_wheel(float wheel, float brake, float throttle, float pitch, float roll) { return ""; }
+std::string OSCProtocol::format_wheel(const std::map<std::string, float>& values) { return ""; }
 void OSCProtocol::parse(const std::string& message) { }
 
 void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc) {

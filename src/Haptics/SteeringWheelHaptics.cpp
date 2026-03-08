@@ -13,6 +13,7 @@ int SteeringWheelHaptics::SetGain(int gain) {
 int SteeringWheelHaptics::PlayConstant(float strength, uint32_t duration_ms) {
     RunAsync([this, strength, duration_ms]() {
         if (!m_haptic) {
+            SDL_Log("SteeringWheelHaptics::PlayConstant - Haptic device not ready");
             return;
         }
 
@@ -23,13 +24,15 @@ int SteeringWheelHaptics::PlayConstant(float strength, uint32_t duration_ms) {
 
         effect.type = SDL_HAPTIC_CONSTANT;
         effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
-        effect.constant.direction.dir[0] = 1; // Play on the X axis
+        effect.constant.direction.dir[0] = -1; // Play on the X axis
         effect.constant.level = static_cast<Sint16>(clamped_strength * 32767.0f);
         effect.constant.length = duration_ms;
 
         m_constantEffectId = UploadEffect(effect, m_constantEffectId);
         if (m_constantEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1);
+            if (!SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1)) {
+                SDL_Log("SteeringWheelHaptics::PlayConstant - Run failed: %s", SDL_GetError());
+            }
         }
     });
     return 0;
@@ -38,6 +41,7 @@ int SteeringWheelHaptics::PlayConstant(float strength, uint32_t duration_ms) {
 int SteeringWheelHaptics::PlayPeriodic(float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) {
     RunAsync([this, strength, period, magnitude, offset, phase, duration_ms]() {
         if (!m_haptic) {
+            SDL_Log("SteeringWheelHaptics::PlayPeriodic - Haptic device not ready");
             return;
         }
 
@@ -55,7 +59,9 @@ int SteeringWheelHaptics::PlayPeriodic(float strength, uint32_t period, float ma
 
         m_periodicEffectId = UploadEffect(effect, m_periodicEffectId);
         if (m_periodicEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1);
+            if (!SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1)) {
+                SDL_Log("SteeringWheelHaptics::PlayPeriodic - Run failed: %s", SDL_GetError());
+            }
         }
     });
     return 0;
@@ -64,6 +70,7 @@ int SteeringWheelHaptics::PlayPeriodic(float strength, uint32_t period, float ma
 int SteeringWheelHaptics::PlayCondition(float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) {
     RunAsync([this, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms]() {
         if (!m_haptic) {
+            SDL_Log("SteeringWheelHaptics::PlayCondition - Haptic device not ready");
             return;
         }
 
@@ -91,7 +98,9 @@ int SteeringWheelHaptics::PlayCondition(float right_sat, float left_sat, float r
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
             m_conditionEffects[effect.type] = newId;
-            SDL_RunHapticEffect(m_haptic.Get(), newId, 1);
+            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                SDL_Log("SteeringWheelHaptics::PlayCondition - Run failed: %s", SDL_GetError());
+            }
         }
     });
     return 0;

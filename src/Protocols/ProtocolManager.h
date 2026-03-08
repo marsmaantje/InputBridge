@@ -12,6 +12,12 @@ class ProtocolManager {
     std::shared_ptr<IProtocol> GetProtocol(const std::string &name) const;
     std::vector<std::string> GetAvailableProtocols() const;
 
+    void SetActiveInputProtocolId(const std::string& id);
+    std::string GetActiveInputProtocolId() const;
+
+    void SetActiveInputLegacyProtocol(const std::string& name);
+    std::string GetActiveInputLegacyProtocol() const;
+
   private:
     ProtocolManager();
     ~ProtocolManager();

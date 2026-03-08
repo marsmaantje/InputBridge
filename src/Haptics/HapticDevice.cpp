@@ -9,6 +9,7 @@ HapticDevice::~HapticDevice() {
 
 InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
     if (!m_joystick) {
+        SDL_Log("HapticDevice::Init - Failed: Device not found (joystick is null)");
         return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::DeviceNotFound);
     }
 
@@ -20,7 +21,7 @@ InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
         m_haptic.Reset(SDL_OpenHapticFromJoystick(m_joystick));
         if (!m_haptic) {
             SDL_Log("Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
-            SDL_Log("Will continue - gamepad rumble fallback may still work");
+            SDL_Log("Will continue - gamepad rumble fallback may still work, but advanced haptics will NOT work.");
             // FIXED: Don't return error here - allow fallback to gamepad rumble
             // Some controllers (like DualSense) work better with SDL_RumbleGamepad
         } else {
@@ -43,9 +44,11 @@ InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
     }
 
     if (m_haptic || SDL_IsGamepad(joystickID)) {
+        SDL_Log("HapticDevice::Init - Success");
         return InputBridge::Result<bool, InputBridge::HapticError>::Ok(true);
     }
 
+    SDL_Log("HapticDevice::Init - Failed: Unsupported device type");
     return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::UnsupportedEffect);
 }
 
@@ -62,10 +65,13 @@ void HapticDevice::Close() {
     m_cv.notify_all();
     if (m_thread.joinable()) m_thread.join();
 
+    // Thread is now joined; safe to call SDL haptic API directly.
+    // StopAll() uses RunAsync and would silently drop after m_running=false,
+    // so we call SDL_StopHapticEffects directly here.
     if (m_haptic) {
-        StopAll();
+        SDL_StopHapticEffects(m_haptic.Get());
     }
-    m_haptic.Reset();  // RAII automatic cleanup
+    m_haptic.Reset();  // SDL_CloseHaptic cleans up all remaining effect slots
     m_constantEffectId = -1;
     m_periodicEffectId = -1;
     m_rumbleEffectId = -1;
@@ -75,6 +81,11 @@ void HapticDevice::Close() {
 void HapticDevice::RunAsync(std::function<void()> task) {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        // Do not accept new tasks after shutdown has been initiated.
+        // This prevents tasks from accumulating in the queue after Close() and
+        // avoids potential use-after-free if callers post tasks concurrently with
+        // or after destruction.
+        if (!m_running) return;
         m_tasks.push(std::move(task));
     }
     m_cv.notify_one();
@@ -102,16 +113,24 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
             return existingId;
         } else {
             // If update fails (e.g. type mismatch), destroy and recreate
+            SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
             SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
         }
     }
 
-    return SDL_CreateHapticEffect(m_haptic.Get(), &effect);
+    SDL_HapticEffectID newId = SDL_CreateHapticEffect(m_haptic.Get(), &effect);
+    if (newId == -1) {
+        SDL_Log("HapticDevice::UploadEffect - Create failed: %s", SDL_GetError());
+    }
+    return newId;
 }
 
 void HapticDevice::SetConstantForce(float level, float direction) {
     RunAsync([this, level, direction]() {
-        if (!m_haptic) return;
+        if (!m_haptic) {
+            SDL_Log("HapticDevice::SetConstantForce - Haptic device not ready");
+            return;
+        }
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
@@ -123,7 +142,9 @@ void HapticDevice::SetConstantForce(float level, float direction) {
 
         m_constantEffectId = UploadEffect(effect, m_constantEffectId);
         if (m_constantEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1);
+            if (SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1) < 0) {
+                SDL_Log("HapticDevice::SetConstantForce - Run failed: %s", SDL_GetError());
+            }
         }
     });
 }
@@ -143,7 +164,9 @@ void HapticDevice::SetPeriodic(Uint16 type, float magnitude, int period, float d
 
         m_periodicEffectId = UploadEffect(effect, m_periodicEffectId);
         if (m_periodicEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1);
+            if (SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1) < 0) {
+                SDL_Log("HapticDevice::SetPeriodic - Run failed: %s", SDL_GetError());
+            }
         }
     });
 }
@@ -177,7 +200,9 @@ void HapticDevice::SetCondition(Uint16 type, float saturation, float coefficient
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
             m_conditionEffects[type] = newId;
-            SDL_RunHapticEffect(m_haptic.Get(), newId, 1);
+            if (SDL_RunHapticEffect(m_haptic.Get(), newId, 1) < 0) {
+                SDL_Log("HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
+            }
         }
     });
 }
@@ -195,7 +220,9 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
 
         m_rumbleEffectId = UploadEffect(effect, m_rumbleEffectId);
         if (m_rumbleEffectId != -1) {
-            SDL_RunHapticEffect(m_haptic.Get(), m_rumbleEffectId, 1);
+            if (SDL_RunHapticEffect(m_haptic.Get(), m_rumbleEffectId, 1) < 0) {
+                SDL_Log("HapticDevice::SetRumble - Run failed: %s", SDL_GetError());
+            }
         }
     });
 }
@@ -208,7 +235,37 @@ void HapticDevice::UpdateEffect(SDL_HapticEffectID effectId, const SDL_HapticEff
 }
 
 void HapticDevice::StopAll() {
-    if (m_haptic) {
+    // Queue the stop on the haptic thread so that it doesn't race with any
+    // in-flight effect operations already dispatched via RunAsync.
+    RunAsync([this]() {
+        if (!m_haptic) return;
+
         SDL_StopHapticEffects(m_haptic.Get());
-    }
+
+        // Destroy and invalidate every cached effect slot.
+        // This is the key fix for the spring/condition update bug:
+        //   After SDL_StopHapticEffects, some drivers refuse to update or
+        //   re-run an effect that was previously set to SDL_HAPTIC_INFINITY.
+        //   By destroying the effect IDs here, the next SetCondition /
+        //   SetConstantForce / SetPeriodic call will create a fresh effect,
+        //   guaranteeing it starts playing regardless of prior state.
+        auto destroyEffect = [this](SDL_HapticEffectID& id) {
+            if (id != -1) {
+                SDL_DestroyHapticEffect(m_haptic.Get(), id);
+                id = -1;
+            }
+        };
+
+        destroyEffect(m_constantEffectId);
+        destroyEffect(m_periodicEffectId);
+        destroyEffect(m_rumbleEffectId);
+
+        for (auto& [type, id] : m_conditionEffects) {
+            if (id != -1) {
+                SDL_DestroyHapticEffect(m_haptic.Get(), id);
+                id = -1;
+            }
+        }
+        m_conditionEffects.clear();
+    });
 }
