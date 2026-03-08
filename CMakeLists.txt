@@ -259,6 +259,8 @@ add_executable(InputBridge
     src/Protocols/ProtocolRegistry.cpp
     # Utilities
     src/Utils/FileDialog.cpp
+    # UI helpers
+    src/UI/ThemeManager.cpp
 )
 
 if(ENABLE_WEBSOCKETS)

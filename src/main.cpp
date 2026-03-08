@@ -14,8 +14,10 @@
 #include "Devices/DeviceState.h"
 #include "Mappers/InputMapper.h"
 #include "Mappers/OutputMapper.h"
+#include "Utils/FileDialog.h"
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
+#include "UI/ThemeManager.h"
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolEditorWindow.h"
 #include "Network/OSCServer.h"
@@ -54,6 +56,8 @@ void UpdateUIScale(SDL_Window *window, float& user_ui_scale, bool scale_with_win
     ImGuiStyle &style = ImGui::GetStyle();
     style = ImGuiStyle(); // Reset to default style to avoid compounding scales
     ImGui::StyleColorsDark();
+    // Re-apply any custom theme colours on top of the freshly reset style.
+    ThemeManager::GetInstance().Reapply();
     style.ScaleAllSizes(ui_scale);
     if (style.WindowBorderHoverPadding <= 0.0f) style.WindowBorderHoverPadding = 1.0f;
     ImGui::GetIO().FontGlobalScale = ui_scale;
@@ -295,6 +299,108 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, bool& scal
         preferencesManager.Save();
         UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
     }
+
+    // ------------------------------------------------------------------
+    // Theme selector
+    // ------------------------------------------------------------------
+    ImGui::Separator();
+    ImGui::Text("Colour Theme");
+
+    ThemeManager& theme = ThemeManager::GetInstance();
+
+    // Current theme status
+    ImGui::TextDisabled("Active: %s", theme.GetCurrentThemeName().c_str());
+    if (theme.HasCustomTheme()) {
+        ImGui::TextDisabled("%s", theme.GetCurrentThemePath().c_str());
+    }
+
+    // Error banner (shown until next successful load or reset)
+    if (!theme.GetLastError().empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+        ImGui::TextWrapped("Error: %s", theme.GetLastError().c_str());
+        ImGui::PopStyleColor();
+    }
+
+    // --- Load theme file button ---
+    // We keep a small state machine here so the file dialog interaction
+    // and any resulting error/success message work across frames.
+    static std::string s_pendingPath;
+    static bool        s_openDialog = false;
+
+    if (ImGui::Button("Load Theme File...")) {
+        s_openDialog = true;
+    }
+
+    // ImGui-based fallback browser (only shown when native dialog unavailable)
+    // For platforms where FileDialog::Show returns false (no native dialog)
+    // we open a simple path-input popup instead.
+    if (s_openDialog) {
+        std::string chosen;
+        bool ok = FileDialog::Show(
+            FileDialog::Type::Open,
+            "Select ImGui Theme File",
+            "",
+            {{"JSON Theme Files", "*.json"}, {"All Files", "*.*"}},
+            chosen);
+
+        if (ok && !chosen.empty()) {
+            s_pendingPath = chosen;
+        } else if (!ok && !FileDialog::IsNativeDialogAvailable()) {
+            // Fall through to inline path-entry popup on platforms without
+            // a native file dialog.
+            ImGui::OpenPopup("##ThemePathInput");
+        }
+        s_openDialog = false;
+    }
+
+    // Inline path-entry popup (Linux / macOS fallback)
+    if (ImGui::BeginPopup("##ThemePathInput")) {
+        ImGui::Text("Enter path to .json theme file:");
+        static char pathBuf[1024] = "";
+        ImGui::SetNextItemWidth(400.0f);
+        if (ImGui::InputText("##path", pathBuf, sizeof(pathBuf),
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+            s_pendingPath = pathBuf;
+            pathBuf[0]    = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("OK")) {
+            s_pendingPath = pathBuf;
+            pathBuf[0]    = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // Apply any pending path chosen this or a previous frame
+    if (!s_pendingPath.empty()) {
+        auto result = theme.LoadFromFile(s_pendingPath);
+        if (result.IsOk()) {
+            theme.SaveToPreferences(preferencesManager);
+            preferencesManager.Save();
+        }
+        // On error, ThemeManager keeps the previous theme intact and
+        // stores the message in GetLastError() shown in the banner above.
+        s_pendingPath.clear();
+    }
+
+    // --- Reset to default ---
+    if (theme.HasCustomTheme()) {
+        ImGui::SameLine();
+        if (ImGui::Button("Reset to Default")) {
+            // Reset style first, then tell the manager to forget the custom theme.
+            ImGui::StyleColorsDark();
+            theme.ApplyDefault();
+            theme.SaveToPreferences(preferencesManager);
+            preferencesManager.Save();
+        }
+    }
+
     ImGui::End();
 }
 
@@ -543,6 +649,10 @@ int main(int argc, char *argv[]) {
     bool scale_with_window = preferencesManager.GetBool("ScaleWithWindow", false);
 
     UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+
+    // Restore any previously saved custom theme (after UpdateUIScale has
+    // already applied StyleColorsDark so we overlay on a clean base).
+    ThemeManager::GetInstance().LoadFromPreferences(preferencesManager);
 
     OutputMapper::Init(deviceManager);
     OutputMapper& outputMapper = OutputMapper::GetInstance();
