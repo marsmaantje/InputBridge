@@ -427,12 +427,10 @@ void SetupDockSpace() {
         ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
         ImGuiID dock_id_left, dock_id_right;
         ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.5f, &dock_id_left, &dock_id_right);
-        ImGuiID dock_id_right_top, dock_id_right_bottom;
-        ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_top, &dock_id_right_bottom);
         ImGui::DockBuilderDockWindow("Devices", dock_id_left);
-        ImGui::DockBuilderDockWindow("Network Server", dock_id_right_top);
-        ImGui::DockBuilderDockWindow("Output Mapper", dock_id_right_bottom);
-        ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right_bottom);
+        ImGui::DockBuilderDockWindow("Network Server", dock_id_right);
+        ImGui::DockBuilderDockWindow("Output Mapper", dock_id_right);
+        ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right);
         ImGui::DockBuilderFinish(dockspace_id);
     }
     ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
