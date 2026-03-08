@@ -375,10 +375,10 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& use
                      comboItems.data(), (int)comboItems.size())) {
         if (comboIndex == 0) {
             // Revert to built-in style
-            ImGui::StyleColorsDark();
             theme.ApplyDefault();
             theme.SaveToPreferences(preferencesManager);
             preferencesManager.Save();
+            UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
         } else {
             int entryIdx = comboIndex - 1;
             if (entryIdx >= 0 && entryIdx < (int)entries.size()) {
@@ -386,6 +386,7 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& use
                 if (result.IsOk()) {
                     theme.SaveToPreferences(preferencesManager);
                     preferencesManager.Save();
+                    UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
                 }
                 // On failure the error is shown in the banner below and the
                 // combo cursor stays on the previously valid selection.
