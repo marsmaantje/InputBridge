@@ -1,0 +1,95 @@
+{
+  "name": "Cyberpunk 2077 - Nettech",
+  "_comment": [
+    "Inspired by the Cyberpunk 2077 Nettech menu aesthetic:",
+    "Near-black backgrounds with a faint warm undertone,",
+    "signature chrome-yellow (#FCE300) as the primary accent,",
+    "blood-red secondary accents, razor-sharp zero-rounding corners,",
+    "and high-contrast flat surfaces — no gradients, no softness."
+  ],
+  "colors": {
+    "Text":                  [0.99, 0.89, 0.00, 1.00],
+    "TextDisabled":          [0.45, 0.40, 0.00, 1.00],
+
+    "WindowBg":              [0.05, 0.04, 0.04, 0.98],
+    "ChildBg":               [0.07, 0.06, 0.05, 1.00],
+    "PopupBg":               [0.06, 0.05, 0.04, 0.98],
+
+    "Border":                [0.99, 0.89, 0.00, 0.40],
+    "BorderShadow":          [0.00, 0.00, 0.00, 0.00],
+
+    "FrameBg":               [0.10, 0.09, 0.07, 1.00],
+    "FrameBgHovered":        [0.22, 0.19, 0.00, 1.00],
+    "FrameBgActive":         [0.35, 0.30, 0.00, 1.00],
+
+    "TitleBg":               [0.07, 0.06, 0.04, 1.00],
+    "TitleBgActive":         [0.18, 0.15, 0.00, 1.00],
+    "TitleBgCollapsed":      [0.05, 0.04, 0.03, 0.90],
+
+    "MenuBarBg":             [0.08, 0.07, 0.05, 1.00],
+
+    "ScrollbarBg":           [0.05, 0.04, 0.03, 1.00],
+    "ScrollbarGrab":         [0.50, 0.44, 0.00, 1.00],
+    "ScrollbarGrabHovered":  [0.75, 0.66, 0.00, 1.00],
+    "ScrollbarGrabActive":   [0.99, 0.89, 0.00, 1.00],
+
+    "CheckMark":             [0.99, 0.89, 0.00, 1.00],
+    "SliderGrab":            [0.75, 0.66, 0.00, 1.00],
+    "SliderGrabActive":      [0.99, 0.89, 0.00, 1.00],
+
+    "Button":                [0.18, 0.15, 0.00, 1.00],
+    "ButtonHovered":         [0.40, 0.35, 0.00, 1.00],
+    "ButtonActive":          [0.75, 0.66, 0.00, 1.00],
+
+    "Header":                [0.22, 0.19, 0.00, 1.00],
+    "HeaderHovered":         [0.40, 0.35, 0.00, 1.00],
+    "HeaderActive":          [0.60, 0.53, 0.00, 1.00],
+
+    "Separator":             [0.99, 0.89, 0.00, 0.30],
+    "SeparatorHovered":      [0.99, 0.89, 0.00, 0.70],
+    "SeparatorActive":       [0.99, 0.89, 0.00, 1.00],
+
+    "ResizeGrip":            [0.99, 0.89, 0.00, 0.20],
+    "ResizeGripHovered":     [0.99, 0.89, 0.00, 0.60],
+    "ResizeGripActive":      [0.99, 0.89, 0.00, 1.00],
+
+    "Tab":                   [0.10, 0.09, 0.06, 1.00],
+    "TabHovered":            [0.40, 0.35, 0.00, 1.00],
+    "TabActive":             [0.25, 0.22, 0.00, 1.00],
+    "TabUnfocused":          [0.07, 0.06, 0.04, 1.00],
+    "TabUnfocusedActive":    [0.15, 0.13, 0.00, 1.00],
+
+    "DockingPreview":        [0.99, 0.89, 0.00, 0.60],
+    "DockingEmptyBg":        [0.04, 0.03, 0.02, 1.00],
+
+    "PlotLines":             [0.99, 0.89, 0.00, 1.00],
+    "PlotLinesHovered":      [0.85, 0.10, 0.10, 1.00],
+    "PlotHistogram":         [0.75, 0.66, 0.00, 1.00],
+    "PlotHistogramHovered":  [0.99, 0.89, 0.00, 1.00],
+
+    "TableHeaderBg":         [0.12, 0.10, 0.00, 1.00],
+    "TableBorderStrong":     [0.99, 0.89, 0.00, 0.50],
+    "TableBorderLight":      [0.40, 0.35, 0.00, 0.40],
+    "TableRowBg":            [0.00, 0.00, 0.00, 0.00],
+    "TableRowBgAlt":         [0.99, 0.89, 0.00, 0.06],
+
+    "TextSelectedBg":        [0.99, 0.89, 0.00, 0.25],
+    "DragDropTarget":        [0.99, 0.89, 0.00, 0.95],
+
+    "NavHighlight":          [0.99, 0.89, 0.00, 1.00],
+    "NavWindowingHighlight": [0.99, 0.89, 0.00, 0.70],
+    "NavWindowingDimBg":     [0.05, 0.04, 0.00, 0.60],
+    "ModalWindowDimBg":      [0.05, 0.04, 0.00, 0.70]
+  },
+  "style": {
+    "WindowRounding":    0.0,
+    "ChildRounding":     0.0,
+    "FrameRounding":     0.0,
+    "PopupRounding":     0.0,
+    "ScrollbarRounding": 0.0,
+    "GrabRounding":      0.0,
+    "TabRounding":       0.0,
+    "WindowBorderSize":  1.0,
+    "FrameBorderSize":   1.0
+  }
+}

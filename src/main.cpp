@@ -14,7 +14,6 @@
 #include "Devices/DeviceState.h"
 #include "Mappers/InputMapper.h"
 #include "Mappers/OutputMapper.h"
-#include "Utils/FileDialog.h"
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "UI/ThemeManager.h"
@@ -263,6 +262,10 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, bool& scal
     if (!show_ui_settings) return;
 
     ImGui::Begin("UI Settings", &show_ui_settings, ImGuiWindowFlags_AlwaysAutoResize);
+
+    // ------------------------------------------------------------------
+    // UI Scale controls
+    // ------------------------------------------------------------------
     bool changed = false;
     bool scale_changed = false;
     if (ImGui::Button("-")) {
@@ -301,104 +304,67 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, bool& scal
     }
 
     // ------------------------------------------------------------------
-    // Theme selector
+    // Colour Theme dropdown
     // ------------------------------------------------------------------
     ImGui::Separator();
     ImGui::Text("Colour Theme");
 
     ThemeManager& theme = ThemeManager::GetInstance();
+    const auto& entries = theme.GetAvailableThemes();
 
-    // Current theme status
-    ImGui::TextDisabled("Active: %s", theme.GetCurrentThemeName().c_str());
-    if (theme.HasCustomTheme()) {
-        ImGui::TextDisabled("%s", theme.GetCurrentThemePath().c_str());
-    }
+    // combo index: 0 = Default (Dark), 1..N = entries[0..N-1]
+    int comboIndex = theme.HasCustomTheme() ? theme.GetCurrentEntryIndex() + 1 : 0;
 
-    // Error banner (shown until next successful load or reset)
-    if (!theme.GetLastError().empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
-        ImGui::TextWrapped("Error: %s", theme.GetLastError().c_str());
-        ImGui::PopStyleColor();
-    }
+    // Build a flat list of C-strings for ImGui::Combo.
+    // We do this inline rather than caching so a Refresh is instantly reflected.
+    std::vector<const char*> comboItems;
+    comboItems.reserve(entries.size() + 1);
+    comboItems.push_back("Default (Dark)");
+    for (const auto& e : entries)
+        comboItems.push_back(e.displayName.c_str());
 
-    // --- Load theme file button ---
-    // We keep a small state machine here so the file dialog interaction
-    // and any resulting error/success message work across frames.
-    static std::string s_pendingPath;
-    static bool        s_openDialog = false;
-
-    if (ImGui::Button("Load Theme File...")) {
-        s_openDialog = true;
-    }
-
-    // ImGui-based fallback browser (only shown when native dialog unavailable)
-    // For platforms where FileDialog::Show returns false (no native dialog)
-    // we open a simple path-input popup instead.
-    if (s_openDialog) {
-        std::string chosen;
-        bool ok = FileDialog::Show(
-            FileDialog::Type::Open,
-            "Select ImGui Theme File",
-            "",
-            {{"JSON Theme Files", "*.json"}, {"All Files", "*.*"}},
-            chosen);
-
-        if (ok && !chosen.empty()) {
-            s_pendingPath = chosen;
-        } else if (!ok && !FileDialog::IsNativeDialogAvailable()) {
-            // Fall through to inline path-entry popup on platforms without
-            // a native file dialog.
-            ImGui::OpenPopup("##ThemePathInput");
-        }
-        s_openDialog = false;
-    }
-
-    // Inline path-entry popup (Linux / macOS fallback)
-    if (ImGui::BeginPopup("##ThemePathInput")) {
-        ImGui::Text("Enter path to .json theme file:");
-        static char pathBuf[1024] = "";
-        ImGui::SetNextItemWidth(400.0f);
-        if (ImGui::InputText("##path", pathBuf, sizeof(pathBuf),
-                             ImGuiInputTextFlags_EnterReturnsTrue)) {
-            s_pendingPath = pathBuf;
-            pathBuf[0]    = '\0';
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("OK")) {
-            s_pendingPath = pathBuf;
-            pathBuf[0]    = '\0';
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-
-    // Apply any pending path chosen this or a previous frame
-    if (!s_pendingPath.empty()) {
-        auto result = theme.LoadFromFile(s_pendingPath);
-        if (result.IsOk()) {
-            theme.SaveToPreferences(preferencesManager);
-            preferencesManager.Save();
-        }
-        // On error, ThemeManager keeps the previous theme intact and
-        // stores the message in GetLastError() shown in the banner above.
-        s_pendingPath.clear();
-    }
-
-    // --- Reset to default ---
-    if (theme.HasCustomTheme()) {
-        ImGui::SameLine();
-        if (ImGui::Button("Reset to Default")) {
-            // Reset style first, then tell the manager to forget the custom theme.
+    ImGui::SetNextItemWidth(260.0f);
+    if (ImGui::Combo("##ThemeCombo", &comboIndex,
+                     comboItems.data(), (int)comboItems.size())) {
+        if (comboIndex == 0) {
+            // Revert to built-in style
             ImGui::StyleColorsDark();
             theme.ApplyDefault();
             theme.SaveToPreferences(preferencesManager);
             preferencesManager.Save();
+        } else {
+            int entryIdx = comboIndex - 1;
+            if (entryIdx >= 0 && entryIdx < (int)entries.size()) {
+                auto result = theme.LoadFromFile(entries[entryIdx].path);
+                if (result.IsOk()) {
+                    theme.SaveToPreferences(preferencesManager);
+                    preferencesManager.Save();
+                }
+                // On failure the error is shown in the banner below and the
+                // combo cursor stays on the previously valid selection.
+                comboIndex = theme.HasCustomTheme() ? theme.GetCurrentEntryIndex() + 1 : 0;
+            }
         }
+    }
+
+    // Refresh button – re-scans the themes/ folder
+    ImGui::SameLine();
+    if (ImGui::Button("Refresh")) {
+        theme.Refresh();
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Rescan the themes/ folder for new .json files");
+
+    // Hint showing where to place theme files
+    if (entries.empty()) {
+        ImGui::TextDisabled("No themes found — place .json files in the themes/ folder");
+    }
+
+    // Error banner
+    if (!theme.GetLastError().empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+        ImGui::TextWrapped("Error: %s", theme.GetLastError().c_str());
+        ImGui::PopStyleColor();
     }
 
     ImGui::End();
@@ -650,8 +616,13 @@ int main(int argc, char *argv[]) {
 
     UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
 
-    // Restore any previously saved custom theme (after UpdateUIScale has
-    // already applied StyleColorsDark so we overlay on a clean base).
+    // Scan the themes/ subfolder, then restore the previously saved selection.
+    // ScanThemesDirectory must run first so LoadFromPreferences can update the
+    // combo-box index when the saved path is found in the scanned list.
+    {
+        std::string scanBase = base_path ? std::string(base_path) : ".";
+        ThemeManager::GetInstance().ScanThemesDirectory(scanBase);
+    }
     ThemeManager::GetInstance().LoadFromPreferences(preferencesManager);
 
     OutputMapper::Init(deviceManager);

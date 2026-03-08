@@ -387,6 +387,21 @@ install(TARGETS InputBridge
     BUNDLE DESTINATION .
 )
 
+# Copy the themes/ folder next to the executable at build time so the
+# program can find its themes in the development build layout.
+add_custom_command(TARGET InputBridge POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+        "$<TARGET_FILE_DIR:InputBridge>/themes"
+    COMMENT "Copying themes/ to build output directory"
+)
+
+# Install the themes/ folder alongside the binary.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+    DESTINATION bin
+    FILES_MATCHING PATTERN "*.json"
+)
+
 if(UNIX AND NOT APPLE)
     # Generate basic desktop file and icon for packaging (Required for AppImage/Flatpak)
     file(WRITE ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.desktop
