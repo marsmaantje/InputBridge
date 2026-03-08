@@ -1,0 +1,97 @@
+{
+   "name": "VRChat",
+  "_comment": [
+    "Inspired by the VRChat UI aesthetic:",
+    "Deep navy/dark-blue backgrounds, soft blue-violet accents,",
+    "subtle frosted-glass feel with gentle rounded corners."
+  ],
+  "font": {
+    "file": "fonts/Poppins-Regular.ttf",
+    "size": 16.0
+  },
+  "colors": {
+    "Text":                  [0.90, 0.95, 0.96, 1.00],
+    "TextDisabled":          [0.38, 0.48, 0.50, 1.00],
+
+    "WindowBg":              [0.06, 0.07, 0.09, 0.98],
+    "ChildBg":               [0.07, 0.09, 0.11, 0.80],
+    "PopupBg":               [0.06, 0.08, 0.10, 0.98],
+
+    "Border":                [0.10, 0.48, 0.52, 0.50],
+    "BorderShadow":          [0.00, 0.00, 0.00, 0.00],
+
+    "FrameBg":               [0.10, 0.13, 0.16, 1.00],
+    "FrameBgHovered":        [0.08, 0.36, 0.40, 0.70],
+    "FrameBgActive":         [0.08, 0.48, 0.54, 0.90],
+
+    "TitleBg":               [0.05, 0.06, 0.08, 1.00],
+    "TitleBgActive":         [0.04, 0.30, 0.34, 1.00],
+    "TitleBgCollapsed":      [0.05, 0.06, 0.08, 0.75],
+
+    "MenuBarBg":             [0.05, 0.06, 0.08, 1.00],
+
+    "ScrollbarBg":           [0.04, 0.05, 0.07, 0.60],
+    "ScrollbarGrab":         [0.10, 0.45, 0.50, 0.80],
+    "ScrollbarGrabHovered":  [0.10, 0.60, 0.65, 1.00],
+    "ScrollbarGrabActive":   [0.10, 0.75, 0.82, 1.00],
+
+    "CheckMark":             [0.10, 0.85, 0.90, 1.00],
+    "SliderGrab":            [0.08, 0.68, 0.74, 1.00],
+    "SliderGrabActive":      [0.10, 0.85, 0.90, 1.00],
+
+    "Button":                [0.06, 0.36, 0.40, 1.00],
+    "ButtonHovered":         [0.06, 0.50, 0.56, 1.00],
+    "ButtonActive":          [0.06, 0.65, 0.72, 1.00],
+
+    "Header":                [0.06, 0.32, 0.36, 0.80],
+    "HeaderHovered":         [0.06, 0.46, 0.52, 0.90],
+    "HeaderActive":          [0.06, 0.60, 0.66, 1.00],
+
+    "Separator":             [0.10, 0.40, 0.44, 0.60],
+    "SeparatorHovered":      [0.10, 0.60, 0.65, 0.90],
+    "SeparatorActive":       [0.10, 0.80, 0.86, 1.00],
+
+    "ResizeGrip":            [0.08, 0.50, 0.55, 0.25],
+    "ResizeGripHovered":     [0.08, 0.65, 0.72, 0.67],
+    "ResizeGripActive":      [0.08, 0.82, 0.88, 0.95],
+
+    "Tab":                   [0.07, 0.12, 0.14, 1.00],
+    "TabHovered":            [0.06, 0.48, 0.54, 1.00],
+    "TabActive":             [0.06, 0.34, 0.38, 1.00],
+    "TabUnfocused":          [0.05, 0.08, 0.10, 1.00],
+    "TabUnfocusedActive":    [0.06, 0.22, 0.25, 1.00],
+
+    "DockingPreview":        [0.08, 0.72, 0.78, 0.70],
+    "DockingEmptyBg":        [0.04, 0.05, 0.06, 1.00],
+
+    "PlotLines":             [0.10, 0.82, 0.88, 1.00],
+    "PlotLinesHovered":      [0.10, 1.00, 1.00, 1.00],
+    "PlotHistogram":         [0.08, 0.68, 0.74, 1.00],
+    "PlotHistogramHovered":  [0.10, 0.85, 0.90, 1.00],
+
+    "TableHeaderBg":         [0.06, 0.16, 0.18, 1.00],
+    "TableBorderStrong":     [0.08, 0.40, 0.44, 1.00],
+    "TableBorderLight":      [0.07, 0.24, 0.27, 1.00],
+    "TableRowBg":            [0.00, 0.00, 0.00, 0.00],
+    "TableRowBgAlt":         [0.08, 0.40, 0.44, 0.12],
+
+    "TextSelectedBg":        [0.08, 0.60, 0.65, 0.40],
+    "DragDropTarget":        [0.10, 0.90, 0.95, 0.90],
+
+    "NavHighlight":          [0.08, 0.82, 0.88, 1.00],
+    "NavWindowingHighlight": [1.00, 1.00, 1.00, 0.70],
+    "NavWindowingDimBg":     [0.80, 0.80, 0.80, 0.20],
+    "ModalWindowDimBg":      [0.02, 0.05, 0.06, 0.55]
+  },
+  "style": {
+    "WindowRounding":    3.0,
+    "ChildRounding":     2.0,
+    "FrameRounding":     2.0,
+    "PopupRounding":     3.0,
+    "ScrollbarRounding": 2.0,
+    "GrabRounding":      2.0,
+    "TabRounding":       2.0,
+    "WindowBorderSize":  1.0,
+    "FrameBorderSize":   1.0
+  }
+}
