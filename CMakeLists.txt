@@ -391,8 +391,8 @@ install(TARGETS InputBridge
 # program can find its themes in the development build layout.
 add_custom_command(TARGET InputBridge POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/themes"
-        "$<TARGET_FILE_DIR:InputBridge>/themes"
+    "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+    "$<TARGET_FILE_DIR:InputBridge>/themes"
     COMMENT "Copying themes/ to build output directory"
 )
 
@@ -400,6 +400,21 @@ add_custom_command(TARGET InputBridge POST_BUILD
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/themes"
     DESTINATION bin
     FILES_MATCHING PATTERN "*.json"
+)
+
+# Copy the fonts/ folder next to the executable at build time so the
+# program can find its fonts in the development build layout.
+add_custom_command(TARGET InputBridge POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+    "$<TARGET_FILE_DIR:InputBridge>/fonts"
+    COMMENT "Copying fonts/ to build output directory"
+)
+
+# Install the fonts/ folder alongside the binary.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+    DESTINATION bin
+    FILES_MATCHING PATTERN "*.ttf" PATTERN "*.otf"
 )
 
 if(UNIX AND NOT APPLE)

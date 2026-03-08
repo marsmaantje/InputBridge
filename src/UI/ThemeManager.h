@@ -15,35 +15,42 @@
  * Theme file format
  * -----------------
  *   {
- *     "name":   "My Theme",          // display name shown in the dropdown
- *     "colors": {                    // ImGuiCol_ name → [r, g, b, a]  (values 0..1)
- *       "WindowBg":  [0.06, 0.06, 0.06, 0.94],
- *       "Button":    [0.20, 0.40, 0.80, 1.00],
+ *     "name":   "My Theme",
+ *     "colors": {                    // ImGuiCol_ name → [r, g, b, a]  (0..1)
+ *       "WindowBg": [0.06, 0.06, 0.06, 0.94],
  *       ...
  *     },
  *     "style": {                     // optional rounding / border overrides
- *       "WindowRounding":    5.0,
- *       "FrameRounding":     3.0,
- *       "ScrollbarRounding": 3.0,
- *       "GrabRounding":      3.0,
- *       "TabRounding":       4.0,
- *       "WindowBorderSize":  1.0,
- *       "FrameBorderSize":   0.0,
- *       "PopupRounding":     3.0,
- *       "ChildRounding":     3.0
+ *       "WindowRounding": 5.0,
+ *       "FrameRounding":  3.0,
+ *       ...
+ *     },
+ *     "font": {                      // optional — omit to keep the ImGui default
+ *       "file": "fonts/MyFont.ttf",  // path relative to the executable directory
+ *       "size": 16.0                 // size in pixels (before UI scale)
  *     }
  *   }
  *
- * Workflow
- * --------
- *  1. At startup call ScanThemesDirectory() – fills GetAvailableThemes().
- *  2. Call LoadFromPreferences() to restore the last used selection.
- *  3. Show a combo box driven by GetAvailableThemes(); on selection change
- *     call LoadFromFile(entry.path) or ApplyDefault().
- *  4. Call Reapply() whenever ImGuiStyle is reset (e.g. inside UpdateUIScale).
+ * Font fallback
+ * -------------
+ * If "font" is present but the file cannot be opened (missing, bad path, …),
+ * ThemeManager automatically falls back to the built-in ImGui default font.
+ * No error is raised for an unloadable font; the font path is simply cleared.
  *
- * Validation runs entirely before touching the live ImGui style, so a broken
- * file leaves the current theme intact and returns an error string.
+ * Font rebuild workflow (owned by main.cpp)
+ * -----------------------------------------
+ * After any call to LoadFromFile() or ApplyDefault() that changes the font
+ * selection, HasPendingFontChange() returns true.  The caller must then, before
+ * the next ImGui_ImplSDLRenderer3_NewFrame() call:
+ *   1. Destroy the existing font texture  (ImGui_ImplSDLRenderer3_DestroyFontsTexture)
+ *   2. Clear and repopulate io.Fonts
+ *   3. Call io.Fonts->Build() and ImGui_ImplSDLRenderer3_CreateFontsTexture()
+ *   4. Call ClearPendingFontChange()
+ * Use GetResolvedFontPath() and GetFontSize() for the parameters.
+ * An empty GetResolvedFontPath() means "use AddFontDefault()".
+ *
+ * Colour validation runs entirely before touching live ImGuiStyle, so a
+ * broken file leaves the current theme and font unchanged.
  */
 class ThemeManager {
 public:
@@ -53,24 +60,18 @@ public:
     // Discovery
     // -----------------------------------------------------------------------
 
-    /** Metadata for one discovered theme file. */
     struct ThemeEntry {
-        std::string displayName;   ///< From "name" field in JSON, or filename stem
-        std::string path;          ///< Full filesystem path to the .json file
+        std::string displayName;  ///< "name" field in JSON, or filename stem
+        std::string path;         ///< Full filesystem path to the .json file
     };
 
-    /**
-     * Scan <basePath>/themes/ for *.json files and populate the internal list.
-     * Call once at startup (and again on "Refresh").
-     * @param basePath  Directory that contains the "themes" sub-folder.
-     *                  Typically SDL_GetBasePath().
-     */
+    /** Scan <basePath>/themes/ for *.json files. Call once at startup. */
     void ScanThemesDirectory(const std::string& basePath);
 
-    /** Re-scan using the same basePath provided to the last ScanThemesDirectory call. */
+    /** Re-scan using the same basePath as the last ScanThemesDirectory call. */
     void Refresh();
 
-    /** All themes discovered by the last scan (not including the built-in default). */
+    /** All themes found by the last scan (does not include the built-in default). */
     const std::vector<ThemeEntry>& GetAvailableThemes() const { return m_entries; }
 
     // -----------------------------------------------------------------------
@@ -81,17 +82,44 @@ public:
      * Load, validate and apply a theme from @p path.
      * On success → Ok(true), applied immediately.
      * On failure → Err(message), previous theme unchanged.
+     * Always marks HasPendingFontChange() so the caller can rebuild the atlas.
      */
     InputBridge::Result<bool, std::string> LoadFromFile(const std::string& path);
 
-    /** Restore the built-in dark theme and forget any loaded file. */
+    /**
+     * Restore the built-in ImGui dark theme and default font.
+     * Always marks HasPendingFontChange().
+     */
     void ApplyDefault();
 
     /**
-     * Re-apply the active theme without re-reading disk.
-     * Must be called after any code that resets ImGuiStyle (e.g. UpdateUIScale).
+     * Re-apply colours and style to the live ImGuiStyle without re-reading disk.
+     * Call after any code that resets ImGuiStyle (e.g. UpdateUIScale).
+     * Does NOT touch fonts — handle those via HasPendingFontChange().
      */
     void Reapply();
+
+    // -----------------------------------------------------------------------
+    // Font support
+    // -----------------------------------------------------------------------
+
+    /** True when the font has changed and the atlas must be rebuilt. */
+    bool HasPendingFontChange() const { return m_pendingFontChange; }
+
+    /** Call after completing the atlas rebuild. */
+    void ClearPendingFontChange() { m_pendingFontChange = false; }
+
+    /**
+     * Full filesystem path to the font for the current theme.
+     * Empty string → use ImGui's built-in default font (AddFontDefault).
+     */
+    const std::string& GetResolvedFontPath() const { return m_resolvedFontPath; }
+
+    /**
+     * Base font size in pixels (before UI scale) for the current theme.
+     * Defaults to 16.0 when no custom font is specified.
+     */
+    float GetFontSize() const { return m_fontSize; }
 
     // -----------------------------------------------------------------------
     // Persistence
@@ -107,24 +135,11 @@ public:
     // Queries
     // -----------------------------------------------------------------------
 
-    /** Display name of the active theme, or "Default (Dark)". */
-    const std::string& GetCurrentThemeName() const { return m_themeName; }
-
-    /** Full path of the active theme file, or empty for the built-in default. */
-    const std::string& GetCurrentThemePath() const { return m_themePath; }
-
-    /** True when a custom file theme is active. */
-    bool HasCustomTheme() const { return m_hasCustomTheme; }
-
-    /**
-     * Index into GetAvailableThemes() for the active theme, or -1 (= Default).
-     * Suitable for use directly as a combo-box selection index when offset by 1
-     * (index 0 = Default, index 1..N = entries[0..N-1]).
-     */
-    int GetCurrentEntryIndex() const { return m_currentEntryIndex; }
-
-    /** Last error from LoadFromFile(), cleared on next successful load. */
-    const std::string& GetLastError() const { return m_lastError; }
+    const std::string& GetCurrentThemeName()  const { return m_themeName; }
+    const std::string& GetCurrentThemePath()  const { return m_themePath; }
+    bool               HasCustomTheme()        const { return m_hasCustomTheme; }
+    int                GetCurrentEntryIndex()  const { return m_currentEntryIndex; }
+    const std::string& GetLastError()          const { return m_lastError; }
 
 private:
     ThemeManager() = default;
@@ -132,14 +147,16 @@ private:
     ThemeManager& operator=(const ThemeManager&) = delete;
 
     // -----------------------------------------------------------------------
-    // Internal helpers
+    // Internal
     // -----------------------------------------------------------------------
 
     struct ThemeData {
         std::string name;
         std::string path;
+        // Colours
         float colors[ImGuiCol_COUNT][4]{};
         bool  colorSet[ImGuiCol_COUNT]{};
+        // Style overrides
         bool  hasWindowRounding    = false; float windowRounding    = 0.f;
         bool  hasFrameRounding     = false; float frameRounding     = 0.f;
         bool  hasScrollbarRounding = false; float scrollbarRounding = 0.f;
@@ -149,13 +166,19 @@ private:
         bool  hasFrameBorderSize   = false; float frameBorderSize   = 0.f;
         bool  hasPopupRounding     = false; float popupRounding     = 0.f;
         bool  hasChildRounding     = false; float childRounding     = 0.f;
+        // Font spec (optional)
+        bool        hasFontSpec = false;
+        std::string fontFile;   ///< relative to executable directory
+        float       fontSize    = 16.f;
     };
 
     InputBridge::Result<ThemeData, std::string> ParseFile(const std::string& path) const;
     static void ApplyData(const ThemeData& data);
     static int  ColorNameToIndex(const std::string& name);
-    /// Peek at just the "name" field from a JSON file without full validation.
     static std::string PeekDisplayName(const std::string& path);
+
+    /** Resolve font path and populate m_resolvedFontPath / m_fontSize. */
+    void ResolveFontPath(const ThemeData& data);
 
     // -----------------------------------------------------------------------
     // State
@@ -165,9 +188,14 @@ private:
     std::string             m_scanBasePath;
 
     bool        m_hasCustomTheme    = false;
-    int         m_currentEntryIndex = -1;   ///< -1 = Default
+    int         m_currentEntryIndex = -1;
     ThemeData   m_current;
     std::string m_themeName = "Default (Dark)";
     std::string m_themePath;
     std::string m_lastError;
+
+    // Font state
+    bool        m_pendingFontChange = false;
+    std::string m_resolvedFontPath;   ///< empty = use built-in default
+    float       m_fontSize          = 16.f;
 };

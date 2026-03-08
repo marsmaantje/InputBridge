@@ -34,12 +34,10 @@ void ThemeManager::ScanThemesDirectory(const std::string& basePath) {
         return;
     }
 
-    // Collect all .json files, then sort by filename for a stable order.
     std::vector<fs::path> found;
     for (const auto& entry : fs::directory_iterator(themesDir)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+        if (entry.is_regular_file() && entry.path().extension() == ".json")
             found.push_back(entry.path());
-        }
     }
     std::sort(found.begin(), found.end());
 
@@ -47,10 +45,8 @@ void ThemeManager::ScanThemesDirectory(const std::string& basePath) {
         ThemeEntry te;
         te.path        = p.string();
         te.displayName = PeekDisplayName(te.path);
-        if (te.displayName.empty()) {
-            // Fall back to the filename stem (e.g. "vrchat" from "vrchat.json")
+        if (te.displayName.empty())
             te.displayName = p.stem().string();
-        }
         m_entries.push_back(std::move(te));
         SDL_Log("[ThemeManager] Found theme: %s (%s)",
                 m_entries.back().displayName.c_str(),
@@ -60,7 +56,7 @@ void ThemeManager::ScanThemesDirectory(const std::string& basePath) {
     SDL_Log("[ThemeManager] Scanned %d theme(s) from %s",
             (int)m_entries.size(), themesDir.string().c_str());
 
-    // After a rescan the current index may need refreshing (paths could change).
+    // Refresh the index pointer if the active theme is still present.
     if (m_hasCustomTheme && !m_themePath.empty()) {
         m_currentEntryIndex = -1;
         for (int i = 0; i < (int)m_entries.size(); ++i) {
@@ -73,8 +69,34 @@ void ThemeManager::ScanThemesDirectory(const std::string& basePath) {
 }
 
 void ThemeManager::Refresh() {
-    if (!m_scanBasePath.empty()) {
+    if (!m_scanBasePath.empty())
         ScanThemesDirectory(m_scanBasePath);
+}
+
+// ============================================================================
+//  Font resolution
+// ============================================================================
+
+void ThemeManager::ResolveFontPath(const ThemeData& data) {
+    if (!data.hasFontSpec || data.fontFile.empty()) {
+        m_resolvedFontPath.clear();
+        m_fontSize = 16.f;
+        return;
+    }
+
+    // Font paths are relative to the executable directory.
+    fs::path resolved = fs::path(m_scanBasePath) / data.fontFile;
+    if (fs::exists(resolved) && fs::is_regular_file(resolved)) {
+        m_resolvedFontPath = resolved.string();
+        m_fontSize         = data.fontSize > 0.f ? data.fontSize : 16.f;
+        SDL_Log("[ThemeManager] Font resolved: %s @ %.1fpx",
+                m_resolvedFontPath.c_str(), m_fontSize);
+    } else {
+        // File not found — fall back to ImGui default silently.
+        SDL_Log("[ThemeManager] Font file not found (%s) — using default font.",
+                resolved.string().c_str());
+        m_resolvedFontPath.clear();
+        m_fontSize = 16.f;
     }
 }
 
@@ -97,7 +119,6 @@ Result<bool, std::string> ThemeManager::LoadFromFile(const std::string& path) {
     m_themePath      = path;
     m_hasCustomTheme = true;
 
-    // Find matching entry index for the combo-box cursor.
     m_currentEntryIndex = -1;
     for (int i = 0; i < (int)m_entries.size(); ++i) {
         if (m_entries[i].path == path) {
@@ -107,6 +128,9 @@ Result<bool, std::string> ThemeManager::LoadFromFile(const std::string& path) {
     }
 
     ApplyData(m_current);
+    ResolveFontPath(m_current);
+    m_pendingFontChange = true;
+
     SDL_Log("[ThemeManager] Applied theme '%s' from '%s'",
             m_themeName.c_str(), path.c_str());
     return Result<bool, std::string>::Ok(true);
@@ -119,14 +143,17 @@ void ThemeManager::ApplyDefault() {
     m_themePath.clear();
     m_lastError.clear();
     m_current = ThemeData{};
-    // The caller is responsible for calling ImGui::StyleColorsDark() first.
+    // Reset font to built-in default.
+    m_resolvedFontPath.clear();
+    m_fontSize          = 16.f;
+    m_pendingFontChange = true;
+    // Caller is responsible for calling ImGui::StyleColorsDark() first.
 }
 
 void ThemeManager::Reapply() {
-    if (m_hasCustomTheme) {
+    if (m_hasCustomTheme)
         ApplyData(m_current);
-    }
-    // Default: nothing to overlay — StyleColorsDark() from the caller is enough.
+    // Default: nothing to overlay — StyleColorsDark() from caller is enough.
 }
 
 // ============================================================================
@@ -146,15 +173,14 @@ void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
 }
 
 void ThemeManager::SaveToPreferences(PreferencesManager& prefs) const {
-    if (m_hasCustomTheme) {
+    if (m_hasCustomTheme)
         prefs.SetString("Theme", "ThemePath", m_themePath);
-    } else {
+    else
         prefs.DeleteKey("Theme", "ThemePath");
-    }
 }
 
 // ============================================================================
-//  Internal – colour-name → ImGuiCol_ index mapping
+//  Internal – colour-name → ImGuiCol_ index
 // ============================================================================
 
 int ThemeManager::ColorNameToIndex(const std::string& name) {
@@ -220,7 +246,7 @@ int ThemeManager::ColorNameToIndex(const std::string& name) {
 }
 
 // ============================================================================
-//  Internal – peek at a theme file's display name without full validation
+//  Internal – peek at a file's "name" field without full validation
 // ============================================================================
 
 std::string ThemeManager::PeekDisplayName(const std::string& path) {
@@ -238,7 +264,7 @@ std::string ThemeManager::PeekDisplayName(const std::string& path) {
 }
 
 // ============================================================================
-//  Internal – JSON parsing + full validation
+//  Internal – full JSON parse + validation
 // ============================================================================
 
 Result<ThemeManager::ThemeData, std::string>
@@ -265,6 +291,7 @@ ThemeManager::ParseFile(const std::string& path) const {
 
     ThemeData data;
 
+    // Optional name
     if (doc.contains("name") && doc["name"].is_string()) {
         data.name = doc["name"].get<std::string>();
         if (data.name.size() > 128)
@@ -272,6 +299,7 @@ ThemeManager::ParseFile(const std::string& path) const {
                 "\"name\" field exceeds 128 characters.");
     }
 
+    // Colours
     const auto& colorsObj = doc["colors"];
     int parsedCount = 0;
     for (auto it = colorsObj.begin(); it != colorsObj.end(); ++it) {
@@ -279,7 +307,7 @@ ThemeManager::ParseFile(const std::string& path) const {
         const json& val = it.value();
 
         int idx = ColorNameToIndex(colorName);
-        if (idx < 0) continue; // unknown – forward-compat
+        if (idx < 0) continue; // unknown key — forward-compat
 
         if (!val.is_array() || val.size() != 4)
             return Result<ThemeData, std::string>::Err(
@@ -304,6 +332,7 @@ ThemeManager::ParseFile(const std::string& path) const {
         return Result<ThemeData, std::string>::Err(
             "\"colors\" object contains no recognised ImGui colour names.");
 
+    // Optional style overrides
     if (doc.contains("style") && doc["style"].is_object()) {
         const auto& s = doc["style"];
         auto rf = [&](const char* k, bool& flag, float& out) -> std::string {
@@ -322,6 +351,22 @@ ThemeManager::ParseFile(const std::string& path) const {
         if (!(err = rf("FrameBorderSize",   data.hasFrameBorderSize,   data.frameBorderSize)).empty())   return Result<ThemeData,std::string>::Err(err);
         if (!(err = rf("PopupRounding",     data.hasPopupRounding,     data.popupRounding)).empty())     return Result<ThemeData,std::string>::Err(err);
         if (!(err = rf("ChildRounding",     data.hasChildRounding,     data.childRounding)).empty())     return Result<ThemeData,std::string>::Err(err);
+    }
+
+    // Optional font spec — no error if missing or file doesn't exist (fallback handled in ResolveFontPath)
+    if (doc.contains("font") && doc["font"].is_object()) {
+        const auto& f = doc["font"];
+        if (f.contains("file") && f["file"].is_string()) {
+            data.fontFile   = f["file"].get<std::string>();
+            data.hasFontSpec = true;
+        }
+        if (f.contains("size") && f["size"].is_number()) {
+            float sz = f["size"].get<float>();
+            if (sz < 4.f || sz > 144.f)
+                return Result<ThemeData, std::string>::Err(
+                    "font.size must be between 4 and 144 pixels.");
+            data.fontSize = sz;
+        }
     }
 
     data.path = path;

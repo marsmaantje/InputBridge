@@ -5,6 +5,10 @@
     "Deep navy/dark-blue backgrounds, soft blue-violet accents,",
     "subtle frosted-glass feel with gentle rounded corners."
   ],
+  "font": {
+    "file": "fonts/Poppins-Regular.ttf",
+    "size": 16.0
+  },
   "colors": {
     "Text":                  [0.90, 0.95, 0.96, 1.00],
     "TextDisabled":          [0.38, 0.48, 0.50, 1.00],

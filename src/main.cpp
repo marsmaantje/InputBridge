@@ -37,7 +37,7 @@
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
 
-void UpdateUIScale(SDL_Window *window, float& user_ui_scale, bool scale_with_window, int initial_width, PreferencesManager& preferencesManager) {
+void UpdateUIScale(SDL_Window *window, float& user_ui_scale, float& user_font_scale, bool scale_with_window, int initial_width, PreferencesManager& preferencesManager) {
     float scale = SDL_GetWindowDisplayScale(window);
     float density = SDL_GetWindowPixelDensity(window);
     if (density <= 0.0f) density = 1.0f;
@@ -59,7 +59,34 @@ void UpdateUIScale(SDL_Window *window, float& user_ui_scale, bool scale_with_win
     ThemeManager::GetInstance().Reapply();
     style.ScaleAllSizes(ui_scale);
     if (style.WindowBorderHoverPadding <= 0.0f) style.WindowBorderHoverPadding = 1.0f;
-    ImGui::GetIO().FontGlobalScale = ui_scale;
+    ImGui::GetIO().FontGlobalScale = ui_scale * user_font_scale;
+}
+
+// Rebuild the ImGui font atlas after a theme font change.
+// Must be called BEFORE ImGui_ImplSDLRenderer3_NewFrame().
+// Falls back to the built-in default font if the requested file cannot be loaded.
+void RebuildFontAtlas() {
+    ImGuiIO& io = ImGui::GetIO();
+    ThemeManager& theme = ThemeManager::GetInstance();
+
+    // Tear down the existing GPU-side font texture.
+    io.Fonts->Clear();
+
+    const std::string& fontPath = theme.GetResolvedFontPath();
+    const float fontSize = theme.GetFontSize();
+
+    bool loaded = false;
+    if (!fontPath.empty()) {
+        ImFont* f = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), fontSize);
+        loaded = (f != nullptr);
+        if (!loaded)
+            SDL_Log("[Font] Failed to load '%s' — falling back to default.", fontPath.c_str());
+    }
+    if (!loaded)
+        io.Fonts->AddFontDefault();
+
+    io.Fonts->Build();
+    theme.ClearPendingFontChange();
 }
 
 void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
@@ -258,7 +285,7 @@ void DrawMainMenu(bool& done, bool& show_ui_settings, bool& show_protocol_editor
     }
 }
 
-void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, bool& scale_with_window, SDL_Window* window, int initial_width, int initial_height, PreferencesManager& preferencesManager) {
+void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& user_font_scale, bool& scale_with_window, SDL_Window* window, int initial_width, int initial_height, PreferencesManager& preferencesManager) {
     if (!show_ui_settings) return;
 
     ImGui::Begin("UI Settings", &show_ui_settings, ImGuiWindowFlags_AlwaysAutoResize);
@@ -268,19 +295,37 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, bool& scal
     // ------------------------------------------------------------------
     bool changed = false;
     bool scale_changed = false;
-    if (ImGui::Button("-")) {
+    if (ImGui::Button("-##UI")) {
         user_ui_scale -= 0.05f;
         if (user_ui_scale < 0.5f) user_ui_scale = 0.5f;
         scale_changed = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("+")) {
+    if (ImGui::Button("+##UI")) {
         user_ui_scale += 0.05f;
         if (user_ui_scale > 3.0f) user_ui_scale = 3.0f;
         scale_changed = true;
     }
     ImGui::SameLine();
     ImGui::Text("UI Scale: %.2f", user_ui_scale);
+
+    // ------------------------------------------------------------------
+    // Font Scale controls
+    // ------------------------------------------------------------------
+    bool font_scale_changed = false;
+    if (ImGui::Button("-##Font")) {
+        user_font_scale -= 0.05f;
+        if (user_font_scale < 0.5f) user_font_scale = 0.5f;
+        font_scale_changed = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("+##Font")) {
+        user_font_scale += 0.05f;
+        if (user_font_scale > 3.0f) user_font_scale = 3.0f;
+        font_scale_changed = true;
+    }
+    ImGui::SameLine();
+    ImGui::Text("Font Scale: %.2f", user_font_scale);
 
     if (scale_changed) {
         scale_with_window = false;
@@ -290,17 +335,19 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, bool& scal
 
     if (ImGui::Button("Reset UI")) {
         user_ui_scale = 1.0f;
+        user_font_scale = 1.0f;
         scale_with_window = false;
         SDL_SetWindowSize(window, initial_width, initial_height);
         SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
         changed = true;
     }
 
-    if (changed) {
+    if (changed || font_scale_changed) {
         preferencesManager.SetFloat("UIScale", user_ui_scale);
+        preferencesManager.SetFloat("FontScale", user_font_scale);
         preferencesManager.SetBool("ScaleWithWindow", scale_with_window);
         preferencesManager.Save();
-        UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+        UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
     }
 
     // ------------------------------------------------------------------
@@ -467,7 +514,7 @@ void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& prefere
     ImGui::End();
 }
 
-void ProcessEvents(bool& done, SDL_Window* window, DeviceManager& deviceManager, PreferencesManager& preferencesManager, float& user_ui_scale, bool scale_with_window, int initial_width) {
+void ProcessEvents(bool& done, SDL_Window* window, DeviceManager& deviceManager, PreferencesManager& preferencesManager, float& user_ui_scale, float& user_font_scale, bool scale_with_window, int initial_width) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL3_ProcessEvent(&event);
@@ -479,11 +526,11 @@ void ProcessEvents(bool& done, SDL_Window* window, DeviceManager& deviceManager,
 
         if (event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED &&
             event.window.windowID == SDL_GetWindowID(window)) {
-            UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+            UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
         }
         if (event.type == SDL_EVENT_WINDOW_RESIZED && scale_with_window &&
             event.window.windowID == SDL_GetWindowID(window)) {
-            UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+            UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
         }
 
         // Handle hot-plugging
@@ -612,9 +659,10 @@ int main(int argc, char *argv[]) {
     preferencesManager.Load();
 
     float user_ui_scale = preferencesManager.GetFloat("UIScale", 1.0f);
+    float user_font_scale = preferencesManager.GetFloat("FontScale", 1.0f);
     bool scale_with_window = preferencesManager.GetBool("ScaleWithWindow", false);
 
-    UpdateUIScale(window, user_ui_scale, scale_with_window, initial_width, preferencesManager);
+    UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
 
     // Scan the themes/ subfolder, then restore the previously saved selection.
     // ScanThemesDirectory must run first so LoadFromPreferences can update the
@@ -624,6 +672,11 @@ int main(int argc, char *argv[]) {
         ThemeManager::GetInstance().ScanThemesDirectory(scanBase);
     }
     ThemeManager::GetInstance().LoadFromPreferences(preferencesManager);
+
+    // If the restored theme specifies a custom font, build the atlas now
+    // before the first frame so the correct font is used from the start.
+    if (ThemeManager::GetInstance().HasPendingFontChange())
+        RebuildFontAtlas();
 
     OutputMapper::Init(deviceManager);
     OutputMapper& outputMapper = OutputMapper::GetInstance();
@@ -658,7 +711,7 @@ int main(int argc, char *argv[]) {
 
     while (!done) {
         Uint64 frame_start_time = SDL_GetTicks();
-        ProcessEvents(done, window, deviceManager, preferencesManager, user_ui_scale, scale_with_window, initial_width);
+        ProcessEvents(done, window, deviceManager, preferencesManager, user_ui_scale, user_font_scale, scale_with_window, initial_width);
 
         // Always update haptics to ensure low latency
         outputMapper.Update();
@@ -686,6 +739,11 @@ int main(int argc, char *argv[]) {
             last_mps_update_time = frame_start_time;
         }
 
+        // Rebuild font atlas if a theme change requested a different font.
+        // Must happen before ImGui_ImplSDLRenderer3_NewFrame().
+        if (ThemeManager::GetInstance().HasPendingFontChange())
+            RebuildFontAtlas();
+
         // Start the Dear ImGui frame
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -694,7 +752,7 @@ int main(int argc, char *argv[]) {
         // Menu Bar
         DrawMainMenu(done, show_ui_settings, show_protocol_editor);
 
-        DrawSettingsWindow(show_ui_settings, user_ui_scale, scale_with_window, window, initial_width, initial_height, preferencesManager);
+        DrawSettingsWindow(show_ui_settings, user_ui_scale, user_font_scale, scale_with_window, window, initial_width, initial_height, preferencesManager);
         
         // Protocol Editor
         ProtocolEditorWindow::Draw(show_protocol_editor);
