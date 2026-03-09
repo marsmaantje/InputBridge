@@ -1,0 +1,120 @@
+{
+    "direction": "Output",
+    "fields": [
+        {
+            "fieldId": "axis_steering",
+            "oscPath": "/input/yaw",
+            "wsKey": "yaw"
+        },
+        {
+            "fieldId": "axis_throttle",
+            "oscPath": "/input/throttle",
+            "wsKey": "throttle"
+        },
+        {
+            "fieldId": "axis_clutch",
+            "oscPath": "/input/clutch",
+            "wsKey": "clutch"
+        },
+        {
+            "fieldId": "axis_brake",
+            "oscPath": "/input/brake",
+            "wsKey": "brake"
+        },
+        {
+            "fieldId": "axis_handbrake",
+            "oscPath": "/input/handbrake",
+            "wsKey": "handbrake"
+        },
+        {
+            "fieldId": "btn_lights",
+            "oscPath": "/input/lights",
+            "wsKey": "lights"
+        },
+        {
+            "fieldId": "btn_beam",
+            "oscPath": "/input/beam",
+            "wsKey": "beam"
+        },
+        {
+            "fieldId": "btn_parking",
+            "oscPath": "/input/parking",
+            "wsKey": "parking"
+        },
+        {
+            "fieldId": "btn_fog",
+            "oscPath": "/input/fog",
+            "wsKey": "fog"
+        },
+        {
+            "fieldId": "btn_turn_right",
+            "oscPath": "/input/turn_right",
+            "wsKey": "turn_right"
+        },
+        {
+            "fieldId": "btn_turn_left",
+            "oscPath": "/input/turn_left",
+            "wsKey": "turn_left"
+        },
+        {
+            "fieldId": "btn_hazard",
+            "oscPath": "/input/hazard",
+            "wsKey": "hazard"
+        },
+        {
+            "fieldId": "btn_engine",
+            "oscPath": "/input/engine",
+            "wsKey": "engine"
+        },
+        {
+            "fieldId": "btn_horn",
+            "oscPath": "/input/horn",
+            "wsKey": "horn"
+        },
+        {
+            "fieldId": "btn_cam_switch",
+            "oscPath": "/input/cam_switch",
+            "wsKey": "cam_switch"
+        },
+        {
+            "fieldId": "btn_boost",
+            "oscPath": "/input/boost",
+            "wsKey": "boost"
+        },
+        {
+            "fieldId": "btn_jump",
+            "oscPath": "/input/jump",
+            "wsKey": "jump"
+        },
+        {
+            "fieldId": "btn_gear_down",
+            "oscPath": "/input/gear_down",
+            "wsKey": "gear_down"
+        },
+        {
+            "fieldId": "btn_gear_up",
+            "oscPath": "/input/gear_up",
+            "wsKey": "gear_up"
+        },
+        {
+            "fieldId": "btn_neutral",
+            "oscPath": "/input/neutral",
+            "wsKey": "neutral"
+        },
+        {
+            "fieldId": "btn_reverse",
+            "oscPath": "/input/reverse",
+            "wsKey": "reverse"
+        },
+        {
+            "fieldId": "unflip",
+            "oscPath": "/input/unflip",
+            "wsKey": "input_unflip"
+        }
+    ],
+    "protocol_id": "7e46de1cc59851f0",
+    "protocol_name": "MPV OSC Car",
+    "template_desc": "The default MPV car setup, using OSC for communication.",
+    "template_name": "MPV OSC Car",
+    "transport": "OSC"
+}

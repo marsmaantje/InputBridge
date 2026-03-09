@@ -1,0 +1,105 @@
+{
+    "direction": "Output",
+    "fields": [
+        {
+            "fieldId": "btn_engine",
+            "oscPath": "/input/engine",
+            "wsKey": "engine"
+        },
+        {
+            "fieldId": "axis_steering",
+            "oscPath": "/input/yaw",
+            "wsKey": "yaw"
+        },
+        {
+            "fieldId": "axis_throttle",
+            "oscPath": "/input/throttle",
+            "wsKey": "throttle"
+        },
+        {
+            "fieldId": "axis_brake",
+            "oscPath": "/input/brake",
+            "wsKey": "brake"
+        },
+        {
+            "fieldId": "axis_pitch",
+            "oscPath": "/input/pitch",
+            "wsKey": "pitch"
+        },
+        {
+            "fieldId": "axis_roll",
+            "oscPath": "/input/roll",
+            "wsKey": "roll"
+        },
+        {
+            "fieldId": "axis_collective",
+            "oscPath": "/input/collective",
+            "wsKey": "collective"
+        },
+        {
+            "fieldId": "btn_weapon_main",
+            "oscPath": "/input/weapon_main",
+            "wsKey": "weapon_main"
+        },
+        {
+            "fieldId": "btn_weapon_sec",
+            "oscPath": "/input/weapon_sec",
+            "wsKey": "weapon_sec"
+        },
+        {
+            "fieldId": "btn_reload",
+            "oscPath": "/input/reload",
+            "wsKey": "reload"
+        },
+        {
+            "fieldId": "btn_boost",
+            "oscPath": "/input/boost",
+            "wsKey": "boost"
+        },
+        {
+            "fieldId": "btn_landing_gear",
+            "oscPath": "/input/landing_gear",
+            "wsKey": "landing_gear"
+        },
+        {
+            "fieldId": "btn_cam_switch",
+            "oscPath": "/input/cam_switch",
+            "wsKey": "cam_switch"
+        },
+        {
+            "fieldId": "btn_horn",
+            "oscPath": "/input/horn",
+            "wsKey": "horn"
+        },
+        {
+            "fieldId": "btn_lights",
+            "oscPath": "/input/lights",
+            "wsKey": "lights"
+        },
+        {
+            "fieldId": "btn_hazard",
+            "oscPath": "/input/hazard",
+            "wsKey": "hazard"
+        },
+        {
+            "fieldId": "btn_parking",
+            "oscPath": "/input/parking",
+            "wsKey": "parking"
+        },
+        {
+            "fieldId": "btn_beam",
+            "oscPath": "/input/beam",
+            "wsKey": "beam"
+        },
+        {
+            "fieldId": "btn_jump",
+            "oscPath": "/input/jump",
+            "wsKey": "jump"
+        }
+    ],
+    "protocol_id": "5e3c0ad01916a500",
+    "protocol_name": "MPV OSC Helicopter",
+    "template_desc": "Exmaple template for the MPV helicopter, using the OSC protocol.",
+    "template_name": "MPV OSC Helicopter",
+    "transport": "OSC"
+}
