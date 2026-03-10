@@ -206,7 +206,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
         ProtocolDefinition def;
         def.id = GenerateId(); // Always generate a new ID to avoid conflicts
         def.name = j.value("name", "Imported Protocol");
-        
+
         std::string ts = j.value("transport", "osc");
         def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
 
@@ -514,7 +514,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
 void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     json j;
     j["_comment"] = "Default built-in fields. Delete this file to regenerate defaults.";
-    
+
     json outArr = json::array();
     auto addOut = [&](const char* id, const char* label, const char* cat, FieldType type, const char* oscPath, const char* wsKey) {
         json item;
@@ -548,6 +548,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_gear_4",      "4th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_4",    "gear_4");
     addOut("btn_gear_5",      "5th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_5",    "gear_5");
     addOut("btn_gear_6",      "6th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_6",    "gear_6");
+    addOut("btn_gear_7",      "7th Gear",        "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_7",    "gear_7");
     addOut("btn_drive_fwd",   "Drive FWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/fwd",       "fwd");
     addOut("btn_drive_bwd",   "Drive BWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/bwd",       "bwd");
     addOut("btn_drive_awd",   "Drive AWD",       "Digital: Vehicle", FieldType::DigitalButton, "/input/awd",       "awd");
