@@ -293,7 +293,9 @@ static bool g_SidebarExpanded = true;
 // Forward declaration so DrawSidebarLayout can call it
 void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& scale_with_window,
                          SDL_Window* window, int initial_width, int initial_height,
-                         PreferencesManager& preferencesManager);
+                         PreferencesManager& preferencesManager,
+                         bool& vsync, int& framerate_limit,
+                         SDL_Renderer* renderer, const ImGuiIO& io);
 
 void DrawSidebarLayout(
         DeviceManager&        deviceManager,
@@ -405,6 +407,9 @@ void DrawSidebarLayout(
             active ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive)
                    : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
 
+        // Left-align button text
+        ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+
         // Left-edge accent bar for the active item
         if (active) {
             ImVec2 p = ImGui::GetCursorScreenPos();
@@ -413,9 +418,12 @@ void DrawSidebarLayout(
                 ImGui::GetColorU32(ImGuiCol_SliderGrab));
         }
 
+        // Small left indent so the icon clears the accent bar
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 6.0f);
         if (ImGui::Button(buf, {ImGui::GetContentRegionAvail().x, BTN_H}))
             g_ActiveSection = idx;
 
+        ImGui::PopStyleVar();   // ButtonTextAlign
         ImGui::PopStyleColor(2);
 
         if (!g_SidebarExpanded && ImGui::IsItemHovered())
@@ -425,10 +433,10 @@ void DrawSidebarLayout(
     };
 
     // ── Main navigation entries ───────────────────────────────────────────
-    NavItem(ICON_FA_GAMEPAD,   "Devices",         0);
-    NavItem(ICON_FA_SLIDERS,   "Input Mapper",    1);
-    NavItem(ICON_FA_BOLT,      "Output Mapper",   2);
-    NavItem(ICON_FA_WIFI,      "Network",         3);
+    NavItem(ICON_FA_GAMEPAD,   "Devices",  0);
+    NavItem(ICON_FA_SLIDERS,   "Input",    1);
+    NavItem(ICON_FA_BOLT,      "Output",   2);
+    NavItem(ICON_FA_WIFI,      "Network",  3);
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -436,7 +444,7 @@ void DrawSidebarLayout(
 
     // ── Utility navigation entries ────────────────────────────────────────
     NavItem(ICON_FA_FILE_CODE, "Protocol Editor", 4);
-    NavItem(ICON_FA_GEAR,      "UI Settings",     5);
+    NavItem(ICON_FA_GEAR,      "Settings",        5);
 
     ImGui::EndChild(); // ##NavScroll
 
@@ -472,26 +480,14 @@ void DrawSidebarLayout(
 
     // Profile selector is always shown at the top of the content area
     inputMapper.DrawProfileSelector();
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
 
     // ── Section-specific content ──────────────────────────────────────────
     switch (g_ActiveSection) {
 
         case 0: { // ── Devices ────────────────────────────────────────────
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-                        1000.0f / io.Framerate, io.Framerate);
-            if (ImGui::Checkbox("VSync", &vsync))
-                SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
-            ImGui::SameLine();
-            {
-                const char* fl = "Framerate Limit";
-                float fw = ImGui::GetContentRegionAvail().x
-                           - ImGui::CalcTextSize(fl).x
-                           - ImGui::GetStyle().ItemInnerSpacing.x;
-                if (fw < 10.0f) fw = 10.0f;
-                ImGui::SetNextItemWidth(fw);
-                ImGui::InputInt(fl, &framerate_limit);
-                if (framerate_limit < 0) framerate_limit = 0;
-            }
             static bool first_run_dev = true;
             static bool enable_battery_led = true;
             if (first_run_dev) {
@@ -548,7 +544,8 @@ void DrawSidebarLayout(
 
         case 5: // ── UI Settings (inline) ──────────────────────────────────
             DrawSettingsContent(user_ui_scale, user_font_scale, scale_with_window,
-                                window, initial_width, initial_height, preferencesManager);
+                                window, initial_width, initial_height, preferencesManager,
+                                vsync, framerate_limit, renderer, io);
             break;
     }
 
@@ -560,8 +557,30 @@ void DrawSidebarLayout(
 // All parameters are forwarded from the outer scope.
 void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& scale_with_window,
                          SDL_Window* window, int initial_width, int initial_height,
-                         PreferencesManager& preferencesManager)
+                         PreferencesManager& preferencesManager,
+                         bool& vsync, int& framerate_limit,
+                         SDL_Renderer* renderer, const ImGuiIO& io)
 {
+    // ------------------------------------------------------------------
+    // Performance
+    // ------------------------------------------------------------------
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+                1000.0f / io.Framerate, io.Framerate);
+    if (ImGui::Checkbox("VSync", &vsync))
+        SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
+    ImGui::SameLine();
+    {
+        const char* fl = "Framerate Limit";
+        float fw = ImGui::GetContentRegionAvail().x
+                   - ImGui::CalcTextSize(fl).x
+                   - ImGui::GetStyle().ItemInnerSpacing.x;
+        if (fw < 10.0f) fw = 10.0f;
+        ImGui::SetNextItemWidth(fw);
+        ImGui::InputInt(fl, &framerate_limit);
+        if (framerate_limit < 0) framerate_limit = 0;
+    }
+    ImGui::Separator();
+
     // ------------------------------------------------------------------
     // UI Scale controls
     // ------------------------------------------------------------------
