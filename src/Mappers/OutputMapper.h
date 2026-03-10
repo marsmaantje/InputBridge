@@ -28,6 +28,7 @@ public:
     OutputMapper(const OutputMapper&) = delete;
     OutputMapper& operator=(const OutputMapper&) = delete;
     void DrawContent();
+    void DrawContentOnly(); // Draws content without Begin/End
 
     // Call this every frame in the main loop to process queued haptic commands
     void Update();
@@ -42,8 +43,8 @@ public:
     void QueuePeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
     void QueueCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms);
     void QueueSetGain(int virtual_id, int gain);
-    void QueueDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type, 
-                               int position, int strength, int end_position, 
+    void QueueDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,
+                               int position, int strength, int end_position,
                                int amplitude, int frequency, int snap_force,
                                int first_foot, int second_foot, int period,
                                int amplitude_a, int amplitude_b);

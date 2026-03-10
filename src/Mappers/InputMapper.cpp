@@ -250,9 +250,15 @@ void InputMapper::UpdateListening() {
 }
 
 void InputMapper::DrawContent() {
+    ImGui::Begin("Input Mapper");
+    DrawProfileSelector();   // calls HandleDeviceConnectionChange + UpdateListening
+    DrawMappingContent();
+    ImGui::End();
+}
+
+void InputMapper::DrawProfileSelector() {
     HandleDeviceConnectionChange();
     UpdateListening();
-    ImGui::Begin("Input Mapper");
 
     // Profile management
     ImGui::Text("Mapping Profiles");
@@ -358,9 +364,11 @@ void InputMapper::DrawContent() {
             }
         }
     }
+}
 
+void InputMapper::DrawMappingContent() {
     ImGui::Separator();
-    if (m_SelectedProfileIndex == -1) { ImGui::TextDisabled("Select or create a profile above."); ImGui::End(); return; }
+    if (m_SelectedProfileIndex == -1) { ImGui::TextDisabled("Select or create a profile above."); return; }
 
     bool changed = false;
     MappingProfile &profile = m_Profiles[m_SelectedProfileIndex];
@@ -691,7 +699,7 @@ void InputMapper::DrawContent() {
     // Protocol Selection
     ImGui::Spacing(); ImGui::Separator();
     ImGui::Text("Active Protocols");
-    
+
     auto drawProtoCombo = [&](const char* label, std::string& currentId, ProtocolTransport transport, ProtocolDirection dir) {
         std::string preview = "None";
         if (!currentId.empty()) {
@@ -733,7 +741,6 @@ void InputMapper::DrawContent() {
     ImGui::Separator();
     ImGui::Text("Output Preview:");
     ImGui::TextWrapped("%s", GetOutputPreview().c_str());
-    ImGui::End();
 }
 
 float InputMapper::ProcessAxis(const InputSource &cfg) {

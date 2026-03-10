@@ -164,7 +164,7 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
 void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
     ImGui::PushID((int)dev.instance_id);
     std::string label = dev.name + " [ID: " + std::to_string(dev.instance_id) + "]" + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
-    
+
     bool header_open = ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
 
     // Draw battery indicator if available
@@ -172,13 +172,13 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         ImVec2 rect_min = ImGui::GetItemRectMin();
         ImVec2 rect_max = ImGui::GetItemRectMax();
-        
+
         float icon_h = ImGui::GetTextLineHeight();
         float icon_w = icon_h * 1.6f;
         float pad = ImGui::GetStyle().FramePadding.x;
-        
+
         ImVec2 icon_pos = ImVec2(rect_max.x - icon_w - pad, rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
-        
+
         ImU32 bat_col = ImGui::GetColorU32(ImGuiCol_Text);
         if (dev.battery_state == SDL_POWERSTATE_CHARGING || dev.battery_state == SDL_POWERSTATE_CHARGED) {
             bat_col = IM_COL32(50, 255, 50, 255);
@@ -187,26 +187,26 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
             else if (dev.battery_percent <= 50) bat_col = IM_COL32(255, 200, 50, 255);
             else bat_col = IM_COL32(50, 255, 50, 255);
         }
-        
+
         // Draw Battery Body
         float body_w = icon_w * 0.85f;
         float term_w = icon_w * 0.15f;
         float term_h = icon_h * 0.4f;
-        
+
         draw_list->AddRect(icon_pos, icon_pos + ImVec2(body_w, icon_h), bat_col, 0.0f, 0, 2.0f);
-        draw_list->AddRectFilled(icon_pos + ImVec2(body_w, (icon_h - term_h) * 0.5f), 
+        draw_list->AddRectFilled(icon_pos + ImVec2(body_w, (icon_h - term_h) * 0.5f),
                                  icon_pos + ImVec2(icon_w, (icon_h + term_h) * 0.5f), bat_col);
-                                 
+
         // Draw Level
         if (dev.battery_percent >= 0) {
             float fill_pct = dev.battery_percent / 100.0f;
             float fill_w = (body_w - 4.0f) * fill_pct;
             if (fill_w > 0) {
-                draw_list->AddRectFilled(icon_pos + ImVec2(2.0f, 2.0f), 
+                draw_list->AddRectFilled(icon_pos + ImVec2(2.0f, 2.0f),
                                          icon_pos + ImVec2(2.0f + fill_w, icon_h - 2.0f), bat_col);
             }
         }
-        
+
         // Charging indicator
         if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
             ImVec2 center = icon_pos + ImVec2(body_w * 0.5f, icon_h * 0.5f);
@@ -214,10 +214,10 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
             draw_list->AddLine(center + ImVec2(0, -3), center + ImVec2(0, 3), IM_COL32(255,255,255,255), 2.0f);
         }
     }
-    
+
     if (header_open) {
         ImGui::Indent();
-        
+
         // Show detailed battery info
         if ((dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0) && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
             const char* state_str = "Unknown";
@@ -228,12 +228,12 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
                 case SDL_POWERSTATE_CHARGED: state_str = "Fully Charged"; break;
                 default: break;
             }
-            
+
             ImGui::Text("Battery: %s", state_str);
             if (dev.battery_percent >= 0) {
                 ImGui::SameLine();
                 ImGui::Text("(%d%%)", dev.battery_percent);
-                
+
                 // Draw battery level bar
                 float battery_fraction = dev.battery_percent / 100.0f;
                 ImVec4 bar_color = ImVec4(0.2f, 1.0f, 0.2f, 1.0f);
@@ -242,52 +242,234 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
                 } else if (dev.battery_percent < 70) {
                     bar_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
                 }
-                
+
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
                 ImGui::ProgressBar(battery_fraction, ImVec2(-1, 0), "");
                 ImGui::PopStyleColor();
             }
         }
-        
+
         DrawDeviceVisualizer(dev, deviceManager, preferencesManager);
         ImGui::Unindent();
     }
     ImGui::PopID();
 }
 
-void DrawMainMenu(bool& done, bool& show_ui_settings, bool& show_protocol_editor) {
-    if (ImGui::BeginMainMenuBar()) {
-        if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Import Protocol...")) {
-                show_protocol_editor = true;
-                ProtocolEditorWindow::ShowImportDialog();
-            }
-            
-            if (ImGui::MenuItem("Export Protocol...")) {
-                show_protocol_editor = true;
-                ProtocolEditorWindow::ShowExportDialog();
-            }
-            
-            ImGui::Separator();
-            
-            if (ImGui::MenuItem("Exit")) {
-                done = true;
-            }
-            ImGui::EndMenu();
-        }
-        
-        if (ImGui::BeginMenu("Tools")) {
-            ImGui::MenuItem("Protocol Editor", NULL, &show_protocol_editor);
-            ImGui::EndMenu();
-        }
-        
-        if (ImGui::BeginMenu("Settings")) {
-            ImGui::MenuItem("UI Settings", NULL, &show_ui_settings);
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
+// ─── Sidebar navigation layout ──────────────────────────────────────────────
+// Replaces the old top menu-bar + dockspace.
+// Left panel  : collapsible icon/text sidebar
+// Right panel : profile selector strip at top, then active section content
+
+static int  g_ActiveSection     = 0;   // 0=Devices 1=InputMapper 2=OutputMapper 3=Network
+static bool g_SidebarExpanded   = true;
+
+void DrawSidebarLayout(
+        DeviceManager&        deviceManager,
+        PreferencesManager&   preferencesManager,
+        InputMapper&          inputMapper,
+        OutputMapper&         outputMapper,
+        bool&                 vsync,
+        int&                  framerate_limit,
+        SDL_Renderer*         renderer,
+        const ImGuiIO&        io,
+        int&                  server_update_rate,
+        bool&                 server_dynamic_rate,
+        float                 current_messages_per_second,
+        bool&                 show_ui_settings,
+        bool&                 show_protocol_editor,
+        bool&                 done)
+{
+    const float SIDEBAR_W_EXPANDED  = 170.0f;
+    const float SIDEBAR_W_COLLAPSED =  48.0f;
+
+    // ── Full-screen host window ──────────────────────────────────────────────
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize(vp->WorkSize);
+    ImGui::SetNextWindowViewport(vp->ID);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,  0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize,0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,   ImVec2(0.0f, 0.0f));
+    ImGui::Begin("##MainLayout", nullptr,
+        ImGuiWindowFlags_NoDecoration        |
+        ImGuiWindowFlags_NoMove              |
+        ImGuiWindowFlags_NoScrollbar         |
+        ImGuiWindowFlags_NoScrollWithMouse   |
+        ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoNavFocus          |
+        ImGuiWindowFlags_NoSavedSettings);
+    ImGui::PopStyleVar(3);
+
+    float sidebar_w = g_SidebarExpanded ? SIDEBAR_W_EXPANDED : SIDEBAR_W_COLLAPSED;
+    ImVec2 avail    = ImGui::GetContentRegionAvail();
+    float  spc      = ImGui::GetStyle().ItemSpacing.x;
+    float  content_w = avail.x - sidebar_w - spc;
+    float  content_h = avail.y;
+
+    // ── LEFT SIDEBAR ────────────────────────────────────────────────────────
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 6.0f));
+    ImGui::BeginChild("##Sidebar", ImVec2(sidebar_w, content_h), ImGuiChildFlags_Borders);
+    ImGui::PopStyleVar();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+
+    // Toggle collapse / expand button
+    if (g_SidebarExpanded) {
+        if (ImGui::Button("< Collapse", ImVec2(-1.0f, 0.0f))) g_SidebarExpanded = false;
+    } else {
+        if (ImGui::Button(">",          ImVec2(-1.0f, 0.0f))) g_SidebarExpanded = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Expand menu");
     }
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Main navigation items
+    struct NavItem { const char* icon; const char* label; };
+    static const NavItem k_NavItems[] = {
+        { "[D]",  "Devices"        },
+        { "[IN]", "Input Mapper"   },
+        { "[O]",  "Output Mapper"  },
+        { "[N]",  "Network"        },
+    };
+    constexpr int k_NumNav = 4;
+
+    for (int i = 0; i < k_NumNav; ++i) {
+        bool active = (g_ActiveSection == i);
+        if (active) {
+            ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
+            ImGui::PushStyleColor(ImGuiCol_Button,        col);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, col);
+        }
+        const char* lbl = g_SidebarExpanded ? k_NavItems[i].label : k_NavItems[i].icon;
+        if (ImGui::Button(lbl, ImVec2(-1.0f, 0.0f))) g_ActiveSection = i;
+        if (!g_SidebarExpanded && ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", k_NavItems[i].label);
+        if (active) ImGui::PopStyleColor(2);
+        ImGui::Spacing();
+    }
+
+    // ── Bottom utility buttons ────────────────────────────────────────────
+    // Push them toward the bottom of the sidebar
+    float btn_h  = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
+    float sep_h  = ImGui::GetStyle().ItemSpacing.y * 2.0f + 1.0f;
+    int   n_bottom = 3; // Protocol Editor, UI Settings, Exit
+    float spacer = ImGui::GetContentRegionAvail().y
+                   - n_bottom * btn_h
+                   - ImGui::GetStyle().ItemSpacing.y
+                   - sep_h;
+    if (spacer > 0.0f) ImGui::Dummy(ImVec2(0.0f, spacer));
+
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    auto BottomBtn = [&](const char* icon, const char* label, bool& flag) {
+        const char* b = g_SidebarExpanded ? label : icon;
+        if (ImGui::Button(b, ImVec2(-1.0f, 0.0f))) flag = !flag;
+        if (!g_SidebarExpanded && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label);
+        ImGui::Spacing();
+    };
+    BottomBtn("[P]", "Protocol Editor", show_protocol_editor);
+    BottomBtn("[S]", "UI Settings",     show_ui_settings);
+
+    {
+        const char* exitLbl = g_SidebarExpanded ? "Exit" : "[X]";
+        if (ImGui::Button(exitLbl, ImVec2(-1.0f, 0.0f))) done = true;
+        if (!g_SidebarExpanded && ImGui::IsItemHovered()) ImGui::SetTooltip("Exit");
+    }
+
+    ImGui::PopStyleVar(); // FrameRounding
+    ImGui::EndChild();    // ##Sidebar
+
+    ImGui::SameLine(0.0f, spc);
+
+    // ── RIGHT CONTENT AREA ──────────────────────────────────────────────────
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+    ImGui::BeginChild("##ContentArea", ImVec2(content_w, content_h), ImGuiChildFlags_Borders);
+    ImGui::PopStyleVar();
+
+    // ── Profile selector (always visible at the top) ─────────────────────
+    inputMapper.DrawProfileSelector();
+
+    // ── Section content ───────────────────────────────────────────────────
+    switch (g_ActiveSection) {
+        case 0: // Devices
+        {
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+                        1000.0f / io.Framerate, io.Framerate);
+
+            if (ImGui::Checkbox("VSync", &vsync))
+                SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
+            ImGui::SameLine();
+            {
+                const char* fl_label = "Framerate Limit";
+                float fw = ImGui::GetContentRegionAvail().x
+                           - ImGui::CalcTextSize(fl_label).x
+                           - ImGui::GetStyle().ItemInnerSpacing.x;
+                if (fw < 10.0f) fw = 10.0f;
+                ImGui::SetNextItemWidth(fw);
+                ImGui::InputInt(fl_label, &framerate_limit);
+                if (framerate_limit < 0) framerate_limit = 0;
+            }
+
+            static bool first_run_dev = true;
+            static bool enable_battery_led = true;
+            if (first_run_dev) {
+                enable_battery_led = preferencesManager.GetBool("EnableBatteryLED", true);
+                first_run_dev = false;
+            }
+            if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
+                preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
+                preferencesManager.Save();
+            }
+
+            ImGui::Separator();
+            auto& devices = deviceManager.GetDevices();
+            ImGui::Text("Connected Devices: %d", (int)devices.size());
+
+            static int frame_counter = 0;
+            if (frame_counter++ >= 60) {
+                frame_counter = 0;
+                for (auto& dev : const_cast<std::vector<DeviceState>&>(devices)) {
+                    deviceManager.UpdateBatteryInfo(dev);
+                    if (enable_battery_led && dev.gamepad) {
+                        Uint8 r=0,g=0,b=0; bool upd=false;
+                        if (dev.battery_state == SDL_POWERSTATE_CHARGING)  { r=0;   g=0;   b=255; upd=true; }
+                        else if (dev.battery_state == SDL_POWERSTATE_CHARGED) { r=0; g=255; b=0;   upd=true; }
+                        else if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
+                            if      (dev.battery_percent >= 70) { r=0;   g=255; b=0;   }
+                            else if (dev.battery_percent >= 30) { r=255; g=165; b=0;   }
+                            else                                { r=255; g=0;   b=0;   }
+                            upd = true;
+                        }
+                        if (upd) SDL_SetGamepadLED(dev.gamepad, r, g, b);
+                    }
+                }
+            }
+            for (const auto& dev : devices)
+                DrawDeviceItem(dev, deviceManager, preferencesManager);
+            break;
+        }
+
+        case 1: // Input Mapper
+            inputMapper.DrawMappingContent();
+            break;
+
+        case 2: // Output Mapper
+            outputMapper.DrawContentOnly();
+            break;
+
+        case 3: // Network
+            NetworkStatusWindow::DrawContentOnly(
+                server_update_rate, server_dynamic_rate, current_messages_per_second);
+            break;
+    }
+
+    ImGui::EndChild(); // ##ContentArea
+    ImGui::End();      // ##MainLayout
 }
+
 
 void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& user_font_scale, bool& scale_with_window, SDL_Window* window, int initial_width, int initial_height, PreferencesManager& preferencesManager) {
     if (!show_ui_settings) return;
@@ -422,101 +604,7 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& use
     ImGui::End();
 }
 
-void SetupDockSpace() {
-    ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-    static bool first_time = true;
-    if (first_time) {
-        first_time = false;
-        ImGui::DockBuilderRemoveNode(dockspace_id);
-        ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-        ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
-        ImGuiID dock_id_left, dock_id_right;
-        ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.5f, &dock_id_left, &dock_id_right);
-        ImGui::DockBuilderDockWindow("Devices", dock_id_left);
-        ImGui::DockBuilderDockWindow("Network Server", dock_id_right);
-        ImGui::DockBuilderDockWindow("Output Mapper", dock_id_right);
-        ImGui::DockBuilderDockWindow("Input Mapper", dock_id_right);
-        ImGui::DockBuilderFinish(dockspace_id);
-    }
-    ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-}
-
-void DrawDevicesWindow(DeviceManager& deviceManager, PreferencesManager& preferencesManager, bool& vsync, int& framerate_limit, SDL_Renderer* renderer, const ImGuiIO& io) {
-    ImGui::Begin("Devices");
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-
-    if (ImGui::Checkbox("VSync", &vsync)) {
-        SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
-    }
-    ImGui::SameLine();
-    const char* label = "Framerate Limit";
-    float width = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemInnerSpacing.x;
-    if (width < 10.0f) width = 10.0f;
-    ImGui::SetNextItemWidth(width);
-    ImGui::InputInt(label, &framerate_limit);
-    if (framerate_limit < 0) {
-        framerate_limit = 0;
-    }
-
-    static bool first_run = true;
-    static bool enable_battery_led = true;
-    if (first_run) {
-        enable_battery_led = preferencesManager.GetBool("EnableBatteryLED", true);
-        first_run = false;
-    }
-    if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
-        preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
-        preferencesManager.Save();
-    }
-
-    ImGui::Separator();
-    auto &devices = deviceManager.GetDevices();
-    ImGui::Text("Connected Devices: %d", (int)devices.size());
-
-    // Update battery info periodically (every 60 frames / ~1 second at 60fps)
-    static int frame_counter = 0;
-    if (frame_counter++ >= 60) {
-        frame_counter = 0;
-        for (auto &dev : const_cast<std::vector<DeviceState>&>(devices)) {
-            deviceManager.UpdateBatteryInfo(dev);
-
-            // Update LED based on battery level
-            if (enable_battery_led && dev.gamepad) {
-                Uint8 r = 0, g = 0, b = 0;
-                bool update_led = false;
-
-                if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
-                    // Blue for charging
-                    r = 0; g = 0; b = 255;
-                    update_led = true;
-                } else if (dev.battery_state == SDL_POWERSTATE_CHARGED) {
-                    // Green for fully charged
-                    r = 0; g = 255; b = 0;
-                    update_led = true;
-                } else if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
-                    if (dev.battery_percent >= 70) {
-                        r = 0; g = 255; b = 0; // Green
-                    } else if (dev.battery_percent >= 30) {
-                        r = 255; g = 165; b = 0; // Yellow/Orange
-                    } else {
-                        r = 255; g = 0; b = 0; // Red
-                    }
-                    update_led = true;
-                }
-
-                if (update_led) {
-                    SDL_SetGamepadLED(dev.gamepad, r, g, b);
-                }
-            }
-        }
-    }
-
-    for (const auto &dev : devices) {
-        DrawDeviceItem(dev, deviceManager, preferencesManager);
-    }
-    ImGui::End();
-}
-
+// SetupDockSpace removed — layout is now handled by DrawSidebarLayout()
 void ProcessEvents(bool& done, SDL_Window* window, DeviceManager& deviceManager, PreferencesManager& preferencesManager, float& user_ui_scale, float& user_font_scale, bool scale_with_window, int initial_width) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -758,23 +846,20 @@ int main(int argc, char *argv[]) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        // Menu Bar
-        DrawMainMenu(done, show_ui_settings, show_protocol_editor);
-
+        // Settings popup (opened from sidebar)
         DrawSettingsWindow(show_ui_settings, user_ui_scale, user_font_scale, scale_with_window, window, initial_width, initial_height, preferencesManager);
-        
-        // Protocol Editor
+
+        // Protocol Editor (opened from sidebar)
         ProtocolEditorWindow::Draw(show_protocol_editor);
 
-        // DockSpace
-        SetupDockSpace();
-
-        DrawDevicesWindow(deviceManager, preferencesManager, vsync, framerate_limit, renderer, io);
-
-        inputMapper.DrawContent();
-        outputMapper.DrawContent();
-
-        NetworkStatusWindow::Draw(server_update_rate, server_dynamic_rate, current_messages_per_second);
+        // Main sidebar layout – contains all sections + profile selector
+        DrawSidebarLayout(
+            deviceManager, preferencesManager,
+            inputMapper, outputMapper,
+            vsync, framerate_limit, renderer, io,
+            server_update_rate, server_dynamic_rate,
+            current_messages_per_second,
+            show_ui_settings, show_protocol_editor, done);
 
         // Rendering
         RenderFrame(renderer, window, vsync, framerate_limit, frame_start_time);

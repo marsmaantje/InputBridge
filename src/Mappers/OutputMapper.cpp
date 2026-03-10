@@ -61,8 +61,13 @@ void OutputMapper::SetActiveHapticTargets(std::vector<HapticTarget>* targets) {
 
 void OutputMapper::DrawContent() {
     HandleDeviceConnectionChange();
-
     ImGui::Begin("Output Mapper");
+    DrawContentOnly();
+    ImGui::End();
+}
+
+void OutputMapper::DrawContentOnly() {
+    HandleDeviceConnectionChange();
 
     ImGui::Text("Haptic Output Targets");
     ImGui::Separator();
@@ -72,7 +77,6 @@ void OutputMapper::DrawContent() {
     auto& inputMapper = InputMapper::GetInstance();
     if (!m_active_targets) {
         ImGui::Text("No mapping profile selected in Input Mapper.");
-        ImGui::End();
         return;
     }
 
@@ -222,8 +226,6 @@ void OutputMapper::DrawContent() {
         m_active_targets->erase(m_active_targets->begin() + targetToDelete);
         inputMapper.SaveCurrentProfile();
     }
-
-    ImGui::End();
 }
 
 void OutputMapper::Update() {
@@ -619,14 +621,14 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
         if (!target || target->instance_id == 0) continue;
-        
+
         // Get the haptic device - for DualSense, we need to access GamepadHaptics
         HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
         if (!hapticDevice) continue;
-        
+
         GamepadHaptics* gamepadHaptics = dynamic_cast<GamepadHaptics*>(hapticDevice);
         if (!gamepadHaptics) continue;
-        
+
         // Build parameters map
         std::map<std::string, int> params;
         params["position"] = position;
@@ -641,7 +643,7 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
         params["period"] = period;
         params["amplitude_a"] = amplitude_a;
         params["amplitude_b"] = amplitude_b;
-        
+
         gamepadHaptics->SendDualSenseTrigger(trigger, effect_type, params);
     }
 }

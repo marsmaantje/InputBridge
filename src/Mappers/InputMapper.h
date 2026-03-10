@@ -99,6 +99,8 @@ class InputMapper {
     InputMapper(const InputMapper &) = delete;
     InputMapper &operator=(const InputMapper &) = delete;
     void DrawContent();
+    void DrawProfileSelector();   // Draws only the profile selector bar (no Begin/End)
+    void DrawMappingContent();    // Draws only the mapping content (no Begin/End)
     bool Update(bool dynamic_rate);
     std::string GetOutputPreview();
 
@@ -109,7 +111,7 @@ class InputMapper {
     void SaveProfile(const MappingProfile &profile) const;
     void HandleDeviceConnectionChange();
     std::vector<HapticTarget>* GetCurrentHapticTargets();
-    
+
     void CancelListening();
 
   private:
@@ -121,7 +123,7 @@ class InputMapper {
     int m_SelectedProfileIndex = -1;
     char m_NewProfileName[128] = "";
     char m_RenameProfileName[128] = "";
-    
+
     int m_SelectedProtocolView = 0; // 0: OSC, 1: WebSocket
 
     std::map<std::string, float> m_LastOutputValues;
