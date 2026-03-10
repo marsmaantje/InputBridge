@@ -87,10 +87,10 @@ void PreferencesManager::Load() {
                     key = "";
                 }
 
-                // Trim value
+                // Trim value (include \r so Windows CRLF files are handled correctly)
                 first = val.find_first_not_of(" \t");
                 if (std::string::npos != first) {
-                    size_t last = val.find_last_not_of(" \t");
+                    size_t last = val.find_last_not_of(" \t\r");
                     val = val.substr(first, (last - first + 1));
                 } else {
                     val = "";
