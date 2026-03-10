@@ -69,8 +69,8 @@ void OutputMapper::DrawContent() {
 void OutputMapper::DrawContentOnly() {
     HandleDeviceConnectionChange();
 
-    // ── Output Protocol Selection ─────────────────────────────────────────────
-    InputMapper::GetInstance().DrawOutputProtocolSelector();
+    // ── Input Protocol Selection ──────────────────────────────────────────────
+    InputMapper::GetInstance().DrawInputProtocolSelector();
     ImGui::Separator();
 
     ImGui::Text("Haptic Output Targets");

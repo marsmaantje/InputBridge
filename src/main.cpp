@@ -4,7 +4,6 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
-#include "imgui_internal.h"
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -107,7 +106,8 @@ void RebuildFontAtlas() {
         ImFontConfig cfg;
         cfg.MergeMode        = true;   // merge into the font loaded above
         cfg.PixelSnapH       = true;
-        cfg.GlyphMinAdvanceX = fontSize;
+        cfg.GlyphMinAdvanceX = fontSize; // pad narrow glyphs up to fontSize
+        cfg.GlyphMaxAdvanceX = fontSize; // cap wide glyphs down to fontSize
         cfg.GlyphOffset      = ImVec2(0.0f, 1.0f); // nudge 1 px down to align baseline
 
         ImFont* icons = io.Fonts->AddFontFromFileTTF(iconFontPath.c_str(), fontSize, &cfg, icon_ranges);
@@ -397,16 +397,14 @@ void DrawSidebarLayout(
     // icon  : FA6 UTF-8 codepoint string, e.g. ICON_FA_GAMEPAD
     // label : plain text label shown when sidebar is expanded
     // idx   : g_ActiveSection index this item represents
+    //
+    // Icon and text are drawn as separate AddText calls so the label column
+    // always starts at a fixed pixel offset regardless of icon glyph width.
+    // ICON_COL_W matches GlyphMin/MaxAdvanceX = fontSize, giving true monospacing.
+    const float ICON_COL_W = FONT_SZ + ImGui::GetStyle().ItemInnerSpacing.x;
     auto NavItem = [&](const char* icon, const char* label, int idx)
     {
         bool active = (g_ActiveSection == idx);
-
-        // Build the button label: "icon  text##navN" (expanded) or "icon##navN"
-        char buf[128];
-        if (g_SidebarExpanded)
-            snprintf(buf, sizeof(buf), "%s  %s##nav%d", icon, label, idx);
-        else
-            snprintf(buf, sizeof(buf), "%s##nav%d", icon, idx);
 
         // Colour: filled background when active, transparent otherwise
         ImGui::PushStyleColor(ImGuiCol_Button,
@@ -415,7 +413,7 @@ void DrawSidebarLayout(
             active ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive)
                    : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
 
-        // Left-align button text
+        // Left-align button text (no visible label — we draw manually below)
         ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
 
         // Left-edge accent bar for the active item
@@ -431,11 +429,41 @@ void DrawSidebarLayout(
         const float indent = g_SidebarExpanded ? 6.0f : 0.0f;
         if (indent > 0.0f)
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
-        if (ImGui::Button(buf, {ImGui::GetContentRegionAvail().x, BTN_H}))
+
+        // Capture button origin before the call moves the cursor
+        ImVec2 btn_pos  = ImGui::GetCursorScreenPos();
+        float  btn_w    = ImGui::GetContentRegionAvail().x;
+
+        // Invisible button — handles all interaction
+        char id_buf[32];
+        snprintf(id_buf, sizeof(id_buf), "##nav%d", idx);
+        if (ImGui::Button(id_buf, {btn_w, BTN_H}))
             g_ActiveSection = idx;
 
         ImGui::PopStyleVar();   // ButtonTextAlign
         ImGui::PopStyleColor(2);
+
+        // ── Overlay: icon + (optional) label drawn at fixed columns ──────
+        ImDrawList* dl       = ImGui::GetWindowDrawList();
+        ImFont*     font     = ImGui::GetFont();
+        ImU32       text_col = ImGui::GetColorU32(ImGuiCol_Text);
+        float       text_y   = btn_pos.y + (BTN_H - FONT_SZ) * 0.5f;
+
+        if (g_SidebarExpanded) {
+            // Icon: centered within its fixed column
+            float icon_w = ImGui::CalcTextSize(icon).x;
+            float icon_x = btn_pos.x + (ICON_COL_W - icon_w) * 0.5f;
+            dl->AddText(font, FONT_SZ, ImVec2(icon_x, text_y), text_col, icon);
+
+            // Label: starts at the fixed column boundary after the icon
+            float label_x = btn_pos.x + ICON_COL_W + ImGui::GetStyle().ItemInnerSpacing.x;
+            dl->AddText(font, FONT_SZ, ImVec2(label_x, text_y), text_col, label);
+        } else {
+            // Collapsed: icon centered in the full button width
+            float icon_w = ImGui::CalcTextSize(icon).x;
+            float icon_x = btn_pos.x + (btn_w - icon_w) * 0.5f;
+            dl->AddText(font, FONT_SZ, ImVec2(icon_x, text_y), text_col, icon);
+        }
 
         if (!g_SidebarExpanded && ImGui::IsItemHovered())
             ImGui::SetTooltip("%s", label);
@@ -463,19 +491,41 @@ void DrawSidebarLayout(
     ImGui::Separator();
     ImGui::Spacing();
     {
-        char buf[64];
-        if (g_SidebarExpanded)
-            snprintf(buf, sizeof(buf), "%s  Exit##exit_btn", ICON_FA_POWER_OFF);
-        else
-            snprintf(buf, sizeof(buf), "%s##exit_btn", ICON_FA_POWER_OFF);
-
         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0,0,0,0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
         ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
-        if (ImGui::Button(buf, {ImGui::GetContentRegionAvail().x, BTN_H}))
+
+        const float indent = g_SidebarExpanded ? 6.0f : 0.0f;
+        if (indent > 0.0f)
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
+
+        ImVec2 btn_pos = ImGui::GetCursorScreenPos();
+        float  btn_w   = ImGui::GetContentRegionAvail().x;
+
+        if (ImGui::Button("##exit_btn", {btn_w, BTN_H}))
             done = true;
+
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(2);
+
+        // Overlay icon + label at fixed columns (mirrors NavItem)
+        ImDrawList* dl       = ImGui::GetWindowDrawList();
+        ImFont*     font     = ImGui::GetFont();
+        ImU32       text_col = ImGui::GetColorU32(ImGuiCol_Text);
+        float       text_y   = btn_pos.y + (BTN_H - FONT_SZ) * 0.5f;
+        const char* icon     = ICON_FA_POWER_OFF;
+
+        if (g_SidebarExpanded) {
+            float icon_w = ImGui::CalcTextSize(icon).x;
+            float icon_x = btn_pos.x + (ICON_COL_W - icon_w) * 0.5f;
+            dl->AddText(font, FONT_SZ, ImVec2(icon_x, text_y), text_col, icon);
+            float label_x = btn_pos.x + ICON_COL_W + ImGui::GetStyle().ItemInnerSpacing.x;
+            dl->AddText(font, FONT_SZ, ImVec2(label_x, text_y), text_col, "Exit");
+        } else {
+            float icon_w = ImGui::CalcTextSize(icon).x;
+            float icon_x = btn_pos.x + (btn_w - icon_w) * 0.5f;
+            dl->AddText(font, FONT_SZ, ImVec2(icon_x, text_y), text_col, icon);
+        }
 
         if (!g_SidebarExpanded && ImGui::IsItemHovered())
             ImGui::SetTooltip("Exit");

@@ -403,6 +403,75 @@ void InputMapper::DrawOutputProtocolSelector() {
     if (changed) SaveProfile(profile);
 }
 
+void InputMapper::DrawInputProtocolSelector() {
+    if (m_SelectedProfileIndex == -1) return;
+    bool changed = false;
+    MappingProfile& profile = m_Profiles[m_SelectedProfileIndex];
+
+    // ── Active Protocol Selection ─────────────────────────────────────────────
+    {
+        bool oscActive  = !OSCServer::GetInstance().GetInputDefinitionId().empty();
+        bool oscRunning = OSCServer::GetInstance().IsRunning();
+#ifdef ENABLE_WEBSOCKETS
+        bool wsActive  = !WebSocketServer::GetInstance().GetInputDefinitionId().empty();
+        bool wsRunning = WebSocketServer::GetInstance().IsRunning();
+#else
+        bool wsActive  = false;
+        bool wsRunning = false;
+#endif
+        ImGui::SetNextItemWidth(120);
+        int oldView = m_SelectedProtocolView;
+        if (ImGui::BeginCombo("##protoview_in", m_SelectedProtocolView == 0 ? "OSC" : "WebSocket")) {
+            if (ImGui::Selectable("OSC", m_SelectedProtocolView == 0)) m_SelectedProtocolView = 0;
+            if (oscActive) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0,1,0,1), "(Active)"); }
+            if (ImGui::Selectable("WebSocket", m_SelectedProtocolView == 1)) m_SelectedProtocolView = 1;
+            if (wsActive) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0,1,0,1), "(Active)"); }
+            ImGui::EndCombo();
+        }
+        if (oldView != m_SelectedProtocolView && m_SelectedProfileIndex != -1) {
+            m_Profiles[m_SelectedProfileIndex].selectedProtocolView = m_SelectedProtocolView;
+            changed = true;
+        }
+
+        ImGui::SameLine();
+        bool isRunning = (m_SelectedProtocolView == 0) ? oscRunning : wsRunning;
+        if (isRunning) ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "[Running]");
+        else           ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "[Stopped]");
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("Select which protocol definition to use for incoming data.\nOnly one definition drives the output mapping at a time.");
+    }
+
+    auto drawProtoCombo = [&](const char* label, std::string& currentId, ProtocolTransport transport, ProtocolDirection dir) {
+        std::string preview = "None";
+        if (!currentId.empty()) {
+            if (auto* def = ProtocolRegistry::GetInstance().FindById(currentId)) preview = def->name;
+            else preview = "Unknown (" + currentId + ")";
+        }
+        if (ImGui::BeginCombo(label, preview.c_str())) {
+            if (ImGui::Selectable("None", currentId.empty())) { currentId = ""; changed = true; }
+            for (const auto& def : ProtocolRegistry::GetInstance().GetDefinitions()) {
+                if (def.transport == transport && def.direction == dir) {
+                    if (ImGui::Selectable(def.name.c_str(), def.id == currentId)) { currentId = def.id; changed = true; UpdateActiveProtocols(); }
+                }
+            }
+            ImGui::EndCombo();
+        }
+    };
+
+    if (m_SelectedProtocolView == 0) {
+        drawProtoCombo("OSC Input", profile.oscInputProtocolId, ProtocolTransport::OSC, ProtocolDirection::Input);
+    } else {
+#ifdef ENABLE_WEBSOCKETS
+        drawProtoCombo("WebSocket Input", profile.wsInputProtocolId, ProtocolTransport::WebSocket, ProtocolDirection::Input);
+#else
+        ImGui::TextDisabled("WebSockets are disabled in this build.");
+#endif
+    }
+
+    if (changed) SaveProfile(profile);
+}
+
 void InputMapper::DrawMappingContent() {
     ImGui::Separator();
     if (m_SelectedProfileIndex == -1) { ImGui::TextDisabled("Select or create a profile above."); return; }
@@ -463,11 +532,9 @@ void InputMapper::DrawMappingContent() {
 
     if (m_SelectedProtocolView == 0) {
         drawProtoCombo("OSC Output", profile.oscOutputProtocolId, ProtocolTransport::OSC, ProtocolDirection::Output);
-        drawProtoCombo("OSC Input",  profile.oscInputProtocolId,  ProtocolTransport::OSC, ProtocolDirection::Input);
     } else {
 #ifdef ENABLE_WEBSOCKETS
         drawProtoCombo("WebSocket Output", profile.wsOutputProtocolId, ProtocolTransport::WebSocket, ProtocolDirection::Output);
-        drawProtoCombo("WebSocket Input",  profile.wsInputProtocolId,  ProtocolTransport::WebSocket, ProtocolDirection::Input);
 #else
         ImGui::TextDisabled("WebSockets are disabled in this build.");
 #endif
