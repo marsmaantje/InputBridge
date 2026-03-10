@@ -17,7 +17,7 @@
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "UI/ThemeManager.h"
-#include "UI/SidebarIcons.h"
+#include "UI/IconsFontAwesome6.h"
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolEditorWindow.h"
 #include "Network/OSCServer.h"
@@ -66,6 +66,8 @@ void UpdateUIScale(SDL_Window *window, float& user_ui_scale, float& user_font_sc
 // Rebuild the ImGui font atlas after a theme font change.
 // Must be called BEFORE ImGui_ImplSDLRenderer3_NewFrame().
 // Falls back to the built-in default font if the requested file cannot be loaded.
+// Font Awesome 6 Free (Solid) is merged as a second pass when fa-solid-900.ttf
+// is present in the fonts/ directory next to the executable.
 //
 // The SDL3 renderer backend advertises ImGuiBackendFlags_RendererHasTextures,
 // meaning it manages the font atlas GPU texture automatically.  Calling
@@ -90,9 +92,34 @@ void RebuildFontAtlas() {
     if (!loaded)
         io.Fonts->AddFontDefault();
 
+    // ── Merge Font Awesome 6 Free (Solid) icons ──────────────────────────
+    // The TTF must be placed as fonts/fa-solid-900.ttf next to the executable.
+    // If it is absent the app still works — buttons just show the fallback text.
+    {
+        const char* base = SDL_GetBasePath();
+        std::string iconFontPath = (base ? std::string(base) : std::string("."))
+                                   + "fonts/" FONT_ICON_FILE_NAME_FAS;
+
+        // Icon glyphs are rendered at the same pixel size as the text font so
+        // they sit on the baseline naturally.  GlyphMinAdvanceX makes them
+        // fixed-width (monospaced), which keeps sidebar columns aligned.
+        static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+        ImFontConfig cfg;
+        cfg.MergeMode        = true;   // merge into the font loaded above
+        cfg.PixelSnapH       = true;
+        cfg.GlyphMinAdvanceX = fontSize;
+        cfg.GlyphOffset      = ImVec2(0.0f, 1.0f); // nudge 1 px down to align baseline
+
+        ImFont* icons = io.Fonts->AddFontFromFileTTF(iconFontPath.c_str(), fontSize, &cfg, icon_ranges);
+        if (!icons)
+            SDL_Log("[Font] FA6 not found at '%s' — icon glyphs will be missing.",
+                    iconFontPath.c_str());
+    }
+
     io.Fonts->Build();
     theme.ClearPendingFontChange();
 }
+
 
 void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, PreferencesManager& preferencesManager) {
     static GamepadVisualizer gamepad_viz;
@@ -288,14 +315,14 @@ void DrawSidebarLayout(
         int                   initial_height,
         bool&                 done)
 {
-    // Sizing (adapts to font / DPI)
-    const float ICON_SZ        = floorf(ImGui::GetTextLineHeight() * 1.15f);
+    // ── Sizing (adapts to font / DPI) ────────────────────────────────────────
+    const float FONT_SZ        = ImGui::GetFontSize();
     const float PAD            = ImGui::GetStyle().WindowPadding.x;
     const float ITEM_SPC       = ImGui::GetStyle().ItemSpacing.y;
-    const float BTN_H          = ICON_SZ + ImGui::GetStyle().FramePadding.y * 2.0f;
+    const float BTN_H          = FONT_SZ + ImGui::GetStyle().FramePadding.y * 2.0f;
     const float TEXT_W         = 130.0f;
-    const float SIDEBAR_W_FULL = ICON_SZ + PAD * 3.0f + TEXT_W;
-    const float SIDEBAR_W_SML  = ICON_SZ + PAD * 3.0f;
+    const float SIDEBAR_W_FULL = FONT_SZ + PAD * 3.0f + TEXT_W;
+    const float SIDEBAR_W_SML  = FONT_SZ + PAD * 3.0f + 2.0f;
     const float sidebar_w      = g_SidebarExpanded ? SIDEBAR_W_FULL : SIDEBAR_W_SML;
 
     // ── Full-screen host window ──────────────────────────────────────────────
@@ -328,132 +355,109 @@ void DrawSidebarLayout(
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
 
-    ImDrawList* wdl    = ImGui::GetWindowDrawList();
-    ImU32       tc     = ImGui::GetColorU32(ImGuiCol_Text);
-    ImU32       tc_dim = ImGui::GetColorU32(ImGuiCol_TextDisabled);
-
-    // ── Collapse / Expand toggle button ──────────────────────────────────
+    // ── Collapse / Expand toggle ──────────────────────────────────────────
     {
-        float  bw  = ImGui::GetContentRegionAvail().x;
-        ImVec2 bp  = ImGui::GetCursorScreenPos();
-        ImGui::InvisibleButton("##toggle", {bw, BTN_H});
-        bool hov = ImGui::IsItemHovered();
-        if (ImGui::IsItemClicked()) g_SidebarExpanded = !g_SidebarExpanded;
-
-        if (hov) wdl->AddRectFilled(bp, {bp.x+bw, bp.y+BTN_H},
-                                    ImGui::GetColorU32(ImGuiCol_ButtonHovered), 4.0f);
-
-        // Chevron arrow
-        float icx = bp.x + PAD + ICON_SZ * 0.5f;
-        float icy = bp.y + BTN_H * 0.5f;
-        float aw  = ICON_SZ * 0.28f, ah = ICON_SZ * 0.36f;
-        if (g_SidebarExpanded) {
-            wdl->AddLine({icx+aw, icy-ah}, {icx-aw, icy},    tc_dim, 1.8f);
-            wdl->AddLine({icx-aw, icy},    {icx+aw, icy+ah}, tc_dim, 1.8f);
-        } else {
-            wdl->AddLine({icx-aw, icy-ah}, {icx+aw, icy},    tc_dim, 1.8f);
-            wdl->AddLine({icx+aw, icy},    {icx-aw, icy+ah}, tc_dim, 1.8f);
-        }
-        if (g_SidebarExpanded) {
-            float tx = bp.x + PAD + ICON_SZ + PAD;
-            float ty = bp.y + (BTN_H - ImGui::GetTextLineHeight()) * 0.5f;
-            wdl->AddText({tx, ty}, tc_dim, "Collapse");
-        } else if (hov) {
+        // U+00AB «  →  \xC2\xAB   (LEFT-POINTING DOUBLE ANGLE QUOTATION MARK)
+        // U+00BB »  →  \xC2\xBB   (RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK)
+        const char* lbl = g_SidebarExpanded ? "\xC2\xAB  Collapse" : "\xC2\xBB";
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0,0,0,0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        if (ImGui::Button(lbl, {ImGui::GetContentRegionAvail().x, BTN_H}))
+            g_SidebarExpanded = !g_SidebarExpanded;
+        ImGui::PopStyleColor(3);
+        if (!g_SidebarExpanded && ImGui::IsItemHovered())
             ImGui::SetTooltip("Expand");
-        }
     }
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── Scrollable navigation + utility area ──────────────────────────────
-    // Reserve space at the bottom for the pinned Exit button.
+    // ── Scrollable navigation + utility area ─────────────────────────────
+    // Compute space reserved for the pinned Exit button at the bottom.
     float sep_h    = ITEM_SPC * 2.0f + 1.0f;
     float bottom_h = BTN_H + ITEM_SPC + sep_h + ITEM_SPC;
     float scroll_h = ImGui::GetContentRegionAvail().y - bottom_h;
     if (scroll_h < BTN_H) scroll_h = BTN_H;
 
     ImGui::BeginChild("##NavScroll", {ImGui::GetContentRegionAvail().x, scroll_h},
-                      ImGuiChildFlags_None);  // vertical scrollbar appears automatically
+                      ImGuiChildFlags_None); // vertical scrollbar appears automatically when needed
 
-    // Reusable icon-button builder
-    using DrawFn = void(*)(ImDrawList*, ImVec2, float, ImU32);
-    auto NavItem = [&](const char* label, int idx, DrawFn drawFn) {
-        float  bw  = ImGui::GetContentRegionAvail().x;
-        ImVec2 bp  = ImGui::GetCursorScreenPos();
-        ImGui::InvisibleButton(label, {bw, BTN_H});
-        bool hov  = ImGui::IsItemHovered();
+    // ── Reusable FA-icon nav button ───────────────────────────────────────
+    // icon  : FA6 UTF-8 codepoint string, e.g. ICON_FA_GAMEPAD
+    // label : plain text label shown when sidebar is expanded
+    // idx   : g_ActiveSection index this item represents
+    auto NavItem = [&](const char* icon, const char* label, int idx)
+    {
         bool active = (g_ActiveSection == idx);
 
-        // Background highlight
-        ImU32 bg = active  ? ImGui::GetColorU32(ImGuiCol_ButtonActive)  :
-                   hov     ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : 0;
-        if (bg) wdl->AddRectFilled(bp, {bp.x+bw, bp.y+BTN_H}, bg, 4.0f);
+        // Build the button label: "icon  text##navN" (expanded) or "icon##navN"
+        char buf[128];
+        if (g_SidebarExpanded)
+            snprintf(buf, sizeof(buf), "%s  %s##nav%d", icon, label, idx);
+        else
+            snprintf(buf, sizeof(buf), "%s##nav%d", icon, idx);
 
-        // Left active indicator bar
+        // Colour: filled background when active, transparent otherwise
+        ImGui::PushStyleColor(ImGuiCol_Button,
+            active ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive) : ImVec4(0,0,0,0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+            active ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive)
+                   : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+
+        // Left-edge accent bar for the active item
         if (active) {
-            wdl->AddRectFilled(bp, {bp.x+3.0f, bp.y+BTN_H},
-                               ImGui::GetColorU32(ImGuiCol_SliderGrab));
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                p, {p.x + 3.0f, p.y + BTN_H},
+                ImGui::GetColorU32(ImGuiCol_SliderGrab));
         }
 
-        // Icon (drawn at left edge, vertically centered)
-        float ix = bp.x + PAD;
-        float iy = bp.y + (BTN_H - ICON_SZ) * 0.5f;
-        drawFn(wdl, {ix, iy}, ICON_SZ, tc);
+        if (ImGui::Button(buf, {ImGui::GetContentRegionAvail().x, BTN_H}))
+            g_ActiveSection = idx;
 
-        // Label (expanded only)
-        if (g_SidebarExpanded) {
-            float tx = ix + ICON_SZ + PAD;
-            float ty = bp.y + (BTN_H - ImGui::GetTextLineHeight()) * 0.5f;
-            wdl->AddText({tx, ty}, tc, label);
-        } else if (hov) {
+        ImGui::PopStyleColor(2);
+
+        if (!g_SidebarExpanded && ImGui::IsItemHovered())
             ImGui::SetTooltip("%s", label);
-        }
 
-        if (ImGui::IsItemClicked()) g_ActiveSection = idx;
         ImGui::Spacing();
     };
 
-    // Main navigation
-    NavItem("Devices",         0, SidebarIcons::Devices);
-    NavItem("Input Mapper",    1, SidebarIcons::InputMapper);
-    NavItem("Output Mapper",   2, SidebarIcons::OutputMapper);
-    NavItem("Network",         3, SidebarIcons::Network);
+    // ── Main navigation entries ───────────────────────────────────────────
+    NavItem(ICON_FA_GAMEPAD,   "Devices",         0);
+    NavItem(ICON_FA_SLIDERS,   "Input Mapper",    1);
+    NavItem(ICON_FA_BOLT,      "Output Mapper",   2);
+    NavItem(ICON_FA_WIFI,      "Network",         3);
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Utility navigation
-    NavItem("Protocol Editor", 4, SidebarIcons::ProtocolEditor);
-    NavItem("UI Settings",     5, SidebarIcons::UISettings);
+    // ── Utility navigation entries ────────────────────────────────────────
+    NavItem(ICON_FA_FILE_CODE, "Protocol Editor", 4);
+    NavItem(ICON_FA_GEAR,      "UI Settings",     5);
 
     ImGui::EndChild(); // ##NavScroll
 
-    // ── Pinned Exit button ────────────────────────────────────────────────
+    // ── Pinned Exit button (always visible at the bottom) ─────────────────
     ImGui::Separator();
     ImGui::Spacing();
     {
-        float  bw  = ImGui::GetContentRegionAvail().x;
-        ImVec2 bp  = ImGui::GetCursorScreenPos();
-        ImGui::InvisibleButton("##exit_btn", {bw, BTN_H});
-        bool hov = ImGui::IsItemHovered();
+        char buf[64];
+        if (g_SidebarExpanded)
+            snprintf(buf, sizeof(buf), "%s  Exit##exit_btn", ICON_FA_POWER_OFF);
+        else
+            snprintf(buf, sizeof(buf), "%s##exit_btn", ICON_FA_POWER_OFF);
 
-        if (hov) wdl->AddRectFilled(bp, {bp.x+bw, bp.y+BTN_H},
-                                    ImGui::GetColorU32(ImGuiCol_ButtonHovered), 4.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0,0,0,0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        if (ImGui::Button(buf, {ImGui::GetContentRegionAvail().x, BTN_H}))
+            done = true;
+        ImGui::PopStyleColor(2);
 
-        float ix = bp.x + PAD;
-        float iy = bp.y + (BTN_H - ICON_SZ) * 0.5f;
-        SidebarIcons::Exit(wdl, {ix, iy}, ICON_SZ, tc);
-
-        if (g_SidebarExpanded) {
-            float tx = ix + ICON_SZ + PAD;
-            float ty = bp.y + (BTN_H - ImGui::GetTextLineHeight()) * 0.5f;
-            wdl->AddText({tx, ty}, tc, "Exit");
-        } else if (hov) {
+        if (!g_SidebarExpanded && ImGui::IsItemHovered())
             ImGui::SetTooltip("Exit");
-        }
-        if (ImGui::IsItemClicked()) done = true;
     }
 
     ImGui::EndChild(); // ##Sidebar
@@ -466,10 +470,10 @@ void DrawSidebarLayout(
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
 
-    // Profile selector is always shown at top of the content area
+    // Profile selector is always shown at the top of the content area
     inputMapper.DrawProfileSelector();
 
-    // Section-specific content
+    // ── Section-specific content ──────────────────────────────────────────
     switch (g_ActiveSection) {
 
         case 0: { // ── Devices ────────────────────────────────────────────
