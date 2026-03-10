@@ -23,7 +23,7 @@ OSCServer& OSCServer::GetInstance() {
 
 OSCServer::OSCServer() {
     s_isDestroyed = false;
-    SetProtocol("OSC Default");
+    SetProtocol("OSC Back Ally Racing");
 }
 
 OSCServer::~OSCServer() {
@@ -389,7 +389,7 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     std::string send_host = prefs.GetString("OSC", "SendHost", "127.0.0.1");
     int send_port = prefs.GetInt("OSC", "SendPort", 9066);
     int recv_port = prefs.GetInt("OSC", "RecvPort", 9068);
-    std::string protocol   = prefs.GetString("OSC", "Protocol", "OSC Default");
+    std::string protocol   = prefs.GetString("OSC", "Protocol", "OSC Back Ally Racing");
     std::string inputProtocol = prefs.GetString("OSC", "InputProtocol", "");
     std::string outDefId   = prefs.GetString("OSC", "OutputDefinitionId", "");
     std::string inDefId    = prefs.GetString("OSC", "InputDefinitionId",  "");

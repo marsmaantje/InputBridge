@@ -716,7 +716,7 @@ void ProtocolEditorWindow::Draw(bool& open) {
     if (!open) return;
 
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Protocol Editor", &open,
+    if (!ImGui::Begin("Protocols", &open,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
                       ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
@@ -1611,26 +1611,50 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 }
 
 void ProtocolEditorWindow::DrawExportProtocolModal() {
-    if (s_showExportModal) {
-        // Try native dialog first
-        std::string exportPathStr = s_exportPath;
-        if (TryNativeFileDialog(true, exportPathStr)) {
-            std::strncpy(s_exportPath, exportPathStr.c_str(), sizeof(s_exportPath));
+    // ── Collect native dialog result (runs every frame, harmless when idle) ──
+    // The native Win32 dialog is launched on a worker thread. Once the thread
+    // finishes (running flag cleared) we join it and handle the result here,
+    // safely back on the render thread.
+    if (!s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
+        s_nativeDialogThread.join();
+        if (s_nativeDialogSucceeded.load()) {
+            std::strncpy(s_exportPath, s_nativeDialogResultPath.c_str(), sizeof(s_exportPath));
             ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
-            s_showExportModal = false;
-            return;
+        }
+        // Whether the user picked a file or cancelled, we are done.
+        // Do NOT open the ImGui browser on cancel — just return silently.
+        return;
+    }
+
+    if (s_showExportModal) {
+        s_showExportModal = false;
+
+        if (FileDialog::IsNativeDialogAvailable()) {
+            // Spawn worker thread so the render loop never blocks.
+            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
+            s_nativeDialogIsImport  = false;
+            s_nativeDialogSucceeded = false;
+            s_nativeDialogRunning   = true;
+            s_nativeDialogResultPath = s_exportCurrentDir;
+            std::string capturedId  = s_exportId;
+            s_nativeDialogThread = std::thread([]() {
+                std::string path = s_nativeDialogResultPath;
+                bool ok = TryNativeFileDialog(true, path);
+                s_nativeDialogResultPath = path;
+                s_nativeDialogSucceeded  = ok;
+                s_nativeDialogRunning    = false;
+            });
+            return; // result collected next frame(s) above
         }
 
-        // Fall back to ImGui browser
+        // No native dialog available — open the ImGui browser.
         ImGui::OpenPopup("Export Protocol##modal");
-        s_showExportModal = false;
     }
 
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Export Protocol##modal", &open)) {
 
-        // Browser occupies most of the modal height
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
             ImGui::BeginChild("##export_browser_area", ImVec2(0, -footerH), false);
@@ -1642,14 +1666,12 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
 
         ImGui::Separator();
 
-        // File name row
         ImGui::AlignTextToFramePadding();
         ImGui::Text("File name:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(-1);
         ImGui::InputText("##export_path", s_exportPath, sizeof(s_exportPath));
 
-        // Buttons row
         float btnW = 110.0f;
         ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - btnW * 2 + ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Button("Export", ImVec2(btnW, 0))) {
@@ -1666,32 +1688,49 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
 }
 
 void ProtocolEditorWindow::DrawImportProtocolModal() {
-    if (s_showImportModal) {
-        // Try native dialog first
-        std::string importPath;
-        if (TryNativeFileDialog(false, importPath)) {
-            std::string id = ProtocolRegistry::GetInstance().ImportDefinition(importPath);
+    // ── Collect native dialog result (runs every frame, harmless when idle) ──
+    if (s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
+        s_nativeDialogThread.join();
+        if (s_nativeDialogSucceeded.load()) {
+            std::string id = ProtocolRegistry::GetInstance().ImportDefinition(s_nativeDialogResultPath);
             auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
             for (int i = 0; i < (int)defs.size(); ++i) {
-                if (defs[i].id == id) {
-                    s_selectedIndex = i;
-                    break;
-                }
+                if (defs[i].id == id) { s_selectedIndex = i; break; }
             }
-            s_showImportModal = false;
-            return;
+        }
+        // Whether the user picked a file or cancelled, do NOT open the ImGui
+        // browser — just return silently.
+        return;
+    }
+
+    if (s_showImportModal) {
+        s_showImportModal = false;
+
+        if (FileDialog::IsNativeDialogAvailable()) {
+            // Spawn worker thread so the render loop never blocks.
+            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
+            s_nativeDialogIsImport  = true;
+            s_nativeDialogSucceeded = false;
+            s_nativeDialogRunning   = true;
+            s_nativeDialogResultPath = s_importCurrentDir;
+            s_nativeDialogThread = std::thread([]() {
+                std::string path = s_nativeDialogResultPath;
+                bool ok = TryNativeFileDialog(false, path);
+                s_nativeDialogResultPath = path;
+                s_nativeDialogSucceeded  = ok;
+                s_nativeDialogRunning    = false;
+            });
+            return; // result collected next frame(s) above
         }
 
-        // Fall back to ImGui browser
+        // No native dialog available — open the ImGui browser.
         ImGui::OpenPopup("Import Protocol##modal");
-        s_showImportModal = false;
     }
 
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Import Protocol##modal", &open)) {
 
-        // Browser occupies most of the modal height
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
             ImGui::BeginChild("##import_browser_area", ImVec2(0, -footerH), false);
@@ -1703,14 +1742,12 @@ void ProtocolEditorWindow::DrawImportProtocolModal() {
 
         ImGui::Separator();
 
-        // File name row
         ImGui::AlignTextToFramePadding();
         ImGui::Text("File name:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(-1);
         ImGui::InputText("##import_path", s_importPath, sizeof(s_importPath));
 
-        // Buttons row
         float btnW = 110.0f;
         ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - btnW * 2 + ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Button("Import", ImVec2(btnW, 0))) {

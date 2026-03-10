@@ -69,6 +69,10 @@ void OutputMapper::DrawContent() {
 void OutputMapper::DrawContentOnly() {
     HandleDeviceConnectionChange();
 
+    // ── Output Protocol Selection ─────────────────────────────────────────────
+    InputMapper::GetInstance().DrawOutputProtocolSelector();
+    ImGui::Separator();
+
     ImGui::Text("Haptic Output Targets");
     ImGui::Separator();
     ImGui::TextWrapped("Map virtual device IDs (used by external apps) to physical haptic devices.");

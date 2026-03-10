@@ -454,8 +454,8 @@ void DrawSidebarLayout(
     ImGui::Spacing();
 
     // ── Utility navigation entries ────────────────────────────────────────
-    NavItem(ICON_FA_FILE_CODE, "Protocol Editor", 4);
-    NavItem(ICON_FA_GEAR,      "Settings",        5);
+    NavItem(ICON_FA_FILE_CODE, "Protocols", 4);
+    NavItem(ICON_FA_GEAR,      "Settings",  5);
 
     ImGui::EndChild(); // ##NavScroll
 

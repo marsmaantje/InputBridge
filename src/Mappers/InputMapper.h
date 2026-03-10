@@ -100,7 +100,8 @@ class InputMapper {
     InputMapper &operator=(const InputMapper &) = delete;
     void DrawContent();
     void DrawProfileSelector();   // Draws only the profile selector bar (no Begin/End)
-    void DrawMappingContent();    // Draws only the mapping content (no Begin/End)
+    void DrawMappingContent();           // Draws only the mapping content (no Begin/End)
+    void DrawOutputProtocolSelector();   // Draws the output protocol combo for the active profile
     bool Update(bool dynamic_rate);
     std::string GetOutputPreview();
 

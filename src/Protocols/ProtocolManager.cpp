@@ -2,7 +2,7 @@
 #include <map>
 #include "Protocols/MarsmaantjeOldProtocol.h"
 #include "Protocols/MarsmaantjeNewProtocol.h"
-#include "Protocols/OSCDefaultProtocol.h"
+#include "Protocols/OSCBackAllyRacingProtocol.h"
 #include "Protocols/OSCSteamLinkProtocol.h"
 #include "Protocols/OSCProjectBabbleProtocol.h"
 
@@ -21,7 +21,7 @@ ProtocolManager::ProtocolManager() : m_Impl(new Impl) {
     // Register default protocols
     RegisterProtocol(std::make_shared<MarsmaantjeOldProtocol>());
     RegisterProtocol(std::make_shared<MarsmaantjeNewProtocol>());
-    RegisterProtocol(std::make_shared<OSCDefaultProtocol>());
+    RegisterProtocol(std::make_shared<OSCBackAllyRacingProtocol>());
     RegisterProtocol(std::make_shared<OSCSteamLinkProtocol>());
     RegisterProtocol(std::make_shared<OSCProjectBabbleProtocol>());
 }
