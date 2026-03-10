@@ -287,15 +287,20 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
 // Active section IDs:
 // 0=Devices  1=InputMapper  2=OutputMapper  3=Network
 // 4=ProtocolEditor  5=UISettings
-static int  g_ActiveSection   = 0;
-static bool g_SidebarExpanded = true;
+static int   g_ActiveSection   = 0;
+static bool  g_SidebarExpanded = true;
+static float g_SidebarW        = 0.0f; // 0 = initialise from SIDEBAR_W_FULL on first frame
+// Battery LED state promoted to file scope so both Devices and Settings can access it
+static bool  s_enable_battery_led = true;
+static bool  s_battery_led_loaded = false;
 
 // Forward declaration so DrawSidebarLayout can call it
 void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& scale_with_window,
                          SDL_Window* window, int initial_width, int initial_height,
                          PreferencesManager& preferencesManager,
                          bool& vsync, int& framerate_limit,
-                         SDL_Renderer* renderer, const ImGuiIO& io);
+                         SDL_Renderer* renderer, const ImGuiIO& io,
+                         bool& enable_battery_led);
 
 void DrawSidebarLayout(
         DeviceManager&        deviceManager,
@@ -325,7 +330,12 @@ void DrawSidebarLayout(
     const float TEXT_W         = 130.0f;
     const float SIDEBAR_W_FULL = FONT_SZ + PAD * 3.0f + TEXT_W;
     const float SIDEBAR_W_SML  = FONT_SZ + PAD * 3.0f + 2.0f;
-    const float sidebar_w      = g_SidebarExpanded ? SIDEBAR_W_FULL : SIDEBAR_W_SML;
+    const float SPLITTER_W     = 4.0f;
+
+    // Initialise persistent sidebar width on first frame
+    if (g_SidebarW <= 0.0f) g_SidebarW = SIDEBAR_W_FULL;
+
+    const float sidebar_w = g_SidebarExpanded ? g_SidebarW : SIDEBAR_W_SML;
 
     // ── Full-screen host window ──────────────────────────────────────────────
     ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -347,8 +357,7 @@ void DrawSidebarLayout(
 
     float total_h   = ImGui::GetContentRegionAvail().y;
     float total_w   = ImGui::GetContentRegionAvail().x;
-    float spc       = ImGui::GetStyle().ItemSpacing.x;
-    float content_w = total_w - sidebar_w - spc;
+    float content_w = total_w - sidebar_w - SPLITTER_W;
 
     // ── LEFT SIDEBAR ─────────────────────────────────────────────────────────
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(PAD, PAD));
@@ -359,14 +368,14 @@ void DrawSidebarLayout(
 
     // ── Collapse / Expand toggle ──────────────────────────────────────────
     {
-        // U+00AB «  →  \xC2\xAB   (LEFT-POINTING DOUBLE ANGLE QUOTATION MARK)
-        // U+00BB »  →  \xC2\xBB   (RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK)
         const char* lbl = g_SidebarExpanded ? "\xC2\xAB  Collapse" : "\xC2\xBB";
         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0,0,0,0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
         if (ImGui::Button(lbl, {ImGui::GetContentRegionAvail().x, BTN_H}))
             g_SidebarExpanded = !g_SidebarExpanded;
+        ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
         if (!g_SidebarExpanded && ImGui::IsItemHovered())
             ImGui::SetTooltip("Expand");
@@ -376,14 +385,13 @@ void DrawSidebarLayout(
     ImGui::Spacing();
 
     // ── Scrollable navigation + utility area ─────────────────────────────
-    // Compute space reserved for the pinned Exit button at the bottom.
     float sep_h    = ITEM_SPC * 2.0f + 1.0f;
     float bottom_h = BTN_H + ITEM_SPC + sep_h + ITEM_SPC;
     float scroll_h = ImGui::GetContentRegionAvail().y - bottom_h;
     if (scroll_h < BTN_H) scroll_h = BTN_H;
 
     ImGui::BeginChild("##NavScroll", {ImGui::GetContentRegionAvail().x, scroll_h},
-                      ImGuiChildFlags_None); // vertical scrollbar appears automatically when needed
+                      ImGuiChildFlags_None);
 
     // ── Reusable FA-icon nav button ───────────────────────────────────────
     // icon  : FA6 UTF-8 codepoint string, e.g. ICON_FA_GAMEPAD
@@ -418,8 +426,11 @@ void DrawSidebarLayout(
                 ImGui::GetColorU32(ImGuiCol_SliderGrab));
         }
 
-        // Small left indent so the icon clears the accent bar
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 6.0f);
+        // In expanded mode indent 6 px so icon clears the accent bar.
+        // In collapsed mode skip the indent so the icon is never clipped.
+        const float indent = g_SidebarExpanded ? 6.0f : 0.0f;
+        if (indent > 0.0f)
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
         if (ImGui::Button(buf, {ImGui::GetContentRegionAvail().x, BTN_H}))
             g_ActiveSection = idx;
 
@@ -460,8 +471,10 @@ void DrawSidebarLayout(
 
         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0,0,0,0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
         if (ImGui::Button(buf, {ImGui::GetContentRegionAvail().x, BTN_H}))
             done = true;
+        ImGui::PopStyleVar();
         ImGui::PopStyleColor(2);
 
         if (!g_SidebarExpanded && ImGui::IsItemHovered())
@@ -469,7 +482,21 @@ void DrawSidebarLayout(
     }
 
     ImGui::EndChild(); // ##Sidebar
-    ImGui::SameLine(0.0f, spc);
+
+    // ── Drag-to-resize splitter ───────────────────────────────────────────
+    ImGui::SameLine(0, 0);
+    ImGui::InvisibleButton("##splitter", {SPLITTER_W, total_h});
+    if (ImGui::IsItemActive()) {
+        g_SidebarW += ImGui::GetIO().MouseDelta.x;
+        const float min_w = FONT_SZ * 2.0f + PAD * 2.0f;
+        const float max_w = total_w * 0.6f;
+        if (g_SidebarW < min_w) g_SidebarW = min_w;
+        if (g_SidebarW > max_w) g_SidebarW = max_w;
+    }
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+
+    ImGui::SameLine(0, 0);
 
     // ── RIGHT CONTENT AREA ───────────────────────────────────────────────────
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
@@ -484,21 +511,22 @@ void DrawSidebarLayout(
     ImGui::Separator();
     ImGui::Spacing();
 
+    // ── Scrollable section content ────────────────────────────────────────
+    // A separate inner child provides scrolling for the section below the
+    // profile bar, which was lost when NoScrollbar was set on ContentArea.
+    ImGui::BeginChild("##SectionScroll", {0.0f, 0.0f},
+                      ImGuiChildFlags_None,
+                      ImGuiWindowFlags_HorizontalScrollbar);
+
     // ── Section-specific content ──────────────────────────────────────────
     switch (g_ActiveSection) {
 
         case 0: { // ── Devices ────────────────────────────────────────────
-            static bool first_run_dev = true;
-            static bool enable_battery_led = true;
-            if (first_run_dev) {
-                enable_battery_led = preferencesManager.GetBool("EnableBatteryLED", true);
-                first_run_dev = false;
+            // Load battery LED pref on first run (file-scope static)
+            if (!s_battery_led_loaded) {
+                s_enable_battery_led = preferencesManager.GetBool("EnableBatteryLED", true);
+                s_battery_led_loaded = true;
             }
-            if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
-                preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
-                preferencesManager.Save();
-            }
-            ImGui::Separator();
             auto& devices = deviceManager.GetDevices();
             ImGui::Text("Connected Devices: %d", (int)devices.size());
             static int frame_ctr = 0;
@@ -506,7 +534,7 @@ void DrawSidebarLayout(
                 frame_ctr = 0;
                 for (auto& dev : const_cast<std::vector<DeviceState>&>(devices)) {
                     deviceManager.UpdateBatteryInfo(dev);
-                    if (enable_battery_led && dev.gamepad) {
+                    if (s_enable_battery_led && dev.gamepad) {
                         Uint8 r=0,g=0,b=0; bool upd=false;
                         if      (dev.battery_state==SDL_POWERSTATE_CHARGING) { r=0;  g=0;  b=255; upd=true; }
                         else if (dev.battery_state==SDL_POWERSTATE_CHARGED)  { r=0;  g=255;b=0;   upd=true; }
@@ -520,6 +548,7 @@ void DrawSidebarLayout(
                     }
                 }
             }
+            ImGui::Separator();
             for (const auto& dev : devices)
                 DrawDeviceItem(dev, deviceManager, preferencesManager);
             break;
@@ -545,10 +574,12 @@ void DrawSidebarLayout(
         case 5: // ── UI Settings (inline) ──────────────────────────────────
             DrawSettingsContent(user_ui_scale, user_font_scale, scale_with_window,
                                 window, initial_width, initial_height, preferencesManager,
-                                vsync, framerate_limit, renderer, io);
+                                vsync, framerate_limit, renderer, io,
+                                s_enable_battery_led);
             break;
     }
 
+    ImGui::EndChild(); // ##SectionScroll
     ImGui::EndChild(); // ##ContentArea
     ImGui::End();      // ##MainLayout
 }
@@ -559,7 +590,8 @@ void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& sca
                          SDL_Window* window, int initial_width, int initial_height,
                          PreferencesManager& preferencesManager,
                          bool& vsync, int& framerate_limit,
-                         SDL_Renderer* renderer, const ImGuiIO& io)
+                         SDL_Renderer* renderer, const ImGuiIO& io,
+                         bool& enable_battery_led)
 {
     // ------------------------------------------------------------------
     // Performance
@@ -582,18 +614,27 @@ void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& sca
     ImGui::Separator();
 
     // ------------------------------------------------------------------
+    // Device Settings
+    // ------------------------------------------------------------------
+    if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
+        preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
+        preferencesManager.Save();
+    }
+    ImGui::Separator();
+
+    // ------------------------------------------------------------------
     // UI Scale controls
     // ------------------------------------------------------------------
     bool changed = false;
     bool scale_changed = false;
     if (ImGui::Button("-##UI")) {
-        user_ui_scale -= 0.05f;
+        user_ui_scale -= 0.1f;
         if (user_ui_scale < 0.5f) user_ui_scale = 0.5f;
         scale_changed = true;
     }
     ImGui::SameLine();
     if (ImGui::Button("+##UI")) {
-        user_ui_scale += 0.05f;
+        user_ui_scale += 0.1f;
         if (user_ui_scale > 3.0f) user_ui_scale = 3.0f;
         scale_changed = true;
     }
@@ -605,13 +646,13 @@ void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& sca
     // ------------------------------------------------------------------
     bool font_scale_changed = false;
     if (ImGui::Button("-##Font")) {
-        user_font_scale -= 0.05f;
+        user_font_scale -= 0.1f;
         if (user_font_scale < 0.5f) user_font_scale = 0.5f;
         font_scale_changed = true;
     }
     ImGui::SameLine();
     if (ImGui::Button("+##Font")) {
-        user_font_scale += 0.05f;
+        user_font_scale += 0.1f;
         if (user_font_scale > 3.0f) user_font_scale = 3.0f;
         font_scale_changed = true;
     }
@@ -625,7 +666,7 @@ void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& sca
     if (ImGui::Checkbox("Scale with Window", &scale_with_window)) changed = true;
 
     if (ImGui::Button("Reset UI")) {
-        user_ui_scale = 1.0f;
+        user_ui_scale = 1.3f;
         user_font_scale = 1.0f;
         scale_with_window = false;
         SDL_SetWindowSize(window, initial_width, initial_height);
@@ -840,7 +881,7 @@ int main(int argc, char *argv[]) {
 
     preferencesManager.Load();
 
-    float user_ui_scale = preferencesManager.GetFloat("UIScale", 1.0f);
+    float user_ui_scale = preferencesManager.GetFloat("UIScale", 1.3f);
     float user_font_scale = preferencesManager.GetFloat("FontScale", 1.0f);
     bool scale_with_window = preferencesManager.GetBool("ScaleWithWindow", false);
 
