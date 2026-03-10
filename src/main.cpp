@@ -17,6 +17,7 @@
 #include "Network/NetworkStatusWindow.h"
 #include "Preferences/Preferences.h"
 #include "UI/ThemeManager.h"
+#include "UI/SidebarIcons.h"
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolEditorWindow.h"
 #include "Network/OSCServer.h"
@@ -256,12 +257,16 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
 }
 
 // ─── Sidebar navigation layout ──────────────────────────────────────────────
-// Replaces the old top menu-bar + dockspace.
-// Left panel  : collapsible icon/text sidebar
-// Right panel : profile selector strip at top, then active section content
+// Active section IDs:
+// 0=Devices  1=InputMapper  2=OutputMapper  3=Network
+// 4=ProtocolEditor  5=UISettings
+static int  g_ActiveSection   = 0;
+static bool g_SidebarExpanded = true;
 
-static int  g_ActiveSection     = 0;   // 0=Devices 1=InputMapper 2=OutputMapper 3=Network
-static bool g_SidebarExpanded   = true;
+// Forward declaration so DrawSidebarLayout can call it
+void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& scale_with_window,
+                         SDL_Window* window, int initial_width, int initial_height,
+                         PreferencesManager& preferencesManager);
 
 void DrawSidebarLayout(
         DeviceManager&        deviceManager,
@@ -275,144 +280,214 @@ void DrawSidebarLayout(
         int&                  server_update_rate,
         bool&                 server_dynamic_rate,
         float                 current_messages_per_second,
-        bool&                 show_ui_settings,
-        bool&                 show_protocol_editor,
+        float&                user_ui_scale,
+        float&                user_font_scale,
+        bool&                 scale_with_window,
+        SDL_Window*           window,
+        int                   initial_width,
+        int                   initial_height,
         bool&                 done)
 {
-    const float SIDEBAR_W_EXPANDED  = 170.0f;
-    const float SIDEBAR_W_COLLAPSED =  48.0f;
+    // Sizing (adapts to font / DPI)
+    const float ICON_SZ        = floorf(ImGui::GetTextLineHeight() * 1.15f);
+    const float PAD            = ImGui::GetStyle().WindowPadding.x;
+    const float ITEM_SPC       = ImGui::GetStyle().ItemSpacing.y;
+    const float BTN_H          = ICON_SZ + ImGui::GetStyle().FramePadding.y * 2.0f;
+    const float TEXT_W         = 130.0f;
+    const float SIDEBAR_W_FULL = ICON_SZ + PAD * 3.0f + TEXT_W;
+    const float SIDEBAR_W_SML  = ICON_SZ + PAD * 3.0f;
+    const float sidebar_w      = g_SidebarExpanded ? SIDEBAR_W_FULL : SIDEBAR_W_SML;
 
     // ── Full-screen host window ──────────────────────────────────────────────
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
     ImGui::SetNextWindowSize(vp->WorkSize);
     ImGui::SetNextWindowViewport(vp->ID);
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,  0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize,0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,   ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    ImVec2(0.0f, 0.0f));
     ImGui::Begin("##MainLayout", nullptr,
-        ImGuiWindowFlags_NoDecoration        |
-        ImGuiWindowFlags_NoMove              |
-        ImGuiWindowFlags_NoScrollbar         |
-        ImGuiWindowFlags_NoScrollWithMouse   |
-        ImGuiWindowFlags_NoBringToFrontOnFocus |
-        ImGuiWindowFlags_NoNavFocus          |
+        ImGuiWindowFlags_NoDecoration         |
+        ImGuiWindowFlags_NoMove               |
+        ImGuiWindowFlags_NoScrollbar          |
+        ImGuiWindowFlags_NoScrollWithMouse    |
+        ImGuiWindowFlags_NoBringToFrontOnFocus|
+        ImGuiWindowFlags_NoNavFocus           |
         ImGuiWindowFlags_NoSavedSettings);
     ImGui::PopStyleVar(3);
 
-    float sidebar_w = g_SidebarExpanded ? SIDEBAR_W_EXPANDED : SIDEBAR_W_COLLAPSED;
-    ImVec2 avail    = ImGui::GetContentRegionAvail();
-    float  spc      = ImGui::GetStyle().ItemSpacing.x;
-    float  content_w = avail.x - sidebar_w - spc;
-    float  content_h = avail.y;
+    float total_h   = ImGui::GetContentRegionAvail().y;
+    float total_w   = ImGui::GetContentRegionAvail().x;
+    float spc       = ImGui::GetStyle().ItemSpacing.x;
+    float content_w = total_w - sidebar_w - spc;
 
-    // ── LEFT SIDEBAR ────────────────────────────────────────────────────────
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 6.0f));
-    ImGui::BeginChild("##Sidebar", ImVec2(sidebar_w, content_h), ImGuiChildFlags_Borders);
+    // ── LEFT SIDEBAR ─────────────────────────────────────────────────────────
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(PAD, PAD));
+    ImGui::BeginChild("##Sidebar", ImVec2(sidebar_w, total_h),
+                      ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImDrawList* wdl    = ImGui::GetWindowDrawList();
+    ImU32       tc     = ImGui::GetColorU32(ImGuiCol_Text);
+    ImU32       tc_dim = ImGui::GetColorU32(ImGuiCol_TextDisabled);
 
-    // Toggle collapse / expand button
-    if (g_SidebarExpanded) {
-        if (ImGui::Button("< Collapse", ImVec2(-1.0f, 0.0f))) g_SidebarExpanded = false;
-    } else {
-        if (ImGui::Button(">",          ImVec2(-1.0f, 0.0f))) g_SidebarExpanded = true;
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Expand menu");
-    }
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // Main navigation items
-    struct NavItem { const char* icon; const char* label; };
-    static const NavItem k_NavItems[] = {
-        { "[D]",  "Devices"        },
-        { "[IN]", "Input Mapper"   },
-        { "[O]",  "Output Mapper"  },
-        { "[N]",  "Network"        },
-    };
-    constexpr int k_NumNav = 4;
-
-    for (int i = 0; i < k_NumNav; ++i) {
-        bool active = (g_ActiveSection == i);
-        if (active) {
-            ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
-            ImGui::PushStyleColor(ImGuiCol_Button,        col);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, col);
-        }
-        const char* lbl = g_SidebarExpanded ? k_NavItems[i].label : k_NavItems[i].icon;
-        if (ImGui::Button(lbl, ImVec2(-1.0f, 0.0f))) g_ActiveSection = i;
-        if (!g_SidebarExpanded && ImGui::IsItemHovered())
-            ImGui::SetTooltip("%s", k_NavItems[i].label);
-        if (active) ImGui::PopStyleColor(2);
-        ImGui::Spacing();
-    }
-
-    // ── Bottom utility buttons ────────────────────────────────────────────
-    // Push them toward the bottom of the sidebar
-    float btn_h  = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
-    float sep_h  = ImGui::GetStyle().ItemSpacing.y * 2.0f + 1.0f;
-    int   n_bottom = 3; // Protocol Editor, UI Settings, Exit
-    float spacer = ImGui::GetContentRegionAvail().y
-                   - n_bottom * btn_h
-                   - ImGui::GetStyle().ItemSpacing.y
-                   - sep_h;
-    if (spacer > 0.0f) ImGui::Dummy(ImVec2(0.0f, spacer));
-
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    auto BottomBtn = [&](const char* icon, const char* label, bool& flag) {
-        const char* b = g_SidebarExpanded ? label : icon;
-        if (ImGui::Button(b, ImVec2(-1.0f, 0.0f))) flag = !flag;
-        if (!g_SidebarExpanded && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label);
-        ImGui::Spacing();
-    };
-    BottomBtn("[P]", "Protocol Editor", show_protocol_editor);
-    BottomBtn("[S]", "UI Settings",     show_ui_settings);
-
+    // ── Collapse / Expand toggle button ──────────────────────────────────
     {
-        const char* exitLbl = g_SidebarExpanded ? "Exit" : "[X]";
-        if (ImGui::Button(exitLbl, ImVec2(-1.0f, 0.0f))) done = true;
-        if (!g_SidebarExpanded && ImGui::IsItemHovered()) ImGui::SetTooltip("Exit");
+        float  bw  = ImGui::GetContentRegionAvail().x;
+        ImVec2 bp  = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##toggle", {bw, BTN_H});
+        bool hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) g_SidebarExpanded = !g_SidebarExpanded;
+
+        if (hov) wdl->AddRectFilled(bp, {bp.x+bw, bp.y+BTN_H},
+                                    ImGui::GetColorU32(ImGuiCol_ButtonHovered), 4.0f);
+
+        // Chevron arrow
+        float icx = bp.x + PAD + ICON_SZ * 0.5f;
+        float icy = bp.y + BTN_H * 0.5f;
+        float aw  = ICON_SZ * 0.28f, ah = ICON_SZ * 0.36f;
+        if (g_SidebarExpanded) {
+            wdl->AddLine({icx+aw, icy-ah}, {icx-aw, icy},    tc_dim, 1.8f);
+            wdl->AddLine({icx-aw, icy},    {icx+aw, icy+ah}, tc_dim, 1.8f);
+        } else {
+            wdl->AddLine({icx-aw, icy-ah}, {icx+aw, icy},    tc_dim, 1.8f);
+            wdl->AddLine({icx+aw, icy},    {icx-aw, icy+ah}, tc_dim, 1.8f);
+        }
+        if (g_SidebarExpanded) {
+            float tx = bp.x + PAD + ICON_SZ + PAD;
+            float ty = bp.y + (BTN_H - ImGui::GetTextLineHeight()) * 0.5f;
+            wdl->AddText({tx, ty}, tc_dim, "Collapse");
+        } else if (hov) {
+            ImGui::SetTooltip("Expand");
+        }
+    }
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ── Scrollable navigation + utility area ──────────────────────────────
+    // Reserve space at the bottom for the pinned Exit button.
+    float sep_h    = ITEM_SPC * 2.0f + 1.0f;
+    float bottom_h = BTN_H + ITEM_SPC + sep_h + ITEM_SPC;
+    float scroll_h = ImGui::GetContentRegionAvail().y - bottom_h;
+    if (scroll_h < BTN_H) scroll_h = BTN_H;
+
+    ImGui::BeginChild("##NavScroll", {ImGui::GetContentRegionAvail().x, scroll_h},
+                      ImGuiChildFlags_None);  // vertical scrollbar appears automatically
+
+    // Reusable icon-button builder
+    using DrawFn = void(*)(ImDrawList*, ImVec2, float, ImU32);
+    auto NavItem = [&](const char* label, int idx, DrawFn drawFn) {
+        float  bw  = ImGui::GetContentRegionAvail().x;
+        ImVec2 bp  = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton(label, {bw, BTN_H});
+        bool hov  = ImGui::IsItemHovered();
+        bool active = (g_ActiveSection == idx);
+
+        // Background highlight
+        ImU32 bg = active  ? ImGui::GetColorU32(ImGuiCol_ButtonActive)  :
+                   hov     ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : 0;
+        if (bg) wdl->AddRectFilled(bp, {bp.x+bw, bp.y+BTN_H}, bg, 4.0f);
+
+        // Left active indicator bar
+        if (active) {
+            wdl->AddRectFilled(bp, {bp.x+3.0f, bp.y+BTN_H},
+                               ImGui::GetColorU32(ImGuiCol_SliderGrab));
+        }
+
+        // Icon (drawn at left edge, vertically centered)
+        float ix = bp.x + PAD;
+        float iy = bp.y + (BTN_H - ICON_SZ) * 0.5f;
+        drawFn(wdl, {ix, iy}, ICON_SZ, tc);
+
+        // Label (expanded only)
+        if (g_SidebarExpanded) {
+            float tx = ix + ICON_SZ + PAD;
+            float ty = bp.y + (BTN_H - ImGui::GetTextLineHeight()) * 0.5f;
+            wdl->AddText({tx, ty}, tc, label);
+        } else if (hov) {
+            ImGui::SetTooltip("%s", label);
+        }
+
+        if (ImGui::IsItemClicked()) g_ActiveSection = idx;
+        ImGui::Spacing();
+    };
+
+    // Main navigation
+    NavItem("Devices",         0, SidebarIcons::Devices);
+    NavItem("Input Mapper",    1, SidebarIcons::InputMapper);
+    NavItem("Output Mapper",   2, SidebarIcons::OutputMapper);
+    NavItem("Network",         3, SidebarIcons::Network);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Utility navigation
+    NavItem("Protocol Editor", 4, SidebarIcons::ProtocolEditor);
+    NavItem("UI Settings",     5, SidebarIcons::UISettings);
+
+    ImGui::EndChild(); // ##NavScroll
+
+    // ── Pinned Exit button ────────────────────────────────────────────────
+    ImGui::Separator();
+    ImGui::Spacing();
+    {
+        float  bw  = ImGui::GetContentRegionAvail().x;
+        ImVec2 bp  = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##exit_btn", {bw, BTN_H});
+        bool hov = ImGui::IsItemHovered();
+
+        if (hov) wdl->AddRectFilled(bp, {bp.x+bw, bp.y+BTN_H},
+                                    ImGui::GetColorU32(ImGuiCol_ButtonHovered), 4.0f);
+
+        float ix = bp.x + PAD;
+        float iy = bp.y + (BTN_H - ICON_SZ) * 0.5f;
+        SidebarIcons::Exit(wdl, {ix, iy}, ICON_SZ, tc);
+
+        if (g_SidebarExpanded) {
+            float tx = ix + ICON_SZ + PAD;
+            float ty = bp.y + (BTN_H - ImGui::GetTextLineHeight()) * 0.5f;
+            wdl->AddText({tx, ty}, tc, "Exit");
+        } else if (hov) {
+            ImGui::SetTooltip("Exit");
+        }
+        if (ImGui::IsItemClicked()) done = true;
     }
 
-    ImGui::PopStyleVar(); // FrameRounding
-    ImGui::EndChild();    // ##Sidebar
-
+    ImGui::EndChild(); // ##Sidebar
     ImGui::SameLine(0.0f, spc);
 
-    // ── RIGHT CONTENT AREA ──────────────────────────────────────────────────
+    // ── RIGHT CONTENT AREA ───────────────────────────────────────────────────
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
-    ImGui::BeginChild("##ContentArea", ImVec2(content_w, content_h), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("##ContentArea", {content_w, total_h},
+                      ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
 
-    // ── Profile selector (always visible at the top) ─────────────────────
+    // Profile selector is always shown at top of the content area
     inputMapper.DrawProfileSelector();
 
-    // ── Section content ───────────────────────────────────────────────────
+    // Section-specific content
     switch (g_ActiveSection) {
-        case 0: // Devices
-        {
+
+        case 0: { // ── Devices ────────────────────────────────────────────
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                         1000.0f / io.Framerate, io.Framerate);
-
             if (ImGui::Checkbox("VSync", &vsync))
                 SDL_SetRenderVSync(renderer, vsync ? 1 : 0);
             ImGui::SameLine();
             {
-                const char* fl_label = "Framerate Limit";
+                const char* fl = "Framerate Limit";
                 float fw = ImGui::GetContentRegionAvail().x
-                           - ImGui::CalcTextSize(fl_label).x
+                           - ImGui::CalcTextSize(fl).x
                            - ImGui::GetStyle().ItemInnerSpacing.x;
                 if (fw < 10.0f) fw = 10.0f;
                 ImGui::SetNextItemWidth(fw);
-                ImGui::InputInt(fl_label, &framerate_limit);
+                ImGui::InputInt(fl, &framerate_limit);
                 if (framerate_limit < 0) framerate_limit = 0;
             }
-
             static bool first_run_dev = true;
             static bool enable_battery_led = true;
             if (first_run_dev) {
@@ -423,24 +498,22 @@ void DrawSidebarLayout(
                 preferencesManager.SetBool("EnableBatteryLED", enable_battery_led);
                 preferencesManager.Save();
             }
-
             ImGui::Separator();
             auto& devices = deviceManager.GetDevices();
             ImGui::Text("Connected Devices: %d", (int)devices.size());
-
-            static int frame_counter = 0;
-            if (frame_counter++ >= 60) {
-                frame_counter = 0;
+            static int frame_ctr = 0;
+            if (frame_ctr++ >= 60) {
+                frame_ctr = 0;
                 for (auto& dev : const_cast<std::vector<DeviceState>&>(devices)) {
                     deviceManager.UpdateBatteryInfo(dev);
                     if (enable_battery_led && dev.gamepad) {
                         Uint8 r=0,g=0,b=0; bool upd=false;
-                        if (dev.battery_state == SDL_POWERSTATE_CHARGING)  { r=0;   g=0;   b=255; upd=true; }
-                        else if (dev.battery_state == SDL_POWERSTATE_CHARGED) { r=0; g=255; b=0;   upd=true; }
-                        else if (dev.battery_state != SDL_POWERSTATE_UNKNOWN && dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
-                            if      (dev.battery_percent >= 70) { r=0;   g=255; b=0;   }
-                            else if (dev.battery_percent >= 30) { r=255; g=165; b=0;   }
-                            else                                { r=255; g=0;   b=0;   }
+                        if      (dev.battery_state==SDL_POWERSTATE_CHARGING) { r=0;  g=0;  b=255; upd=true; }
+                        else if (dev.battery_state==SDL_POWERSTATE_CHARGED)  { r=0;  g=255;b=0;   upd=true; }
+                        else if (dev.battery_state!=SDL_POWERSTATE_UNKNOWN && dev.battery_state!=SDL_POWERSTATE_NO_BATTERY) {
+                            if      (dev.battery_percent>=70) { r=0;  g=255;b=0; }
+                            else if (dev.battery_percent>=30) { r=255;g=165;b=0; }
+                            else                              { r=255;g=0;  b=0; }
                             upd = true;
                         }
                         if (upd) SDL_SetGamepadLED(dev.gamepad, r, g, b);
@@ -452,17 +525,26 @@ void DrawSidebarLayout(
             break;
         }
 
-        case 1: // Input Mapper
+        case 1: // ── Input Mapper ───────────────────────────────────────────
             inputMapper.DrawMappingContent();
             break;
 
-        case 2: // Output Mapper
+        case 2: // ── Output Mapper ──────────────────────────────────────────
             outputMapper.DrawContentOnly();
             break;
 
-        case 3: // Network
+        case 3: // ── Network ────────────────────────────────────────────────
             NetworkStatusWindow::DrawContentOnly(
                 server_update_rate, server_dynamic_rate, current_messages_per_second);
+            break;
+
+        case 4: // ── Protocol Editor (inline) ──────────────────────────────
+            ProtocolEditorWindow::DrawContent();
+            break;
+
+        case 5: // ── UI Settings (inline) ──────────────────────────────────
+            DrawSettingsContent(user_ui_scale, user_font_scale, scale_with_window,
+                                window, initial_width, initial_height, preferencesManager);
             break;
     }
 
@@ -470,12 +552,12 @@ void DrawSidebarLayout(
     ImGui::End();      // ##MainLayout
 }
 
-
-void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& user_font_scale, bool& scale_with_window, SDL_Window* window, int initial_width, int initial_height, PreferencesManager& preferencesManager) {
-    if (!show_ui_settings) return;
-
-    ImGui::Begin("UI Settings", &show_ui_settings, ImGuiWindowFlags_AlwaysAutoResize);
-
+// Renders UI settings content without any Begin/End wrapper.
+// All parameters are forwarded from the outer scope.
+void DrawSettingsContent(float& user_ui_scale, float& user_font_scale, bool& scale_with_window,
+                         SDL_Window* window, int initial_width, int initial_height,
+                         PreferencesManager& preferencesManager)
+{
     // ------------------------------------------------------------------
     // UI Scale controls
     // ------------------------------------------------------------------
@@ -545,11 +627,8 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& use
     ThemeManager& theme = ThemeManager::GetInstance();
     const auto& entries = theme.GetAvailableThemes();
 
-    // combo index: 0 = Default (Dark), 1..N = entries[0..N-1]
     int comboIndex = theme.HasCustomTheme() ? theme.GetCurrentEntryIndex() + 1 : 0;
 
-    // Build a flat list of C-strings for ImGui::Combo.
-    // We do this inline rather than caching so a Refresh is instantly reflected.
     std::vector<const char*> comboItems;
     comboItems.reserve(entries.size() + 1);
     comboItems.push_back("Default (Dark)");
@@ -560,7 +639,6 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& use
     if (ImGui::Combo("##ThemeCombo", &comboIndex,
                      comboItems.data(), (int)comboItems.size())) {
         if (comboIndex == 0) {
-            // Revert to built-in style
             theme.ApplyDefault();
             theme.SaveToPreferences(preferencesManager);
             preferencesManager.Save();
@@ -574,34 +652,24 @@ void DrawSettingsWindow(bool& show_ui_settings, float& user_ui_scale, float& use
                     preferencesManager.Save();
                     UpdateUIScale(window, user_ui_scale, user_font_scale, scale_with_window, initial_width, preferencesManager);
                 }
-                // On failure the error is shown in the banner below and the
-                // combo cursor stays on the previously valid selection.
                 comboIndex = theme.HasCustomTheme() ? theme.GetCurrentEntryIndex() + 1 : 0;
             }
         }
     }
 
-    // Refresh button – re-scans the themes/ folder
     ImGui::SameLine();
-    if (ImGui::Button("Refresh")) {
-        theme.Refresh();
-    }
+    if (ImGui::Button("Refresh")) { theme.Refresh(); }
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Rescan the themes/ folder for new .json files");
 
-    // Hint showing where to place theme files
-    if (entries.empty()) {
+    if (entries.empty())
         ImGui::TextDisabled("No themes found — place .json files in the themes/ folder");
-    }
 
-    // Error banner
     if (!theme.GetLastError().empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
         ImGui::TextWrapped("Error: %s", theme.GetLastError().c_str());
         ImGui::PopStyleColor();
     }
-
-    ImGui::End();
 }
 
 // SetupDockSpace removed — layout is now handled by DrawSidebarLayout()
@@ -792,8 +860,6 @@ int main(int argc, char *argv[]) {
     bool done = false;
     bool vsync = true;
     int framerate_limit = 60;
-    static bool show_ui_settings = false;
-    static bool show_protocol_editor = false;
     SDL_SetRenderVSync(renderer, 1);
 
     WebSocketServer::GetInstance().SetOutputMapper(&outputMapper);
@@ -846,20 +912,16 @@ int main(int argc, char *argv[]) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        // Settings popup (opened from sidebar)
-        DrawSettingsWindow(show_ui_settings, user_ui_scale, user_font_scale, scale_with_window, window, initial_width, initial_height, preferencesManager);
-
-        // Protocol Editor (opened from sidebar)
-        ProtocolEditorWindow::Draw(show_protocol_editor);
-
-        // Main sidebar layout – contains all sections + profile selector
+        // Main sidebar layout – contains all sections, profile selector, and
+        // inline Protocol Editor / UI Settings (no separate popup windows)
         DrawSidebarLayout(
             deviceManager, preferencesManager,
             inputMapper, outputMapper,
             vsync, framerate_limit, renderer, io,
             server_update_rate, server_dynamic_rate,
             current_messages_per_second,
-            show_ui_settings, show_protocol_editor, done);
+            user_ui_scale, user_font_scale, scale_with_window,
+            window, initial_width, initial_height, done);
 
         // Rendering
         RenderFrame(renderer, window, vsync, framerate_limit, frame_start_time);

@@ -29,17 +29,22 @@ struct RemovedProtocolField {
 class ProtocolEditorWindow {
 public:
     /**
-     * Draw the Protocol Editor window.
-     * 
+     * Draw the Protocol Editor window (standalone floating window).
      * @param open Window open state (set to false to close)
      */
     static void Draw(bool& open);
-    
+
+    /**
+     * Draw only the Protocol Editor content, no ImGui::Begin/End wrapper.
+     * Use this to embed the editor inside an existing window or child region.
+     */
+    static void DrawContent();
+
     /**
      * Trigger import dialog from external code (e.g., main menu).
      */
     static void ShowImportDialog();
-    
+
     /**
      * Trigger export dialog for selected protocol from external code.
      */
