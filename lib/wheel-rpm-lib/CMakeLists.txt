@@ -4,6 +4,10 @@ project(wheelrpm)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Glob only the real translation units (.cpp).
+# The per-wheel class definitions live in .ipp files under src/moza/ and are
+# #included directly into wheel_manager.cpp so they share one TU.  They must
+# NOT be compiled separately to avoid duplicate-symbol linker errors.
 file(GLOB_RECURSE SRC
     src/*.cpp
 )
