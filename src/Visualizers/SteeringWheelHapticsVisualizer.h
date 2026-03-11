@@ -30,4 +30,7 @@ private:
     float m_condition_center = 0.0f;
     int m_condition_duration = 5000;
     bool m_condition_infinite_duration = false;
+
+    // RPM LEDs (wheel-rpm-lib)
+    float m_rpm_percent = 0.0f;
 };

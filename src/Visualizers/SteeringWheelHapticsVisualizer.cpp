@@ -1,6 +1,7 @@
 #include "SteeringWheelHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/SteeringWheelHaptics.h"
+#include "wheel/utils/rpm_mapper.hpp"
 #include <SDL3/SDL.h>
 
 void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
@@ -90,5 +91,64 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
         }
     } else {
         ImGui::TextDisabled("Steering Wheel Haptics not available");
+    }
+
+    // -------------------------------------------------------------------------
+    // RPM LED Control  (wheel-rpm-lib)
+    // -------------------------------------------------------------------------
+    ImGui::Separator();
+    ImGui::Text("RPM LEDs");
+
+    const auto& rpmWheels = deviceManager.GetWheelRPMDevices();
+
+    if (ImGui::Button("Scan for RPM Devices")) {
+        deviceManager.ScanWheelRPMDevices();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(%zu found)", rpmWheels.size());
+
+    if (rpmWheels.empty()) {
+        ImGui::TextDisabled("No RPM-capable wheel devices detected.");
+        ImGui::TextDisabled("Connect a supported wheel and press Scan, or check");
+        ImGui::TextDisabled("that the wheel is powered on.");
+    } else {
+        ImGui::SliderFloat("RPM %%", &m_rpm_percent, 0.0f, 1.0f, "%.2f");
+
+        for (const auto& wheel : rpmWheels) {
+            ImGui::PushID(wheel.get());
+
+            // Show the wheel name and a preview of the LED bar.
+            ImGui::Text("%s", wheel->name().c_str());
+            ImGui::SameLine();
+
+            // Draw a simple LED bar preview using RPMMapper.
+            constexpr int kPreviewLEDs = 10;
+            auto leds = wheel::RPMMapper::linear(m_rpm_percent, kPreviewLEDs);
+            for (int i = 0; i < kPreviewLEDs; ++i) {
+                ImGui::SameLine();
+                ImVec4 col = leds[i]
+                    ? ImVec4(1.0f, 0.4f, 0.0f, 1.0f)   // active  – orange
+                    : ImVec4(0.2f, 0.2f, 0.2f, 1.0f);  // inactive – dark
+                ImGui::ColorButton("##led", col,
+                    ImGuiColorEditFlags_NoTooltip |
+                    ImGuiColorEditFlags_NoBorder,
+                    ImVec2(10, 16));
+            }
+
+            if (ImGui::Button("Set RPM")) {
+                wheel->setRPM(m_rpm_percent);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Set LEDs")) {
+                auto ledData = wheel::RPMMapper::linear(m_rpm_percent, kPreviewLEDs);
+                wheel->setLEDs(ledData);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear LEDs")) {
+                wheel->setRPM(0.0f);
+            }
+
+            ImGui::PopID();
+        }
     }
 }

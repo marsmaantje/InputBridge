@@ -203,6 +203,10 @@ if(ENABLE_WEBSOCKETS)
 
 endif() # if(ENABLE_WEBSOCKETS)
 
+# Add wheel-rpm-lib (steering wheel RPM LED library)
+# Must come after SDL3 is set up so SDL3::SDL3 is already defined.
+add_subdirectory(lib/wheel-rpm-lib)
+
 # Find Threads (required for std::thread)
 find_package(Threads REQUIRED)
 
@@ -324,6 +328,7 @@ target_link_libraries(InputBridge PRIVATE
     SDL3::SDL3
     Threads::Threads
     nlohmann_json
+    wheelrpm
 )
 
 if(ENABLE_WEBSOCKETS)
