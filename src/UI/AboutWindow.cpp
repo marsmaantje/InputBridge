@@ -106,6 +106,7 @@ void AboutWindow::DrawContent() {
         { "uWebSockets",       "High-performance WebSocket server library",                "Apache 2.0"     },
         { "uSockets",          "Low-level async networking (used by uWebSockets)",         "Apache 2.0"     },
         { "wheel-rpm-lib",     "Steering wheel RPM LED control via HID",                  "Internal"       },
+        { "Google Fonts",      "Used for the Resonite and VRChat color themes",            "Apache 2.0 / OFL 1.1"   },
         { "Font Awesome 6",    "Icon font used throughout the user interface",             "SIL OFL 1.1"    },
     };
 
