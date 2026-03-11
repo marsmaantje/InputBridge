@@ -3,7 +3,6 @@
 #include <memory>
 #include <vector>
 #include "wheel.hpp"
-#include "device_id.hpp"
 
 namespace wheel {
 

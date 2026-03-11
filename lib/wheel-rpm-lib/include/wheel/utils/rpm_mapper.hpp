@@ -1,7 +1,8 @@
 
 #pragma once
-#include <vector>
 #include <cmath>
+#include <cstdint>
+#include <vector>
 
 namespace wheel {
 
