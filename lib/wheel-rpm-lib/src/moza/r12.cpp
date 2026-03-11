@@ -1,28 +1,17 @@
 
-#include "wheel/wheel.hpp"
+#include "moza_base.hpp"
 
 namespace wheel {
 
-class MOZA_R12 : public Wheel {
+// VID 0x346E  PID 0x000B
+// 10 shift-indicator LEDs, same physical layout as R9.
+
+class MOZA_R12 : public MozaBase {
 
 public:
-
-    bool setRPM(float percent) override
-    {
-        (void)percent;
-        return false;
-    }
-
-    bool setLEDs(const std::vector<uint8_t>& leds) override
-    {
-        (void)leds;
-        return false;
-    }
-
-    std::string name() const override
-    {
-        return "Moza R12";
-    }
+    static constexpr int kLEDs = 10;
+    MOZA_R12(std::unique_ptr<HIDTransport> t) : MozaBase(std::move(t), kLEDs) {}
+    std::string name() const override { return "Moza R12"; }
 };
 
 }
