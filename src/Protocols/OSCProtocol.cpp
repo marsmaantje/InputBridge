@@ -238,4 +238,16 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
             }
         }
     }
+    // RPM LED meter — /inputbridge/wheel/led_rpm f  (value 0.0 – 1.0)
+    // Sets the RPM LED bar on all connected RPM-capable steering wheels.
+    else if (path_sv == "/inputbridge/wheel/led_rpm" && std::strcmp(types, "f") == 0 && argc == 1) {
+        float rpm_percent = argv[0]->f;
+        if (rpm_percent < 0.0f) rpm_percent = 0.0f;
+        if (rpm_percent > 1.0f) rpm_percent = 1.0f;
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        for (const auto& wheel : deviceManager.GetWheelRPMDevices()) {
+            wheel->setRPM(rpm_percent);
+        }
+    }
 }

@@ -17,6 +17,7 @@
 #include "Preferences/Preferences.h"
 #include "UI/ThemeManager.h"
 #include "UI/IconsFontAwesome6.h"
+#include "UI/AboutWindow.h"
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolEditorWindow.h"
 #include "Network/OSCServer.h"
@@ -320,7 +321,7 @@ void DrawDeviceItem(const DeviceState& dev, DeviceManager& deviceManager, Prefer
 // ─── Sidebar navigation layout ──────────────────────────────────────────────
 // Active section IDs:
 // 0=Devices  1=InputMapper  2=OutputMapper  3=Network
-// 4=ProtocolEditor  5=UISettings
+// 4=ProtocolEditor  5=UISettings  6=About
 static int   g_ActiveSection   = 0;
 static bool  g_SidebarExpanded = true;
 static float g_SidebarW        = 0.0f; // 0 = initialise from SIDEBAR_W_FULL on first frame
@@ -518,6 +519,7 @@ void DrawSidebarLayout(
     // ── Utility navigation entries ────────────────────────────────────────
     NavItem(ICON_FA_FILE_CODE, "Protocols", 4);
     NavItem(ICON_FA_GEAR,      "Settings",  5);
+    NavItem(ICON_FA_INFO_CIRCLE, "About",   6);
 
     ImGui::EndChild(); // ##NavScroll
 
@@ -735,6 +737,10 @@ void DrawSidebarLayout(
                                 window, initial_width, initial_height, preferencesManager,
                                 vsync, framerate_limit, renderer, io,
                                 s_enable_battery_led);
+            break;
+
+        case 6: // ── About ────────────────────────────────────────────────────
+            AboutWindow::DrawContent();
             break;
     }
 
