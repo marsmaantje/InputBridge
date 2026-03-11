@@ -7,8 +7,14 @@
 void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
     HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
     if (haptic) {
-        if (haptic->IsReady()) {
+        if (haptic->IsReady() && dev.joystick) {
             ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Haptics: Ready");
+            SDL_Haptic* sdl_haptic = SDL_OpenHapticFromJoystick(dev.joystick);
+            if (sdl_haptic) {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(%d effect slots)", SDL_GetMaxHapticEffects(sdl_haptic));
+                SDL_CloseHaptic(sdl_haptic);
+            }
         } else {
             ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Haptics: Not Available");
         }
