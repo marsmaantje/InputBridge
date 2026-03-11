@@ -33,6 +33,8 @@
 #include "Visualizers/GamepadHapticsVisualizer.h"
 #include "Visualizers/WiimoteVisualizer.h"
 #include "Visualizers/SteeringWheelHapticsVisualizer.h"
+#include "Devices/VirtualDeviceManager.h"
+#include "Visualizers/VirtualDeviceVisualizer.h"
 
 // Note: For SDL3, we may need to link against SDL3_net if we want use it.
 // #include <SDL3_net/SDL_net.h>
@@ -129,6 +131,7 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
     static GamepadHapticsVisualizer gamepad_haptics_viz;
     static SteeringWheelHapticsVisualizer wheel_haptics_viz;
     static WiimoteVisualizer wiimote_viz;
+    static VirtualDeviceVisualizer virtual_viz;
 
     std::string guid = DeviceManager::GetDeviceGUIDString(dev);
     bool apply_pref = !preferencesManager.IsPreferenceApplied(dev.instance_id);
@@ -137,6 +140,11 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
     if (apply_pref) {
         preferencesManager.MarkPreferenceApplied(dev.instance_id);
     }
+
+    // For virtual devices, prefer the Simulate tab by default
+    const bool isVirtual = SDL_IsJoystickVirtual(dev.instance_id);
+    if (apply_pref && isVirtual && preferred_viz.empty())
+        preferred_viz = "Simulate Inputs";
 
     auto TabItem = [&](const char *label, DeviceVisualizer &visualizer) {
         ImGuiTabItemFlags flags = 0;
@@ -162,6 +170,19 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
                 gamepad_haptics_viz.Draw(dev, deviceManager);
                 ImGui::EndTabItem();
             }
+            if (isVirtual) {
+                const char* simLabel = "Simulate Inputs";
+                ImGuiTabItemFlags flags = (apply_pref && preferred_viz == simLabel)
+                    ? ImGuiTabItemFlags_SetSelected : 0;
+                if (ImGui::BeginTabItem(simLabel, nullptr, flags)) {
+                    virtual_viz.Draw(dev);
+                    if (preferencesManager.GetVisualizerPreference(guid) != simLabel) {
+                        preferencesManager.SetVisualizerPreference(guid, simLabel);
+                        preferencesManager.Save();
+                    }
+                    ImGui::EndTabItem();
+                }
+            }
             ImGui::EndTabBar();
         }
     } else {
@@ -181,6 +202,19 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
             if (type == SDL_JOYSTICK_TYPE_WHEEL) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
                     wheel_haptics_viz.Draw(dev, deviceManager);
+                    ImGui::EndTabItem();
+                }
+            }
+            if (isVirtual) {
+                const char* simLabel = "Simulate Inputs";
+                ImGuiTabItemFlags flags = (apply_pref && preferred_viz == simLabel)
+                    ? ImGuiTabItemFlags_SetSelected : 0;
+                if (ImGui::BeginTabItem(simLabel, nullptr, flags)) {
+                    virtual_viz.Draw(dev);
+                    if (preferencesManager.GetVisualizerPreference(guid) != simLabel) {
+                        preferencesManager.SetVisualizerPreference(guid, simLabel);
+                        preferencesManager.Save();
+                    }
                     ImGui::EndTabItem();
                 }
             }
@@ -598,6 +632,81 @@ void DrawSidebarLayout(
                     }
                 }
             }
+
+            // ── Virtual Device panel ──────────────────────────────────────
+            {
+                auto& vdm = VirtualDeviceManager::GetInstance();
+
+                ImGui::Separator();
+                bool vOpen = ImGui::CollapsingHeader(
+                    "Virtual Devices",
+                    ImGuiTreeNodeFlags_DefaultOpen);
+
+                if (vOpen) {
+                    ImGui::Indent();
+
+                    // ── Add device form ───────────────────────────────────
+                    static int  s_typeIdx  = 0;
+                    static char s_devName[64] = "Virtual Gamepad";
+                    const char* typeNames[] = { "Gamepad", "Steering Wheel", "Flight Stick", "Generic" };
+                    const VirtualDeviceType typeMap[] = {
+                        VirtualDeviceType::Gamepad,
+                        VirtualDeviceType::SteeringWheel,
+                        VirtualDeviceType::FlightStick,
+                        VirtualDeviceType::Generic
+                    };
+                    const char* defaultNames[] = {
+                        "Virtual Gamepad", "Virtual Wheel", "Virtual Flight Stick", "Virtual Device"
+                    };
+
+                    ImGui::SetNextItemWidth(140.0f);
+                    if (ImGui::Combo("Type##vdev", &s_typeIdx, typeNames, 4)) {
+                        // Auto-fill a sensible default name when type changes
+                        strncpy(s_devName, defaultNames[s_typeIdx], sizeof(s_devName) - 1);
+                        s_devName[sizeof(s_devName) - 1] = '\0';
+                    }
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(180.0f);
+                    ImGui::InputText("Name##vdev", s_devName, sizeof(s_devName));
+                    ImGui::SameLine();
+                    if (ImGui::Button("Add##vdev")) {
+                        vdm.AddDevice(typeMap[s_typeIdx], std::string(s_devName));
+                    }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip(
+                            "Creates a virtual joystick that appears in the device list.\n"
+                            "Use the 'Simulate Inputs' tab on the device to drive its axes\n"
+                            "and buttons so protocols and mappers can be tested without\n"
+                            "real hardware.");
+
+                    // ── Existing virtual devices (remove buttons) ─────────
+                    const auto& vDevs = vdm.GetDevices();
+                    if (!vDevs.empty()) {
+                        ImGui::Spacing();
+                        ImGui::Text("Active virtual devices:");
+                        for (const auto& vs : vDevs) {
+                            ImGui::PushID((int)vs->joystick_id);
+                            ImGui::BulletText("%s", vs->name.c_str());
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("(%s)", VirtualDeviceTypeName(vs->type));
+                            ImGui::SameLine();
+                            if (ImGui::SmallButton("Remove")) {
+                                // Capture id before erase; RemoveDevice invalidates the pointer
+                                SDL_JoystickID toRemove = vs->joystick_id;
+                                vdm.RemoveDevice(toRemove);
+                                ImGui::PopID();
+                                break; // iterator invalidated — redraw next frame
+                            }
+                            ImGui::PopID();
+                        }
+                    } else {
+                        ImGui::TextDisabled("No virtual devices active.");
+                    }
+
+                    ImGui::Unindent();
+                }
+            }
+
             ImGui::Separator();
             for (const auto& dev : devices)
                 DrawDeviceItem(dev, deviceManager, preferencesManager);
@@ -992,6 +1101,9 @@ int main(int argc, char *argv[]) {
 
         // Always update haptics to ensure low latency
         outputMapper.Update();
+
+        // Push virtual device axis/button state so InputMapper reads current values
+        VirtualDeviceManager::GetInstance().PushAllStates();
 
         bool check_input_update = false;
         if (server_dynamic_rate) {

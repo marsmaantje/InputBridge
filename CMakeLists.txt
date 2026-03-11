@@ -227,6 +227,7 @@ add_executable(InputBridge
     # Device management
     src/Devices/DeviceManager.cpp
     src/Devices/DeviceFactory.cpp
+    src/Devices/VirtualDeviceManager.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
@@ -243,6 +244,7 @@ add_executable(InputBridge
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
+    src/Visualizers/VirtualDeviceVisualizer.cpp
     src/Visualizers/WiimoteVisualizer.cpp
     # Networking
     src/Network/NetworkStatusWindow.cpp
