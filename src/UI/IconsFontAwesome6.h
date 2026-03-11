@@ -27,6 +27,7 @@
 //  U+F1EB  →  \xEF\x87\xAB   wifi
 //  U+F1C9  →  \xEF\x87\x89   file-code
 //  U+F013  →  \xEF\x80\x93   gear
+//  U+F05A  →  \xEF\x81\x9A   info-circle
 //  U+F011  →  \xEF\x80\x91   power-off
 
 #define ICON_FA_GAMEPAD       "\xEF\x84\x9B"   // Devices
@@ -35,4 +36,5 @@
 #define ICON_FA_WIFI          "\xEF\x87\xAB"   // Network
 #define ICON_FA_FILE_CODE     "\xEF\x87\x89"   // Protocol Editor
 #define ICON_FA_GEAR          "\xEF\x80\x93"   // UI Settings
+#define ICON_FA_INFO_CIRCLE   "\xEF\x81\x9A"   // About
 #define ICON_FA_POWER_OFF     "\xEF\x80\x91"   // Exit

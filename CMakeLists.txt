@@ -203,6 +203,10 @@ if(ENABLE_WEBSOCKETS)
 
 endif() # if(ENABLE_WEBSOCKETS)
 
+# Add wheel-rpm-lib (steering wheel RPM LED library)
+# Must come after SDL3 is set up so SDL3::SDL3 is already defined.
+add_subdirectory(lib/wheel-rpm-lib)
+
 # Find Threads (required for std::thread)
 find_package(Threads REQUIRED)
 
@@ -223,6 +227,7 @@ add_executable(InputBridge
     # Device management
     src/Devices/DeviceManager.cpp
     src/Devices/DeviceFactory.cpp
+    src/Devices/VirtualDeviceManager.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
@@ -239,6 +244,7 @@ add_executable(InputBridge
     src/Visualizers/FlightStickVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
+    src/Visualizers/VirtualDeviceVisualizer.cpp
     src/Visualizers/WiimoteVisualizer.cpp
     # Networking
     src/Network/NetworkStatusWindow.cpp
@@ -261,6 +267,7 @@ add_executable(InputBridge
     src/Utils/FileDialog.cpp
     # UI helpers
     src/UI/ThemeManager.cpp
+    src/UI/AboutWindow.cpp
 )
 
 if(ENABLE_WEBSOCKETS)
@@ -324,6 +331,7 @@ target_link_libraries(InputBridge PRIVATE
     SDL3::SDL3
     Threads::Threads
     nlohmann_json
+    wheelrpm
 )
 
 if(ENABLE_WEBSOCKETS)
