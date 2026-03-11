@@ -173,8 +173,11 @@ void HapticDevice::SetPeriodic(Uint16 type, float magnitude, int period, float d
 
 void HapticDevice::SetCondition(Uint16 type, float saturation, float coefficient, float deadband, float center) {
     RunAsync([this, type, saturation, coefficient, deadband, center]() {
-        if (!m_haptic) return;
+        if (!m_haptic) {
+            return;
+        }
 
+        const int slot = -1 - type; // Use negative, type-based slots to not conflict with user-defined slots
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
         effect.type = type;
@@ -193,13 +196,13 @@ void HapticDevice::SetCondition(Uint16 type, float saturation, float coefficient
         effect.condition.center[0] = ctr;
 
         SDL_HapticEffectID existingId = -1;
-        if (m_conditionEffects.count(type)) {
-            existingId = m_conditionEffects[type];
+        if (m_conditionEffects.count(slot)) {
+            existingId = m_conditionEffects[slot];
         }
 
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
-            m_conditionEffects[type] = newId;
+            m_conditionEffects[slot] = newId;
             if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
                 SDL_Log("HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
             }

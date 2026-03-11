@@ -159,7 +159,10 @@ void WebSocketServer::Start(int port) {
                                                    int duration = data.value("duration", 0);
                                                    if (data.contains("duration_ms")) duration = data.value("duration_ms", 0);
 
-                                                   mapperCopy->QueueCondition(device, data.value("right_sat", 0.0f), data.value("left_sat", 0.0f), data.value("right_coeff", 0.0f), data.value("left_coeff", 0.0f), data.value("deadband", 0.0f), data.value("center", 0.0f), duration);
+                                                   int slot = data.value("slot", 0);
+                                                   uint16_t condition_type = data.value("condition_type", (uint16_t)SDL_HAPTIC_SPRING);
+
+                                                   mapperCopy->QueueCondition(device, slot, condition_type, data.value("right_sat", 0.0f), data.value("left_sat", 0.0f), data.value("right_coeff", 0.0f), data.value("left_coeff", 0.0f), data.value("deadband", 0.0f), data.value("center", 0.0f), duration);
                                                }
                                            }
                                        } catch (...) {}

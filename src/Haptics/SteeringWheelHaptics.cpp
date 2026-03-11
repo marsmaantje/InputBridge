@@ -67,39 +67,75 @@ int SteeringWheelHaptics::PlayPeriodic(float strength, uint32_t period, float ma
     return 0;
 }
 
-int SteeringWheelHaptics::PlayCondition(float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) {
-    RunAsync([this, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms]() {
+int SteeringWheelHaptics::PlayCondition(int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) {
+    RunAsync([this, slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms]() {
         if (!m_haptic) {
             SDL_Log("SteeringWheelHaptics::PlayCondition - Haptic device not ready");
+            return;
+        }
+
+        if (m_joystick) {
+            SDL_Haptic* sdl_haptic = SDL_OpenHapticFromJoystick(m_joystick);
+            if (sdl_haptic) {
+                int max_effects = SDL_GetMaxHapticEffects(sdl_haptic);
+                SDL_CloseHaptic(sdl_haptic);
+                if (slot < 0 || slot >= max_effects) {
+                    SDL_Log("SteeringWheelHaptics::PlayCondition - Invalid slot %d (max: %d)", slot, max_effects);
+                    return;
+                }
+            }
+        }
+
+        if (type != SDL_HAPTIC_SPRING && type != SDL_HAPTIC_DAMPER &&
+            type != SDL_HAPTIC_INERTIA && type != SDL_HAPTIC_FRICTION) {
+            SDL_Log("SteeringWheelHaptics::PlayCondition - Invalid condition type: %d", type);
             return;
         }
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
 
-        effect.type = SDL_HAPTIC_SPRING; // Using Spring as a common condition effect
+        effect.type = type;
         effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
         effect.condition.direction.dir[0] = 1;
 
         // Condition properties are arrays for each axis
-        effect.condition.right_sat[0] = static_cast<Uint16>(right_sat * 0xFFFF);
-        effect.condition.left_sat[0] = static_cast<Uint16>(left_sat * 0xFFFF);
+        effect.condition.right_sat[0] = static_cast<Uint16>(right_sat * 65535.0f);
+        effect.condition.left_sat[0] = static_cast<Uint16>(left_sat * 65535.0f);
         effect.condition.right_coeff[0] = static_cast<Sint16>(right_coeff * 32767.0f);
         effect.condition.left_coeff[0] = static_cast<Sint16>(left_coeff * 32767.0f);
-        effect.condition.deadband[0] = static_cast<Uint16>(deadband * 0xFFFF);
+        effect.condition.deadband[0] = static_cast<Uint16>(deadband * 65535.0f);
         effect.condition.center[0] = static_cast<Sint16>(center * 32767.0f);
         effect.condition.length = duration_ms;
 
         SDL_HapticEffectID existingId = -1;
-        if (m_conditionEffects.count(effect.type)) {
-            existingId = m_conditionEffects[effect.type];
+        if (m_conditionEffects.count(slot)) {
+            existingId = m_conditionEffects[slot];
         }
-
+ 
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
-            m_conditionEffects[effect.type] = newId;
+            m_conditionEffects[slot] = newId;
             if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("SteeringWheelHaptics::PlayCondition - Run failed: %s", SDL_GetError());
+                SDL_Log("SteeringWheelHaptics::PlayCondition - Run failed for type %d: %s", type, SDL_GetError());
+            }
+        }
+    });
+    return 0;
+}
+
+int SteeringWheelHaptics::StopCondition(int slot) {
+    RunAsync([this, slot]() {
+        if (!m_haptic) {
+            SDL_Log("SteeringWheelHaptics::StopCondition - Haptic device not ready");
+            return;
+        }
+        if (m_conditionEffects.count(slot)) {
+            SDL_HapticEffectID effectId = m_conditionEffects.at(slot);
+            if (effectId != -1) {
+                SDL_StopHapticEffect(m_haptic.Get(), effectId);
+                SDL_DestroyHapticEffect(m_haptic.Get(), effectId);
+                m_conditionEffects.erase(slot);
             }
         }
     });

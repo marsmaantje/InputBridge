@@ -26,6 +26,8 @@ private:
     bool m_periodic_infinite_duration = false;
 
     // Condition
+    int m_condition_slot = 0;
+    int m_condition_type = 0; // 0: Spring, 1: Damper, 2: Inertia, 3: Friction
     float m_condition_right_sat = 1.0f;
     float m_condition_left_sat = 1.0f;
     float m_condition_right_coeff = 0.5f;

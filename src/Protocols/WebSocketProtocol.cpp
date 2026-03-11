@@ -156,17 +156,21 @@ void WebSocketProtocol::parse(const std::string &message) {
                 float magnitude = params.at("magnitude");
                 float offset = params.at("offset");
                 int phase = params.at("phase");
-                int duration_int = params.at("duration_ms");
-                OutputMapper::GetInstance().QueuePeriodic(0, strength, period, magnitude, offset, phase, duration_int);
+                int duration_ms = params.at("duration_ms");
+                OutputMapper::GetInstance().QueuePeriodic(0, strength, period, magnitude, offset, phase, duration_ms);
             } else if (effect == "condition") {
+                int slot = params.value("slot", 0);
+                uint16_t condition_type = params.value("condition_type", (uint16_t)SDL_HAPTIC_SPRING);
+
                 float right_sat = params.at("right_sat");
                 float left_sat = params.at("left_sat");
                 float right_coeff = params.at("right_coeff");
                 float left_coeff = params.at("left_coeff");
                 float deadband = params.at("deadband");
                 float center = params.at("center");
-                int duration_int = params.at("duration_ms");
-                OutputMapper::GetInstance().QueueCondition(0, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_int);
+                int duration_ms = params.at("duration_ms");
+                // Note: Assumes OutputMapper::QueueCondition is updated to accept a slot.
+                OutputMapper::GetInstance().QueueCondition(0, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms);
             } else if (effect == "gain") {
                 int value = params.at("value");
                 OutputMapper::GetInstance().QueueSetGain(0, value);

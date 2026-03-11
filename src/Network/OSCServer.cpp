@@ -79,8 +79,8 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 8)
-            server->m_OutputMapper->QueueCondition(argv[0]->i, argv[1]->f, argv[2]->f, argv[3]->f, argv[4]->f, argv[5]->f, argv[6]->f, argv[7]->i);
+        if (argc >= 10)
+            server->m_OutputMapper->QueueCondition(argv[0]->i, argv[1]->i, (uint16_t)argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->f, argv[6]->f, argv[7]->f, argv[8]->f, argv[9]->i);
     } catch (...) {}
     return 0;
 }
@@ -134,7 +134,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     lo_server_thread_add_method(m_server_thread, "/haptic/rumble", "iffi", haptic_rumble_handler, this);
     lo_server_thread_add_method(m_server_thread, "/haptic/constant", "ifi", haptic_constant_handler, this);
     lo_server_thread_add_method(m_server_thread, "/haptic/periodic", "ififfii", haptic_periodic_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/condition", "iffffffi", haptic_condition_handler, this);
+    lo_server_thread_add_method(m_server_thread, "/haptic/condition", "iiiffffffi", haptic_condition_handler, this);
     lo_server_thread_add_method(m_server_thread, "/haptic/gain", "ii", haptic_gain_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);

@@ -77,7 +77,21 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNode("Condition (Spring)")) {
+        if (ImGui::TreeNode("Condition Effects")) {
+            const char* condition_types[] = { "Spring", "Damper", "Inertia", "Friction" };
+            ImGui::Combo("Type", &m_condition_type, condition_types, IM_ARRAYSIZE(condition_types));
+            ImGui::Separator();
+
+            int max_slots = 1;
+            if (dev.joystick) {
+                SDL_Haptic* sdl_haptic = SDL_OpenHapticFromJoystick(dev.joystick);
+                if (sdl_haptic) {
+                    max_slots = SDL_GetMaxHapticEffects(sdl_haptic);
+                    SDL_CloseHaptic(sdl_haptic);
+                }
+            }
+            ImGui::SliderInt("Slot", &m_condition_slot, 0, max_slots > 0 ? max_slots - 1 : 0);
+
             ImGui::SliderFloat("Right Sat", &m_condition_right_sat, 0.0f, 1.0f);
             ImGui::SliderFloat("Left Sat", &m_condition_left_sat, 0.0f, 1.0f);
             ImGui::SliderFloat("Right Coeff", &m_condition_right_coeff, -1.0f, 1.0f);
@@ -89,9 +103,20 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
                 ImGui::SliderInt("Duration (ms)", &m_condition_duration, 0, 10000);
             }
 
-            if (ImGui::Button("Play Spring")) {
-                wheelHaptics->PlayCondition(m_condition_right_sat, m_condition_left_sat, m_condition_right_coeff, m_condition_left_coeff, m_condition_deadband, m_condition_center,
+            if (ImGui::Button("Play Condition")) {
+                uint16_t sdl_type = SDL_HAPTIC_SPRING;
+                switch (m_condition_type) {
+                    case 0: sdl_type = SDL_HAPTIC_SPRING; break;
+                    case 1: sdl_type = SDL_HAPTIC_DAMPER; break;
+                    case 2: sdl_type = SDL_HAPTIC_INERTIA; break;
+                    case 3: sdl_type = SDL_HAPTIC_FRICTION; break;
+                }
+                wheelHaptics->PlayCondition(m_condition_slot, sdl_type, m_condition_right_sat, m_condition_left_sat, m_condition_right_coeff, m_condition_left_coeff, m_condition_deadband, m_condition_center,
                                             m_condition_infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)m_condition_duration);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Stop Condition")) {
+                wheelHaptics->StopCondition(m_condition_slot);
             }
             ImGui::TreePop();
         }

@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "InputMapper.h"
 #include "Haptics/GamepadHaptics.h"
+#include "Haptics/SteeringWheelHaptics.h"
 #include <algorithm>
 #include <memory>
 #include <map>
@@ -251,7 +252,7 @@ void OutputMapper::Update() {
                 TriggerPeriodic(cmd.virtual_id, cmd.fParams[0], cmd.iParams[0], cmd.fParams[1], cmd.fParams[2], cmd.iParams[1], cmd.iParams[2]);
                 break;
             case HapticCommand::CONDITION:
-                TriggerCondition(cmd.virtual_id, cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[0]);
+                TriggerCondition(cmd.virtual_id, cmd.iParams[0], (uint16_t)cmd.iParams[1], cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[2]);
                 break;
             case HapticCommand::GAIN:
                 TriggerSetGain(cmd.virtual_id, cmd.iParams[0]);
@@ -389,7 +390,7 @@ void OutputMapper::QueuePeriodic(int virtual_id, float strength, int period, flo
     m_CommandQueue.push_back(cmd);
 }
 
-void OutputMapper::QueueCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
+void OutputMapper::QueueCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     HapticCommand cmd;
     cmd.type = HapticCommand::CONDITION;
@@ -400,7 +401,9 @@ void OutputMapper::QueueCondition(int virtual_id, float right_sat, float left_sa
     cmd.fParams[3] = left_coeff;
     cmd.fParams[4] = deadband;
     cmd.fParams[5] = center;
-    cmd.iParams[0] = duration_ms;
+    cmd.iParams[0] = slot;
+    cmd.iParams[1] = type;
+    cmd.iParams[2] = duration_ms;
     m_CommandQueue.push_back(cmd);
 }
 
@@ -578,41 +581,19 @@ void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, f
     }
 }
 
-void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
+void OutputMapper::TriggerCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-    if (!target || !target->haptic_device || !target->enable_condition) continue;
+        if (!target || target->instance_id == 0 || !target->enable_condition) continue;
 
-    SDL_HapticEffect effect;
-    SDL_memset(&effect, 0, sizeof(effect));
-    effect.type = SDL_HAPTIC_SPRING;
-    effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-    effect.condition.direction.dir[0] = 1;
-    effect.condition.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
-    effect.condition.right_sat[0] = (Uint16)(std::clamp(right_sat, 0.0f, 1.0f) * 65535.0f);
-    effect.condition.left_sat[0] = (Uint16)(std::clamp(left_sat, 0.0f, 1.0f) * 65535.0f);
-    effect.condition.right_coeff[0] = (Sint16)(std::clamp(right_coeff, -1.0f, 1.0f) * 32767.0f);
-    effect.condition.left_coeff[0] = (Sint16)(std::clamp(left_coeff, -1.0f, 1.0f) * 32767.0f);
-    effect.condition.deadband[0] = (Uint16)(std::clamp(deadband, 0.0f, 1.0f) * 65535.0f);
-    effect.condition.center[0] = (Sint16)(std::clamp(center, -1.0f, 1.0f) * 32767.0f);
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (!hapticDevice) continue;
 
-    bool created = false;
-    if (target->condition_effect_id == -1) {
-        target->condition_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
-        created = true;
-    } else {
-        SDL_UpdateHapticEffect(target->haptic_device, target->condition_effect_id, &effect);
-    }
-
-    if (target->condition_effect_id != -1) {
-        // Spring/condition effects respond to the live axis position in real-time.
-        // Restarting a running condition effect causes no perceptible glitch, so
-        // we always run it after an update. This is the safest way to handle the
-        // infinity-duration case: after StopAll the effect is stopped and an
-        // SDL_UpdateHapticEffect call alone does not restart it on most drivers.
-        SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
-    }
+        SteeringWheelHaptics* wheelHaptics = dynamic_cast<SteeringWheelHaptics*>(hapticDevice);
+        if (wheelHaptics) {
+            wheelHaptics->PlayCondition(slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+        }
     }
 }
 
