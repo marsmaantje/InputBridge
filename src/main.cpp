@@ -206,6 +206,19 @@ void DrawDeviceVisualizer(const DeviceState& dev, DeviceManager& deviceManager, 
                     ImGui::EndTabItem();
                 }
             }
+
+            // RPM LED tab: shown for any non-gamepad device when wheel-rpm-lib
+            // has found at least one supported device — independent of whether
+            // SDL recognises the wheel's haptic interface.
+            {
+                const bool hasRPM = !deviceManager.GetWheelRPMDevices().empty();
+                if (hasRPM || type == SDL_JOYSTICK_TYPE_WHEEL || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
+                    if (ImGui::BeginTabItem("RPM LEDs")) {
+                        wheel_haptics_viz.DrawLEDs(deviceManager);
+                        ImGui::EndTabItem();
+                    }
+                }
+            }
             if (isVirtual) {
                 const char* simLabel = "Simulate Inputs";
                 ImGuiTabItemFlags flags = (apply_pref && preferred_viz == simLabel)

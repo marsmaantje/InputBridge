@@ -92,11 +92,9 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
     } else {
         ImGui::TextDisabled("Steering Wheel Haptics not available");
     }
+}
 
-    // -------------------------------------------------------------------------
-    // RPM LED Control  (wheel-rpm-lib)
-    // -------------------------------------------------------------------------
-    ImGui::Separator();
+void SteeringWheelHapticsVisualizer::DrawLEDs(DeviceManager& deviceManager) {
     ImGui::Text("RPM LEDs");
 
     const auto& rpmWheels = deviceManager.GetWheelRPMDevices();

@@ -3,8 +3,8 @@
 #include "wheel/sdl_transport.hpp"
 
 // Moza concrete types – included here so the translation unit owns them.
-// Each .cpp defines a class in namespace wheel; we forward-declare and
-// instantiate them via a factory table rather than exposing their headers.
+// Each .ipp file defines a class in namespace wheel; we forward-declare and
+// instantiate them via a factory table rather than exposing public headers.
 #include "../moza/r3.ipp"
 #include "../moza/r5.ipp"
 #include "../moza/r9.ipp"

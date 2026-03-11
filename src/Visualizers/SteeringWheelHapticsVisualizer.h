@@ -6,6 +6,10 @@ class SteeringWheelHapticsVisualizer {
 public:
     void Draw(const DeviceState& dev, DeviceManager& deviceManager);
 
+    // Draw only the RPM LED controls — independent of haptics availability.
+    // Safe to call even when the device has no SDL haptic support.
+    void DrawLEDs(DeviceManager& deviceManager);
+
 private:
     // Constant
     float m_constant_strength = 0.5f;
