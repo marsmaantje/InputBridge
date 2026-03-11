@@ -1,6 +1,7 @@
 
 #pragma once
 #include <vector>
+#include <cmath>
 
 namespace wheel {
 
@@ -12,7 +13,7 @@ public:
         if(percent < 0) percent = 0;
         if(percent > 1) percent = 1;
 
-        int active = percent * ledCount;
+        int active = static_cast<int>(std::round(percent * ledCount));
 
         std::vector<uint8_t> leds(ledCount,0);
 

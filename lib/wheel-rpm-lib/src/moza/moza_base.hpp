@@ -1,6 +1,7 @@
 #pragma once
 #include "wheel/wheel.hpp"
 #include "wheel/transport.hpp"
+#include "wheel/utils/rpm_mapper.hpp"
 #include <memory>
 #include <cstring>
 
@@ -55,6 +56,37 @@ protected:
             buf[4 + i] = ledValues[i];
 
         return hid->write(buf, kMozaReportSize);
+    }
+
+public:
+    bool setRPM(float percent) override
+    {
+        if (m_ledCount == 0) {
+            (void)percent;
+            return false;
+        }
+
+        auto leds = RPMMapper::linear(percent, m_ledCount);
+
+        uint8_t values[61]{}; // Max possible LEDs
+        for (int i = 0; i < m_ledCount; ++i)
+            values[i] = leds[i] ? 0xFF : 0x00;
+
+        return sendLEDs(values, m_ledCount);
+    }
+
+    bool setLEDs(const std::vector<uint8_t>& leds) override
+    {
+        if (m_ledCount == 0) {
+            (void)leds;
+            return false;
+        }
+
+        uint8_t values[61]{}; // Max possible LEDs
+        for (int i = 0; i < m_ledCount; ++i)
+            values[i] = (i < static_cast<int>(leds.size())) ? leds[i] : 0;
+
+        return sendLEDs(values, m_ledCount);
     }
 };
 

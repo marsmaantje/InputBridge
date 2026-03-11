@@ -1,5 +1,6 @@
 #include "wheel/wheel_manager.hpp"
 #include "wheel/transport.hpp"
+#include "wheel/sdl_transport.hpp"
 
 // Moza concrete types – included here so the translation unit owns them.
 // Each .cpp defines a class in namespace wheel; we forward-declare and
@@ -22,36 +23,6 @@
 // Moza R9: 346E:0009
 
 namespace wheel {
-
-// ---------------------------------------------------------------------------
-// SDLTransport (defined in sdl_transport.cpp but reproduced inline here so
-// wheel_manager can construct one without a separate header).
-// ---------------------------------------------------------------------------
-
-class SDLTransport : public HIDTransport {
-
-    SDL_hid_device* dev;
-
-public:
-
-    explicit SDLTransport(SDL_hid_device* d) : dev(d) {}
-
-    ~SDLTransport() override
-    {
-        if (dev)
-            SDL_hid_close(dev);
-    }
-
-    bool write(const uint8_t* data, size_t size) override
-    {
-        return SDL_hid_write(dev, data, size) >= 0;
-    }
-
-    bool read(uint8_t* data, size_t size) override
-    {
-        return SDL_hid_read(dev, data, size) >= 0;
-    }
-};
 
 // ---------------------------------------------------------------------------
 // VID / PID table for Moza devices
