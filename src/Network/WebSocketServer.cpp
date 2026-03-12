@@ -1,6 +1,7 @@
 #include "WebSocketServer.h"
 #include "Preferences/Preferences.h"
 #include "../Mappers/OutputMapper.h"
+#include "../Mappers/InputMapper.h"
 
 #if ENABLE_WEBSOCKETS
 
@@ -302,6 +303,11 @@ void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
 }
 
 void WebSocketServer::Broadcast(const std::string &address, float value) {
+    // Avoid sending updates for unbound outputs
+    if (!InputMapper::GetInstance().IsOutputAddressBound(address)) {
+        return;
+    }
+
     std::shared_ptr<IProtocol> protocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -315,6 +321,11 @@ void WebSocketServer::Broadcast(const std::string &address, float value) {
 }
 
 void WebSocketServer::Broadcast(const std::string &address, int value) {
+    // Avoid sending updates for unbound outputs
+    if (!InputMapper::GetInstance().IsOutputAddressBound(address)) {
+        return;
+    }
+
     std::shared_ptr<IProtocol> protocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -328,6 +339,11 @@ void WebSocketServer::Broadcast(const std::string &address, int value) {
 }
 
 void WebSocketServer::Broadcast(const std::string &address, const std::string &value) {
+    // Avoid sending updates for unbound outputs
+    if (!InputMapper::GetInstance().IsOutputAddressBound(address)) {
+        return;
+    }
+
     std::shared_ptr<IProtocol> protocol;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -347,12 +363,18 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
         protocol = m_Impl->protocol;
     }
     if (protocol) {
-        std::map<std::string, float> values = {
-            {"wheel", wheel},
-            {"brake", brake},
-            {"throttle", throttle},
-            {"pitch", pitch},
-            {"roll", roll}};
+        InputMapper& im = InputMapper::GetInstance();
+        std::map<std::string, float> values;
+        if (im.IsOutputAddressBound("wheel"))    values["wheel"] = wheel;
+        if (im.IsOutputAddressBound("brake"))    values["brake"] = brake;
+        if (im.IsOutputAddressBound("throttle")) values["throttle"] = throttle;
+        if (im.IsOutputAddressBound("pitch"))    values["pitch"] = pitch;
+        if (im.IsOutputAddressBound("roll"))     values["roll"] = roll;
+
+        if (values.empty()) {
+            return;
+        }
+
         std::string msg = protocol->format_wheel(values);
         if (!msg.empty()) {
             uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;

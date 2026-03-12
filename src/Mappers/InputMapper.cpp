@@ -1306,6 +1306,67 @@ void InputMapper::UpdateActiveProtocols() {
     ProtocolManager::GetInstance().SetActiveInputProtocolId(inputId);
 }
 
+bool InputMapper::IsOutputAddressBound(const std::string& address) const {
+    if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= (int)m_Profiles.size()) {
+        return false; // No profile, so nothing is bound.
+    }
+    const auto& profile = m_Profiles[m_SelectedProfileIndex];
+
+    std::string fieldId;
+
+    // 1. Check active protocol definitions from the profile
+    const ProtocolDefinition* oscDef = !profile.oscOutputProtocolId.empty() ? ProtocolRegistry::GetInstance().FindById(profile.oscOutputProtocolId) : nullptr;
+    if (oscDef) {
+        for (const auto& field : oscDef->fields) {
+            if (field.oscPath == address) {
+                fieldId = field.fieldId;
+                break;
+            }
+        }
+    }
+
+    if (fieldId.empty()) {
+        const ProtocolDefinition* wsDef = !profile.wsOutputProtocolId.empty() ? ProtocolRegistry::GetInstance().FindById(profile.wsOutputProtocolId) : nullptr;
+        if (wsDef) {
+            for (const auto& field : wsDef->fields) {
+                if (field.wsKey == address) {
+                    fieldId = field.fieldId;
+                    break;
+                }
+            }
+        }
+    }
+
+    // 2. If not found, check legacy protocols
+    if (fieldId.empty()) {
+        // This mapping is for legacy protocols that don't use definitions.
+        if (address == "/wheel/steer" || address == "wheel") fieldId = "Steering";
+        else if (address == "/wheel/throttle" || address == "throttle") fieldId = "Throttle";
+        else if (address == "/wheel/brake" || address == "brake") fieldId = "Brake";
+        else if (address == "/wheel/clutch" || address == "clutch") fieldId = "Clutch";
+        else if (address == "/wheel/handbrake" || address == "handbrake") fieldId = "Handbrake";
+        else if (address == "/wheel/pitch" || address == "pitch") fieldId = "Pitch";
+        else if (address == "/wheel/roll" || address == "roll") fieldId = "Roll";
+    }
+
+    if (fieldId.empty()) {
+        return false;
+    }
+
+    // 3. Check if fieldId is bound in the current profile
+    if (profile.outputToInput.count(fieldId) && profile.outputToInput.at(fieldId).axisIndex != -1) {
+        return true;
+    }
+    for (const auto& mapping : profile.buttonMappings) {
+        if (mapping.target_output_name == fieldId && mapping.button_index != -1) return true;
+    }
+    for (const auto& mapping : profile.digitalMappings) {
+        if (mapping.target_field_id == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
+    }
+
+    return false;
+}
+
 #ifdef ENABLE_EXCLUSIVE_INPUT
 void InputMapper::ApplyExclusiveMode() {}
 #endif

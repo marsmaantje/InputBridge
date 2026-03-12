@@ -113,6 +113,7 @@ class InputMapper {
     void SaveProfile(const MappingProfile &profile) const;
     void HandleDeviceConnectionChange();
     std::vector<HapticTarget>* GetCurrentHapticTargets();
+    bool IsOutputAddressBound(const std::string& address) const;
 
     void CancelListening();
 

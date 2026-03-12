@@ -1,5 +1,6 @@
 #include "Network/OSCServer.h"
 #include "Mappers/OutputMapper.h"
+#include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include "Protocols/ProtocolManager.h"
@@ -204,6 +205,12 @@ bool OSCServer::IsRunning() const {
 
 void OSCServer::Send(const std::string& path, const char* types, ...) {
     if (s_isDestroyed) return;
+
+    // Avoid sending updates for unbound outputs
+    if (!InputMapper::GetInstance().IsOutputAddressBound(path)) {
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(m_mutex);
     if (!m_running || !m_send_address) return;
 
