@@ -235,6 +235,7 @@ add_executable(InputBridge
     src/Haptics/DualSenseTriggerEffectGenerator.cpp
     src/Haptics/DualSenseController.cpp
     src/Haptics/XboxController.cpp
+    src/Network/HapticParser.cpp
     # Settings
     src/Preferences/Preferences.cpp
     # Input device visualizers
