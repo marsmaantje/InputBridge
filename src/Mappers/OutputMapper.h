@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <mutex>
+#include <atomic>
 #include <SDL3/SDL.h>
 #include "Devices/DeviceManager.h"
 
@@ -37,6 +38,9 @@ public:
 
     void HandleDeviceConnectionChange();
 
+    void StopAllHapticEffects();
+    bool IsHapticsActive() const;
+
     // Thread-safe API for external servers
     void QueueRumble(int virtual_id, float low_freq, float high_freq, int duration_ms);
     void QueueConstantForce(int virtual_id, float strength, int duration_ms);
@@ -61,6 +65,9 @@ private:
     std::mutex m_Mutex;
     std::vector<HapticCommand> m_CommandQueue;
 
+    std::atomic<uint64_t> m_lastHapticActivityTime{0};
+
+    void QueueCommand(HapticCommand&& cmd);
     void GetTargets(int virtual_id, std::vector<HapticTarget*>& out_targets);
     void UpdateHapticDevice(HapticTarget& target);
     void CloseHapticDevice(HapticTarget& target);

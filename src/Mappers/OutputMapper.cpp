@@ -50,6 +50,13 @@ OutputMapper::~OutputMapper() {
     }
 }
 
+bool OutputMapper::IsHapticsActive() const {
+    // Consider haptics active for a short period after the last command.
+    // This is an approximation for UI feedback.
+    const uint64_t activity_timeout_ms = 500;
+    return (SDL_GetTicks() - m_lastHapticActivityTime.load()) < activity_timeout_ms;
+}
+
 void OutputMapper::SetActiveHapticTargets(std::vector<HapticTarget>* targets) {
     if (m_active_targets) {
         for (auto& target : *m_active_targets) {
@@ -268,6 +275,26 @@ void OutputMapper::Update() {
     }
 }
 
+void OutputMapper::StopAllHapticEffects()
+{
+    if (!m_active_targets) {
+        return;
+    }
+
+    for (auto& target : *m_active_targets) {
+        if (target.haptic_device) {
+            SDL_StopHapticEffects(target.haptic_device);
+        }
+        // For gamepads that don't use the haptic_device path for rumble
+        else if (target.instance_id != 0 && SDL_IsGamepad(target.instance_id)) {
+            SDL_Gamepad* pad = SDL_GetGamepadFromID(target.instance_id);
+            if (pad) {
+                SDL_RumbleGamepad(pad, 0, 0, 0);
+            }
+        }
+    }
+}
+
 void OutputMapper::HandleDeviceConnectionChange() {
     if (!m_active_targets) return;
 
@@ -355,43 +382,54 @@ void OutputMapper::GetTargets(int virtual_id, std::vector<HapticTarget*>& out_ta
 
 // --- Queue Methods ---
 
-void OutputMapper::QueueRumble(int virtual_id, float low_freq, float high_freq, int duration_ms) {
+void OutputMapper::QueueCommand(HapticCommand&& cmd) {
     std::lock_guard<std::mutex> lock(m_Mutex);
+    m_CommandQueue.push_back(std::move(cmd));
+}
+
+void OutputMapper::QueueRumble(int virtual_id, float low_freq, float high_freq, int duration_ms) {
+    if (low_freq > 0.0f || high_freq > 0.0f) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
     HapticCommand cmd;
     cmd.type = HapticCommand::RUMBLE;
     cmd.virtual_id = virtual_id;
     cmd.fParams[0] = low_freq;
     cmd.fParams[1] = high_freq;
     cmd.iParams[0] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 void OutputMapper::QueueConstantForce(int virtual_id, float strength, int duration_ms) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+    if (strength != 0.0f) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
     HapticCommand cmd;
     cmd.type = HapticCommand::CONSTANT;
     cmd.virtual_id = virtual_id;
     cmd.fParams[0] = strength;
     cmd.iParams[0] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 void OutputMapper::QueuePeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+    if (strength > 0.0f && magnitude > 0.0f) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
     HapticCommand cmd;
     cmd.type = HapticCommand::PERIODIC;
     cmd.virtual_id = virtual_id;
     cmd.fParams[0] = strength;
-    cmd.iParams[0] = period;
     cmd.fParams[1] = magnitude;
     cmd.fParams[2] = offset;
+    cmd.iParams[0] = period;
     cmd.iParams[1] = phase;
     cmd.iParams[2] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 void OutputMapper::QueueCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_lastHapticActivityTime = SDL_GetTicks();
     HapticCommand cmd;
     cmd.type = HapticCommand::CONDITION;
     cmd.virtual_id = virtual_id;
@@ -404,16 +442,16 @@ void OutputMapper::QueueCondition(int virtual_id, int slot, uint16_t type, float
     cmd.iParams[0] = slot;
     cmd.iParams[1] = type;
     cmd.iParams[2] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 void OutputMapper::QueueSetGain(int virtual_id, int gain) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+    // Not considered an "active" effect for UI purposes
     HapticCommand cmd;
     cmd.type = HapticCommand::GAIN;
     cmd.virtual_id = virtual_id;
     cmd.iParams[0] = gain;
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,
@@ -421,7 +459,7 @@ void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, co
                                          int amplitude, int frequency, int snap_force,
                                          int first_foot, int second_foot, int period,
                                          int amplitude_a, int amplitude_b) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_lastHapticActivityTime = SDL_GetTicks();
     HapticCommand cmd;
     cmd.type = HapticCommand::DUALSENSE_TRIGGER;
     cmd.virtual_id = virtual_id;
@@ -437,7 +475,7 @@ void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, co
     cmd.iParams[7] = second_foot;
     cmd.iParams[8] = period;
     cmd.iParams[9] = (amplitude_a & 0xFF) | ((amplitude_b & 0xFF) << 8);
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 // --- Trigger Implementations ---

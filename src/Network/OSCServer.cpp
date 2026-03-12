@@ -6,6 +6,7 @@
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
+#include <SDL3/SDL_timer.h>
 #include <iostream>
 #include <string>
 #include <cstdarg>
@@ -154,6 +155,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
 void OSCServer::Stop() {
     lo_server_thread thread_to_stop = nullptr;
     lo_address address_to_free = nullptr;
+    OutputMapper* mapper = nullptr;
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -174,6 +176,11 @@ void OSCServer::Stop() {
         // as soon as Stop() is called, rather than keeping stale entries
         // until the next Start().
         m_clients.clear();
+        mapper = m_OutputMapper;
+    }
+
+    if (mapper) {
+        mapper->StopAllHapticEffects();
     }
 
     // lo_server_thread_stop() blocks until the liblo receive thread exits.
@@ -287,6 +294,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
 
         {
             std::lock_guard<std::mutex> lock(server->m_mutex);
+            server->m_lastMessageTime = SDL_GetTicks();
             isRunning  = server->m_running;
 
             // Track the source client while we still hold the lock
@@ -459,6 +467,25 @@ int OSCServer::GetReceivePort() const {
 }
 
 void OSCServer::DrawContent() {
+    // --- Client timeout logic --------------------------------------------------
+    const uint64_t OSC_CLIENT_TIMEOUT_MS = 5000; // 5 seconds
+    bool clients_timed_out = false;
+    OutputMapper* mapper = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_running && !m_clients.empty() && m_lastMessageTime > 0 && (SDL_GetTicks() - m_lastMessageTime > OSC_CLIENT_TIMEOUT_MS)) {
+            clients_timed_out = true;
+            m_clients.clear();
+            m_lastMessageTime = 0; // Prevent re-triggering
+            m_logs.push_back("OSC clients timed out. Stopping haptics.");
+            if (m_logs.size() > 100) m_logs.pop_front();
+            mapper = m_OutputMapper;
+        }
+    }
+    if (clients_timed_out && mapper) {
+        mapper->StopAllHapticEffects();
+    }
+
     ImGui::InputInt("Send Port",    &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 

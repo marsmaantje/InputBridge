@@ -122,12 +122,25 @@ void WebSocketServer::Start(int port) {
                                },
                            .close =
                                [this](auto *ws, int code, std::string_view message) {
-                                   std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                                   if (m_Impl->clients.count(ws)) {
-                                       m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
-                                       if (m_Impl->logs.size() > 100)
-                                           m_Impl->logs.pop_front();
-                                       m_Impl->clients.erase(ws);
+                                   bool doStopHaptics = false;
+                                   OutputMapper* mapperCopy = nullptr;
+                                   {
+                                       std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                                       if (m_Impl->clients.count(ws)) {
+                                           m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
+                                           if (m_Impl->logs.size() > 100)
+                                               m_Impl->logs.pop_front();
+                                           m_Impl->clients.erase(ws);
+
+                                           if (m_Impl->clients.empty()) {
+                                               doStopHaptics = true;
+                                               mapperCopy = m_OutputMapper;
+                                           }
+                                       }
+                                   }
+
+                                   if (doStopHaptics && mapperCopy) {
+                                       mapperCopy->StopAllHapticEffects();
                                    }
                                }})
             .listen(port,
@@ -189,6 +202,10 @@ void WebSocketServer::Stop() {
     if (m_Impl->running && m_Impl->loop && m_Impl->listen_socket) {
         struct us_listen_socket_t *socket = (struct us_listen_socket_t *)m_Impl->listen_socket;
         m_Impl->loop->defer([socket]() { us_listen_socket_close(0, socket); });
+    }
+
+    if (m_OutputMapper) {
+        m_OutputMapper->StopAllHapticEffects();
     }
 }
 

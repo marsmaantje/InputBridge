@@ -108,5 +108,6 @@ private:
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;
+    uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;
 };

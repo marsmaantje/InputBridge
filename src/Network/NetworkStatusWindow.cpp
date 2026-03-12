@@ -1,6 +1,7 @@
 #include "NetworkStatusWindow.h"
 #include "OSCServer.h"
 #include "WebSocketServer.h"
+#include "Mappers/OutputMapper.h"
 #include "imgui.h"
 
 void NetworkStatusWindow::Draw(int& update_rate, bool& dynamic_rate, float messages_per_second) {
@@ -26,6 +27,16 @@ void NetworkStatusWindow::DrawContentOnly(int& update_rate, bool& dynamic_rate, 
         ImGui::SliderInt(label, &update_rate, 1, 200);
     }
     ImGui::Separator();
+
+    ImGui::Text("Haptic Effects:");
+    ImGui::SameLine();
+    if (OutputMapper::GetInstance().IsHapticsActive()) {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Active");
+    } else {
+        ImGui::TextDisabled("Idle");
+    }
+    ImGui::Separator();
+
     if (ImGui::BeginTabBar("NetworkTabs")) {
         if (ImGui::BeginTabItem("OSC Server")) {
             OSCServer::GetInstance().DrawContent();
