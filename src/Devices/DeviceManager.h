@@ -7,7 +7,7 @@
 #include <map>
 
 #include "Haptics/HapticDevice.h"
-#include "wheel/wheel_manager.hpp"
+#include "../../lib/wheel-rpm-lib/include/wheel/wheel_manager.hpp"
 
 class DeviceManager {
   public:
@@ -23,7 +23,7 @@ class DeviceManager {
     static std::string GetDeviceGUIDString(const DeviceState &dev);
 
     HapticDevice* GetHapticDevice(SDL_JoystickID instance_id) const;
-    
+
     void UpdateBatteryInfo(DeviceState &dev);
 
     // --- wheel-rpm-lib integration ---
