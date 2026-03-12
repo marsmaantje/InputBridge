@@ -1,5 +1,11 @@
 #include "SteeringWheelHaptics.h"
 
+std::map<int, ActiveConditionInfo> SteeringWheelHaptics::GetActiveConditions()
+{
+    std::lock_guard<std::mutex> lock(m_activeConditionsMutex);
+    return m_activeConditions;
+}
+
 int SteeringWheelHaptics::SetGain(int gain) {
     RunAsync([this, gain]() {
         if (!m_haptic) {
@@ -116,8 +122,26 @@ int SteeringWheelHaptics::PlayCondition(int slot, uint16_t type, float right_sat
         SDL_HapticEffectID newId = UploadEffect(effect, existingId);
         if (newId != -1) {
             m_conditionEffects[slot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+            if (SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                // Success, update UI state
+                std::lock_guard<std::mutex> lock(m_activeConditionsMutex);
+                auto& info = m_activeConditions[slot];
+                info.type = type;
+                info.right_sat = right_sat;
+                info.left_sat = left_sat;
+                info.right_coeff = right_coeff;
+                info.left_coeff = left_coeff;
+                info.deadband = deadband;
+                info.center = center;
+                info.duration_ms = duration_ms;
+                info.last_updated = SDL_GetTicks();
+            } else {
                 SDL_Log("SteeringWheelHaptics::PlayCondition - Run failed for type %d: %s", type, SDL_GetError());
+                // Effect failed to run, remove it from our UI state
+                {
+                    std::lock_guard<std::mutex> lock(m_activeConditionsMutex);
+                    m_activeConditions.erase(slot);
+                }
             }
         }
     });
@@ -135,9 +159,20 @@ int SteeringWheelHaptics::StopCondition(int slot) {
             if (effectId != -1) {
                 SDL_StopHapticEffect(m_haptic.Get(), effectId);
                 SDL_DestroyHapticEffect(m_haptic.Get(), effectId);
+                {
+                    std::lock_guard<std::mutex> lock(m_activeConditionsMutex);
+                    m_activeConditions.erase(slot);
+                }
                 m_conditionEffects.erase(slot);
             }
         }
     });
     return 0;
+}
+
+void SteeringWheelHaptics::StopAll()
+{
+    std::lock_guard<std::mutex> lock(m_activeConditionsMutex);
+    m_activeConditions.clear();
+    HapticDevice::StopAll();
 }

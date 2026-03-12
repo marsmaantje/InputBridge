@@ -120,6 +120,39 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             }
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Text("Active Haptic Slots");
+        if (ImGui::BeginChild("ActiveHaptics", ImVec2(0, 150), true)) {
+            auto active_conditions = wheelHaptics->GetActiveConditions();
+            if (active_conditions.empty()) {
+                ImGui::TextDisabled("No active condition effects.");
+            } else {
+                for (const auto& [slot, info] : active_conditions) {
+                    if (ImGui::TreeNode((void*)(intptr_t)slot, "Slot %d", slot)) {
+                        const char* type_str = "Unknown";
+                        switch (info.type) {
+                            case SDL_HAPTIC_SPRING: type_str = "Spring"; break;
+                            case SDL_HAPTIC_DAMPER: type_str = "Damper"; break;
+                            case SDL_HAPTIC_INERTIA: type_str = "Inertia"; break;
+                            case SDL_HAPTIC_FRICTION: type_str = "Friction"; break;
+                        }
+                        ImGui::Text("Type: %s", type_str);
+                        if (info.duration_ms == SDL_HAPTIC_INFINITY) {
+                            ImGui::Text("Duration: Infinite");
+                        } else {
+                            ImGui::Text("Duration: %u ms", info.duration_ms);
+                        }
+                        ImGui::Text("Center: %.3f", info.center);
+                        ImGui::Text("Deadband: %.3f", info.deadband);
+                        ImGui::Text("L/R Coeff: %.3f / %.3f", info.left_coeff, info.right_coeff);
+                        ImGui::Text("L/R Sat: %.3f / %.3f", info.left_sat, info.right_sat);
+                        ImGui::TreePop();
+                    }
+                }
+            }
+        }
+        ImGui::EndChild();
     } else {
         ImGui::TextDisabled("Steering Wheel Haptics not available");
     }

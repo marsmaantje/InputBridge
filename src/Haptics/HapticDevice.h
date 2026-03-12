@@ -45,7 +45,7 @@ public:
 
     void UpdateEffect(SDL_HapticEffectID effectId, const SDL_HapticEffect& effect);
 
-    void StopAll();
+    virtual void StopAll();
 
 protected:
     SDL_Joystick* m_joystick = nullptr;  // Non-owning pointer
