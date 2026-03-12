@@ -203,7 +203,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
         const float  btn_w   = ImGui::GetContentRegionAvail().x;
 
         if (ImGui::Button("##exit_btn", { btn_w, BTN_H }))
-            ctx.done = true;
+            ctx.done = false;
 
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(2);

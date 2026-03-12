@@ -336,6 +336,18 @@ void Application::Shutdown()
     // prevents that entire class of ordering bugs.
     ProtocolManager::GetInstance().Clear();
 
+    // ── Stop network servers BEFORE destroying mappers ────────────────────────
+    // Both OSCServer::Stop() and WebSocketServer::Stop() call
+    // m_OutputMapper->StopAllHapticEffects() synchronously via their stored raw
+    // pointer.  If OutputMapper::Shutdown() runs first it frees the OutputMapper
+    // object, turning those calls into use-after-free crashes (segfault at
+    // OutputMapper.cpp StopAllHapticEffects).  Stopping the servers here —
+    // while OutputMapper is still alive — prevents that entirely.
+    OSCServer::GetInstance().SaveConfig(m_prefs);
+    WebSocketServer::GetInstance().SaveConfig(m_prefs);
+    OSCServer::GetInstance().Stop();
+    WebSocketServer::GetInstance().Stop();
+
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
@@ -344,16 +356,6 @@ void Application::Shutdown()
     im.SaveConfig(m_prefs);
     InputMapper::Shutdown();
     OutputMapper::Shutdown();
-
-    OSCServer::GetInstance().SaveConfig(m_prefs);
-    WebSocketServer::GetInstance().SaveConfig(m_prefs);
-
-    // Stop network servers explicitly here (while SDL and all singletons are
-    // still alive) so their cleanup threads finish before SDL_Quit().  Without
-    // this the servers' static-singleton destructors run after SDL_Quit(),
-    // causing lo_server_thread_stop / SDL haptic calls on a dead subsystem.
-    OSCServer::GetInstance().Stop();
-    WebSocketServer::GetInstance().Stop();
 
     // Close haptic and joystick devices before SDL_Quit().  DeviceManager is a
     // static singleton; its destructor (which calls CloseAllDevices) runs after
