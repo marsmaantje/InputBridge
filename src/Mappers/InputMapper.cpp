@@ -670,7 +670,7 @@ void InputMapper::DrawMappingContent() {
                 ImGui::TableSetupColumn("Button Index",  ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableSetupColumn("Digital Field", ImGuiTableColumnFlags_WidthFixed, 150.f);
                 ImGui::TableSetupColumn("Mode",          ImGuiTableColumnFlags_WidthFixed, 90.f);
-                ImGui::TableSetupColumn("",              ImGuiTableColumnFlags_WidthFixed, 90.f);
+                ImGui::TableSetupColumn("",              ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableHeadersRow();
 
                 for (int i = 0; i < (int)profile.digitalMappings.size(); ++i) {
@@ -759,7 +759,7 @@ void InputMapper::DrawMappingContent() {
         ImGui::TableSetupColumn("Target",   ImGuiTableColumnFlags_WidthFixed, 150.f);
         ImGui::TableSetupColumn("On Val",   ImGuiTableColumnFlags_WidthFixed, 60.f);
         ImGui::TableSetupColumn("Off Val",  ImGuiTableColumnFlags_WidthFixed, 60.f);
-        ImGui::TableSetupColumn("",         ImGuiTableColumnFlags_WidthFixed, 90.f);
+        ImGui::TableSetupColumn("",         ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
         for (int i = 0; i < (int)profile.buttonMappings.size(); ++i) {
