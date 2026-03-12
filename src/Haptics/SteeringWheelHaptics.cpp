@@ -108,15 +108,15 @@ int SteeringWheelHaptics::PlayCondition(int slot, uint16_t type, float right_sat
             return;
         }
 
-        if (m_joystick) {
-            SDL_Haptic* sdl_haptic = SDL_OpenHapticFromJoystick(m_joystick);
-            if (sdl_haptic) {
-                int max_effects = SDL_GetMaxHapticEffects(sdl_haptic);
-                SDL_CloseHaptic(sdl_haptic);
-                if (slot < 0 || slot >= max_effects) {
-                    SDL_Log("SteeringWheelHaptics::PlayCondition - Invalid slot %d (max: %d)", slot, max_effects);
-                    return;
-                }
+        // Validate the slot using the already-open haptic handle.  The previous
+        // code called SDL_OpenHapticFromJoystick here, which opened a second
+        // SDL_Haptic handle to the same device — redundant, wasteful, and a
+        // potential source of conflict with the existing m_haptic handle.
+        if (m_haptic) {
+            int max_effects = SDL_GetMaxHapticEffects(m_haptic.Get());
+            if (slot < 0 || slot >= max_effects) {
+                SDL_Log("SteeringWheelHaptics::PlayCondition - Invalid slot %d (max: %d)", slot, max_effects);
+                return;
             }
         }
 

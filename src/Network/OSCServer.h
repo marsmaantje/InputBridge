@@ -35,6 +35,10 @@ public:
     // Starts both sending and receiving
     bool Start(const std::string& send_host, int send_port, int recv_port);
     void Stop();
+    // Block until the liblo cleanup thread (spawned by Stop()) has fully
+    // exited.  Must be called after Stop() and before destroying any object
+    // the liblo callbacks reference (e.g. OutputMapper).
+    void WaitStopped();
 
     bool IsRunning() const;
 

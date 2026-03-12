@@ -170,43 +170,69 @@ void WebSocketServer::Start(int port) {
 }
 
 void WebSocketServer::Stop() {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    m_Impl->restartPending = false;
+    OutputMapper* mapper = nullptr;
 
-    // loop over all connected clients, closing them
-    if (m_Impl->running && m_Impl->loop && !m_Impl->clients.empty()) {
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        m_Impl->restartPending = false;
 
-        // We capture a copy of the clients map pointers to avoid long locks
-        std::vector<void *> targets;
-        for (auto const &[ws, ip] : m_Impl->clients) {
-            targets.push_back(ws);
+        // Capture and immediately null m_OutputMapper while holding the lock.
+        // The .close lambda (which fires on the uWS thread when clients are
+        // disconnected) snapshots m_OutputMapper under this same mutex.  By
+        // clearing it here — before the deferred client-close callbacks are
+        // queued — we guarantee those callbacks see nullptr and will not call
+        // StopAllHapticEffects() on an object that may have been freed by the
+        // time the uWS thread processes the deferred work.
+        mapper = m_OutputMapper;
+        m_OutputMapper = nullptr;
+
+        // loop over all connected clients, closing them
+        if (m_Impl->running && m_Impl->loop && !m_Impl->clients.empty()) {
+
+            // We capture a copy of the clients map pointers to avoid long locks
+            std::vector<void *> targets;
+            for (auto const &[ws, ip] : m_Impl->clients) {
+                targets.push_back(ws);
+            }
+
+            // Move the actual closing into the uWS Thread via defer
+            m_Impl->loop->defer([targets, this]() {
+                for (void *ptr : targets) {
+                    // Check if the client is still connected to avoid use-after-free
+                    {
+                        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                        if (m_Impl->clients.find(ptr) == m_Impl->clients.end())
+                            continue;
+                    }
+                    // Cast back to the specific WebSocket type used in Start()
+                    auto *ws = (uWS::WebSocket<false, true, int> *)ptr;
+                    // code 1000 means "Normal closure" and gets send to all clients
+                    ws->end(1000, "Server stopping");
+                }
+            });
         }
 
-        // Move the actual closing into the uWS Thread via defer
-        m_Impl->loop->defer([targets, this]() {
-            for (void *ptr : targets) {
-                // Check if the client is still connected to avoid use-after-free
-                {
-                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                    if (m_Impl->clients.find(ptr) == m_Impl->clients.end())
-                        continue;
-                }
-                // Cast back to the specific WebSocket type used in Start()
-                auto *ws = (uWS::WebSocket<false, true, int> *)ptr;
-                // code 1000 means "Normal closure" and gets send to all clients
-                ws->end(1000, "Server stopping");
-            }
-        });
-    }
+        if (m_Impl->running && m_Impl->loop && m_Impl->listen_socket) {
+            struct us_listen_socket_t *socket = (struct us_listen_socket_t *)m_Impl->listen_socket;
+            m_Impl->loop->defer([socket]() { us_listen_socket_close(0, socket); });
+        }
+    } // mutex released before external call
 
-    if (m_Impl->running && m_Impl->loop && m_Impl->listen_socket) {
-        struct us_listen_socket_t *socket = (struct us_listen_socket_t *)m_Impl->listen_socket;
-        m_Impl->loop->defer([socket]() { us_listen_socket_close(0, socket); });
+    // Stop haptic effects while the OutputMapper is still alive.  Called outside
+    // the lock to avoid holding the WS mutex during an external call.
+    if (mapper) {
+        mapper->StopAllHapticEffects();
     }
+}
 
-    if (m_OutputMapper) {
-        m_OutputMapper->StopAllHapticEffects();
-    }
+void WebSocketServer::WaitStopped() {
+    // Block until the uWS event-loop thread has fully exited.  After Stop()
+    // defers the socket close, the thread continues running until app.run()
+    // returns.  Joining here ensures no more .message/.close callbacks can
+    // fire before the caller proceeds to tear down shared resources such as
+    // OutputMapper.
+    if (m_Impl->thread.joinable())
+        m_Impl->thread.join();
 }
 
 bool WebSocketServer::IsRunning() const {
@@ -593,6 +619,10 @@ void WebSocketServer::DrawContent() {
 }
 
 void WebSocketServer::SetOutputMapper(OutputMapper* mapper) {
+    // Must hold the mutex: m_OutputMapper is read from the uWS event-loop thread
+    // in the .message and .close callbacks, so writes from the main thread require
+    // the same lock those callbacks use.
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
     m_OutputMapper = mapper;
 }
 #endif

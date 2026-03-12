@@ -180,7 +180,14 @@ void OSCServer::Stop() {
         // as soon as Stop() is called, rather than keeping stale entries
         // until the next Start().
         m_clients.clear();
+
+        // Capture and null m_OutputMapper inside the lock.  The static haptic
+        // handlers check m_running (atomic) first, but a handler that passed
+        // that check before we set m_running=false could still call into
+        // m_OutputMapper.  Clearing the pointer here closes that window: any
+        // such handler will see nullptr on the next check and bail out safely.
         mapper = m_OutputMapper;
+        m_OutputMapper = nullptr;
     }
 
     if (mapper) {
@@ -214,6 +221,15 @@ void OSCServer::Stop() {
             if (m_logs.size() > 100) m_logs.pop_front();
         });
     }
+}
+
+void OSCServer::WaitStopped() {
+    // Block until the liblo cleanup thread (spawned by Stop()) has finished
+    // calling lo_server_thread_stop().  Once joined, no more liblo callbacks
+    // can fire, so it is safe to destroy objects those callbacks reference
+    // (e.g. OutputMapper).
+    if (m_cleanupThread.joinable())
+        m_cleanupThread.join();
 }
 
 bool OSCServer::IsDestroyed() {
@@ -652,5 +668,9 @@ void OSCServer::DrawContent() {
 }
 
 void OSCServer::SetOutputMapper(OutputMapper* mapper) {
+    // Protect with the mutex: the static haptic handlers read m_OutputMapper
+    // from the liblo receive thread, so writes from the main thread must be
+    // synchronised to prevent a data race.
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_OutputMapper = mapper;
 }

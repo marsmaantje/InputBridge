@@ -348,6 +348,16 @@ void Application::Shutdown()
     OSCServer::GetInstance().Stop();
     WebSocketServer::GetInstance().Stop();
 
+    // Wait for the OSC liblo cleanup thread and the uWS event-loop thread to
+    // fully exit before OutputMapper is destroyed.  Both Stop() calls above
+    // return immediately and move their blocking teardown to background threads;
+    // those threads hold raw OutputMapper* pointers and can still invoke
+    // callbacks (e.g. StopAllHapticEffects) until they have fully terminated.
+    // Joining here guarantees no callback can fire after Shutdown() frees the
+    // object, eliminating the use-after-free that causes the segfault.
+    OSCServer::GetInstance().WaitStopped();
+    WebSocketServer::GetInstance().WaitStopped();
+
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();

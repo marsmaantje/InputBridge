@@ -18,6 +18,10 @@ class WebSocketServer {
 
     void Start(int port);
     void Stop();
+    // Block until the uWS event-loop thread has fully exited.  Must be called
+    // after Stop() and before destroying any objects the thread's callbacks
+    // reference (e.g. OutputMapper).
+    void WaitStopped();
     bool IsRunning() const;
     int GetPort() const;
     void SetPort(int port);
@@ -59,6 +63,7 @@ class WebSocketServer {
 
     void Start(int port) {}
     void Stop() {}
+    void WaitStopped() {}
     bool IsRunning() const { return false; }
     int GetPort() const { return 0; }
     void SetPort(int port) {}
