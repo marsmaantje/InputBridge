@@ -543,7 +543,20 @@ void OutputMapper::TriggerConstantForce(int virtual_id, float strength, int dura
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-    if (!target || !target->haptic_device || !target->enable_constant) continue;
+    if (!target || !target->enable_constant) continue;
+
+    // If this target maps to a SteeringWheelHaptics, delegate to it so the
+    // effect is tracked in the haptic UI (Active Haptic Slots panel).
+    if (target->instance_id != 0) {
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        SteeringWheelHaptics* wheelHaptics = dynamic_cast<SteeringWheelHaptics*>(hapticDevice);
+        if (wheelHaptics) {
+            wheelHaptics->PlayConstant(strength, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            continue;
+        }
+    }
+
+    if (!target->haptic_device) continue;
 
     SDL_HapticEffect effect;
     SDL_memset(&effect, 0, sizeof(effect));
@@ -581,7 +594,21 @@ void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, f
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-    if (!target || !target->haptic_device || !target->enable_periodic) continue;
+    if (!target || !target->enable_periodic) continue;
+
+    // If this target maps to a SteeringWheelHaptics, delegate to it so the
+    // effect is tracked in the haptic UI (Active Haptic Slots panel).
+    if (target->instance_id != 0) {
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        SteeringWheelHaptics* wheelHaptics = dynamic_cast<SteeringWheelHaptics*>(hapticDevice);
+        if (wheelHaptics) {
+            wheelHaptics->PlayPeriodic(strength, (uint32_t)period, magnitude, offset, (uint32_t)phase,
+                                       (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            continue;
+        }
+    }
+
+    if (!target->haptic_device) continue;
 
     SDL_HapticEffect effect;
     SDL_memset(&effect, 0, sizeof(effect));

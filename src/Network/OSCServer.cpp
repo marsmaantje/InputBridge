@@ -30,6 +30,10 @@ OSCServer::OSCServer() {
 
 OSCServer::~OSCServer() {
     Stop();
+    // Join the cleanup thread (if any) so it finishes accessing our members
+    // before the destructor body returns and the members are destroyed.
+    if (m_cleanupThread.joinable())
+        m_cleanupThread.join();
     s_isDestroyed = true;
 }
 
@@ -190,7 +194,13 @@ void OSCServer::Stop() {
     // Both handles are captured by value; the OSCServer singleton outlives
     // the detached thread, so the final log append is safe.
     if (thread_to_stop || address_to_free) {
-        std::thread([this, thread_to_stop, address_to_free]() {
+        // Join any previous cleanup thread before launching a new one.
+        // This prevents overlapping cleanups and ensures the stored thread
+        // is always in a joinable or default (not-a-thread) state.
+        if (m_cleanupThread.joinable())
+            m_cleanupThread.join();
+
+        m_cleanupThread = std::thread([this, thread_to_stop, address_to_free]() {
             if (thread_to_stop) {
                 lo_server_thread_stop(thread_to_stop);
                 lo_server_thread_free(thread_to_stop);
@@ -202,8 +212,12 @@ void OSCServer::Stop() {
             std::cout << "OSC server stopped." << std::endl;
             m_logs.push_back("OSC server stopped.");
             if (m_logs.size() > 100) m_logs.pop_front();
-        }).detach();
+        });
     }
+}
+
+bool OSCServer::IsDestroyed() {
+    return s_isDestroyed.load();
 }
 
 bool OSCServer::IsRunning() const {

@@ -3,6 +3,24 @@
 #include <map>
 #include <mutex>
 
+struct ActiveConstantInfo {
+    float strength = 0.0f;
+    uint32_t duration_ms = 0;
+    uint64_t last_updated = 0;
+    bool active = false;
+};
+
+struct ActivePeriodicInfo {
+    float strength = 0.0f;
+    uint32_t period = 0;
+    float magnitude = 0.0f;
+    float offset = 0.0f;
+    uint32_t phase = 0;
+    uint32_t duration_ms = 0;
+    uint64_t last_updated = 0;
+    bool active = false;
+};
+
 struct ActiveConditionInfo {
     uint16_t type = 0;
     float right_sat = 0.0f;
@@ -27,7 +45,13 @@ public:
     void StopAll() override;
 
     std::map<int, ActiveConditionInfo> GetActiveConditions();
+    ActiveConstantInfo GetActiveConstant();
+    ActivePeriodicInfo GetActivePeriodic();
 private:
     std::map<int, ActiveConditionInfo> m_activeConditions;
     std::mutex m_activeConditionsMutex;
+
+    ActiveConstantInfo  m_activeConstant;
+    ActivePeriodicInfo  m_activePeriodic;
+    std::mutex          m_activeSimpleMutex; // guards m_activeConstant and m_activePeriodic
 };

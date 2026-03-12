@@ -27,7 +27,14 @@ OSCProtocol::OSCProtocol() {
 }
 
 OSCProtocol::~OSCProtocol() {
-    OSCServer::GetInstance().SetHandler(nullptr);
+    // OSCServer is a static singleton constructed after ProtocolManager and
+    // therefore destroyed before it.  If ProtocolManager::Clear() was not
+    // called during Shutdown(), our destructor could run after OSCServer's
+    // destructor has already finished — calling SetHandler on a dead object.
+    // IsDestroyed() guards against that scenario.
+    if (!OSCServer::IsDestroyed()) {
+        OSCServer::GetInstance().SetHandler(nullptr);
+    }
 }
 
 std::string OSCProtocol::format(const std::string &address, float value) { return ""; }

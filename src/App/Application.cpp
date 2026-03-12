@@ -327,6 +327,15 @@ void Application::Run()
 
 void Application::Shutdown()
 {
+    // ── Release all protocol instances first ──────────────────────────────────
+    // ProtocolManager is a static singleton constructed before OSCServer, so it
+    // would be destroyed AFTER OSCServer during normal static teardown.
+    // Protocol destructors (e.g. OSCProtocol::~OSCProtocol) call back into
+    // OSCServer::GetInstance(), which would be a use-after-destruction crash.
+    // Clearing the protocol map now — while all singletons are still alive —
+    // prevents that entire class of ordering bugs.
+    ProtocolManager::GetInstance().Clear();
+
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
@@ -338,6 +347,19 @@ void Application::Shutdown()
 
     OSCServer::GetInstance().SaveConfig(m_prefs);
     WebSocketServer::GetInstance().SaveConfig(m_prefs);
+
+    // Stop network servers explicitly here (while SDL and all singletons are
+    // still alive) so their cleanup threads finish before SDL_Quit().  Without
+    // this the servers' static-singleton destructors run after SDL_Quit(),
+    // causing lo_server_thread_stop / SDL haptic calls on a dead subsystem.
+    OSCServer::GetInstance().Stop();
+    WebSocketServer::GetInstance().Stop();
+
+    // Close haptic and joystick devices before SDL_Quit().  DeviceManager is a
+    // static singleton; its destructor (which calls CloseAllDevices) runs after
+    // main() returns and therefore after SDL_Quit() — too late.  Calling it
+    // explicitly here keeps all SDL API calls within SDL's lifetime.
+    DeviceManager::GetInstance().CloseAllDevices();
 
     ProtocolRegistry::GetInstance().SaveAll();
 

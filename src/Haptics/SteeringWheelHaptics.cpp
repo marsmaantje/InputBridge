@@ -6,6 +6,18 @@ std::map<int, ActiveConditionInfo> SteeringWheelHaptics::GetActiveConditions()
     return m_activeConditions;
 }
 
+ActiveConstantInfo SteeringWheelHaptics::GetActiveConstant()
+{
+    std::lock_guard<std::mutex> lock(m_activeSimpleMutex);
+    return m_activeConstant;
+}
+
+ActivePeriodicInfo SteeringWheelHaptics::GetActivePeriodic()
+{
+    std::lock_guard<std::mutex> lock(m_activeSimpleMutex);
+    return m_activePeriodic;
+}
+
 int SteeringWheelHaptics::SetGain(int gain) {
     RunAsync([this, gain]() {
         if (!m_haptic) {
@@ -38,6 +50,12 @@ int SteeringWheelHaptics::PlayConstant(float strength, uint32_t duration_ms) {
         if (m_constantEffectId != -1) {
             if (!SDL_RunHapticEffect(m_haptic.Get(), m_constantEffectId, 1)) {
                 SDL_Log("SteeringWheelHaptics::PlayConstant - Run failed: %s", SDL_GetError());
+            } else {
+                std::lock_guard<std::mutex> lock(m_activeSimpleMutex);
+                m_activeConstant.strength    = clamped_strength;
+                m_activeConstant.duration_ms = duration_ms;
+                m_activeConstant.last_updated = SDL_GetTicks();
+                m_activeConstant.active      = true;
             }
         }
     });
@@ -67,6 +85,16 @@ int SteeringWheelHaptics::PlayPeriodic(float strength, uint32_t period, float ma
         if (m_periodicEffectId != -1) {
             if (!SDL_RunHapticEffect(m_haptic.Get(), m_periodicEffectId, 1)) {
                 SDL_Log("SteeringWheelHaptics::PlayPeriodic - Run failed: %s", SDL_GetError());
+            } else {
+                std::lock_guard<std::mutex> lock(m_activeSimpleMutex);
+                m_activePeriodic.strength     = strength;
+                m_activePeriodic.period       = period;
+                m_activePeriodic.magnitude    = magnitude;
+                m_activePeriodic.offset       = offset;
+                m_activePeriodic.phase        = phase;
+                m_activePeriodic.duration_ms  = duration_ms;
+                m_activePeriodic.last_updated = SDL_GetTicks();
+                m_activePeriodic.active       = true;
             }
         }
     });
@@ -172,7 +200,14 @@ int SteeringWheelHaptics::StopCondition(int slot) {
 
 void SteeringWheelHaptics::StopAll()
 {
-    std::lock_guard<std::mutex> lock(m_activeConditionsMutex);
-    m_activeConditions.clear();
+    {
+        std::lock_guard<std::mutex> lock(m_activeConditionsMutex);
+        m_activeConditions.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_activeSimpleMutex);
+        m_activeConstant = {};
+        m_activePeriodic = {};
+    }
     HapticDevice::StopAll();
 }

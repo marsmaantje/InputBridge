@@ -124,32 +124,70 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
         ImGui::Separator();
         ImGui::Text("Active Haptic Slots");
         if (ImGui::BeginChild("ActiveHaptics", ImVec2(0, 150), true)) {
-            auto active_conditions = wheelHaptics->GetActiveConditions();
-            if (active_conditions.empty()) {
-                ImGui::TextDisabled("No active condition effects.");
-            } else {
-                for (const auto& [slot, info] : active_conditions) {
-                    if (ImGui::TreeNode((void*)(intptr_t)slot, "Slot %d", slot)) {
-                        const char* type_str = "Unknown";
-                        switch (info.type) {
-                            case SDL_HAPTIC_SPRING: type_str = "Spring"; break;
-                            case SDL_HAPTIC_DAMPER: type_str = "Damper"; break;
-                            case SDL_HAPTIC_INERTIA: type_str = "Inertia"; break;
-                            case SDL_HAPTIC_FRICTION: type_str = "Friction"; break;
-                        }
-                        ImGui::Text("Type: %s", type_str);
-                        if (info.duration_ms == SDL_HAPTIC_INFINITY) {
-                            ImGui::Text("Duration: Infinite");
-                        } else {
-                            ImGui::Text("Duration: %u ms", info.duration_ms);
-                        }
-                        ImGui::Text("Center: %.3f", info.center);
-                        ImGui::Text("Deadband: %.3f", info.deadband);
-                        ImGui::Text("L/R Coeff: %.3f / %.3f", info.left_coeff, info.right_coeff);
-                        ImGui::Text("L/R Sat: %.3f / %.3f", info.left_sat, info.right_sat);
-                        ImGui::TreePop();
-                    }
+            bool anyActive = false;
+
+            // --- Constant ---
+            auto active_constant = wheelHaptics->GetActiveConstant();
+            if (active_constant.active) {
+                anyActive = true;
+                if (ImGui::TreeNodeEx("Constant Force", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Text("Strength: %.3f", active_constant.strength);
+                    if (active_constant.duration_ms == SDL_HAPTIC_INFINITY)
+                        ImGui::Text("Duration: Infinite");
+                    else
+                        ImGui::Text("Duration: %u ms", active_constant.duration_ms);
+                    ImGui::TreePop();
                 }
+            }
+
+            // --- Periodic ---
+            auto active_periodic = wheelHaptics->GetActivePeriodic();
+            if (active_periodic.active) {
+                anyActive = true;
+                if (ImGui::TreeNodeEx("Periodic (Sine)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Text("Strength: %.3f", active_periodic.strength);
+                    ImGui::Text("Period: %u ms", active_periodic.period);
+                    ImGui::Text("Magnitude: %.3f", active_periodic.magnitude);
+                    ImGui::Text("Offset: %.3f", active_periodic.offset);
+                    ImGui::Text("Phase: %u", active_periodic.phase);
+                    if (active_periodic.duration_ms == SDL_HAPTIC_INFINITY)
+                        ImGui::Text("Duration: Infinite");
+                    else
+                        ImGui::Text("Duration: %u ms", active_periodic.duration_ms);
+                    ImGui::TreePop();
+                }
+            }
+
+            // --- Conditions ---
+            auto active_conditions = wheelHaptics->GetActiveConditions();
+            for (const auto& [slot, info] : active_conditions) {
+                anyActive = true;
+                if (ImGui::TreeNode((void*)(intptr_t)slot, "Slot %d", slot)) {
+                    const char* type_str = "Unknown";
+                    switch (info.type) {
+                        case SDL_HAPTIC_SPRING: type_str = "Spring"; break;
+                        case SDL_HAPTIC_DAMPER: type_str = "Damper"; break;
+                        case SDL_HAPTIC_INERTIA: type_str = "Inertia"; break;
+                        case SDL_HAPTIC_FRICTION: type_str = "Friction"; break;
+                    }
+                    ImGui::Text("Type: %s", type_str);
+                    if (info.duration_ms == SDL_HAPTIC_INFINITY) {
+                        ImGui::Text("Duration: Infinite");
+                    } else {
+                        ImGui::Text("Duration: %u ms", info.duration_ms);
+                    }
+                    ImGui::Text("Center: %.3f", info.center);
+                    ImGui::Text("Deadband: %.3f", info.deadband);
+                    ImGui::Text("L/R Coeff: %.3f / %.3f", info.left_coeff, info.right_coeff);
+                    ImGui::Text("L/R Sat: %.3f / %.3f", info.left_sat, info.right_sat);
+                    ImGui::TreePop();
+                }
+            }
+
+            if (!anyActive) {
+                ImGui::TextDisabled("No active haptic effects.");
+                ImGui::TextDisabled("(Effects started before InputBridge opened");
+                ImGui::TextDisabled(" cannot be detected via SDL.)");
             }
         }
         ImGui::EndChild();

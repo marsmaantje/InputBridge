@@ -28,6 +28,13 @@ ProtocolManager::ProtocolManager() : m_Impl(new Impl) {
 
 ProtocolManager::~ProtocolManager() { delete m_Impl; }
 
+void ProtocolManager::Clear() {
+    // Release all protocol shared_ptrs now, while the singletons they
+    // reference (OSCServer, DeviceManager, etc.) are still alive.
+    // The destructor will then delete an already-empty Impl, which is safe.
+    m_Impl->protocols.clear();
+}
+
 void ProtocolManager::RegisterProtocol(std::shared_ptr<IProtocol> protocol) {
     if (protocol) {
         m_Impl->protocols[protocol->getProtocolName()] = protocol;

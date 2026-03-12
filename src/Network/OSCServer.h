@@ -9,6 +9,7 @@
 #include <set>
 #include <memory>
 #include <vector>
+#include <thread>
 
 class PreferencesManager;
 class OutputMapper;
@@ -36,6 +37,11 @@ public:
     void Stop();
 
     bool IsRunning() const;
+
+    // Returns true after the OSCServer singleton has been fully destroyed.
+    // Use in destructors of objects that may outlive the server (e.g. OSCProtocol)
+    // to guard against use-after-destruction when calling GetInstance().
+    static bool IsDestroyed();
 
     void Send(const std::string& path, const char* types, ...);
     void SendWheel(float steer, float brake, float throttle, float pitch, float roll);
@@ -110,4 +116,9 @@ private:
     std::set<std::string> m_clients;
     uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;
+
+    // Cleanup thread used by Stop() to run lo_server_thread_stop off the
+    // main/UI thread.  Stored (not detached) so the destructor can join it
+    // and guarantee the thread finishes before members are destroyed.
+    std::thread m_cleanupThread;
 };
