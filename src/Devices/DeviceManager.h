@@ -7,7 +7,7 @@
 #include <map>
 
 #include "Haptics/HapticDevice.h"
-#include "../../lib/wheel-rpm-lib/include/wheel/wheel_manager.hpp"
+#include "wheel/wheel_manager.hpp"
 
 class DeviceManager {
   public:

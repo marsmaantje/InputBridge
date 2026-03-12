@@ -1,7 +1,7 @@
 #include "SteeringWheelHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/SteeringWheelHaptics.h"
-#include "../../lib/wheel-rpm-lib/include/wheel/utils/rpm_mapper.hpp"
+#include "wheel/utils/rpm_mapper.hpp"
 #include <SDL3/SDL.h>
 
 void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
