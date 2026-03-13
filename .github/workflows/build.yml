@@ -300,7 +300,7 @@ jobs:
             - name: Generate Coverage Report
               if: runner.os == 'Linux'
               run: |
-                  lcov --capture --directory build --output-file coverage.info
+                  lcov --capture --ignore-errors mismatch --rc geninfo_unexecuted_blocks=1 --directory build --output-file coverage.info
                   lcov --remove coverage.info '/usr/*' '*/tests/*' '*/lib/*' --output-file coverage.info
                   genhtml coverage.info --output-directory coverage-report
 
