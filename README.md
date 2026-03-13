@@ -1,6 +1,6 @@
 # InputBridge
 
-[![Cross-platform building test](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml)
+[![Build Status](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (Ubuntu)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(ubuntu-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (Windows)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(windows-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (macOS)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(macos-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml)
 
 InputBridge is a cross-platform input device bridge that relays joystick, gamepad, steering wheel, and other controller data over OSC and WebSocket. It supports haptic feedback control, adaptive trigger effects, and a fully configurable protocol system.
 
