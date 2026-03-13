@@ -104,7 +104,7 @@ void PreferencesManager::Load() {
                 }
 
                 if (!key.empty()) {
-                    m_Sections[currentSection.empty() ? "General" : currentSection][key] = val;
+                    m_Sections[currentSection.empty() ? kGeneralSection : currentSection][key] = val;
                 }
             }
         }
@@ -115,15 +115,15 @@ void PreferencesManager::Save() {
     std::ofstream file(GetConfigFilePath());
     if (file.is_open()) {
         // Save General section first as top-level keys
-        if (m_Sections.count("General")) {
-            for (const auto &pair : m_Sections.at("General")) {
+        if (m_Sections.count(kGeneralSection)) {
+            for (const auto &pair : m_Sections.at(kGeneralSection)) {
                 file << pair.first << " = \"" << escape_for_toml(pair.second) << "\"\n";
             }
             file << "\n";
         }
 
         for (const auto &sectionPair : m_Sections) {
-            if (sectionPair.first == "General")
+            if (sectionPair.first == kGeneralSection)
                 continue;
             file << "[" << sectionPair.first << "]\n";
             for (const auto &pair : sectionPair.second) {
@@ -135,11 +135,11 @@ void PreferencesManager::Save() {
     }
 }
 
-void PreferencesManager::SetString(const std::string &key, const std::string &value) { SetString("General", key, value); }
+void PreferencesManager::SetString(const std::string &key, const std::string &value) { SetString(kGeneralSection, key, value); }
 
 void PreferencesManager::SetString(const std::string &section, const std::string &key, const std::string &value) { m_Sections[section][key] = value; }
 
-std::string PreferencesManager::GetString(const std::string &key, const std::string &defaultValue) const { return GetString("General", key, defaultValue); }
+std::string PreferencesManager::GetString(const std::string &key, const std::string &defaultValue) const { return GetString(kGeneralSection, key, defaultValue); }
 
 std::string PreferencesManager::GetString(const std::string &section, const std::string &key, const std::string &defaultValue) const {
     if (m_Sections.count(section)) {
@@ -151,7 +151,7 @@ std::string PreferencesManager::GetString(const std::string &section, const std:
     return defaultValue;
 }
 
-void PreferencesManager::DeleteKey(const std::string &key) { DeleteKey("General", key); }
+void PreferencesManager::DeleteKey(const std::string &key) { DeleteKey(kGeneralSection, key); }
 
 void PreferencesManager::DeleteKey(const std::string &section, const std::string &key) {
     if (m_Sections.count(section)) {
@@ -159,11 +159,11 @@ void PreferencesManager::DeleteKey(const std::string &section, const std::string
     }
 }
 
-void PreferencesManager::SetInt(const std::string &key, int value) { SetInt("General", key, value); }
+void PreferencesManager::SetInt(const std::string &key, int value) { SetInt(kGeneralSection, key, value); }
 
 void PreferencesManager::SetInt(const std::string &section, const std::string &key, int value) { m_Sections[section][key] = std::to_string(value); }
 
-int PreferencesManager::GetInt(const std::string &key, int defaultValue) const { return GetInt("General", key, defaultValue); }
+int PreferencesManager::GetInt(const std::string &key, int defaultValue) const { return GetInt(kGeneralSection, key, defaultValue); }
 
 int PreferencesManager::GetInt(const std::string &section, const std::string &key, int defaultValue) const {
     if (m_Sections.count(section)) {
@@ -175,11 +175,11 @@ int PreferencesManager::GetInt(const std::string &section, const std::string &ke
     return defaultValue;
 }
 
-void PreferencesManager::SetFloat(const std::string &key, float value) { SetFloat("General", key, value); }
+void PreferencesManager::SetFloat(const std::string &key, float value) { SetFloat(kGeneralSection, key, value); }
 
 void PreferencesManager::SetFloat(const std::string &section, const std::string &key, float value) { m_Sections[section][key] = std::to_string(value); }
 
-float PreferencesManager::GetFloat(const std::string &key, float defaultValue) const { return GetFloat("General", key, defaultValue); }
+float PreferencesManager::GetFloat(const std::string &key, float defaultValue) const { return GetFloat(kGeneralSection, key, defaultValue); }
 
 float PreferencesManager::GetFloat(const std::string &section, const std::string &key, float defaultValue) const {
     if (m_Sections.count(section)) {
@@ -191,11 +191,11 @@ float PreferencesManager::GetFloat(const std::string &section, const std::string
     return defaultValue;
 }
 
-void PreferencesManager::SetBool(const std::string &key, bool value) { SetBool("General", key, value); }
+void PreferencesManager::SetBool(const std::string &key, bool value) { SetBool(kGeneralSection, key, value); }
 
 void PreferencesManager::SetBool(const std::string &section, const std::string &key, bool value) { m_Sections[section][key] = value ? "true" : "false"; }
 
-bool PreferencesManager::GetBool(const std::string &key, bool defaultValue) const { return GetBool("General", key, defaultValue); }
+bool PreferencesManager::GetBool(const std::string &key, bool defaultValue) const { return GetBool(kGeneralSection, key, defaultValue); }
 
 bool PreferencesManager::GetBool(const std::string &section, const std::string &key, bool defaultValue) const {
     if (m_Sections.count(section)) {
@@ -210,10 +210,10 @@ bool PreferencesManager::GetBool(const std::string &section, const std::string &
 }
 
 std::string PreferencesManager::GetVisualizerPreference(const std::string &guid) const {
-    std::string section = "Device_" + guid;
+    std::string section = std::string(kDeviceSectionPrefix) + guid;
     if (m_Sections.count(section)) {
         const auto &sec = m_Sections.at(section);
-        auto it = sec.find("Visualizer");
+        auto it = sec.find(kVisualizerKey);
         if (it != sec.end()) {
             return it->second;
         }
@@ -221,15 +221,15 @@ std::string PreferencesManager::GetVisualizerPreference(const std::string &guid)
     return "";
 }
 
-void PreferencesManager::SetVisualizerPreference(const std::string &guid, const std::string &visualizer) { m_Sections["Device_" + guid]["Visualizer"] = visualizer; }
+void PreferencesManager::SetVisualizerPreference(const std::string &guid, const std::string &visualizer) { m_Sections[std::string(kDeviceSectionPrefix) + guid][kVisualizerKey] = visualizer; }
 
 std::string PreferencesManager::GetDeviceMapping(const std::string &guid) const {
-    std::string section = "Device_" + guid;
+    std::string section = std::string(kDeviceSectionPrefix) + guid;
     if (m_Sections.count(section)) {
         const auto &sec = m_Sections.at(section);
 
         // Check for legacy single-line mapping
-        auto it = sec.find("Mapping");
+        auto it = sec.find(kMappingKey);
         if (it != sec.end()) {
             return it->second;
         }
@@ -237,8 +237,8 @@ std::string PreferencesManager::GetDeviceMapping(const std::string &guid) const 
         // Construct from individual keys
         std::string mapping;
         for (const auto &pair : sec) {
-            if (pair.first.compare(0, 8, "Mapping.") == 0) {
-                mapping += pair.first.substr(8) + ":" + pair.second + ";";
+            if (pair.first.compare(0, kMappingPrefixLen, kMappingPrefix) == 0) {
+                mapping += pair.first.substr(kMappingPrefixLen) + ":" + pair.second + ";";
             }
         }
         return mapping;
@@ -247,19 +247,19 @@ std::string PreferencesManager::GetDeviceMapping(const std::string &guid) const 
 }
 
 void PreferencesManager::SetDeviceMapping(const std::string &guid, const std::string &mapping) {
-    std::string section = "Device_" + guid;
+    std::string section = std::string(kDeviceSectionPrefix) + guid;
 
     // Clear any previously decomposed Mapping.* keys
     auto &sec = m_Sections[section];
     for (auto it = sec.begin(); it != sec.end(); ) {
-        if (it->first.compare(0, 8, "Mapping.") == 0)
+        if (it->first.compare(0, kMappingPrefixLen, kMappingPrefix) == 0)
             it = sec.erase(it);
         else
             ++it;
     }
 
     // Store as a single opaque value (GetDeviceMapping checks "Mapping" first)
-    sec["Mapping"] = mapping;
+    sec[kMappingKey] = mapping;
     Save();
 }
 

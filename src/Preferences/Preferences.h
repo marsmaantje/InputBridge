@@ -4,6 +4,18 @@
 #include <set>
 #include <string>
 
+namespace PrefKeys {
+    // UI
+    inline constexpr const char* UIScale = "UIScale";
+    inline constexpr const char* FontScale = "FontScale";
+    inline constexpr const char* ScaleWithWindow = "ScaleWithWindow";
+
+    // Network
+    inline constexpr const char* NetworkSection = "Network";
+    inline constexpr const char* UpdateRate = "UpdateRate";
+    inline constexpr const char* DynamicRate = "DynamicRate";
+}
+
 class PreferencesManager {
   public:
     void Load();
@@ -48,4 +60,12 @@ class PreferencesManager {
     std::set<SDL_JoystickID> m_AppliedPreferences;
     const char *CONFIG_FILENAME = "visualizer_prefs.toml";
     std::string GetConfigFilePath();
+
+    // Constants for sections and keys
+    static constexpr const char* kGeneralSection = "General";
+    static constexpr const char* kDeviceSectionPrefix = "Device_";
+    static constexpr const char* kVisualizerKey = "Visualizer";
+    static constexpr const char* kMappingKey = "Mapping";
+    static constexpr const char* kMappingPrefix = "Mapping.";
+    static constexpr size_t kMappingPrefixLen = 8; // strlen("Mapping.")
 };

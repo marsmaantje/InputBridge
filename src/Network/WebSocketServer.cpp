@@ -15,6 +15,20 @@
 #include <mutex>
 #include <thread>
 
+namespace {
+    // Preference Keys
+    const char* const kWebSocketSection = "WebSocket";
+    const char* const kPortKey = "Port";
+    const char* const kProtocolKey = "Protocol";
+    const char* const kOutputDefIdKey = "OutputDefinitionId";
+    const char* const kInputDefIdKey = "InputDefinitionId";
+    const char* const kEnabledKey = "Enabled";
+
+    // Default values
+    const char* const kDefaultProtocol = "Marsmaantje (New)";
+}
+
+
 struct us_listen_socket_t;
 
 struct WebSocketServer::Impl {
@@ -47,7 +61,7 @@ WebSocketServer &WebSocketServer::GetInstance() {
 
 WebSocketServer::WebSocketServer() : m_selectedDeviceId(0), m_Impl(new Impl) {
     // Default to Marsmaantje (New)
-    SetProtocol("Marsmaantje (New)");
+    SetProtocol(kDefaultProtocol);
 }
 
 WebSocketServer::~WebSocketServer() {
@@ -442,11 +456,11 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
 }
 
 void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
-    int port = prefs.GetInt("WebSocket", "Port", 4269);
-    std::string protocol = prefs.GetString("WebSocket", "Protocol", "Marsmaantje (New)");
-    std::string outDefId = prefs.GetString("WebSocket", "OutputDefinitionId", "");
-    std::string inDefId  = prefs.GetString("WebSocket", "InputDefinitionId",  "");
-    bool enabled = prefs.GetBool("WebSocket", "Enabled", false);
+    int port = prefs.GetInt(kWebSocketSection, kPortKey, 4269);
+    std::string protocol = prefs.GetString(kWebSocketSection, kProtocolKey, kDefaultProtocol);
+    std::string outDefId = prefs.GetString(kWebSocketSection, kOutputDefIdKey, "");
+    std::string inDefId  = prefs.GetString(kWebSocketSection, kInputDefIdKey,  "");
+    bool enabled = prefs.GetBool(kWebSocketSection, kEnabledKey, false);
 
     SetPort(port);
     SetProtocol(protocol);
@@ -469,11 +483,11 @@ void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
         outDef   = m_Impl->outputDefinitionId;
         inDef    = m_Impl->inputDefinitionId;
     }
-    prefs.SetInt("WebSocket",    "Port",               port);
-    prefs.SetString("WebSocket", "Protocol",           protocol);
-    prefs.SetString("WebSocket", "OutputDefinitionId", outDef);
-    prefs.SetString("WebSocket", "InputDefinitionId",  inDef);
-    prefs.SetBool("WebSocket",   "Enabled",            running);
+    prefs.SetInt(kWebSocketSection,    kPortKey,               port);
+    prefs.SetString(kWebSocketSection, kProtocolKey,           protocol);
+    prefs.SetString(kWebSocketSection, kOutputDefIdKey, outDef);
+    prefs.SetString(kWebSocketSection, kInputDefIdKey,  inDef);
+    prefs.SetBool(kWebSocketSection,   kEnabledKey,            running);
 }
 
 void WebSocketServer::DrawContent() {

@@ -16,6 +16,41 @@
 #include <atomic>
 #include <thread>
 
+namespace {
+    // Preference Keys
+    const char* const kOSCSection = "OSC";
+    const char* const kSendHostKey = "SendHost";
+    const char* const kSendPortKey = "SendPort";
+    const char* const kRecvPortKey = "RecvPort";
+    const char* const kProtocolKey = "Protocol";
+    const char* const kInputProtocolKey = "InputProtocol";
+    const char* const kOutputDefIdKey = "OutputDefinitionId";
+    const char* const kInputDefIdKey = "InputDefinitionId";
+    const char* const kEnabledKey = "Enabled";
+
+    // Default values
+    const char* const kDefaultHost = "127.0.0.1";
+    const char* const kDefaultProtocol = "OSC Back Ally Racing";
+
+    // OSC Paths
+    const char* const kHapticRumblePath = "/haptic/rumble";
+    const char* const kHapticConstantPath = "/haptic/constant";
+    const char* const kHapticPeriodicPath = "/haptic/periodic";
+    const char* const kHapticConditionPath = "/haptic/condition";
+    const char* const kHapticGainPath = "/haptic/gain";
+
+    const char* const kWheelSteerPath = "/wheel/steer";
+    const char* const kWheelBrakePath = "/wheel/brake";
+    const char* const kWheelThrottlePath = "/wheel/throttle";
+    const char* const kWheelPitchPath = "/wheel/pitch";
+    const char* const kWheelRollPath = "/wheel/roll";
+
+    const char* const kWheelButtons0Path = "/wheel/buttons/0";
+    const char* const kWheelButtons1Path = "/wheel/buttons/1";
+    const char* const kWheelButtons2Path = "/wheel/buttons/2";
+    const char* const kWheelButtons3Path = "/wheel/buttons/3";
+}
+
 static std::atomic<bool> s_isDestroyed{false};
 
 OSCServer& OSCServer::GetInstance() {
@@ -25,7 +60,9 @@ OSCServer& OSCServer::GetInstance() {
 
 OSCServer::OSCServer() {
     s_isDestroyed = false;
-    SetProtocol("OSC Back Ally Racing");
+    SetProtocol(kDefaultProtocol);
+    strncpy(m_send_host, kDefaultHost, sizeof(m_send_host) - 1);
+    m_send_host[sizeof(m_send_host) - 1] = '\0';
 }
 
 OSCServer::~OSCServer() {
@@ -195,11 +232,11 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
         return false;
     }
 
-    lo_server_thread_add_method(m_server_thread, "/haptic/rumble", "iffi", haptic_rumble_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/constant", "ifi", haptic_constant_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/periodic", "ififfii", haptic_periodic_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/condition", "iiiffffffi", haptic_condition_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/gain", "ii", haptic_gain_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticRumblePath, "iffi", haptic_rumble_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticConstantPath, "ifi", haptic_constant_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath, "ififfii", haptic_periodic_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticConditionPath, "iiiffffffi", haptic_condition_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticGainPath, "ii", haptic_gain_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);
 
@@ -351,11 +388,11 @@ void OSCServer::SendWheel(float steer, float brake, float throttle, float pitch,
     // Ideally this would delegate to m_protocol->format_wheel, but we need to handle binary bundles.
     // For now, we keep the logic here but it applies to all selected OSC protocols.
     if (m_protocol) {
-        Send("/wheel/steer", "f", steer);
-        Send("/wheel/brake", "f", brake);
-        Send("/wheel/throttle", "f", throttle);
-        Send("/wheel/pitch", "f", pitch);
-        Send("/wheel/roll", "f", roll);
+        Send(kWheelSteerPath, "f", steer);
+        Send(kWheelBrakePath, "f", brake);
+        Send(kWheelThrottlePath, "f", throttle);
+        Send(kWheelPitchPath, "f", pitch);
+        Send(kWheelRollPath, "f", roll);
     }
 }
 
@@ -366,10 +403,10 @@ void OSCServer::SendButtons(const std::vector<uint32_t>& buttons) {
     int b3 = buttons.size() > 3 ? static_cast<int>(buttons[3]) : 0;
 
     if (m_protocol) {
-        Send("/wheel/buttons/0", "i", b0);
-        Send("/wheel/buttons/1", "i", b1);
-        Send("/wheel/buttons/2", "i", b2);
-        Send("/wheel/buttons/3", "i", b3);
+        Send(kWheelButtons0Path, "i", b0);
+        Send(kWheelButtons1Path, "i", b1);
+        Send(kWheelButtons2Path, "i", b2);
+        Send(kWheelButtons3Path, "i", b3);
     }
 }
 
@@ -503,14 +540,14 @@ std::string OSCServer::GetInputDefinitionId() const {
 }
 
 void OSCServer::LoadConfig(const PreferencesManager& prefs) {
-    std::string send_host = prefs.GetString("OSC", "SendHost", "127.0.0.1");
-    int send_port = prefs.GetInt("OSC", "SendPort", 9066);
-    int recv_port = prefs.GetInt("OSC", "RecvPort", 9068);
-    std::string protocol   = prefs.GetString("OSC", "Protocol", "OSC Back Ally Racing");
-    std::string inputProtocol = prefs.GetString("OSC", "InputProtocol", "");
-    std::string outDefId   = prefs.GetString("OSC", "OutputDefinitionId", "");
-    std::string inDefId    = prefs.GetString("OSC", "InputDefinitionId",  "");
-    bool enabled = prefs.GetBool("OSC", "Enabled", false);
+    std::string send_host = prefs.GetString(kOSCSection, kSendHostKey, kDefaultHost);
+    int send_port = prefs.GetInt(kOSCSection, kSendPortKey, 9066);
+    int recv_port = prefs.GetInt(kOSCSection, kRecvPortKey, 9068);
+    std::string protocol   = prefs.GetString(kOSCSection, kProtocolKey, kDefaultProtocol);
+    std::string inputProtocol = prefs.GetString(kOSCSection, kInputProtocolKey, "");
+    std::string outDefId   = prefs.GetString(kOSCSection, kOutputDefIdKey, "");
+    std::string inDefId    = prefs.GetString(kOSCSection, kInputDefIdKey,  "");
+    bool enabled = prefs.GetBool(kOSCSection, kEnabledKey, false);
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -535,14 +572,14 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
 
 void OSCServer::SaveConfig(PreferencesManager& prefs) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    prefs.SetString("OSC", "SendHost",           m_send_host);
-    prefs.SetInt   ("OSC", "SendPort",            m_send_port);
-    prefs.SetInt   ("OSC", "ReceivePort",         m_recv_port);
-    prefs.SetString("OSC", "Protocol",            m_protocolName);
-    prefs.SetString("OSC", "InputProtocol",       ProtocolManager::GetInstance().GetActiveInputLegacyProtocol());
-    prefs.SetString("OSC", "OutputDefinitionId",  m_outputDefinitionId);
-    prefs.SetString("OSC", "InputDefinitionId",   m_inputDefinitionId);
-    prefs.SetBool  ("OSC", "Enabled",             m_running);
+    prefs.SetString(kOSCSection, kSendHostKey,           m_send_host);
+    prefs.SetInt   (kOSCSection, kSendPortKey,            m_send_port);
+    prefs.SetInt   (kOSCSection, kRecvPortKey,         m_recv_port);
+    prefs.SetString(kOSCSection, kProtocolKey,            m_protocolName);
+    prefs.SetString(kOSCSection, kInputProtocolKey,       ProtocolManager::GetInstance().GetActiveInputLegacyProtocol());
+    prefs.SetString(kOSCSection, kOutputDefIdKey,  m_outputDefinitionId);
+    prefs.SetString(kOSCSection, kInputDefIdKey,   m_inputDefinitionId);
+    prefs.SetBool  (kOSCSection, kEnabledKey,             m_running);
 }
 
 void OSCServer::SetSelectedDevice(int id) {

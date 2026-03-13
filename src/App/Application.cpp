@@ -118,11 +118,11 @@ void Application::RestorePreferences()
 {
     m_prefs.Load();
 
-    m_uiScale         = m_prefs.GetFloat("UIScale",           1.3f);
-    m_fontScale       = m_prefs.GetFloat("FontScale",         1.0f);
-    m_scaleWithWindow = m_prefs.GetBool("ScaleWithWindow",    false);
-    m_serverUpdateRate  = m_prefs.GetInt("Network", "UpdateRate", 60);
-    m_serverDynamicRate = m_prefs.GetBool("Network", "DynamicRate", false);
+    m_uiScale         = m_prefs.GetFloat(PrefKeys::UIScale,           1.3f);
+    m_fontScale       = m_prefs.GetFloat(PrefKeys::FontScale,         1.0f);
+    m_scaleWithWindow = m_prefs.GetBool(PrefKeys::ScaleWithWindow,    false);
+    m_serverUpdateRate  = m_prefs.GetInt(PrefKeys::NetworkSection, PrefKeys::UpdateRate, 60);
+    m_serverDynamicRate = m_prefs.GetBool(PrefKeys::NetworkSection, PrefKeys::DynamicRate, false);
 
     // Scan and restore the active theme BEFORE UpdateUIScale so the theme's
     // style values (rounded corners, etc.) are applied before scaling.
@@ -379,8 +379,8 @@ void Application::Shutdown()
 
     ProtocolRegistry::GetInstance().SaveAll();
 
-    m_prefs.SetInt("Network",  "UpdateRate",  m_serverUpdateRate);
-    m_prefs.SetBool("Network", "DynamicRate", m_serverDynamicRate);
+    m_prefs.SetInt(PrefKeys::NetworkSection,  PrefKeys::UpdateRate,  m_serverUpdateRate);
+    m_prefs.SetBool(PrefKeys::NetworkSection, PrefKeys::DynamicRate, m_serverDynamicRate);
     m_prefs.Save();
 
     SDL_DestroyRenderer(m_renderer);

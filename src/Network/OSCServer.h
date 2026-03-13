@@ -100,7 +100,7 @@ private:
     std::atomic<int> m_selectedDeviceId = 0;
 
     // UI State
-    char m_send_host[128] = "127.0.0.1";
+    char m_send_host[128];
     int m_send_port = 9066;
     int m_recv_port = 9068;
 
@@ -112,7 +112,7 @@ private:
     OSCHandler m_handler;
     mutable std::mutex m_mutex;  // mutable for const methods
     std::shared_ptr<IProtocol> m_protocol;
-    std::string m_protocolName = "OSC Back Ally Racing";
+    std::string m_protocolName;
     std::string m_selectedDefinitionId; // legacy single-slot
     std::string m_outputDefinitionId; // selected output (server→client) definition
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
