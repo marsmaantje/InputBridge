@@ -139,8 +139,8 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
             int duration = argv[6]->i;
             {
                 std::lock_guard<std::mutex> lk(server->m_mutex);
-                char buf[160];
-                std::snprintf(buf, sizeof(buf), "Haptic periodic: dev=%d str=%.2f per=%d mag=%.2f dur=%dms", id, strength, period, magnitude, duration);
+                char buf[256];
+                std::snprintf(buf, sizeof(buf), "Haptic periodic: dev=%d str=%.2f per=%d mag=%.2f off=%.2f phase=%d dur=%dms", id, strength, period, magnitude, offset, phase, duration);
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
@@ -159,14 +159,17 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
             int id = argv[0]->i;
             int slot = argv[1]->i;
             uint16_t ctype = (uint16_t)argv[2]->i;
-            float rsat = argv[3]->f, lsat = argv[4]->f;
-            float rcoeff = argv[5]->f, lcoeff = argv[6]->f;
-            float db = argv[7]->f, center = argv[8]->f;
+            float rsat = argv[3]->f;
+            float lsat = argv[4]->f;
+            float rcoeff = argv[5]->f;
+            float lcoeff = argv[6]->f;
+            float db = argv[7]->f;
+            float center = argv[8]->f;
             int duration = argv[9]->i;
             {
                 std::lock_guard<std::mutex> lk(server->m_mutex);
-                char buf[160];
-                std::snprintf(buf, sizeof(buf), "Haptic condition: dev=%d slot=%d type=%u rcoeff=%.2f lcoeff=%.2f dur=%dms", id, slot, ctype, rcoeff, lcoeff, duration);
+                char buf[256];
+                std::snprintf(buf, sizeof(buf), "Haptic condition: dev=%d slot=%d type=%u rsat=%.2f lsat=%.2f rcoeff=%.2f lcoeff=%.2f db=%.2f center=%.2f dur=%dms", id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
@@ -175,6 +178,7 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
     } catch (...) {}
     return 0;
 }
+
 
 int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
     try {
