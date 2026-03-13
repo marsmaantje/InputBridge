@@ -50,6 +50,28 @@ namespace {
     // Common params
     const char* const kDuration = "duration";
     const char* const kDurationMs = "duration_ms";
+
+    // Helper to get the nested "params" or "data" object.
+    // Returns a reference to avoid copying. Returns an empty object if neither key exists.
+    const nlohmann::json& get_params_obj(const nlohmann::json& json)
+    {
+        if (json.contains(kParams)) {
+            return json.at(kParams);
+        }
+        if (json.contains(kData)) {
+            return json.at(kData);
+        }
+        // Return a static empty object to avoid creating it on every call.
+        static const nlohmann::json empty_obj = nlohmann::json::object();
+        return empty_obj;
+    }
+
+    // Helper to get duration, preferring "duration_ms" over "duration".
+    int get_duration(const nlohmann::json& data)
+    {
+        if (data.contains(kDurationMs)) return data.value(kDurationMs, 0);
+        return data.value(kDuration, 0);
+    }
 }
 
 void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
@@ -63,15 +85,7 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
         if (type == kTypeHaptic || type == kTypeGamepad || type == kTypeSteeringWheel) {
             std::string effect = json.value(kEffect, "");
             int device = json.value(kDevice, 0);
-
-            nlohmann::json data;
-            if (json.contains(kParams)) {
-                data = json[kParams];
-            } else if (json.contains(kData)) {
-                data = json[kData];
-            } else {
-                data = nlohmann::json::object();
-            }
+            const auto& data = get_params_obj(json);
 
             if (effect == kEffectRumble) {
                 float low = data.value(kRumbleLow, 0.0f);
@@ -80,24 +94,20 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
                 float high = data.value(kRumbleHigh, 0.0f);
                 if (data.contains(kRumbleSmallMag)) high = data.value(kRumbleSmallMag, 0.0f);
 
-                int duration = data.value(kDuration, 0);
-                if (data.contains(kDurationMs)) duration = data.value(kDurationMs, 0);
+                int duration = get_duration(data);
 
                 mapper->QueueRumble(device, low, high, duration);
             } else if (effect == kEffectConstant) {
                 float strength = data.value(kConstantStrength, 0.0f);
-                int duration = data.value(kDuration, 0);
-                if (data.contains(kDurationMs)) duration = data.value(kDurationMs, 0);
+                int duration = get_duration(data);
 
                 mapper->QueueConstantForce(device, strength, duration);
             } else if (effect == kEffectPeriodic) {
-                int duration = data.value(kDuration, 0);
-                if (data.contains(kDurationMs)) duration = data.value(kDurationMs, 0);
+                int duration = get_duration(data);
 
                 mapper->QueuePeriodic(device, data.value(kConstantStrength, 0.0f), data.value(kPeriodicPeriod, 0), data.value(kPeriodicMagnitude, 0.0f), data.value(kPeriodicOffset, 0.0f), data.value(kPeriodicPhase, 0), duration);
             } else if (effect == kEffectCondition) {
-                int duration = data.value(kDuration, 0);
-                if (data.contains(kDurationMs)) duration = data.value(kDurationMs, 0);
+                int duration = get_duration(data);
 
                 int slot = data.value(kConditionSlot, 0);
                 uint16_t condition_type = data.value(kConditionType, (uint16_t)SDL_HAPTIC_SPRING);
