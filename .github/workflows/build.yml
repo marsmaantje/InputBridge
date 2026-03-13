@@ -28,7 +28,8 @@ on:
                     - "only"
 
 permissions:
-  checks: write
+  checks: write   # for dorny/test-reporter to publish test reports
+  contents: read  # for actions/checkout to fetch code and actions
 
 jobs:
     build-windows:
@@ -184,8 +185,7 @@ jobs:
               run: dnf install -y git gcc-c++ make cmake libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel libxkbcommon-devel wayland-devel systemd-devel alsa-lib-devel pulseaudio-libs-devel libXScrnSaver-devel libXext-devel libXfixes-devel libXinerama-devel libXxf86vm-devel dbus-devel libdrm-devel mesa-libgbm-devel libusb1-devel libsamplerate-devel libdecor-devel libXtst-devel openssl-devel zlib-devel libuv-devel
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              with: { submodules: recursive }
 
             - name: Configure CMake
               run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
@@ -211,11 +211,10 @@ jobs:
         container: archlinux:latest
         steps:
             - name: Install Dependencies
-              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
+              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes-devel libxinerama-devel libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              with: { submodules: recursive }
 
             - name: Configure CMake
               run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
@@ -244,8 +243,7 @@ jobs:
         runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              with: { submodules: recursive }
 
             - name: Cache apt packages
               if: runner.os == 'Linux'
