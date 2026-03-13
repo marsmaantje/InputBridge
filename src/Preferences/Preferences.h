@@ -13,24 +13,24 @@ class PreferencesManager {
     void SetString(const std::string &key, const std::string &value);
     std::string GetString(const std::string &key, const std::string &defaultValue = "") const;
     void SetString(const std::string &section, const std::string &key, const std::string &value);
-    std::string GetString(const std::string &section, const std::string &key, const std::string &defaultValue = "") const;
+    std::string GetString(const std::string &section, const std::string &key, const std::string &defaultValue) const;
     void DeleteKey(const std::string &key);
     void DeleteKey(const std::string &section, const std::string &key);
 
     void SetInt(const std::string &key, int value);
     int GetInt(const std::string &key, int defaultValue = 0) const;
     void SetInt(const std::string &section, const std::string &key, int value);
-    int GetInt(const std::string &section, const std::string &key, int defaultValue = 0) const;
+    int GetInt(const std::string &section, const std::string &key, int defaultValue) const;
 
     void SetFloat(const std::string &key, float value);
     float GetFloat(const std::string &key, float defaultValue = 0.0f) const;
     void SetFloat(const std::string &section, const std::string &key, float value);
-    float GetFloat(const std::string &section, const std::string &key, float defaultValue = 0.0f) const;
+    float GetFloat(const std::string &section, const std::string &key, float defaultValue) const;
 
     void SetBool(const std::string &key, bool value);
     bool GetBool(const std::string &key, bool defaultValue = false) const;
     void SetBool(const std::string &section, const std::string &key, bool value);
-    bool GetBool(const std::string &section, const std::string &key, bool defaultValue = false) const;
+    bool GetBool(const std::string &section, const std::string &key, bool defaultValue) const;
 
     // Specific accessors
     std::string GetVisualizerPreference(const std::string &guid) const;

@@ -45,7 +45,7 @@ TEST(PreferencesManager, SectionKeysAreIsolatedFromGlobalKeys) {
     prefs.SetString("key", "global_value");
     prefs.SetString("Section", "key", "section_value");
     EXPECT_EQ(prefs.GetString("key"),           "global_value");
-    EXPECT_EQ(prefs.GetString("Section", "key"), "section_value");
+    EXPECT_EQ(prefs.GetString("Section", "key", ""), "section_value");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -98,14 +98,14 @@ TEST(Result, MapCanChangeValueType) {
 
 TEST(Result, MapErrTransformsErrorWhenErr) {
     auto r = Result<int, int>::Err(3);
-    auto mapped = r.MapErr([](int e) { return e * 10; });
+    auto mapped = r.MapError([](int e) { return e * 10; });
     EXPECT_TRUE(mapped.IsErr());
     EXPECT_EQ(mapped.Error(), 30);
 }
 
 TEST(Result, MapErrPreservesOkUnchanged) {
     auto r = Result<int, int>::Ok(5);
-    auto mapped = r.MapErr([](int e) { return e * 10; });
+    auto mapped = r.MapError([](int e) { return e * 10; });
     EXPECT_TRUE(mapped.IsOk());
     EXPECT_EQ(mapped.Value(), 5);
 }
