@@ -248,23 +248,18 @@ std::string PreferencesManager::GetDeviceMapping(const std::string &guid) const 
 
 void PreferencesManager::SetDeviceMapping(const std::string &guid, const std::string &mapping) {
     std::string section = "Device_" + guid;
-    m_Sections[section].erase("Mapping"); // Remove legacy key
 
-    size_t pos = 0;
-    while (pos < mapping.length()) {
-        size_t end = mapping.find(';', pos);
-        if (end == std::string::npos)
-            end = mapping.length();
-        std::string token = mapping.substr(pos, end - pos);
-        pos = end + 1;
-
-        size_t colon = token.find(':');
-        if (colon != std::string::npos) {
-            std::string key = token.substr(0, colon);
-            std::string val = token.substr(colon + 1);
-            m_Sections[section]["Mapping." + key] = val;
-        }
+    // Clear any previously decomposed Mapping.* keys
+    auto &sec = m_Sections[section];
+    for (auto it = sec.begin(); it != sec.end(); ) {
+        if (it->first.compare(0, 8, "Mapping.") == 0)
+            it = sec.erase(it);
+        else
+            ++it;
     }
+
+    // Store as a single opaque value (GetDeviceMapping checks "Mapping" first)
+    sec["Mapping"] = mapping;
     Save();
 }
 
