@@ -16,21 +16,21 @@ std::string BackupManager::CreateBackup(const std::string& filePath) {
     if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
         return "";
     }
-    
+
     try {
         if (!EnsureBackupDirectoryExists()) {
             return "";
         }
-        
+
         std::string backupName = GenerateBackupName(filePath);
         fs::path backupPath = fs::path(m_backupDir) / backupName;
-        
+
         // Copy file to backup location
         fs::copy_file(filePath, backupPath, fs::copy_options::overwrite_existing);
-        
+
         // Cleanup old backups
         CleanupOldBackups(filePath);
-        
+
         return backupPath.string();
     } catch (const std::exception& e) {
         fprintf(stderr, "Failed to create backup: %s\n", e.what());
@@ -42,19 +42,19 @@ std::string BackupManager::CreateDirectoryBackup(const std::string& dirPath) {
     if (!fs::exists(dirPath) || !fs::is_directory(dirPath)) {
         return "";
     }
-    
+
     try {
         if (!EnsureBackupDirectoryExists()) {
             return "";
         }
-        
+
         std::string backupName = GenerateBackupName(dirPath);
         fs::path backupPath = fs::path(m_backupDir) / backupName;
-        
+
         // Copy directory recursively
-        fs::copy(dirPath, backupPath, 
+        fs::copy(dirPath, backupPath,
                 fs::copy_options::recursive | fs::copy_options::overwrite_existing);
-        
+
         return backupPath.string();
     } catch (const std::exception& e) {
         fprintf(stderr, "Failed to create directory backup: %s\n", e.what());
@@ -62,19 +62,19 @@ std::string BackupManager::CreateDirectoryBackup(const std::string& dirPath) {
     }
 }
 
-bool BackupManager::RestoreBackup(const std::string& backupPath, 
+bool BackupManager::RestoreBackup(const std::string& backupPath,
                                    const std::string& targetPath) {
     if (!fs::exists(backupPath)) {
         return false;
     }
-    
+
     try {
         std::string target = targetPath;
         if (target.empty()) {
             // Extract original filename from backup
             target = ExtractOriginalName(fs::path(backupPath).filename().string());
         }
-        
+
         if (fs::is_directory(backupPath)) {
             // Restore directory
             fs::copy(backupPath, target,
@@ -83,7 +83,7 @@ bool BackupManager::RestoreBackup(const std::string& backupPath,
             // Restore file
             fs::copy_file(backupPath, target, fs::copy_options::overwrite_existing);
         }
-        
+
         return true;
     } catch (const std::exception& e) {
         fprintf(stderr, "Failed to restore backup: %s\n", e.what());
@@ -93,27 +93,28 @@ bool BackupManager::RestoreBackup(const std::string& backupPath,
 
 std::vector<std::string> BackupManager::ListBackups(const std::string& filePath) const {
     std::vector<std::string> backups;
-    
+
     if (!fs::exists(m_backupDir)) {
         return backups;
     }
-    
+
     try {
         fs::path originalFile(filePath);
-        std::string baseName = originalFile.filename().string();
-        
+        std::string stemPrefix = originalFile.stem().string() + "_";
+
         // Find all backups matching the base name
+        // Backup format: stem_YYYYMMDD_HHMMSS.ext — match on "stem_" prefix
         for (const auto& entry : fs::directory_iterator(m_backupDir)) {
             if (entry.is_regular_file()) {
                 std::string filename = entry.path().filename().string();
-                
+
                 // Check if this backup matches the original file
-                if (filename.find(baseName) == 0) {
+                if (filename.find(stemPrefix) == 0) {
                     backups.push_back(entry.path().string());
                 }
             }
         }
-        
+
         // Sort by modification time (newest first)
         std::sort(backups.begin(), backups.end(),
                  [](const std::string& a, const std::string& b) {
@@ -122,7 +123,7 @@ std::vector<std::string> BackupManager::ListBackups(const std::string& filePath)
     } catch (const std::exception& e) {
         fprintf(stderr, "Failed to list backups: %s\n", e.what());
     }
-    
+
     return backups;
 }
 
@@ -132,7 +133,7 @@ void BackupManager::CleanupOldBackups(const std::string& filePath) {
         if (!fs::exists(m_backupDir)) {
             return;
         }
-        
+
         try {
             std::vector<fs::path> allBackups;
             for (const auto& entry : fs::directory_iterator(m_backupDir)) {
@@ -140,13 +141,13 @@ void BackupManager::CleanupOldBackups(const std::string& filePath) {
                     allBackups.push_back(entry.path());
                 }
             }
-            
+
             // Sort by modification time (oldest first)
             std::sort(allBackups.begin(), allBackups.end(),
                      [](const fs::path& a, const fs::path& b) {
                          return fs::last_write_time(a) < fs::last_write_time(b);
                      });
-            
+
             // Remove oldest backups if count exceeds limit
             while (allBackups.size() > m_maxBackups * 5) { // Global limit
                 try {
@@ -164,7 +165,7 @@ void BackupManager::CleanupOldBackups(const std::string& filePath) {
     } else {
         // Cleanup backups for specific file
         auto backups = ListBackups(filePath);
-        
+
         // Remove oldest backups if count exceeds max
         while (backups.size() > m_maxBackups) {
             try {
@@ -182,11 +183,11 @@ void BackupManager::CleanupOldBackups(const std::string& filePath) {
 
 size_t BackupManager::GetTotalBackupSize() const {
     size_t totalSize = 0;
-    
+
     if (!fs::exists(m_backupDir)) {
         return 0;
     }
-    
+
     try {
         for (const auto& entry : fs::recursive_directory_iterator(m_backupDir)) {
             if (entry.is_regular_file()) {
@@ -196,7 +197,7 @@ size_t BackupManager::GetTotalBackupSize() const {
     } catch (const std::exception& e) {
         fprintf(stderr, "Failed to calculate backup size: %s\n", e.what());
     }
-    
+
     return totalSize;
 }
 
@@ -204,7 +205,7 @@ void BackupManager::ClearAllBackups() {
     if (!fs::exists(m_backupDir)) {
         return;
     }
-    
+
     try {
         fs::remove_all(m_backupDir);
         EnsureBackupDirectoryExists();
@@ -221,7 +222,7 @@ std::string BackupManager::GenerateBackupName(const std::string& originalPath) c
     fs::path path(originalPath);
     std::string filename = path.filename().string();
     std::string timestamp = GetTimestamp();
-    
+
     // Format: originalname_YYYYMMDD_HHMMSS.ext
     size_t extPos = filename.find_last_of('.');
     if (extPos != std::string::npos) {
@@ -263,7 +264,7 @@ bool BackupManager::EnsureBackupDirectoryExists() {
 std::string BackupManager::GetTimestamp() const {
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
-    
+
     std::stringstream ss;
     ss << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
     return ss.str();
