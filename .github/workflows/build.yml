@@ -229,24 +229,78 @@ jobs:
                   path: dist/InputBridge-Arch.tar.gz
 
     run-tests:
-        if: ${{ github.event.inputs.run_tests }}
-        runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.run_tests == 'true' }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
-            - name: Install Dependencies
+            - name: Cache apt packages
+              if: runner.os == 'Linux'
+              uses: actions/cache@v4
+              with:
+                path: |
+                  /var/cache/apt/archives
+                  /var/lib/apt/lists
+                key: ${{ runner.os }}-apt-cache-${{ hashFiles('.github/workflows/build.yml') }}
+                restore-keys: |
+                  ${{ runner.os }}-apt-cache-
+
+            - name: Install Dependencies (Linux)
+              if: runner.os == 'Linux'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y build-essential git cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev
+                  sudo apt-get install -y build-essential git cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev lcov
+
+            - name: Add OpenSSL to PATH (Windows)
+              if: runner.os == 'Windows'
+              run: echo "C:/Program Files/OpenSSL/bin" >> $env:GITHUB_PATH
 
             - name: Configure CMake
+              if: runner.os != 'Linux'
               run: cmake -B build -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+
+            - name: Configure CMake (Linux Coverage)
+              if: runner.os == 'Linux'
+              run: cmake -B build -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="--coverage" -DCMAKE_C_FLAGS="--coverage"
 
             - name: Build
               run: cmake --build build --config Debug
 
             - name: Run Tests
               working-directory: ./build
-              run: ctest --output-on-failure
+              run: ctest --output-on-failure --output-junit test-results.xml
+
+            - name: Upload Test Results
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-results-${{ matrix.os }}
+                  path: build/test-results.xml
+
+            - name: Publish Test Report
+              uses: dorny/test-reporter@v1
+              if: always()
+              with:
+                name: Test Results (${{ matrix.os }})
+                path: build/test-results.xml
+                reporter: java-junit
+
+            - name: Generate Coverage Report
+              if: runner.os == 'Linux'
+              run: |
+                  lcov --capture --directory build --output-file coverage.info
+                  lcov --remove coverage.info '/usr/*' '*/tests/*' '*/lib/*' --output-file coverage.info
+                  genhtml coverage.info --output-directory coverage-report
+
+            - name: Upload Coverage Report
+              if: runner.os == 'Linux'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-report
+                  path: coverage-report
