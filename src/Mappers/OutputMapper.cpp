@@ -650,14 +650,57 @@ void OutputMapper::TriggerCondition(int virtual_id, int slot, uint16_t type, flo
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-        if (!target || target->instance_id == 0 || !target->enable_condition) continue;
+        if (!target || !target->enable_condition) continue;
 
-        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
-        if (!hapticDevice) continue;
+        // If this target maps to a SteeringWheelHaptics, delegate to it as it
+        // has a more advanced, multi-slot implementation for condition effects.
+        if (target->instance_id != 0) {
+            HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+            if (!hapticDevice) continue;
 
-        SteeringWheelHaptics* wheelHaptics = dynamic_cast<SteeringWheelHaptics*>(hapticDevice);
-        if (wheelHaptics) {
-            wheelHaptics->PlayCondition(slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            SteeringWheelHaptics* wheelHaptics = dynamic_cast<SteeringWheelHaptics*>(hapticDevice);
+            if (wheelHaptics) {
+                wheelHaptics->PlayCondition(slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+                continue; // Handled by specialized class
+            }
+        }
+
+        // Generic fallback for other haptic devices.
+        // NOTE: This generic path does not support multiple slots; it uses a single
+        // overwritable effect ID, consistent with how Constant and Periodic effects
+        // are handled for generic devices. The 'slot' parameter is ignored here.
+        if (!target->haptic_device) continue;
+
+        SDL_HapticEffect effect;
+        SDL_memset(&effect, 0, sizeof(effect));
+        effect.type = type;
+        effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
+        effect.condition.direction.dir[0] = 1;
+        effect.condition.length = (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms;
+        effect.condition.right_sat[0] = (Uint16)(std::clamp(right_sat, 0.0f, 1.0f) * 65535.0f);
+        effect.condition.left_sat[0]  = (Uint16)(std::clamp(left_sat, 0.0f, 1.0f) * 65535.0f);
+        effect.condition.right_coeff[0] = (Sint16)(std::clamp(right_coeff, -1.0f, 1.0f) * 32767.0f);
+        effect.condition.left_coeff[0]  = (Sint16)(std::clamp(left_coeff, -1.0f, 1.0f) * 32767.0f);
+        effect.condition.deadband[0] = (Uint16)(std::clamp(deadband, 0.0f, 1.0f) * 65535.0f);
+        effect.condition.center[0] = (Sint16)(std::clamp(center, -1.0f, 1.0f) * 32767.0f);
+
+        bool created = false;
+        if (target->condition_effect_id == -1) {
+            target->condition_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
+            created = true;
+        } else {
+            SDL_UpdateHapticEffect(target->haptic_device, target->condition_effect_id, &effect);
+        }
+
+        if (target->condition_effect_id != -1) {
+            bool needsRun = created || duration_ms >= 0;
+            if (!needsRun) {
+                int status = SDL_GetHapticEffectStatus(target->haptic_device, target->condition_effect_id);
+                needsRun = (status != 1);
+            }
+            if (needsRun) {
+                SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
+            }
         }
     }
 }
