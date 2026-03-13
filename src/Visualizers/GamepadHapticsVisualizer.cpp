@@ -11,7 +11,9 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             SDL_Haptic* sdl_haptic = SDL_OpenHapticFromJoystick(dev.joystick);
             if (sdl_haptic) {
                 ImGui::SameLine();
-                ImGui::TextDisabled("(%d effect slots)", SDL_GetMaxHapticEffects(sdl_haptic));
+                int max_effects = SDL_GetMaxHapticEffects(sdl_haptic);
+                int max_playing = SDL_GetMaxHapticEffectsPlaying(sdl_haptic);
+                ImGui::TextDisabled("(%d slots, %d max playing)", max_effects, max_playing);
                 SDL_CloseHaptic(sdl_haptic);
             }
         } else {

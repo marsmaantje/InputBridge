@@ -12,7 +12,28 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             SDL_Haptic* sdl_haptic = SDL_OpenHapticFromJoystick(dev.joystick);
             if (sdl_haptic) {
                 ImGui::SameLine();
-                ImGui::TextDisabled("(%d effect slots)", SDL_GetMaxHapticEffects(sdl_haptic));
+                int max_effects = SDL_GetMaxHapticEffects(sdl_haptic);
+                int max_playing = SDL_GetMaxHapticEffectsPlaying(sdl_haptic);
+
+                int num_currently_playing = 0;
+                if (auto *wheelHaptics = dynamic_cast<SteeringWheelHaptics *>(haptic)) {
+                    if (wheelHaptics->GetActiveConstant().active) {
+                        num_currently_playing++;
+                    }
+                    if (wheelHaptics->GetActivePeriodic().active) {
+                        num_currently_playing++;
+                    }
+                    num_currently_playing += (int)wheelHaptics->GetActiveConditions().size();
+                }
+
+                if (max_playing > 0 && num_currently_playing >= max_playing) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "(%d/%d playing)", num_currently_playing, max_playing);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Maximum number of simultaneous effects reached!");
+                    }
+                } else {
+                    ImGui::TextDisabled("(%d slots, %d/%d playing)", max_effects, num_currently_playing, max_playing);
+                }
                 SDL_CloseHaptic(sdl_haptic);
             }
         } else {
