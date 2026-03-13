@@ -111,4 +111,4 @@ target_link_libraries(test_haptic_parser PRIVATE
     SDL3::SDL3
     Threads::Threads
 )
-gtest_discover_tests(test_haptic_parser)
+gtest_discover_tests(test_haptic_parser DISCOVERY_MODE PRE_TEST)

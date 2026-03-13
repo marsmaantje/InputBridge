@@ -496,6 +496,7 @@ include(CPack)
 # Or set "cmake.configureArgs": ["-DBUILD_TESTS=ON"] in VS Code settings.json
 option(BUILD_TESTS "Build unit tests" OFF)
 if(BUILD_TESTS)
+    include(CTest)
     add_subdirectory(tests)
 endif()
 
