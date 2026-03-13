@@ -17,6 +17,11 @@ on:
                     - ubuntu-flatpak
                     - fedora
                     - arch
+            run_tests:
+                description: "Run Google Tests"
+                required: true
+                type: boolean
+                default: false
 
 jobs:
     build-windows:
@@ -222,3 +227,26 @@ jobs:
               with:
                   name: InputBridge-Arch
                   path: dist/InputBridge-Arch.tar.gz
+
+    run-tests:
+        if: ${{ github.event.inputs.run_tests }}
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential git cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev
+
+            - name: Configure CMake
+              run: cmake -B build -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+
+            - name: Build
+              run: cmake --build build --config Debug
+
+            - name: Run Tests
+              working-directory: ./build
+              run: ctest --output-on-failure
