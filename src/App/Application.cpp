@@ -144,12 +144,16 @@ void Application::RestorePreferences()
 
     ProtocolRegistry::GetInstance().LoadAll();
 
-    OSCServer::GetInstance().LoadConfig(m_prefs);
-    WebSocketServer::GetInstance().LoadConfig(m_prefs);
-
+    // SetOutputMapper MUST be called before LoadConfig: LoadConfig will call
+    // Start() if the server was previously enabled, and any haptic messages
+    // arriving between Start() and a late SetOutputMapper() would be silently
+    // dropped because m_OutputMapper is still null.
     OutputMapper& om = OutputMapper::GetInstance();
     WebSocketServer::GetInstance().SetOutputMapper(&om);
     OSCServer::GetInstance().SetOutputMapper(&om);
+
+    OSCServer::GetInstance().LoadConfig(m_prefs);
+    WebSocketServer::GetInstance().LoadConfig(m_prefs);
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────

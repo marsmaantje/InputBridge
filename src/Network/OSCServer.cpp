@@ -52,6 +52,13 @@ int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg
             float low = argv[1]->f;
             float high = argv[2]->f;
             int duration = argv[3]->i;
+            {
+                std::lock_guard<std::mutex> lk(server->m_mutex);
+                char buf[128];
+                std::snprintf(buf, sizeof(buf), "Haptic rumble: dev=%d low=%.2f high=%.2f dur=%dms", id, low, high, duration);
+                server->m_logs.push_back(buf);
+                if (server->m_logs.size() > 100) server->m_logs.pop_front();
+            }
             server->m_OutputMapper->QueueRumble(id, low, high, duration);
         }
     } catch (...) {}
@@ -63,8 +70,19 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 3)
-            server->m_OutputMapper->QueueConstantForce(argv[0]->i, argv[1]->f, argv[2]->i);
+        if (argc >= 3) {
+            int id = argv[0]->i;
+            float strength = argv[1]->f;
+            int duration = argv[2]->i;
+            {
+                std::lock_guard<std::mutex> lk(server->m_mutex);
+                char buf[128];
+                std::snprintf(buf, sizeof(buf), "Haptic constant: dev=%d strength=%.2f dur=%dms", id, strength, duration);
+                server->m_logs.push_back(buf);
+                if (server->m_logs.size() > 100) server->m_logs.pop_front();
+            }
+            server->m_OutputMapper->QueueConstantForce(id, strength, duration);
+        }
     } catch (...) {}
     return 0;
 }
@@ -74,8 +92,23 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 7)
-            server->m_OutputMapper->QueuePeriodic(argv[0]->i, argv[1]->f, argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->i, argv[6]->i);
+        if (argc >= 7) {
+            int id = argv[0]->i;
+            float strength = argv[1]->f;
+            int period = argv[2]->i;
+            float magnitude = argv[3]->f;
+            float offset = argv[4]->f;
+            int phase = argv[5]->i;
+            int duration = argv[6]->i;
+            {
+                std::lock_guard<std::mutex> lk(server->m_mutex);
+                char buf[160];
+                std::snprintf(buf, sizeof(buf), "Haptic periodic: dev=%d str=%.2f per=%d mag=%.2f dur=%dms", id, strength, period, magnitude, duration);
+                server->m_logs.push_back(buf);
+                if (server->m_logs.size() > 100) server->m_logs.pop_front();
+            }
+            server->m_OutputMapper->QueuePeriodic(id, strength, period, magnitude, offset, phase, duration);
+        }
     } catch (...) {}
     return 0;
 }
@@ -85,8 +118,23 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 10)
-            server->m_OutputMapper->QueueCondition(argv[0]->i, argv[1]->i, (uint16_t)argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->f, argv[6]->f, argv[7]->f, argv[8]->f, argv[9]->i);
+        if (argc >= 10) {
+            int id = argv[0]->i;
+            int slot = argv[1]->i;
+            uint16_t ctype = (uint16_t)argv[2]->i;
+            float rsat = argv[3]->f, lsat = argv[4]->f;
+            float rcoeff = argv[5]->f, lcoeff = argv[6]->f;
+            float db = argv[7]->f, center = argv[8]->f;
+            int duration = argv[9]->i;
+            {
+                std::lock_guard<std::mutex> lk(server->m_mutex);
+                char buf[160];
+                std::snprintf(buf, sizeof(buf), "Haptic condition: dev=%d slot=%d type=%u rcoeff=%.2f lcoeff=%.2f dur=%dms", id, slot, ctype, rcoeff, lcoeff, duration);
+                server->m_logs.push_back(buf);
+                if (server->m_logs.size() > 100) server->m_logs.pop_front();
+            }
+            server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
+        }
     } catch (...) {}
     return 0;
 }
@@ -96,8 +144,18 @@ int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg *
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 2)
-            server->m_OutputMapper->QueueSetGain(argv[0]->i, argv[1]->i);
+        if (argc >= 2) {
+            int id = argv[0]->i;
+            int gain = argv[1]->i;
+            {
+                std::lock_guard<std::mutex> lk(server->m_mutex);
+                char buf[80];
+                std::snprintf(buf, sizeof(buf), "Haptic gain: dev=%d gain=%d", id, gain);
+                server->m_logs.push_back(buf);
+                if (server->m_logs.size() > 100) server->m_logs.pop_front();
+            }
+            server->m_OutputMapper->QueueSetGain(id, gain);
+        }
     } catch (...) {}
     return 0;
 }
@@ -147,6 +205,16 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
 
     m_running = true;
     m_isConnected = true;
+
+    // Restore the OutputMapper that was saved when Stop() was last called.
+    // Stop() deliberately nulls m_OutputMapper to guard against use-after-free
+    // during shutdown, but this leaves it null when the server is restarted from
+    // the UI.  Restoring the saved pointer here ensures haptic effects keep
+    // working across Stop/Start cycles without requiring the caller to
+    // re-call SetOutputMapper().
+    if (!m_OutputMapper && m_savedOutputMapper)
+        m_OutputMapper = m_savedOutputMapper;
+
     std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
               << ", Listening on port " << recv_port << std::endl;
 
@@ -186,7 +254,11 @@ void OSCServer::Stop() {
         // that check before we set m_running=false could still call into
         // m_OutputMapper.  Clearing the pointer here closes that window: any
         // such handler will see nullptr on the next check and bail out safely.
+        // We also save a copy in m_savedOutputMapper so that a subsequent
+        // Start() call can restore it without requiring an external
+        // SetOutputMapper() call (fixing the "effects stop after UI restart" bug).
         mapper = m_OutputMapper;
+        m_savedOutputMapper = m_OutputMapper;
         m_OutputMapper = nullptr;
     }
 

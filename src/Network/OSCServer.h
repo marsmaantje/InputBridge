@@ -120,6 +120,9 @@ private:
     std::set<std::string> m_clients;
     uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;
+    // Preserved across Stop()/Start() cycles so that restarting the server
+    // from the UI does not silently disable all haptic effects.
+    OutputMapper* m_savedOutputMapper = nullptr;
 
     // Cleanup thread used by Stop() to run lo_server_thread_stop off the
     // main/UI thread.  Stored (not detached) so the destructor can join it

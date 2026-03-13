@@ -36,6 +36,8 @@ struct WebSocketServer::Impl {
     uWS::App *app = nullptr;
     uWS::Loop *loop = nullptr;
     struct us_listen_socket_t *listen_socket = nullptr;
+    // Preserved across Stop()/Start() cycles — mirrors OSCServer::m_savedOutputMapper.
+    OutputMapper* savedOutputMapper = nullptr;
 };
 
 WebSocketServer &WebSocketServer::GetInstance() {
@@ -57,14 +59,18 @@ WebSocketServer::~WebSocketServer() {
 }
 
 void WebSocketServer::Start(int port) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    if (m_Impl->running)
-        return;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        if (m_Impl->running)
+            return;
 
-    m_Impl->port = port;
-    m_Impl->running = true;
-    m_Impl->runningPort = port;
-
+        m_Impl->port = port;
+        m_Impl->running = true;
+        m_Impl->runningPort = port;
+    }
+    // Join outside the lock: the previous thread acquires m_Impl->mutex in its
+    // exit block to set running=false.  Joining while holding the lock would
+    // deadlock because the thread can never acquire the mutex to finish.
     if (m_Impl->thread.joinable()) {
         m_Impl->thread.join();
     }
@@ -76,6 +82,12 @@ void WebSocketServer::Start(int port) {
             m_Impl->app = &app;
             m_Impl->loop = uWS::Loop::get();
             m_Impl->clients.clear();
+
+            // Restore the OutputMapper saved by Stop() so haptic effects keep
+            // working across UI-driven Stop/Start cycles without requiring an
+            // external SetOutputMapper() call.
+            if (!m_OutputMapper && m_Impl->savedOutputMapper)
+                m_OutputMapper = m_Impl->savedOutputMapper;
         }
 
         app.ws<int>("/*", {/* Settings */
@@ -183,7 +195,10 @@ void WebSocketServer::Stop() {
         // queued — we guarantee those callbacks see nullptr and will not call
         // StopAllHapticEffects() on an object that may have been freed by the
         // time the uWS thread processes the deferred work.
+        // We also save a copy so that a subsequent Start() can restore it,
+        // fixing the "effects stop after UI restart" bug.
         mapper = m_OutputMapper;
+        m_Impl->savedOutputMapper = m_OutputMapper;
         m_OutputMapper = nullptr;
 
         // loop over all connected clients, closing them
