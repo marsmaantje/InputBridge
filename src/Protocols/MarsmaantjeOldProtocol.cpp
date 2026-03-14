@@ -57,7 +57,7 @@ void MarsmaantjeOldProtocol::parse(const std::string& message) {
         std::string msg = message;
         std::replace(msg.begin(), msg.end(), ',', '.');
         float value = -std::stof(msg);
-        OutputMapper::GetInstance().QueueConstantForce(0, value * 50, -1);
+        OutputMapper::GetInstance().QueueConstantForce(0, 0, value * 50, -1);
     } catch (...) {}
 
     try {
@@ -67,7 +67,7 @@ void MarsmaantjeOldProtocol::parse(const std::string& message) {
 
         if (type == "gamepad" && effect == "rumble") {
             auto params = data["params"];
-            OutputMapper::GetInstance().QueueRumble(0, params.value("large_magnitude", 0.0f), params.value("small_magnitude", 0.0f), params.value("duration_ms", 0));
+            OutputMapper::GetInstance().QueueRumble(0, 0, params.value("large_magnitude", 0.0f), params.value("small_magnitude", 0.0f), params.value("duration_ms", 0));
         }
     } catch (...) {}
 }

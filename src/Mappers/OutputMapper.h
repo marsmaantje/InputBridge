@@ -42,9 +42,9 @@ public:
     bool IsHapticsActive() const;
 
     // Thread-safe API for external servers
-    void QueueRumble(int virtual_id, float low_freq, float high_freq, int duration_ms);
-    void QueueConstantForce(int virtual_id, float strength, int duration_ms);
-    void QueuePeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
+    void QueueRumble(int virtual_id, int slot, float low_freq, float high_freq, int duration_ms);
+    void QueueConstantForce(int virtual_id, int slot, float strength, int duration_ms);
+    void QueuePeriodic(int virtual_id, int slot, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
     void QueueCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms);
     void QueueSetGain(int virtual_id, int gain);
     void QueueDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,
@@ -73,9 +73,9 @@ private:
     void CloseHapticDevice(HapticTarget& target);
 
     // Internal triggers (Main Thread Only)
-    void TriggerRumble(int virtual_id, float low_freq, float high_freq, int duration_ms);
-    void TriggerConstantForce(int virtual_id, float strength, int duration_ms);
-    void TriggerPeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
+    void TriggerRumble(int virtual_id, int slot, float low_freq, float high_freq, int duration_ms);
+    void TriggerConstantForce(int virtual_id, int slot, float strength, int duration_ms);
+    void TriggerPeriodic(int virtual_id, int slot, float strength, int period, float magnitude, float offset, int phase, int duration_ms);
     void TriggerCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms);
     void TriggerSetGain(int virtual_id, int gain);
     void TriggerDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,

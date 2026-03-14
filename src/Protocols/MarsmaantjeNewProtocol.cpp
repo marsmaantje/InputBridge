@@ -67,7 +67,7 @@ void MarsmaantjeNewProtocol::parse(const std::string& message) {
         std::string msg = message;
         std::replace(msg.begin(), msg.end(), ',', '.');
         float value = -std::stof(msg);
-        OutputMapper::GetInstance().QueueConstantForce(0, value * 50, -1);
+        OutputMapper::GetInstance().QueueConstantForce(0, 0, value * 50, -1);
     } catch (...) {}
 
     try {

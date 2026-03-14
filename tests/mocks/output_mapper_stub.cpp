@@ -41,17 +41,17 @@ std::unique_ptr<OutputMapper> OutputMapper::s_Instance;
 // These are the only methods actually invoked by HapticParser::Parse().
 // They do NOT access 'this' — see the stub header for why this is safe.
 
-void OutputMapper::QueueRumble(int id, float low, float high, int dur) {
-    HapticStub::rumbleCalls.push_back({id, low, high, dur});
+void OutputMapper::QueueRumble(int id, int slot, float low, float high, int dur) {
+    HapticStub::rumbleCalls.push_back({id, slot, low, high, dur});
 }
 
-void OutputMapper::QueueConstantForce(int id, float strength, int dur) {
-    HapticStub::constantCalls.push_back({id, strength, dur});
+void OutputMapper::QueueConstantForce(int id, int slot, float strength, int dur) {
+    HapticStub::constantCalls.push_back({id, slot, strength, dur});
 }
 
-void OutputMapper::QueuePeriodic(int id, float strength, int period,
+void OutputMapper::QueuePeriodic(int id, int slot, float strength, int period,
                                  float magnitude, float offset, int phase, int dur) {
-    HapticStub::periodicCalls.push_back({id, strength, period, magnitude, offset, phase, dur});
+    HapticStub::periodicCalls.push_back({id, slot, strength, period, magnitude, offset, phase, dur});
 }
 
 void OutputMapper::QueueCondition(int id, int slot, uint16_t type,
@@ -86,15 +86,14 @@ void OutputMapper::QueueDualSenseTrigger(int, const char*, const char*,
                                          int, int, int, int, int, int,
                                          int, int, int, int, int)     {}
 
-// Private helpers — never called from outside; stubs prevent link errors
-// if the compiler emits references to them.
+// Private helpers — never called from outside; stubs prevent link errors.
 void OutputMapper::QueueCommand(HapticCommand&&)                       {}
 void OutputMapper::GetTargets(int, std::vector<HapticTarget*>&)        {}
 void OutputMapper::UpdateHapticDevice(HapticTarget&)                   {}
 void OutputMapper::CloseHapticDevice(HapticTarget&)                    {}
-void OutputMapper::TriggerRumble(int, float, float, int)               {}
-void OutputMapper::TriggerConstantForce(int, float, int)               {}
-void OutputMapper::TriggerPeriodic(int, float, int, float, float, int, int) {}
+void OutputMapper::TriggerRumble(int, int, float, float, int)          {}
+void OutputMapper::TriggerConstantForce(int, int, float, int)          {}
+void OutputMapper::TriggerPeriodic(int, int, float, int, float, float, int, int) {}
 void OutputMapper::TriggerCondition(int, int, uint16_t,
                                     float, float, float, float, float, float, int) {}
 void OutputMapper::TriggerSetGain(int, int)                            {}

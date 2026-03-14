@@ -127,38 +127,43 @@ const char* GamepadHaptics::GetControllerTypeName() const {
 
 // ==================== Universal Rumble ====================
 
-int GamepadHaptics::Rumble(float largeMagnitude, float smallMagnitude, uint32_t durationMs) {
-    // Clamp values
+int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnitude, uint32_t durationMs) {
     largeMagnitude = std::clamp(largeMagnitude, 0.0f, 1.0f);
     smallMagnitude = std::clamp(smallMagnitude, 0.0f, 1.0f);
-    
-    RunAsync([this, largeMagnitude, smallMagnitude, durationMs]() {
-        // FIXED: Steam Controller uses ONLY standard rumble
-        // Trackpad haptics are not supported via SDL (would need Steam Input API)
+
+    RunAsync([this, slot, largeMagnitude, smallMagnitude, durationMs]() {
         if (IsSteamController()) {
             SDL_Log("Steam Controller: Using standard rumble motor");
         }
-        
-        // ALL controllers (including Steam Controller) use standard SDL rumble
+
+        // All gamepad types use SDL_RumbleGamepad (last call wins for the motors).
         SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
         SDL_Gamepad* gamepad = SDL_GetGamepadFromID(id);
-        
+
         if (gamepad) {
-            const Uint16 lowFreq = static_cast<Uint16>(largeMagnitude * 0xFFFF);
+            const Uint16 lowFreq  = static_cast<Uint16>(largeMagnitude * 0xFFFF);
             const Uint16 highFreq = static_cast<Uint16>(smallMagnitude * 0xFFFF);
-            
+
             if (!SDL_RumbleGamepad(gamepad, lowFreq, highFreq, durationMs)) {
-                SDL_Log("GamepadHaptics::Rumble - SDL_RumbleGamepad failed: %s",
-                       SDL_GetError());
+                SDL_Log("GamepadHaptics::PlayRumble - SDL_RumbleGamepad failed: %s", SDL_GetError());
+                std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+                m_activeRumbles.erase(slot);
             } else {
-                SDL_Log("GamepadHaptics::Rumble - Success (low=%d, high=%d, duration=%dms)",
-                       lowFreq, highFreq, durationMs);
+                std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+                auto& info = m_activeRumbles[slot];
+                info.active           = true;
+                info.large_magnitude  = largeMagnitude;
+                info.small_magnitude  = smallMagnitude;
+                info.duration_ms      = durationMs;
+                info.last_updated     = SDL_GetTicks();
+                SDL_Log("GamepadHaptics::PlayRumble - Success slot=%d (low=%d, high=%d, duration=%dms)",
+                        slot, lowFreq, highFreq, durationMs);
             }
         } else {
-            SDL_Log("GamepadHaptics::Rumble - No gamepad handle available");
+            SDL_Log("GamepadHaptics::PlayRumble - No gamepad handle available");
         }
     });
-    
+
     return 0;
 }
 
@@ -167,12 +172,26 @@ int GamepadHaptics::Rumble(float largeMagnitude, float smallMagnitude, uint32_t 
 int GamepadHaptics::SendDualSenseTrigger(const char* trigger,
                                          const char* effectType,
                                          const std::map<std::string, int>& params) {
+    return PlayDualSenseTrigger(trigger, effectType, params);
+}
+
+int GamepadHaptics::PlayDualSenseTrigger(const std::string& trigger,
+                                         const std::string& effect_type,
+                                         const std::map<std::string, int>& params) {
     if (!m_dualSense) {
         SDL_Log("GamepadHaptics::SendDualSenseTrigger - Not a DualSense controller");
         return -1;  // FIXED: Return error, not silent success
     }
-    
-    return m_dualSense->SetTriggerEffect(trigger, effectType, params);
+
+    int result = m_dualSense->SetTriggerEffect(trigger, effect_type, params);
+    if (result == 0) {
+        std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+        auto& info = m_activeDualSenseTriggers[trigger];
+        info.effect_type = effect_type;
+        info.params = params;
+        info.last_updated = SDL_GetTicks();
+    }
+    return result;
 }
 
 void GamepadHaptics::SetDualSenseLED(uint8_t red, uint8_t green, uint8_t blue) {

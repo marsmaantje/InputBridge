@@ -53,7 +53,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         float high_freq = argv[2]->f;
         int duration_ms = argv[3]->i;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            gamepad->Rumble(low_freq, high_freq, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            gamepad->PlayRumble(0, low_freq, high_freq, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
         });
     }
     // Example: /inputbridge/haptics/force i f i (deviceId, strength, duration_ms)
@@ -61,7 +61,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         float strength = argv[1]->f;
         int duration_int = argv[2]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayConstant(strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayConstant(0, strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
     // Example: /inputbridge/haptics/periodic i f i f f i i (deviceId, strength, period, magnitude, offset, phase, duration_ms)
@@ -73,7 +73,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         int phase = argv[5]->i;
         int duration_int = argv[6]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayPeriodic(strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayPeriodic(0, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
     // Example: /inputbridge/haptics/condition i i i f f f f f f i (deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)

@@ -91,6 +91,7 @@ TEST_F(HapticParserTest, RumbleLowHighDurationParsedCorrectly) {
     ASSERT_EQ(HapticStub::rumbleCalls.size(), 1u);
     const auto& c = HapticStub::rumbleCalls[0];
     EXPECT_EQ(c.device,   2);
+    EXPECT_EQ(c.slot,     0);   // no "slot" key → defaults to 0
     EXPECT_FLOAT_EQ(c.low,   0.7f);
     EXPECT_FLOAT_EQ(c.high,  0.4f);
     EXPECT_EQ(c.duration, 300);
@@ -146,6 +147,7 @@ TEST_F(HapticParserTest, ConstantEffectCallsQueueConstantForce) {
     ASSERT_EQ(HapticStub::constantCalls.size(), 1u);
     const auto& c = HapticStub::constantCalls[0];
     EXPECT_EQ(c.device, 1);
+    EXPECT_EQ(c.slot,   0);   // no "slot" key → defaults to 0
     EXPECT_FLOAT_EQ(c.strength, 0.6f);
     EXPECT_EQ(c.duration, 400);
 }
@@ -180,6 +182,7 @@ TEST_F(HapticParserTest, PeriodicEffectCallsQueuePeriodic) {
         FakeMapper());
     ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
     const auto& c = HapticStub::periodicCalls[0];
+    EXPECT_EQ(c.slot,             0);   // no "slot" key → defaults to 0
     EXPECT_FLOAT_EQ(c.strength,   0.8f);
     EXPECT_EQ(c.period,           50);
     EXPECT_FLOAT_EQ(c.magnitude,  0.9f);
@@ -284,4 +287,57 @@ TEST_F(HapticParserTest, MissingDeviceDefaultsToZero) {
         FakeMapper());
     ASSERT_EQ(HapticStub::constantCalls.size(), 1u);
     EXPECT_EQ(HapticStub::constantCalls[0].device, 0);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Slot passthrough — rumble, constant, periodic
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST_F(HapticParserTest, RumbleSlotPassedThrough) {
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"rumble","device":0,
+            "params":{"low":0.5,"high":0.5,"duration":100,"slot":3}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::rumbleCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::rumbleCalls[0].slot, 3);
+}
+
+TEST_F(HapticParserTest, ConstantSlotPassedThrough) {
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"constant","device":0,
+            "params":{"strength":0.5,"duration":100,"slot":2}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::constantCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::constantCalls[0].slot, 2);
+}
+
+TEST_F(HapticParserTest, PeriodicSlotPassedThrough) {
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,
+            "params":{"strength":1.0,"period":50,"magnitude":0.5,
+                      "offset":0.0,"phase":0,"duration":200,"slot":5}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].slot, 5);
+}
+
+TEST_F(HapticParserTest, SlotDefaultsToZeroWhenAbsent) {
+    // Verify all three effect types default slot to 0 when the key is missing.
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"rumble","device":0,"params":{"low":0.1,"high":0.1,"duration":10}})",
+        FakeMapper());
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"constant","device":0,"params":{"strength":0.1,"duration":10}})",
+        FakeMapper());
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,"params":{"strength":0.1,"period":50,"magnitude":0.1,"offset":0.0,"phase":0,"duration":10}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::rumbleCalls.size(),   1u);
+    ASSERT_EQ(HapticStub::constantCalls.size(), 1u);
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+
+    EXPECT_EQ(HapticStub::rumbleCalls[0].slot,   0);
+    EXPECT_EQ(HapticStub::constantCalls[0].slot, 0);
+    EXPECT_EQ(HapticStub::periodicCalls[0].slot, 0);
 }

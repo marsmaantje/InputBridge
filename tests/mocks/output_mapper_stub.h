@@ -22,6 +22,7 @@ namespace HapticStub {
 
 struct RumbleArgs {
     int     device;
+    int     slot;
     float   low;
     float   high;
     int     duration;
@@ -29,12 +30,14 @@ struct RumbleArgs {
 
 struct ConstantArgs {
     int   device;
+    int   slot;
     float strength;
     int   duration;
 };
 
 struct PeriodicArgs {
     int   device;
+    int   slot;
     float strength;
     int   period;
     float magnitude;

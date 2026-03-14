@@ -40,6 +40,9 @@ namespace {
     // Condition params
     const char* const kConditionSlot = "slot";
     const char* const kConditionType = "condition_type";
+
+    // Shared slot key used by all slotted effect types
+    const char* const kSlot = "slot";
     const char* const kConditionRightSat = "right_sat";
     const char* const kConditionLeftSat = "left_sat";
     const char* const kConditionRightCoeff = "right_coeff";
@@ -95,17 +98,20 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
                 if (data.contains(kRumbleSmallMag)) high = data.value(kRumbleSmallMag, 0.0f);
 
                 int duration = get_duration(data);
+                int slot = data.value(kSlot, 0);
 
-                mapper->QueueRumble(device, low, high, duration);
+                mapper->QueueRumble(device, slot, low, high, duration);
             } else if (effect == kEffectConstant) {
                 float strength = data.value(kConstantStrength, 0.0f);
                 int duration = get_duration(data);
+                int slot = data.value(kSlot, 0);
 
-                mapper->QueueConstantForce(device, strength, duration);
+                mapper->QueueConstantForce(device, slot, strength, duration);
             } else if (effect == kEffectPeriodic) {
                 int duration = get_duration(data);
+                int slot = data.value(kSlot, 0);
 
-                mapper->QueuePeriodic(device, data.value(kConstantStrength, 0.0f), data.value(kPeriodicPeriod, 0), data.value(kPeriodicMagnitude, 0.0f), data.value(kPeriodicOffset, 0.0f), data.value(kPeriodicPhase, 0), duration);
+                mapper->QueuePeriodic(device, slot, data.value(kConstantStrength, 0.0f), data.value(kPeriodicPeriod, 0), data.value(kPeriodicMagnitude, 0.0f), data.value(kPeriodicOffset, 0.0f), data.value(kPeriodicPhase, 0), duration);
             } else if (effect == kEffectCondition) {
                 int duration = get_duration(data);
 

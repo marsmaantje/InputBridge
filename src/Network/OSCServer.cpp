@@ -96,7 +96,7 @@ int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
-            server->m_OutputMapper->QueueRumble(id, low, high, duration);
+            server->m_OutputMapper->QueueRumble(id, 0, low, high, duration);
         }
     } catch (...) {}
     return 0;
@@ -118,7 +118,7 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
-            server->m_OutputMapper->QueueConstantForce(id, strength, duration);
+            server->m_OutputMapper->QueueConstantForce(id, 0, strength, duration);
         }
     } catch (...) {}
     return 0;
@@ -144,7 +144,7 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
-            server->m_OutputMapper->QueuePeriodic(id, strength, period, magnitude, offset, phase, duration);
+            server->m_OutputMapper->QueuePeriodic(id, 0, strength, period, magnitude, offset, phase, duration);
         }
     } catch (...) {}
     return 0;
