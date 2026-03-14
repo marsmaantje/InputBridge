@@ -11,7 +11,7 @@
     "Section header text: cyan (#00B8C8) — used sparingly.",
     "Toggles ON: bright green (#22CC44).",
     "Error/warning rows: deep crimson (#5A1520).",
-    "Rounding: moderate (6–8px) matching the soft-rounded panel style."
+    "Rounding: moderate (6-8px) matching the soft-rounded panel style."
   ],
   "font": {
     "file": "fonts/Poppins-Regular.ttf",

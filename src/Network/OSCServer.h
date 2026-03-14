@@ -9,6 +9,7 @@
 #include <set>
 #include <memory>
 #include <vector>
+#include <thread>
 
 class PreferencesManager;
 class OutputMapper;
@@ -34,8 +35,22 @@ public:
     // Starts both sending and receiving
     bool Start(const std::string& send_host, int send_port, int recv_port);
     void Stop();
+    // Block until the liblo cleanup thread (spawned by Stop()) has fully
+    // exited.  Must be called after Stop() and before destroying any object
+    // the liblo callbacks reference (e.g. OutputMapper).
+    void WaitStopped();
 
     bool IsRunning() const;
+    bool HasClients() const;
+
+    // Call once per frame from the main loop. Handles client inactivity
+    // timeout and fires StopAllHapticEffects on the transition.
+    void CheckInactivity();
+
+    // Returns true after the OSCServer singleton has been fully destroyed.
+    // Use in destructors of objects that may outlive the server (e.g. OSCProtocol)
+    // to guard against use-after-destruction when calling GetInstance().
+    static bool IsDestroyed();
 
     void Send(const std::string& path, const char* types, ...);
     void SendWheel(float steer, float brake, float throttle, float pitch, float roll);
@@ -74,6 +89,15 @@ public:
 
     void SetOutputMapper(OutputMapper* mapper);
 
+    bool IsOutputEnabled() const;
+    bool IsInputEnabled()  const;
+    void SetOutputEnabled(bool enabled);
+    void SetInputEnabled(bool enabled);
+
+    // Write port/host fields from a profile without restarting the server.
+    // The caller must restart manually (or the UI shows "Restart to apply").
+    void SetPortsFromProfile(const std::string& sendHost, int sendPort, int recvPort);
+
 private:
     static int generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_rumble_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
@@ -90,7 +114,7 @@ private:
     std::atomic<int> m_selectedDeviceId = 0;
 
     // UI State
-    char m_send_host[128] = "127.0.0.1";
+    char m_send_host[128];
     int m_send_port = 9066;
     int m_recv_port = 9068;
 
@@ -102,11 +126,24 @@ private:
     OSCHandler m_handler;
     mutable std::mutex m_mutex;  // mutable for const methods
     std::shared_ptr<IProtocol> m_protocol;
-    std::string m_protocolName = "OSC Default";
+    std::string m_protocolName;
     std::string m_selectedDefinitionId; // legacy single-slot
     std::string m_outputDefinitionId; // selected output (server→client) definition
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
     std::deque<std::string> m_logs;
     std::set<std::string> m_clients;
+    uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;
+    // Preserved across Stop()/Start() cycles so that restarting the server
+    // from the UI does not silently disable all haptic effects.
+    OutputMapper* m_savedOutputMapper = nullptr;
+
+    // Direction enable flags — persisted to prefs.
+    bool m_outputEnabled = true;  // send OSC messages to clients
+    bool m_inputEnabled  = true;  // receive OSC messages from clients
+
+    // Cleanup thread used by Stop() to run lo_server_thread_stop off the
+    // main/UI thread.  Stored (not detached) so the destructor can join it
+    // and guarantee the thread finishes before members are destroyed.
+    std::thread m_cleanupThread;
 };

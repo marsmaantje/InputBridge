@@ -90,11 +90,13 @@ static void RegisterProjectBabbleFields() {
 
 // Ensure fields are registered at startup
 static struct ProjectBabbleFieldRegistrar {
-    ProjectBabbleFieldRegistrar() { RegisterProjectBabbleFields(); }
+    ProjectBabbleFieldRegistrar() { 
+        //RegisterProjectBabbleFields(); 
+    }
 } g_ProjectBabbleFieldRegistrar;
 
 OSCProjectBabbleProtocol::OSCProjectBabbleProtocol() {
-    RegisterProjectBabbleFields();
+    //RegisterProjectBabbleFields();
 }
 
 std::string OSCProjectBabbleProtocol::getProtocolName() const {

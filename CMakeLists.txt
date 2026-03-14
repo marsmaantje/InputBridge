@@ -214,8 +214,10 @@ find_package(Threads REQUIRED)
 # InputBridge Executable
 add_executable(InputBridge
     WIN32 MACOSX_BUNDLE
-    # ... put source files here ...
+    # Entry point
     src/main.cpp
+    # Application lifecycle
+    src/App/Application.cpp
     # Core utilities
     src/Core/UndoRedo.cpp
     src/Core/BackupManager.cpp
@@ -223,13 +225,16 @@ add_executable(InputBridge
     # Device management
     src/Devices/DeviceManager.cpp
     src/Devices/DeviceFactory.cpp
+    src/Devices/VirtualDeviceManager.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
     src/Haptics/SteeringWheelHaptics.cpp
+    src/Haptics/FlightStickHaptics.cpp
     src/Haptics/DualSenseTriggerEffectGenerator.cpp
     src/Haptics/DualSenseController.cpp
     src/Haptics/XboxController.cpp
+    src/Network/HapticParser.cpp
     # Settings
     src/Preferences/Preferences.cpp
     # Input device visualizers
@@ -237,22 +242,24 @@ add_executable(InputBridge
     src/Visualizers/GamepadVisualizer.cpp
     src/Visualizers/GamepadHapticsVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
+    src/Visualizers/FlightStickHapticsVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
+    src/Visualizers/VirtualDeviceVisualizer.cpp
     src/Visualizers/WiimoteVisualizer.cpp
     # Networking
     src/Network/NetworkStatusWindow.cpp
     # Device input and protocol output mappings
     src/Mappers/InputMapper.cpp
     src/Mappers/OutputMapper.cpp
-    # Webseerver and OSC protocol
+    # WebSocket and OSC protocols
     src/Protocols/OSCProtocol.cpp
     src/Protocols/ProtocolManager.cpp
     src/Protocols/WebSocketProtocol.cpp
     src/Protocols/MarsmaantjeOldProtocol.cpp
     src/Protocols/MarsmaantjeNewProtocol.cpp
     src/Protocols/OSCBaseProtocol.cpp
-    src/Protocols/OSCDefaultProtocol.cpp
+    src/Protocols/OSCBackAllyRacingProtocol.cpp
     src/Protocols/OSCSteamLinkProtocol.cpp
     src/Protocols/OSCProjectBabbleProtocol.cpp
     src/Protocols/ProtocolEditorWindow.cpp
@@ -261,6 +268,27 @@ add_executable(InputBridge
     src/Utils/FileDialog.cpp
     # UI helpers
     src/UI/ThemeManager.cpp
+    src/UI/AboutWindow.cpp
+    src/UI/FontManager.cpp
+    src/UI/DevicePanel.cpp
+    src/UI/SettingsPanel.cpp
+    src/UI/SidebarLayout.cpp
+    # Steering wheel RPM LED support (formerly lib/wheel-rpm-lib)
+    src/WheelRpm/src/core/sdl_transport.cpp
+    src/WheelRpm/src/core/wheel_manager.cpp
+    src/WheelRpm/src/fanatec/csl_dd.cpp
+    src/WheelRpm/src/fanatec/csl_elite.cpp
+    src/WheelRpm/src/fanatec/csw_v25.cpp
+    src/WheelRpm/src/fanatec/podium_dd1.cpp
+    src/WheelRpm/src/fanatec/podium_dd2.cpp
+    src/WheelRpm/src/logitech/g27.cpp
+    src/WheelRpm/src/logitech/g29.cpp
+    src/WheelRpm/src/logitech/g923.cpp
+    src/WheelRpm/src/logitech/pro.cpp
+    src/WheelRpm/src/thrustmaster/sf1000.cpp
+    src/WheelRpm/src/thrustmaster/t300.cpp
+    src/WheelRpm/src/thrustmaster/t818.cpp
+    src/WheelRpm/src/thrustmaster/ts_pc.cpp
 )
 
 if(ENABLE_WEBSOCKETS)
@@ -277,7 +305,10 @@ if(ENABLE_OSC)
     )
 endif()
 
-target_include_directories(InputBridge PRIVATE src)
+target_include_directories(InputBridge PRIVATE
+    src
+    src/WheelRpm/include
+)
 
 if(ENABLE_EXCLUSIVE_INPUT)
     target_sources(InputBridge PRIVATE
@@ -461,6 +492,15 @@ else()
     set(CPACK_GENERATOR "TGZ")
 endif()
 include(CPack)
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+# Build with: cmake -DBUILD_TESTS=ON ..
+# Or set "cmake.configureArgs": ["-DBUILD_TESTS=ON"] in VS Code settings.json
+option(BUILD_TESTS "Build unit tests" OFF)
+if(BUILD_TESTS)
+    include(CTest)
+    add_subdirectory(tests)
+endif()
 
 # Install Licenses
 set(LICENSE_DIR "bin/licenses")

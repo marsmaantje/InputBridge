@@ -195,7 +195,11 @@ private:
     std::string m_lastError;
 
     // Font state
-    bool        m_pendingFontChange = false;
+    // Initialised to true so that RebuildFontAtlas() is always called once at
+    // startup — even when no custom theme is saved and LoadFromPreferences()
+    // returns early without setting the flag.  Without this the FA6 icon font
+    // is never merged into the ImGui atlas and all icon glyphs render as '?'.
+    bool        m_pendingFontChange = true;
     std::string m_resolvedFontPath;   ///< empty = use built-in default
     float       m_fontSize          = 16.f;
 };

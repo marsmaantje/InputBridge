@@ -71,12 +71,14 @@ public:
      * Works on all controllers. For controllers with advanced haptics,
      * this uses the main rumble motors.
      * 
+     * @param slot Effect slot index (allows multiple simultaneous instances)
      * @param largeMagnitude Low-frequency motor (0.0-1.0)
      * @param smallMagnitude High-frequency motor (0.0-1.0)
      * @param durationMs Duration in milliseconds
      * @return 0 on success, negative on error
      */
-    int Rumble(float largeMagnitude, float smallMagnitude, uint32_t durationMs);
+    int PlayRumble(int slot, float largeMagnitude, float smallMagnitude, uint32_t durationMs) override;
+    int PlayDualSenseTrigger(const std::string& trigger, const std::string& effect_type, const std::map<std::string, int>& params) override;
 
     // ==================== DualSense-Specific ====================
 

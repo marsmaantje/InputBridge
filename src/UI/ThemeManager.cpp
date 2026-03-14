@@ -160,9 +160,43 @@ void ThemeManager::Reapply() {
 //  Persistence
 // ============================================================================
 
+// Sanitize a path that may have been corrupted by repeated escape/unescape
+// cycles.  Each save-without-unescape doubles the backslashes, so after N bad
+// round-trips a single '\' becomes 2^N backslashes.  We fix this by:
+//   1. Replacing every '\' with '/' (Windows accepts '/' as path separator).
+//   2. Collapsing every run of '/' into a single '/', while preserving a
+//      leading "//" so UNC paths survive.
+static std::string SanitizeThemePath(const std::string& raw) {
+    // Step 1 – replace all backslashes with forward slashes
+    std::string s = raw;
+    for (char& c : s) {
+        if (c == '\\') c = '/';
+    }
+    // Step 2 – collapse consecutive forward slashes
+    // Keep the first two characters unchanged so "C:/" and "//" are preserved.
+    std::string out;
+    out.reserve(s.size());
+    bool prev_slash = false;
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '/') {
+            if (!prev_slash || i < 2)   // always keep the first two chars as-is
+                out += '/';
+            prev_slash = true;
+        } else {
+            out += s[i];
+            prev_slash = false;
+        }
+    }
+    return out;
+}
+
 void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
     std::string path = prefs.GetString("Theme", "ThemePath", "");
     if (path.empty()) return;
+
+    // Recover from any previously over-escaped paths (repeated double-escaping
+    // turns one backslash into 2^N backslashes after N bad round-trips).
+    path = SanitizeThemePath(path);
 
     auto result = LoadFromFile(path);
     if (result.IsErr()) {
@@ -173,8 +207,11 @@ void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
 }
 
 void ThemeManager::SaveToPreferences(PreferencesManager& prefs) const {
-    if (m_hasCustomTheme)
-        prefs.SetString("Theme", "ThemePath", m_themePath);
+    if (m_hasCustomTheme) {
+        // Always persist with forward slashes so the TOML escape/unescape cycle
+        // never has to deal with backslashes (which it historically doubled).
+        prefs.SetString("Theme", "ThemePath", SanitizeThemePath(m_themePath));
+    }
     else
         prefs.DeleteKey("Theme", "ThemePath");
 }

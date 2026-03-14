@@ -18,6 +18,10 @@ class WebSocketServer {
 
     void Start(int port);
     void Stop();
+    // Block until the uWS event-loop thread has fully exited.  Must be called
+    // after Stop() and before destroying any objects the thread's callbacks
+    // reference (e.g. OutputMapper).
+    void WaitStopped();
     bool IsRunning() const;
     int GetPort() const;
     void SetPort(int port);
@@ -51,6 +55,18 @@ class WebSocketServer {
     void SaveConfig(PreferencesManager& prefs);
 
     void SetOutputMapper(OutputMapper* mapper);
+
+    // Call once per frame from the main loop — fires StopAllHapticEffects when
+    // connected clients go silent for longer than the inactivity timeout.
+    // Write port field from a profile without restarting the server.
+    void SetPortFromProfile(int port);
+
+    void CheckInactivity();
+
+    bool IsOutputEnabled() const;
+    bool IsInputEnabled()  const;
+    void SetOutputEnabled(bool enabled);
+    void SetInputEnabled(bool enabled);
 #else
     static WebSocketServer &GetInstance() {
         static WebSocketServer i;
@@ -59,6 +75,7 @@ class WebSocketServer {
 
     void Start(int port) {}
     void Stop() {}
+    void WaitStopped() {}
     bool IsRunning() const { return false; }
     int GetPort() const { return 0; }
     void SetPort(int port) {}
@@ -88,6 +105,15 @@ class WebSocketServer {
     void SaveConfig(PreferencesManager& prefs) {}
 
     void SetOutputMapper(OutputMapper* mapper) {}
+
+    void SetPortFromProfile(int port) {}
+
+    void CheckInactivity() {}
+
+    bool IsOutputEnabled() const { return true; }
+    bool IsInputEnabled()  const { return true; }
+    void SetOutputEnabled(bool) {}
+    void SetInputEnabled(bool)  {}
 #endif
 
   private:

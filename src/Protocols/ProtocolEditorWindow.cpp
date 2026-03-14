@@ -29,7 +29,7 @@ using json = nlohmann::json;
 
 /**
  * Find a field within a protocol definition by ID.
- * 
+ *
  * @param def Protocol definition to search
  * @param fieldId Field identifier to find
  * @return Pointer to field if found, nullptr otherwise
@@ -46,7 +46,7 @@ static ProtocolField* FindField(ProtocolDefinition& def, const std::string& fiel
 /**
  * Check if a field descriptor matches the search filter.
  * Case-insensitive substring match against label, category, or id.
- * 
+ *
  * @param fd Field descriptor to check
  * @param filter Search string (null or empty matches all)
  * @return true if field matches filter
@@ -55,22 +55,22 @@ static bool MatchesFilter(const FieldDescriptor& fd, const char* filter) {
     if (!filter || filter[0] == '\0') {
         return true;
     }
-    
+
     // Lambda for case-insensitive contains check
     auto contains = [](const std::string& haystack, const char* needle) {
         std::string lowerHaystack = haystack;
-        std::transform(lowerHaystack.begin(), lowerHaystack.end(), 
+        std::transform(lowerHaystack.begin(), lowerHaystack.end(),
                       lowerHaystack.begin(), ::tolower);
-        
+
         std::string lowerNeedle = needle;
-        std::transform(lowerNeedle.begin(), lowerNeedle.end(), 
+        std::transform(lowerNeedle.begin(), lowerNeedle.end(),
                       lowerNeedle.begin(), ::tolower);
-        
+
         return lowerHaystack.find(lowerNeedle) != std::string::npos;
     };
-    
-    return contains(fd.label, filter) || 
-           contains(fd.category, filter) || 
+
+    return contains(fd.label, filter) ||
+           contains(fd.category, filter) ||
            contains(fd.id, filter);
 }
 
@@ -84,12 +84,12 @@ void ProtocolEditorWindow::LoadSettings() {
     if (!fs::exists(SETTINGS_FILE)) {
         return;
     }
-    
+
     try {
         std::ifstream inputFile(SETTINGS_FILE);
         json settingsJson;
         inputFile >> settingsJson;
-        
+
         if (settingsJson.contains("importDir")) {
             s_importCurrentDir = settingsJson["importDir"];
         }
@@ -107,7 +107,7 @@ void ProtocolEditorWindow::SaveSettings() {
         json settingsJson;
         settingsJson["importDir"] = s_importCurrentDir;
         settingsJson["exportDir"] = s_exportCurrentDir;
-        
+
         std::ofstream outputFile(SETTINGS_FILE);
         outputFile << settingsJson.dump(4);
     } catch (const std::exception& e) {
@@ -593,7 +593,7 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
 
 /**
  * Try to use native file dialog if available.
- * 
+ *
  * @param isSave true for save dialog, false for open dialog
  * @param path Input/output path
  * @return true if native dialog was shown and user selected a file
@@ -602,15 +602,15 @@ bool ProtocolEditorWindow::TryNativeFileDialog(bool isSave, std::string& path) {
     if (!FileDialog::IsNativeDialogAvailable()) {
         return false;
     }
-    
+
     std::vector<std::pair<std::string, std::string>> filters = {
         {"JSON Files", "*.json"},
         {"All Files", "*.*"}
     };
-    
+
     FileDialog::Type dialogType = isSave ? FileDialog::Type::Save : FileDialog::Type::Open;
     std::string title = isSave ? "Export Protocol" : "Import Protocol";
-    
+
     return FileDialog::Show(dialogType, title, path, filters, path);
 }
 
@@ -618,22 +618,10 @@ bool ProtocolEditorWindow::TryNativeFileDialog(bool isSave, std::string& path) {
 // Main Entry Point
 // ═══════════════════════════════════════════════════════════════════════════
 
-void ProtocolEditorWindow::Draw(bool& open) {
+void ProtocolEditorWindow::DrawContent() {
     if (!s_settingsLoaded) {
         LoadSettings();
         s_settingsLoaded = true;
-    }
-
-    if (!open) {
-        return;
-    }
-
-    ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Protocol Editor", &open,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-                      ImGuiWindowFlags_NoDocking)) {
-        ImGui::End();
-        return;
     }
 
     // Handle drag-and-drop of .json files onto the window
@@ -653,22 +641,22 @@ void ProtocolEditorWindow::Draw(bool& open) {
         s_newDirection = 0;
     }
     ImGui::SameLine();
-    
+
     if (ImGui::Button("Save All")) {
         ProtocolRegistry::GetInstance().SaveAll();
     }
     ImGui::SameLine();
-    
+
     if (ImGui::Button("Reload Fields")) {
         ProtocolRegistry::GetInstance().ReloadFieldCatalog();
     }
     ImGui::SameLine();
-    
+
     if (ImGui::Button("Import...")) {
         ShowImportDialog();
     }
     ImGui::SameLine();
-    
+
     if (ImGui::Button("Export...")) {
         ShowExportDialog();
     }
@@ -692,7 +680,7 @@ void ProtocolEditorWindow::Draw(bool& open) {
     ImGui::SameLine();
 
     if (ImGui::Button("Backups...")) s_showBackupModal = true;
-    
+
     ImGui::Separator();
 
     // ── Two-column layout: left=list, right=editor ────────────────────────
@@ -722,10 +710,23 @@ void ProtocolEditorWindow::Draw(bool& open) {
     DrawLoadTemplateModal();
     DrawValidationResultModal();
     DrawBackupManagerModal();
+}
+
+void ProtocolEditorWindow::Draw(bool& open) {
+    if (!open) return;
+
+    ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Protocols", &open,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                      ImGuiWindowFlags_NoDocking)) {
+        ImGui::End();
+        return;
+    }
+
+    DrawContent();
 
     ImGui::End();
 }
-
 void ProtocolEditorWindow::ShowImportDialog() {
     s_showImportModal = true;
     s_importPath[0] = '\0';
@@ -775,7 +776,7 @@ void ProtocolEditorWindow::DrawProtocolList() {
 
         // Transport icon
         const char* icon = (definition.transport == ProtocolTransport::OSC) ? "[OSC] " : "[WS]  ";
-        
+
         // Direction indicator
         const char* direction = (definition.direction == ProtocolDirection::Output) ? "↑" : "↓";
 
@@ -785,11 +786,11 @@ void ProtocolEditorWindow::DrawProtocolList() {
         if (isSelected) {
             ImGui::PushStyleColor(ImGuiCol_Header, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
         }
-        
+
         if (ImGui::Selectable(label.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
             s_selectedIndex = i;
         }
-        
+
         if (isSelected) {
             ImGui::PopStyleColor();
         }
@@ -804,20 +805,20 @@ void ProtocolEditorWindow::DrawProtocolList() {
                 ImGui::EndPopup();
                 break; // List invalidated
             }
-            
+
             if (ImGui::MenuItem("Duplicate")) {
                 s_showDupModal = true;
                 s_dupSourceId = definition.id;
                 std::strncpy(s_dupName, (definition.name + " Copy").c_str(), sizeof(s_dupName));
                 s_dupTransport = (definition.transport == ProtocolTransport::OSC) ? 0 : 1;
             }
-            
+
             if (ImGui::MenuItem("Export")) {
                 s_showExportModal = true;
                 s_exportId = definition.id;
                 s_exportPath[0] = '\0';
             }
-            
+
             ImGui::EndPopup();
         }
     }
@@ -841,7 +842,7 @@ void ProtocolEditorWindow::DrawEditor() {
 
     // ── Protocol name ────────────────────────────────────────────────────────
     ImGui::SeparatorText("Protocol Settings");
-    
+
     char nameBuffer[128];
     std::strncpy(nameBuffer, definition.name.c_str(), sizeof(nameBuffer));
     if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer))) {
@@ -849,9 +850,9 @@ void ProtocolEditorWindow::DrawEditor() {
         needsSave = true;
     }
 
-    ImGui::Text("Transport: %s", 
+    ImGui::Text("Transport: %s",
                 definition.transport == ProtocolTransport::OSC ? "OSC" : "WebSocket");
-    ImGui::Text("Direction: %s", 
+    ImGui::Text("Direction: %s",
                 definition.direction == ProtocolDirection::Output ? "Output" : "Input");
 
     // ── Transport-specific settings ──────────────────────────────────────────
@@ -898,12 +899,12 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
     auto& registry = ProtocolRegistry::GetInstance();
     auto& definitions = registry.GetDefinitions();
     auto& definition = definitions[s_selectedIndex];
-    
+
     const auto& catalog = registry.GetOutputFields();
     bool isOsc = (definition.transport == ProtocolTransport::OSC);
 
     ImGui::SeparatorText("Output Fields");
-    
+
     // Field management buttons
     if (ImGui::Button("+ Create Field")) {
         s_showCreateFieldModal = true;
@@ -915,19 +916,19 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
         std::strncpy(s_cfWs, "custom_", sizeof(s_cfWs));
     }
     ImGui::SameLine();
-    
+
     if (ImGui::Button("Save as Preset")) {
         s_showSavePresetModal = true;
         std::strncpy(s_presetName, "New Preset", sizeof(s_presetName));
     }
-    
+
     if (ImGui::Button("Rename Category")) {
         s_showRenameCatModal = true;
         s_renCatOldName[0] = '\0';
         s_renCatNewName[0] = '\0';
     }
     ImGui::SameLine();
-    
+
     if (ImGui::Button("Delete Category")) {
         s_showDeleteCatModal = true;
         s_delCatName[0] = '\0';
@@ -958,12 +959,12 @@ void ProtocolEditorWindow::DrawInputFieldPicker() {
     auto& registry = ProtocolRegistry::GetInstance();
     auto& definitions = registry.GetDefinitions();
     auto& definition = definitions[s_selectedIndex];
-    
+
     const auto& catalog = registry.GetInputFields();
     bool isOsc = (definition.transport == ProtocolTransport::OSC);
 
     ImGui::SeparatorText("Input Fields");
-    
+
     // Category management for input fields
     if (ImGui::Button("Rename Category")) {
         s_showRenameCatModal = true;
@@ -971,7 +972,7 @@ void ProtocolEditorWindow::DrawInputFieldPicker() {
         s_renCatNewName[0] = '\0';
     }
     ImGui::SameLine();
-    
+
     if (ImGui::Button("Delete Category")) {
         s_showDeleteCatModal = true;
         s_delCatName[0] = '\0';
@@ -1021,7 +1022,7 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                 matchCount++;
             }
         }
-        
+
         if (matchCount == 0) {
             continue; // Skip empty categories
         }
@@ -1122,7 +1123,7 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                 // Show override controls if enabled
                 if (isEnabled && pf) {
                     ImGui::Indent();
-                    
+
                     if (isOsc) {
                         char pathBuffer[128];
                         std::strncpy(pathBuffer, pf->oscPath.c_str(), sizeof(pathBuffer));
@@ -1140,7 +1141,7 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                             pendingSave = true;
                         }
                     }
-                    
+
                     ImGui::Unindent();
                 }
 
@@ -1185,9 +1186,9 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
         ImGui::Separator();
 
         if (ImGui::Button("Create", ImVec2(120, 0))) {
-            ProtocolTransport transport = (s_newTransport == 0) ? 
+            ProtocolTransport transport = (s_newTransport == 0) ?
                 ProtocolTransport::OSC : ProtocolTransport::WebSocket;
-            ProtocolDirection direction = (s_newDirection == 0) ? 
+            ProtocolDirection direction = (s_newDirection == 0) ?
                 ProtocolDirection::Output : ProtocolDirection::Input;
 
             std::string newId = ProtocolRegistry::GetInstance().CreateDefinition(
@@ -1237,11 +1238,11 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        
+
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
-        
+
         ImGui::EndPopup();
     }
 }
@@ -1262,7 +1263,7 @@ void ProtocolEditorWindow::DrawDuplicateProtocolModal() {
         ImGui::Separator();
 
         if (ImGui::Button("Duplicate", ImVec2(120, 0))) {
-            ProtocolTransport transport = (s_dupTransport == 0) ? 
+            ProtocolTransport transport = (s_dupTransport == 0) ?
                 ProtocolTransport::OSC : ProtocolTransport::WebSocket;
 
             std::string newId = ProtocolRegistry::GetInstance().DuplicateDefinition(
@@ -1280,11 +1281,11 @@ void ProtocolEditorWindow::DrawDuplicateProtocolModal() {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        
+
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
-        
+
         ImGui::EndPopup();
     }
 }
@@ -1302,7 +1303,7 @@ void ProtocolEditorWindow::DrawRenameCategoryModal() {
         // Collect existing categories
         std::vector<std::string> categories;
         auto& registry = ProtocolRegistry::GetInstance();
-        
+
         for (const auto& field : registry.GetOutputFields()) {
             if (std::find(categories.begin(), categories.end(), field.category) == categories.end()) {
                 categories.push_back(field.category);
@@ -1382,7 +1383,7 @@ void ProtocolEditorWindow::DrawDeleteCategoryModal() {
         // Collect existing categories
         std::vector<std::string> categories;
         auto& registry = ProtocolRegistry::GetInstance();
-        
+
         for (const auto& field : registry.GetOutputFields()) {
             if (std::find(categories.begin(), categories.end(), field.category) == categories.end()) {
                 categories.push_back(field.category);
@@ -1474,7 +1475,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
     bool open = true;
     if (ImGui::BeginPopupModal("Create/Edit Field##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
         bool idChanged = false;
-        
+
         if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId))) {
             s_cfIdManuallyModified = true;
             idChanged = true;
@@ -1482,7 +1483,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
                 std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
             }
         }
-        
+
         if (ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel))) {
             s_cfLabelManuallyModified = true;
             if (!s_cfIdManuallyModified) {
@@ -1514,7 +1515,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         // Collect existing categories for dropdown
         std::vector<std::string> categories;
         auto& registry = ProtocolRegistry::GetInstance();
-        
+
         for (const auto& field : registry.GetOutputFields()) {
             if (std::find(categories.begin(), categories.end(), field.category) == categories.end()) {
                 categories.push_back(field.category);
@@ -1546,7 +1547,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 
         const char* types[] = {"Analog Axis", "Digital Button"};
         ImGui::Combo("Type", &s_cfType, types, 2);
-        
+
         ImGui::InputText("Default OSC Path", s_cfOsc, sizeof(s_cfOsc));
         ImGui::InputText("Default WS Key", s_cfWs, sizeof(s_cfWs));
 
@@ -1568,7 +1569,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
                 }
             }
         }
-        
+
         if (idExists) {
             ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ID already exists!");
         }
@@ -1610,26 +1611,50 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 }
 
 void ProtocolEditorWindow::DrawExportProtocolModal() {
-    if (s_showExportModal) {
-        // Try native dialog first
-        std::string exportPathStr = s_exportPath;
-        if (TryNativeFileDialog(true, exportPathStr)) {
-            std::strncpy(s_exportPath, exportPathStr.c_str(), sizeof(s_exportPath));
+    // ── Collect native dialog result (runs every frame, harmless when idle) ──
+    // The native Win32 dialog is launched on a worker thread. Once the thread
+    // finishes (running flag cleared) we join it and handle the result here,
+    // safely back on the render thread.
+    if (!s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
+        s_nativeDialogThread.join();
+        if (s_nativeDialogSucceeded.load()) {
+            std::strncpy(s_exportPath, s_nativeDialogResultPath.c_str(), sizeof(s_exportPath));
             ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
-            s_showExportModal = false;
-            return;
         }
-        
-        // Fall back to ImGui browser
-        ImGui::OpenPopup("Export Protocol##modal");
+        // Whether the user picked a file or cancelled, we are done.
+        // Do NOT open the ImGui browser on cancel — just return silently.
+        return;
+    }
+
+    if (s_showExportModal) {
         s_showExportModal = false;
+
+        if (FileDialog::IsNativeDialogAvailable()) {
+            // Spawn worker thread so the render loop never blocks.
+            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
+            s_nativeDialogIsImport  = false;
+            s_nativeDialogSucceeded = false;
+            s_nativeDialogRunning   = true;
+            s_nativeDialogResultPath = s_exportCurrentDir;
+            std::string capturedId  = s_exportId;
+            s_nativeDialogThread = std::thread([]() {
+                std::string path = s_nativeDialogResultPath;
+                bool ok = TryNativeFileDialog(true, path);
+                s_nativeDialogResultPath = path;
+                s_nativeDialogSucceeded  = ok;
+                s_nativeDialogRunning    = false;
+            });
+            return; // result collected next frame(s) above
+        }
+
+        // No native dialog available — open the ImGui browser.
+        ImGui::OpenPopup("Export Protocol##modal");
     }
 
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Export Protocol##modal", &open)) {
 
-        // Browser occupies most of the modal height
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
             ImGui::BeginChild("##export_browser_area", ImVec2(0, -footerH), false);
@@ -1641,14 +1666,12 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
 
         ImGui::Separator();
 
-        // File name row
         ImGui::AlignTextToFramePadding();
         ImGui::Text("File name:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(-1);
         ImGui::InputText("##export_path", s_exportPath, sizeof(s_exportPath));
 
-        // Buttons row
         float btnW = 110.0f;
         ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - btnW * 2 + ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Button("Export", ImVec2(btnW, 0))) {
@@ -1665,32 +1688,49 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
 }
 
 void ProtocolEditorWindow::DrawImportProtocolModal() {
-    if (s_showImportModal) {
-        // Try native dialog first
-        std::string importPath;
-        if (TryNativeFileDialog(false, importPath)) {
-            std::string id = ProtocolRegistry::GetInstance().ImportDefinition(importPath);
+    // ── Collect native dialog result (runs every frame, harmless when idle) ──
+    if (s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
+        s_nativeDialogThread.join();
+        if (s_nativeDialogSucceeded.load()) {
+            std::string id = ProtocolRegistry::GetInstance().ImportDefinition(s_nativeDialogResultPath);
             auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
             for (int i = 0; i < (int)defs.size(); ++i) {
-                if (defs[i].id == id) {
-                    s_selectedIndex = i;
-                    break;
-                }
+                if (defs[i].id == id) { s_selectedIndex = i; break; }
             }
-            s_showImportModal = false;
-            return;
         }
-        
-        // Fall back to ImGui browser
-        ImGui::OpenPopup("Import Protocol##modal");
+        // Whether the user picked a file or cancelled, do NOT open the ImGui
+        // browser — just return silently.
+        return;
+    }
+
+    if (s_showImportModal) {
         s_showImportModal = false;
+
+        if (FileDialog::IsNativeDialogAvailable()) {
+            // Spawn worker thread so the render loop never blocks.
+            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
+            s_nativeDialogIsImport  = true;
+            s_nativeDialogSucceeded = false;
+            s_nativeDialogRunning   = true;
+            s_nativeDialogResultPath = s_importCurrentDir;
+            s_nativeDialogThread = std::thread([]() {
+                std::string path = s_nativeDialogResultPath;
+                bool ok = TryNativeFileDialog(false, path);
+                s_nativeDialogResultPath = path;
+                s_nativeDialogSucceeded  = ok;
+                s_nativeDialogRunning    = false;
+            });
+            return; // result collected next frame(s) above
+        }
+
+        // No native dialog available — open the ImGui browser.
+        ImGui::OpenPopup("Import Protocol##modal");
     }
 
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Import Protocol##modal", &open)) {
 
-        // Browser occupies most of the modal height
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
             ImGui::BeginChild("##import_browser_area", ImVec2(0, -footerH), false);
@@ -1702,14 +1742,12 @@ void ProtocolEditorWindow::DrawImportProtocolModal() {
 
         ImGui::Separator();
 
-        // File name row
         ImGui::AlignTextToFramePadding();
         ImGui::Text("File name:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(-1);
         ImGui::InputText("##import_path", s_importPath, sizeof(s_importPath));
 
-        // Buttons row
         float btnW = 110.0f;
         ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - btnW * 2 + ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Button("Import", ImVec2(btnW, 0))) {
@@ -1738,32 +1776,32 @@ void ProtocolEditorWindow::DrawSavePresetModal() {
         ImGui::InputText("Preset Name", s_presetName, sizeof(s_presetName));
 
         ImGui::Separator();
-        
+
         if (ImGui::Button("Save", ImVec2(120, 0))) {
             auto& registry = ProtocolRegistry::GetInstance();
             auto& definitions = registry.GetDefinitions();
-            
+
             if (s_selectedIndex >= 0 && s_selectedIndex < (int)definitions.size()) {
                 const auto& definition = definitions[s_selectedIndex];
                 std::vector<std::string> fields;
-                
+
                 for (const auto& field : definition.fields) {
                     if (field.enabled) {
                         fields.push_back(field.fieldId);
                     }
                 }
-                
+
                 registry.SavePreset(s_presetName, fields);
             }
-            
+
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        
+
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
-        
+
         ImGui::EndPopup();
     }
 }

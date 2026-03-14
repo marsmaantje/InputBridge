@@ -1,6 +1,6 @@
 # InputBridge
 
-[![Cross-platform building test](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml)
+[![Build Status](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (Ubuntu)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(ubuntu-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (Windows)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(windows-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (macOS)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(macos-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml)
 
 InputBridge is a cross-platform input device bridge that relays joystick, gamepad, steering wheel, and other controller data over OSC and WebSocket. It supports haptic feedback control, adaptive trigger effects, and a fully configurable protocol system.
 
@@ -228,6 +228,10 @@ Used for spring, damper, friction, or inertia effects (e.g., centering spring).
 *   **type**: `"steering_wheel"`
 *   **effect**: `"condition"`
 *   **params**:
+    *   `slot`: Integer - The effect slot to use (0 to device max). Defaults to 0.
+    *   `condition_type`: Integer - The haptic condition type ID.
+        *   `128` (Spring), `256` (Damper), `512` (Inertia), `1024` (Friction).
+        *   Defaults to 128 (Spring).
     *   `right_sat`: Float (0.0 to 1.0) - Saturation level on the positive side.
     *   `left_sat`: Float (0.0 to 1.0) - Saturation level on the negative side.
     *   `right_coeff`: Float (-1.0 to 1.0) - Coefficient (slope) on the positive side.
@@ -243,6 +247,8 @@ Used for spring, damper, friction, or inertia effects (e.g., centering spring).
   "type": "steering_wheel",
   "effect": "condition",
   "params": {
+    "slot": 0,
+    "condition_type": 128,
     "right_sat": 1.0,
     "left_sat": 1.0,
     "right_coeff": 0.5,
@@ -275,8 +281,10 @@ All incoming haptics messages are under the `/inputbridge/haptics/*` namespace. 
 - `/inputbridge/haptics/periodic` — types: "ififfii" (deviceId, strength, period, magnitude, offset, phase, duration_ms)
   - Example: `[1, 1.0, 100, 0.5, 0.0, 0, 2000]`
 
-- `/inputbridge/haptics/condition` — types: "iffffffi" (deviceId, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)
-  - Example: `[1, 1.0, 1.0, 0.5, 0.5, 0.1, 0.0, 5000]`
+- `/inputbridge/haptics/condition` — types: "iiiffffffi" (deviceId, slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms).
+  - `slot`: Integer - The effect slot to use (0 to device max).
+  - `type`: Integer - The haptic condition type ID: `128` (Spring), `256` (Damper), `512` (Inertia), `1024` (Friction).
+  - Example: `[1, 0, 128, 1.0, 1.0, 0.5, 0.5, 0.1, 0.0, 5000]`
 
 - `/inputbridge/haptics/gain` — types: "ii" (deviceId, gain)
   - Example: `[1, 100]`

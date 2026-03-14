@@ -1,11 +1,7 @@
 #pragma once
 
 #include <string>
-#include <filesystem>
-#include <chrono>
 #include <vector>
-
-namespace fs = std::filesystem;
 
 /**
  * Manages automatic backups of files before destructive operations.
@@ -93,12 +89,12 @@ private:
      * Generate backup filename with timestamp.
      */
     std::string GenerateBackupName(const std::string& originalPath) const;
-    
+
     /**
      * Extract original filename from backup name.
      */
     std::string ExtractOriginalName(const std::string& backupName) const;
-    
+
     /**
      * Ensure backup directory exists.
      */
@@ -108,4 +104,5 @@ private:
      * Get timestamp string for backup naming.
      */
     std::string GetTimestamp() const;
+
 };

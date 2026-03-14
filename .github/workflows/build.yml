@@ -17,10 +17,23 @@ on:
                     - ubuntu-flatpak
                     - fedora
                     - arch
+            run_tests:
+                description: "Run Google Tests"
+                required: true
+                type: choice
+                default: "no"
+                options:
+                    - "no"
+                    - "yes"
+                    - "only"
+
+permissions:
+  checks: write   # for dorny/test-reporter to publish test reports
+  contents: read  # for actions/checkout to fetch code and actions
 
 jobs:
     build-windows:
-        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'windows' }}
+        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'windows') && github.event.inputs.run_tests != 'only' }}
         runs-on: windows-latest
         steps:
             - uses: actions/checkout@v4
@@ -48,7 +61,7 @@ jobs:
                   path: package/bin
 
     build-macos:
-        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'macos' }}
+        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'macos') && github.event.inputs.run_tests != 'only' }}
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@v4
@@ -73,7 +86,7 @@ jobs:
                   path: build/*.zip
 
     build-ubuntu-appimage:
-        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage' }}
+        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -107,7 +120,7 @@ jobs:
                   path: InputBridge-Ubuntu.AppImage
 
     build-ubuntu-flatpak:
-        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-flatpak' }}
+        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-flatpak') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -133,7 +146,7 @@ jobs:
                   path: InputBridge-Ubuntu.flatpak
 
     build-ubuntu:
-        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu' }}
+        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -164,7 +177,7 @@ jobs:
                   path: dist/InputBridge-Ubuntu.tar.gz
 
     build-fedora:
-        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'fedora' }}
+        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'fedora') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         container: fedora:latest
         steps:
@@ -172,8 +185,7 @@ jobs:
               run: dnf install -y git gcc-c++ make cmake libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel libxkbcommon-devel wayland-devel systemd-devel alsa-lib-devel pulseaudio-libs-devel libXScrnSaver-devel libXext-devel libXfixes-devel libXinerama-devel libXxf86vm-devel dbus-devel libdrm-devel mesa-libgbm-devel libusb1-devel libsamplerate-devel libdecor-devel libXtst-devel openssl-devel zlib-devel libuv-devel
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              with: { submodules: recursive }
 
             - name: Configure CMake
               run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
@@ -194,16 +206,15 @@ jobs:
                   path: dist/InputBridge-Fedora.tar.gz
 
     build-arch:
-        if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'arch' }}
+        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'arch') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         container: archlinux:latest
         steps:
             - name: Install Dependencies
-              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
+              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes-devel libxinerama-devel libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              with: { submodules: recursive }
 
             - name: Configure CMake
               run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
@@ -222,3 +233,80 @@ jobs:
               with:
                   name: InputBridge-Arch
                   path: dist/InputBridge-Arch.tar.gz
+
+    run-tests:
+        if: ${{ github.event.inputs.run_tests == 'yes' || github.event.inputs.run_tests == 'only' }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+              with: { submodules: recursive }
+
+            - name: Cache apt packages
+              if: runner.os == 'Linux'
+              uses: actions/cache@v4
+              with:
+                path: |
+                  /var/cache/apt/archives
+                  /var/lib/apt/lists
+                key: ${{ runner.os }}-apt-cache-${{ hashFiles('.github/workflows/build.yml') }}
+                restore-keys: |
+                  ${{ runner.os }}-apt-cache-
+
+            - name: Install Dependencies (Linux)
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential git cmake ninja-build libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev lcov
+
+            - name: Add OpenSSL to PATH (Windows)
+              if: runner.os == 'Windows'
+              run: echo "C:/Program Files/OpenSSL/bin" >> $env:GITHUB_PATH
+
+            - name: Configure CMake
+              shell: bash
+              run: |
+                declare -a CMAKE_ARGS=("-B" "build" "-G" "Ninja" "-DBUILD_TESTS=ON" "-DCMAKE_BUILD_TYPE=Debug")
+                if [[ "${{ runner.os }}" == "Linux" ]]; then
+                  CMAKE_ARGS+=("-DCMAKE_CXX_FLAGS=--coverage" "-DCMAKE_C_FLAGS=--coverage")
+                fi
+                cmake "${CMAKE_ARGS[@]}"
+
+            - name: Build
+              run: cmake --build build
+
+            - name: Run Tests
+              working-directory: ./build
+              run: ctest --output-on-failure --output-junit test-results.xml
+
+            - name: Upload Test Results
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-results-${{ matrix.os }}
+                  path: build/test-results.xml
+
+            - name: Publish Test Report
+              uses: dorny/test-reporter@v1
+              if: always()
+              with:
+                name: Test Results (${{ matrix.os }})
+                path: build/test-results.xml
+                reporter: java-junit
+
+            - name: Generate Coverage Report
+              if: runner.os == 'Linux'
+              run: |
+                  lcov --capture --ignore-errors mismatch --rc geninfo_unexecuted_blocks=1 --directory build --output-file coverage.info
+                  lcov --remove coverage.info '/usr/*' '*/tests/*' '*/lib/*' --output-file coverage.info
+                  genhtml coverage.info --output-directory coverage-report
+
+            - name: Upload Coverage Report
+              if: runner.os == 'Linux'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-report
+                  path: coverage-report

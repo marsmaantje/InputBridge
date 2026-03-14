@@ -7,6 +7,7 @@
 #include <map>
 
 #include "Haptics/HapticDevice.h"
+#include "wheel/wheel_manager.hpp"
 
 class DeviceManager {
   public:
@@ -22,8 +23,16 @@ class DeviceManager {
     static std::string GetDeviceGUIDString(const DeviceState &dev);
 
     HapticDevice* GetHapticDevice(SDL_JoystickID instance_id) const;
-    
+
     void UpdateBatteryInfo(DeviceState &dev);
+
+    // --- wheel-rpm-lib integration ---
+    // Re-scans HID devices and refreshes the list of RPM-capable wheels.
+    // Safe to call at any time; replaces the previous scan result.
+    void ScanWheelRPMDevices();
+
+    // Returns the currently-known RPM-capable wheel devices.
+    const std::vector<std::unique_ptr<wheel::Wheel>>& GetWheelRPMDevices() const;
 
   private:
     DeviceManager();
@@ -32,4 +41,7 @@ class DeviceManager {
 
     std::vector<DeviceState> m_Devices;
     std::map<SDL_JoystickID, std::unique_ptr<HapticDevice>> m_HapticDevices;
+
+    // Wheel RPM devices discovered via wheel-rpm-lib
+    std::vector<std::unique_ptr<wheel::Wheel>> m_WheelRPMDevices;
 };

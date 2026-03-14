@@ -17,6 +17,8 @@
  */
 #include <string>
 #include <vector>
+#include <thread>
+#include <atomic>
 #include "../Core/UndoRedo.h"
 #include "../Core/BackupManager.h"
 #include "ProtocolDefinition.h"
@@ -29,17 +31,22 @@ struct RemovedProtocolField {
 class ProtocolEditorWindow {
 public:
     /**
-     * Draw the Protocol Editor window.
-     * 
+     * Draw the Protocol Editor window (standalone floating window).
      * @param open Window open state (set to false to close)
      */
     static void Draw(bool& open);
-    
+
+    /**
+     * Draw only the Protocol Editor content, no ImGui::Begin/End wrapper.
+     * Use this to embed the editor inside an existing window or child region.
+     */
+    static void DrawContent();
+
     /**
      * Trigger import dialog from external code (e.g., main menu).
      */
     static void ShowImportDialog();
-    
+
     /**
      * Trigger export dialog for selected protocol from external code.
      */
@@ -177,6 +184,16 @@ private:
     static inline bool  s_showImportModal = false;
     static inline char  s_importPath[256] = "";
     static inline std::string s_importCurrentDir = ".";
+
+    // Export protocol modal state (also used by async native dialog)
+    // Native dialog async state — the Win32 dialog runs on a worker thread so
+    // it never blocks the ImGui render loop.
+    static inline std::thread       s_nativeDialogThread;
+    static inline std::atomic<bool> s_nativeDialogRunning{false};
+    static inline std::atomic<bool> s_nativeDialogSucceeded{false};
+    static inline std::string       s_nativeDialogResultPath;
+    // true = import pending, false = export pending
+    static inline bool              s_nativeDialogIsImport = false;
 
     // Filter / search state
     static inline char  s_fieldFilter[128] = {};

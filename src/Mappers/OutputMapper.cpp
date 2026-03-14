@@ -1,7 +1,7 @@
 #include "OutputMapper.h"
 #include "imgui.h"
 #include "InputMapper.h"
-#include "Haptics/GamepadHaptics.h"
+#include "Haptics/HapticDevice.h"
 #include <algorithm>
 #include <memory>
 #include <map>
@@ -49,6 +49,13 @@ OutputMapper::~OutputMapper() {
     }
 }
 
+bool OutputMapper::IsHapticsActive() const {
+    // Consider haptics active for a short period after the last command.
+    // This is an approximation for UI feedback.
+    const uint64_t activity_timeout_ms = 500;
+    return (SDL_GetTicks() - m_lastHapticActivityTime.load()) < activity_timeout_ms;
+}
+
 void OutputMapper::SetActiveHapticTargets(std::vector<HapticTarget>* targets) {
     if (m_active_targets) {
         for (auto& target : *m_active_targets) {
@@ -61,8 +68,17 @@ void OutputMapper::SetActiveHapticTargets(std::vector<HapticTarget>* targets) {
 
 void OutputMapper::DrawContent() {
     HandleDeviceConnectionChange();
-
     ImGui::Begin("Output Mapper");
+    DrawContentOnly();
+    ImGui::End();
+}
+
+void OutputMapper::DrawContentOnly() {
+    HandleDeviceConnectionChange();
+
+    // ── Input Protocol Selection ──────────────────────────────────────────────
+    InputMapper::GetInstance().DrawInputProtocolSelector();
+    ImGui::Separator();
 
     ImGui::Text("Haptic Output Targets");
     ImGui::Separator();
@@ -72,7 +88,6 @@ void OutputMapper::DrawContent() {
     auto& inputMapper = InputMapper::GetInstance();
     if (!m_active_targets) {
         ImGui::Text("No mapping profile selected in Input Mapper.");
-        ImGui::End();
         return;
     }
 
@@ -222,8 +237,6 @@ void OutputMapper::DrawContent() {
         m_active_targets->erase(m_active_targets->begin() + targetToDelete);
         inputMapper.SaveCurrentProfile();
     }
-
-    ImGui::End();
 }
 
 void OutputMapper::Update() {
@@ -236,16 +249,16 @@ void OutputMapper::Update() {
     for (const auto& cmd : queue) {
         switch (cmd.type) {
             case HapticCommand::RUMBLE:
-                TriggerRumble(cmd.virtual_id, cmd.fParams[0], cmd.fParams[1], cmd.iParams[0]);
+                TriggerRumble(cmd.virtual_id, cmd.iParams[0], cmd.fParams[0], cmd.fParams[1], cmd.iParams[1]);
                 break;
             case HapticCommand::CONSTANT:
-                TriggerConstantForce(cmd.virtual_id, cmd.fParams[0], cmd.iParams[0]);
+                TriggerConstantForce(cmd.virtual_id, cmd.iParams[0], cmd.fParams[0], cmd.iParams[1]);
                 break;
             case HapticCommand::PERIODIC:
-                TriggerPeriodic(cmd.virtual_id, cmd.fParams[0], cmd.iParams[0], cmd.fParams[1], cmd.fParams[2], cmd.iParams[1], cmd.iParams[2]);
+                TriggerPeriodic(cmd.virtual_id, cmd.iParams[0], cmd.fParams[0], cmd.iParams[1], cmd.fParams[1], cmd.fParams[2], cmd.iParams[2], cmd.iParams[3]);
                 break;
             case HapticCommand::CONDITION:
-                TriggerCondition(cmd.virtual_id, cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[0]);
+                TriggerCondition(cmd.virtual_id, cmd.iParams[0], (uint16_t)cmd.iParams[1], cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[2]);
                 break;
             case HapticCommand::GAIN:
                 TriggerSetGain(cmd.virtual_id, cmd.iParams[0]);
@@ -257,6 +270,37 @@ void OutputMapper::Update() {
                                        cmd.iParams[6], cmd.iParams[7], cmd.iParams[8],
                                        cmd.iParams[9] & 0xFF, (cmd.iParams[9] >> 8) & 0xFF);
                 break;
+        }
+    }
+}
+
+void OutputMapper::StopAllHapticEffects()
+{
+    // Stop effects on OutputMapper-managed targets (output mapping UI slots).
+    if (m_active_targets) {
+        for (auto& target : *m_active_targets) {
+            if (target.haptic_device) {
+                SDL_StopHapticEffects(target.haptic_device);
+            }
+            // For gamepads that don't use the haptic_device path for rumble
+            else if (target.instance_id != 0 && SDL_IsGamepad(target.instance_id)) {
+                SDL_Gamepad* pad = SDL_GetGamepadFromID(target.instance_id);
+                if (pad) {
+                    SDL_RumbleGamepad(pad, 0, 0, 0);
+                }
+            }
+        }
+    }
+
+    // Also stop effects on every HapticDevice owned by DeviceManager.
+    // These are the devices used by OSCBaseProtocol / OSCProtocol via
+    // DispatchHapticCommand, which bypass the OutputMapper target list
+    // entirely.  StopAll() clears per-slot effect maps and destroys SDL
+    // effect IDs so that the next Play* call starts from a clean state.
+    for (const auto& dev : m_DeviceManager.GetDevices()) {
+        HapticDevice* haptic = m_DeviceManager.GetHapticDevice(dev.instance_id);
+        if (haptic) {
+            haptic->StopAll();
         }
     }
 }
@@ -348,43 +392,57 @@ void OutputMapper::GetTargets(int virtual_id, std::vector<HapticTarget*>& out_ta
 
 // --- Queue Methods ---
 
-void OutputMapper::QueueRumble(int virtual_id, float low_freq, float high_freq, int duration_ms) {
+void OutputMapper::QueueCommand(HapticCommand&& cmd) {
     std::lock_guard<std::mutex> lock(m_Mutex);
+    m_CommandQueue.push_back(std::move(cmd));
+}
+
+void OutputMapper::QueueRumble(int virtual_id, int slot, float low_freq, float high_freq, int duration_ms) {
+    if (low_freq > 0.0f || high_freq > 0.0f) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
     HapticCommand cmd;
     cmd.type = HapticCommand::RUMBLE;
     cmd.virtual_id = virtual_id;
+    cmd.iParams[0] = slot;
     cmd.fParams[0] = low_freq;
     cmd.fParams[1] = high_freq;
-    cmd.iParams[0] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    cmd.iParams[1] = duration_ms;
+    QueueCommand(std::move(cmd));
 }
 
-void OutputMapper::QueueConstantForce(int virtual_id, float strength, int duration_ms) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+void OutputMapper::QueueConstantForce(int virtual_id, int slot, float strength, int duration_ms) {
+    if (strength != 0.0f) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
     HapticCommand cmd;
     cmd.type = HapticCommand::CONSTANT;
     cmd.virtual_id = virtual_id;
+    cmd.iParams[0] = slot;
     cmd.fParams[0] = strength;
-    cmd.iParams[0] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    cmd.iParams[1] = duration_ms;
+    QueueCommand(std::move(cmd));
 }
 
-void OutputMapper::QueuePeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+void OutputMapper::QueuePeriodic(int virtual_id, int slot, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
+    if (strength > 0.0f && magnitude > 0.0f) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
     HapticCommand cmd;
     cmd.type = HapticCommand::PERIODIC;
     cmd.virtual_id = virtual_id;
+    cmd.iParams[0] = slot;
     cmd.fParams[0] = strength;
-    cmd.iParams[0] = period;
     cmd.fParams[1] = magnitude;
     cmd.fParams[2] = offset;
-    cmd.iParams[1] = phase;
-    cmd.iParams[2] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    cmd.iParams[1] = period;
+    cmd.iParams[2] = phase;
+    cmd.iParams[3] = duration_ms;
+    QueueCommand(std::move(cmd));
 }
 
-void OutputMapper::QueueCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+void OutputMapper::QueueCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
+    m_lastHapticActivityTime = SDL_GetTicks();
     HapticCommand cmd;
     cmd.type = HapticCommand::CONDITION;
     cmd.virtual_id = virtual_id;
@@ -394,17 +452,19 @@ void OutputMapper::QueueCondition(int virtual_id, float right_sat, float left_sa
     cmd.fParams[3] = left_coeff;
     cmd.fParams[4] = deadband;
     cmd.fParams[5] = center;
-    cmd.iParams[0] = duration_ms;
-    m_CommandQueue.push_back(cmd);
+    cmd.iParams[0] = slot;
+    cmd.iParams[1] = type;
+    cmd.iParams[2] = duration_ms;
+    QueueCommand(std::move(cmd));
 }
 
 void OutputMapper::QueueSetGain(int virtual_id, int gain) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+    // Not considered an "active" effect for UI purposes
     HapticCommand cmd;
     cmd.type = HapticCommand::GAIN;
     cmd.virtual_id = virtual_id;
     cmd.iParams[0] = gain;
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, const char* effect_type,
@@ -412,7 +472,7 @@ void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, co
                                          int amplitude, int frequency, int snap_force,
                                          int first_foot, int second_foot, int period,
                                          int amplitude_a, int amplitude_b) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_lastHapticActivityTime = SDL_GetTicks();
     HapticCommand cmd;
     cmd.type = HapticCommand::DUALSENSE_TRIGGER;
     cmd.virtual_id = virtual_id;
@@ -428,24 +488,31 @@ void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, co
     cmd.iParams[7] = second_foot;
     cmd.iParams[8] = period;
     cmd.iParams[9] = (amplitude_a & 0xFF) | ((amplitude_b & 0xFF) << 8);
-    m_CommandQueue.push_back(cmd);
+    QueueCommand(std::move(cmd));
 }
 
 // --- Trigger Implementations ---
 
-void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq, int duration_ms) {
+void OutputMapper::TriggerRumble(int virtual_id, int slot, float low_freq, float high_freq, int duration_ms) {
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
         if (!target || !target->enable_rumble) continue;
 
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (hapticDevice) {
+            hapticDevice->PlayRumble(slot, low_freq, high_freq, duration_ms);
+            continue;
+        }
+
+        // Generic fallback for non-managed devices (slot ignored — single motor pair).
         if (target->haptic_device) {
             if (SDL_GetHapticFeatures(target->haptic_device) & SDL_HAPTIC_LEFTRIGHT) {
                 SDL_HapticEffect effect;
                 SDL_memset(&effect, 0, sizeof(effect));
                 effect.type = SDL_HAPTIC_LEFTRIGHT;
                 effect.leftright.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
-                effect.leftright.large_magnitude = (Uint16)(std::clamp(low_freq, 0.0f, 1.0f) * 65535.0f);
+                effect.leftright.large_magnitude = (Uint16)(std::clamp(low_freq,  0.0f, 1.0f) * 65535.0f);
                 effect.leftright.small_magnitude = (Uint16)(std::clamp(high_freq, 0.0f, 1.0f) * 65535.0f);
 
                 bool created = false;
@@ -457,14 +524,10 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
                 }
 
                 if (target->rumble_effect_id != -1) {
-                    // Always run on first creation or for finite effects.
-                    // For infinite effects, check whether the effect is still
-                    // playing; if it was stopped (e.g. via the haptic-test StopAll
-                    // button) we must restart it so the server can resume feedback.
                     bool needsRun = created || duration_ms > 0;
                     if (!needsRun) {
                         int status = SDL_GetHapticEffectStatus(target->haptic_device, target->rumble_effect_id);
-                        needsRun = (status != 1); // 1 = SDL_HAPTIC_PLAYING
+                        needsRun = (status != 1);
                     }
                     if (needsRun) {
                         SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
@@ -473,11 +536,6 @@ void OutputMapper::TriggerRumble(int virtual_id, float low_freq, float high_freq
             } else {
                 float strength = std::max(low_freq, high_freq);
                 SDL_PlayHapticRumble(target->haptic_device, strength, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms);
-            }
-        } else if (target->instance_id != 0 && SDL_IsGamepad(target->instance_id)) {
-            SDL_Gamepad* pad = SDL_GetGamepadFromID(target->instance_id);
-            if (pad) {
-                SDL_RumbleGamepad(pad, (Uint16)(std::clamp(low_freq, 0.0f, 1.0f) * 65535.0f), (Uint16)(std::clamp(high_freq, 0.0f, 1.0f) * 65535.0f), (Uint32)duration_ms);
             }
         }
     }
@@ -492,121 +550,152 @@ void OutputMapper::TriggerSetGain(int virtual_id, int gain) {
     }
 }
 
-void OutputMapper::TriggerConstantForce(int virtual_id, float strength, int duration_ms) {
+void OutputMapper::TriggerConstantForce(int virtual_id, int slot, float strength, int duration_ms) {
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-    if (!target || !target->haptic_device || !target->enable_constant) continue;
+        if (!target || !target->enable_constant) continue;
 
-    SDL_HapticEffect effect;
-    SDL_memset(&effect, 0, sizeof(effect));
-    effect.type = SDL_HAPTIC_CONSTANT;
-    effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
-    effect.constant.direction.dir[0] = 1;
-    effect.constant.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
-    effect.constant.level = (Sint16)(std::clamp(strength, -1.0f, 1.0f) * 32767.0f);
-
-    bool created = false;
-    if (target->constant_effect_id == -1) {
-        target->constant_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
-        created = true;
-    } else {
-        SDL_UpdateHapticEffect(target->haptic_device, target->constant_effect_id, &effect);
-    }
-
-    if (target->constant_effect_id != -1) {
-        // Always run on first creation or for finite effects.
-        // For infinite effects, restart only if the effect is no longer playing
-        // (e.g. after a StopAll call from the haptic-test UI).
-        bool needsRun = created || duration_ms > 0;
-        if (!needsRun) {
-            int status = SDL_GetHapticEffectStatus(target->haptic_device, target->constant_effect_id);
-            needsRun = (status != 1); // 1 = SDL_HAPTIC_PLAYING
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (hapticDevice) {
+            hapticDevice->PlayConstant(slot, strength, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            continue;
         }
-        if (needsRun) {
-            SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
+
+        // Generic fallback (slot ignored — single effect slot on unmanaged devices).
+        if (!target->haptic_device) continue;
+
+        SDL_HapticEffect effect;
+        SDL_memset(&effect, 0, sizeof(effect));
+        effect.type = SDL_HAPTIC_CONSTANT;
+        effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
+        effect.constant.direction.dir[0] = 1;
+        effect.constant.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
+        effect.constant.level = (Sint16)(std::clamp(strength, -1.0f, 1.0f) * 32767.0f);
+
+        bool created = false;
+        if (target->constant_effect_id == -1) {
+            target->constant_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
+            created = true;
+        } else {
+            SDL_UpdateHapticEffect(target->haptic_device, target->constant_effect_id, &effect);
         }
-    }
+
+        if (target->constant_effect_id != -1) {
+            bool needsRun = created || duration_ms > 0;
+            if (!needsRun) {
+                int status = SDL_GetHapticEffectStatus(target->haptic_device, target->constant_effect_id);
+                needsRun = (status != 1);
+            }
+            if (needsRun) {
+                SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
+            }
+        }
     }
 }
 
-void OutputMapper::TriggerPeriodic(int virtual_id, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
+void OutputMapper::TriggerPeriodic(int virtual_id, int slot, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-    if (!target || !target->haptic_device || !target->enable_periodic) continue;
+        if (!target || !target->enable_periodic) continue;
 
-    SDL_HapticEffect effect;
-    SDL_memset(&effect, 0, sizeof(effect));
-    effect.type = SDL_HAPTIC_SINE;
-    effect.periodic.direction.type = SDL_HAPTIC_CARTESIAN;
-    effect.periodic.direction.dir[0] = 1;
-    effect.periodic.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
-    effect.periodic.period = (Uint16)period;
-    effect.periodic.magnitude = (Sint16)(std::clamp(magnitude, -1.0f, 1.0f) * 32767.0f);
-    effect.periodic.offset = (Sint16)(std::clamp(offset, -1.0f, 1.0f) * 32767.0f);
-    effect.periodic.phase = (Uint16)std::clamp(phase, 0, 36000);
-
-    if (strength != 1.0f) {
-        effect.periodic.magnitude = (Sint16)(effect.periodic.magnitude * strength);
-    }
-
-    bool created = false;
-    if (target->periodic_effect_id == -1) {
-        target->periodic_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
-        created = true;
-    } else {
-        SDL_UpdateHapticEffect(target->haptic_device, target->periodic_effect_id, &effect);
-    }
-
-    if (target->periodic_effect_id != -1) {
-        bool needsRun = created || duration_ms > 0;
-        if (!needsRun) {
-            int status = SDL_GetHapticEffectStatus(target->haptic_device, target->periodic_effect_id);
-            needsRun = (status != 1);
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (hapticDevice) {
+            hapticDevice->PlayPeriodic(slot, strength, (uint32_t)period, magnitude, offset, (uint32_t)phase, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            continue;
         }
-        if (needsRun) {
-            SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
+
+        // Generic fallback (slot ignored — single effect slot on unmanaged devices).
+        if (!target->haptic_device) continue;
+
+        SDL_HapticEffect effect;
+        SDL_memset(&effect, 0, sizeof(effect));
+        effect.type = SDL_HAPTIC_SINE;
+        effect.periodic.direction.type = SDL_HAPTIC_CARTESIAN;
+        effect.periodic.direction.dir[0] = 1;
+        effect.periodic.length    = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
+        effect.periodic.period    = (Uint16)period;
+        effect.periodic.magnitude = (Sint16)(std::clamp(magnitude, -1.0f, 1.0f) * 32767.0f);
+        effect.periodic.offset    = (Sint16)(std::clamp(offset,   -1.0f, 1.0f) * 32767.0f);
+        effect.periodic.phase     = (Uint16)std::clamp(phase, 0, 36000);
+
+        if (strength != 1.0f) {
+            effect.periodic.magnitude = (Sint16)(effect.periodic.magnitude * strength);
         }
-    }
+
+        bool created = false;
+        if (target->periodic_effect_id == -1) {
+            target->periodic_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
+            created = true;
+        } else {
+            SDL_UpdateHapticEffect(target->haptic_device, target->periodic_effect_id, &effect);
+        }
+
+        if (target->periodic_effect_id != -1) {
+            bool needsRun = created || duration_ms > 0;
+            if (!needsRun) {
+                int status = SDL_GetHapticEffectStatus(target->haptic_device, target->periodic_effect_id);
+                needsRun = (status != 1);
+            }
+            if (needsRun) {
+                SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
+            }
+        }
     }
 }
 
-void OutputMapper::TriggerCondition(int virtual_id, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
+void OutputMapper::TriggerCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
-    if (!target || !target->haptic_device || !target->enable_condition) continue;
+        if (!target || !target->enable_condition) continue;
 
-    SDL_HapticEffect effect;
-    SDL_memset(&effect, 0, sizeof(effect));
-    effect.type = SDL_HAPTIC_SPRING;
-    effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-    effect.condition.direction.dir[0] = 1;
-    effect.condition.length = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;
-    effect.condition.right_sat[0] = (Uint16)(std::clamp(right_sat, 0.0f, 1.0f) * 65535.0f);
-    effect.condition.left_sat[0] = (Uint16)(std::clamp(left_sat, 0.0f, 1.0f) * 65535.0f);
-    effect.condition.right_coeff[0] = (Sint16)(std::clamp(right_coeff, -1.0f, 1.0f) * 32767.0f);
-    effect.condition.left_coeff[0] = (Sint16)(std::clamp(left_coeff, -1.0f, 1.0f) * 32767.0f);
-    effect.condition.deadband[0] = (Uint16)(std::clamp(deadband, 0.0f, 1.0f) * 65535.0f);
-    effect.condition.center[0] = (Sint16)(std::clamp(center, -1.0f, 1.0f) * 32767.0f);
+        // If this target maps to a managed HapticDevice, delegate to it as it
+        // has a more advanced, multi-slot implementation for condition effects.
+        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (hapticDevice) {
+            hapticDevice->PlayCondition(slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            continue; // Handled by specialized class
+        }
 
-    bool created = false;
-    if (target->condition_effect_id == -1) {
-        target->condition_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
-        created = true;
-    } else {
-        SDL_UpdateHapticEffect(target->haptic_device, target->condition_effect_id, &effect);
-    }
+        // Generic fallback for other haptic devices.
+        // NOTE: This generic path does not support multiple slots; it uses a single
+        // overwritable effect ID, consistent with how Constant and Periodic effects
+        // are handled for generic devices. The 'slot' parameter is ignored here.
+        if (!target->haptic_device) continue;
 
-    if (target->condition_effect_id != -1) {
-        // Spring/condition effects respond to the live axis position in real-time.
-        // Restarting a running condition effect causes no perceptible glitch, so
-        // we always run it after an update. This is the safest way to handle the
-        // infinity-duration case: after StopAll the effect is stopped and an
-        // SDL_UpdateHapticEffect call alone does not restart it on most drivers.
-        SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
-    }
+        SDL_HapticEffect effect;
+        SDL_memset(&effect, 0, sizeof(effect));
+        effect.type = type;
+        effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
+        effect.condition.direction.dir[0] = 1;
+        effect.condition.length = (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms;
+        effect.condition.right_sat[0] = (Uint16)(std::clamp(right_sat, 0.0f, 1.0f) * 65535.0f);
+        effect.condition.left_sat[0]  = (Uint16)(std::clamp(left_sat, 0.0f, 1.0f) * 65535.0f);
+        effect.condition.right_coeff[0] = (Sint16)(std::clamp(right_coeff, -1.0f, 1.0f) * 32767.0f);
+        effect.condition.left_coeff[0]  = (Sint16)(std::clamp(left_coeff, -1.0f, 1.0f) * 32767.0f);
+        effect.condition.deadband[0] = (Uint16)(std::clamp(deadband, 0.0f, 1.0f) * 65535.0f);
+        effect.condition.center[0] = (Sint16)(std::clamp(center, -1.0f, 1.0f) * 32767.0f);
+
+        bool created = false;
+        if (target->condition_effect_id == -1) {
+            target->condition_effect_id = SDL_CreateHapticEffect(target->haptic_device, &effect);
+            created = true;
+        } else {
+            SDL_UpdateHapticEffect(target->haptic_device, target->condition_effect_id, &effect);
+        }
+
+        if (target->condition_effect_id != -1) {
+            bool needsRun = created || duration_ms >= 0;
+            if (!needsRun) {
+                int status = SDL_GetHapticEffectStatus(target->haptic_device, target->condition_effect_id);
+                needsRun = (status != 1);
+            }
+            if (needsRun) {
+                SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
+            }
+        }
     }
 }
 
@@ -619,14 +708,11 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
         if (!target || target->instance_id == 0) continue;
-        
+
         // Get the haptic device - for DualSense, we need to access GamepadHaptics
-        HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        auto* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
         if (!hapticDevice) continue;
-        
-        GamepadHaptics* gamepadHaptics = dynamic_cast<GamepadHaptics*>(hapticDevice);
-        if (!gamepadHaptics) continue;
-        
+
         // Build parameters map
         std::map<std::string, int> params;
         params["position"] = position;
@@ -641,7 +727,7 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
         params["period"] = period;
         params["amplitude_a"] = amplitude_a;
         params["amplitude_b"] = amplitude_b;
-        
-        gamepadHaptics->SendDualSenseTrigger(trigger, effect_type, params);
+
+        hapticDevice->PlayDualSenseTrigger(trigger, effect_type, params);
     }
 }

@@ -1,5 +1,6 @@
 #include "WebSocketProtocol.h"
 #include "Mappers/OutputMapper.h"
+#include "Devices/DeviceManager.h"
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -104,7 +105,7 @@ void WebSocketProtocol::parse(const std::string &message) {
         std::replace(msg.begin(), msg.end(), ',', '.');
         float value = -std::stof(msg);
 
-        OutputMapper::GetInstance().QueueConstantForce(0, value * 50, -1);
+        OutputMapper::GetInstance().QueueConstantForce(0, 0, value * 50, -1);
 
     } catch (const std::exception &e) {
         // Not a valid float message, ignore
@@ -121,7 +122,7 @@ void WebSocketProtocol::parse(const std::string &message) {
             float large_magnitude = params.at("large_magnitude");
             float small_magnitude = params.at("small_magnitude");
             int duration_ms = params.at("duration_ms");
-            OutputMapper::GetInstance().QueueRumble(0, large_magnitude, small_magnitude, duration_ms);
+            OutputMapper::GetInstance().QueueRumble(0, 0, large_magnitude, small_magnitude, duration_ms);
         } else if (type == "gamepad" && effect == "dualsense_trigger") {
             // DualSense adaptive trigger effect
             std::string trigger = params.value("trigger", "left");  // "left", "right", or "both"
@@ -148,27 +149,41 @@ void WebSocketProtocol::parse(const std::string &message) {
             if (effect == "constant") {
                 float strength = params.at("strength");
                 int duration_ms = params.at("duration_ms");
-                OutputMapper::GetInstance().QueueConstantForce(0, strength, duration_ms);
+                OutputMapper::GetInstance().QueueConstantForce(0, 0, strength, duration_ms);
             } else if (effect == "periodic") {
                 float strength = params.at("strength");
                 int period = params.at("period");
                 float magnitude = params.at("magnitude");
                 float offset = params.at("offset");
                 int phase = params.at("phase");
-                int duration_int = params.at("duration_ms");
-                OutputMapper::GetInstance().QueuePeriodic(0, strength, period, magnitude, offset, phase, duration_int);
+                int duration_ms = params.at("duration_ms");
+                OutputMapper::GetInstance().QueuePeriodic(0, 0, strength, period, magnitude, offset, phase, duration_ms);
             } else if (effect == "condition") {
+                int slot = params.value("slot", 0);
+                uint16_t condition_type = params.value("condition_type", (uint16_t)SDL_HAPTIC_SPRING);
+
                 float right_sat = params.at("right_sat");
                 float left_sat = params.at("left_sat");
                 float right_coeff = params.at("right_coeff");
                 float left_coeff = params.at("left_coeff");
                 float deadband = params.at("deadband");
                 float center = params.at("center");
-                int duration_int = params.at("duration_ms");
-                OutputMapper::GetInstance().QueueCondition(0, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_int);
+                int duration_ms = params.at("duration_ms");
+                // Note: Assumes OutputMapper::QueueCondition is updated to accept a slot.
+                OutputMapper::GetInstance().QueueCondition(0, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms);
             } else if (effect == "gain") {
                 int value = params.at("value");
                 OutputMapper::GetInstance().QueueSetGain(0, value);
+            }
+        } else if (type == "wheel" && effect == "led_rpm" &&
+                   m_version == ProtocolVersion::MarsmaantjeNew) {
+            // RPM LED meter (MarsmaantjeNew only for now)
+            // {"type":"wheel","effect":"led_rpm","params":{"value":0.75}}
+            float rpm_percent = params.value("value", 0.0f);
+            if (rpm_percent < 0.0f) rpm_percent = 0.0f;
+            if (rpm_percent > 1.0f) rpm_percent = 1.0f;
+            for (const auto& w : DeviceManager::GetInstance().GetWheelRPMDevices()) {
+                w->setRPM(rpm_percent);
             }
         }
     } catch (const json::exception &e) {
