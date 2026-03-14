@@ -90,13 +90,6 @@ int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg
             float low = argv[2]->f;
             float high = argv[3]->f;
             int duration = argv[4]->i;
-            {
-                std::lock_guard<std::mutex> lk(server->m_mutex);
-                char buf[128];
-                std::snprintf(buf, sizeof(buf), "Haptic rumble: dev=%d slot=%d low=%.2f high=%.2f dur=%dms", id, slot, low, high, duration);
-                server->m_logs.push_back(buf);
-                if (server->m_logs.size() > 100) server->m_logs.pop_front();
-            }
             server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
         }
     } catch (...) {}
@@ -113,13 +106,6 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
             int slot = argv[1]->i;
             float strength = argv[2]->f;
             int duration = argv[3]->i;
-            {
-                std::lock_guard<std::mutex> lk(server->m_mutex);
-                char buf[128];
-                std::snprintf(buf, sizeof(buf), "Haptic constant: dev=%d slot=%d strength=%.2f dur=%dms", id, slot, strength, duration);
-                server->m_logs.push_back(buf);
-                if (server->m_logs.size() > 100) server->m_logs.pop_front();
-            }
             server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
         }
     } catch (...) {}
@@ -140,13 +126,6 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
             float offset = argv[5]->f;
             int phase = argv[6]->i;
             int duration = argv[7]->i;
-            {
-                std::lock_guard<std::mutex> lk(server->m_mutex);
-                char buf[256];
-                std::snprintf(buf, sizeof(buf), "Haptic periodic: dev=%d slot=%d str=%.2f per=%d mag=%.2f off=%.2f phase=%d dur=%dms", id, slot, strength, period, magnitude, offset, phase, duration);
-                server->m_logs.push_back(buf);
-                if (server->m_logs.size() > 100) server->m_logs.pop_front();
-            }
             server->m_OutputMapper->QueuePeriodic(id, slot, strength, period, magnitude, offset, phase, duration);
         }
     } catch (...) {}
@@ -169,13 +148,6 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
             float db = argv[7]->f;
             float center = argv[8]->f;
             int duration = argv[9]->i;
-            {
-                std::lock_guard<std::mutex> lk(server->m_mutex);
-                char buf[256];
-                std::snprintf(buf, sizeof(buf), "Haptic condition: dev=%d slot=%d type=%u rsat=%.2f lsat=%.2f rcoeff=%.2f lcoeff=%.2f db=%.2f center=%.2f dur=%dms", id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
-                server->m_logs.push_back(buf);
-                if (server->m_logs.size() > 100) server->m_logs.pop_front();
-            }
             server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
         }
     } catch (...) {}
@@ -191,13 +163,6 @@ int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg *
         if (argc >= 2) {
             int id = argv[0]->i;
             int gain = argv[1]->i;
-            {
-                std::lock_guard<std::mutex> lk(server->m_mutex);
-                char buf[80];
-                std::snprintf(buf, sizeof(buf), "Haptic gain: dev=%d gain=%d", id, gain);
-                server->m_logs.push_back(buf);
-                if (server->m_logs.size() > 100) server->m_logs.pop_front();
-            }
             server->m_OutputMapper->QueueSetGain(id, gain);
         }
     } catch (...) {}
@@ -453,7 +418,22 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 }
             }
 
-            server->m_logs.push_back("Recv: " + std::string(path));
+            // Build a log entry showing the path and all typed arguments so
+            // the UI log is useful regardless of which dedicated handler fired.
+            std::string logEntry = "Recv: " + std::string(path) + " [";
+            for (int i = 0; i < argc; ++i) {
+                if (i > 0) logEntry += ", ";
+                char argBuf[64];
+                switch (types[i]) {
+                    case 'i': std::snprintf(argBuf, sizeof(argBuf), "%d",   argv[i]->i); break;
+                    case 'f': std::snprintf(argBuf, sizeof(argBuf), "%.3f", argv[i]->f); break;
+                    case 's': std::snprintf(argBuf, sizeof(argBuf), "\"%s\"", &argv[i]->s); break;
+                    default:  std::snprintf(argBuf, sizeof(argBuf), "(%c)", types[i]); break;
+                }
+                logEntry += argBuf;
+            }
+            logEntry += "]";
+            server->m_logs.push_back(logEntry);
             if (server->m_logs.size() > 100) server->m_logs.pop_front();
 
             protoCopy    = server->m_protocol;
