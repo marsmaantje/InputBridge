@@ -34,7 +34,7 @@ void AboutWindow::DrawContent() {
 
         ImGui::Spacing();
         ImGui::TextWrapped(
-            "The Science Team members doesn't take any responsibility for the:\r\n"
+            "The Science Team members don't take any responsibility for the:\r\n"
             "bad coding style, lack of structure and potential loss of sanity while reading the code.\r\n"
             "It's handed out as is, deal with it :P"
         );

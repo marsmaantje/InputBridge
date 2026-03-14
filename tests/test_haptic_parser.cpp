@@ -341,3 +341,202 @@ TEST_F(HapticParserTest, SlotDefaultsToZeroWhenAbsent) {
     EXPECT_EQ(HapticStub::constantCalls[0].slot, 0);
     EXPECT_EQ(HapticStub::periodicCalls[0].slot, 0);
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// "flight_stick" type string (new device type wired in PR)
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST_F(HapticParserTest, TypeFlightStickRumbleIsAccepted) {
+    HapticParser::Parse(
+        R"({"type":"flight_stick","effect":"rumble","device":0,
+            "params":{"low":0.6,"high":0.4,"duration":250}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::rumbleCalls.size(), 1u);
+    EXPECT_FLOAT_EQ(HapticStub::rumbleCalls[0].low,  0.6f);
+    EXPECT_FLOAT_EQ(HapticStub::rumbleCalls[0].high, 0.4f);
+}
+
+TEST_F(HapticParserTest, TypeFlightStickConstantIsAccepted) {
+    HapticParser::Parse(
+        R"({"type":"flight_stick","effect":"constant","device":1,
+            "params":{"strength":0.9,"duration":500}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::constantCalls.size(), 1u);
+    EXPECT_FLOAT_EQ(HapticStub::constantCalls[0].strength, 0.9f);
+    EXPECT_EQ(HapticStub::constantCalls[0].device, 1);
+}
+
+TEST_F(HapticParserTest, TypeFlightStickConditionIsAccepted) {
+    HapticParser::Parse(
+        R"({"type":"flight_stick","effect":"condition","device":0,
+            "params":{"condition_type":16385,"right_sat":1.0,"left_sat":1.0,
+                      "right_coeff":0.5,"left_coeff":0.5,
+                      "deadband":0.1,"center":0.0,"duration":5000}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::conditionCalls.size(), 1u);
+    EXPECT_FLOAT_EQ(HapticStub::conditionCalls[0].right_sat, 1.0f);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// AutoDetect — DetectedEffect kind inference
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST_F(HapticParserTest, AutoDetectUnknownOnEmptyObject) {
+    auto det = HapticParser::AutoDetect("{}");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Unknown);
+}
+
+TEST_F(HapticParserTest, AutoDetectUnknownOnBadJson) {
+    auto det = HapticParser::AutoDetect("not json");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Unknown);
+}
+
+TEST_F(HapticParserTest, AutoDetectRumbleFromLowHighFields) {
+    auto det = HapticParser::AutoDetect(
+        R"({"device":2,"params":{"low":0.5,"high":0.3,"duration":200}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Rumble);
+    EXPECT_EQ(det.device, 2);
+    EXPECT_FLOAT_EQ(det.low,  0.5f);
+    EXPECT_FLOAT_EQ(det.high, 0.3f);
+    EXPECT_EQ(det.duration_ms, 200);
+}
+
+TEST_F(HapticParserTest, AutoDetectRumbleFromLargeMagnitudeFields) {
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"large_magnitude":0.8,"small_magnitude":0.2,"duration_ms":100}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Rumble);
+    EXPECT_FLOAT_EQ(det.low,  0.8f);
+    EXPECT_FLOAT_EQ(det.high, 0.2f);
+}
+
+TEST_F(HapticParserTest, AutoDetectConstantFromStrengthAlone) {
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"strength":0.75,"duration":400}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Constant);
+    EXPECT_FLOAT_EQ(det.strength, 0.75f);
+    EXPECT_EQ(det.duration_ms, 400);
+}
+
+TEST_F(HapticParserTest, AutoDetectPeriodicFromPeriodField) {
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"period":500,"magnitude":0.6,"offset":0.0,"phase":0,"duration":1000}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Periodic);
+    EXPECT_EQ(det.period, 500);
+    EXPECT_FLOAT_EQ(det.magnitude, 0.6f);
+}
+
+TEST_F(HapticParserTest, AutoDetectPeriodicFromMagnitudeAndOffset) {
+    // No "period" key, but both "magnitude" and "offset" are present.
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"magnitude":0.4,"offset":0.1,"duration":800}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Periodic);
+}
+
+TEST_F(HapticParserTest, AutoDetectConditionFromRightSat) {
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"right_sat":1.0,"left_sat":1.0,
+                      "right_coeff":0.5,"left_coeff":0.5,
+                      "deadband":0.1,"center":0.0,"duration":5000}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Condition);
+    EXPECT_FLOAT_EQ(det.right_sat, 1.0f);
+    EXPECT_FLOAT_EQ(det.deadband,  0.1f);
+}
+
+TEST_F(HapticParserTest, AutoDetectConditionFromConditionTypeKey) {
+    // condition_type alone is enough to identify the effect.
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"condition_type":16385,"duration":3000}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Condition);
+}
+
+TEST_F(HapticParserTest, AutoDetectDualSenseTrigger) {
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"trigger":"right","effect_type":"feedback","duration":0}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::DualSenseTrigger);
+    EXPECT_EQ(det.trigger,     "right");
+    EXPECT_EQ(det.effect_type, "feedback");
+}
+
+// Condition must win over constant when both "strength" and sat fields co-exist.
+TEST_F(HapticParserTest, AutoDetectConditionBeatsConstantWhenSatPresent) {
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"strength":0.5,"right_sat":1.0,"left_sat":1.0,"duration":1000}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Condition);
+}
+
+// Periodic must win over constant when "period" and "strength" co-exist.
+TEST_F(HapticParserTest, AutoDetectPeriodicBeatsConstantWhenPeriodPresent) {
+    auto det = HapticParser::AutoDetect(
+        R"({"params":{"strength":0.5,"period":200,"magnitude":0.5,"duration":500}})");
+    EXPECT_EQ(det.kind, DetectedEffect::Kind::Periodic);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Parse with "type":"auto" dispatches via AutoDetect
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST_F(HapticParserTest, TypeAutoDispatchesRumble) {
+    HapticParser::Parse(
+        R"({"type":"auto","device":1,"params":{"low":0.4,"high":0.2,"duration":300}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::rumbleCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::rumbleCalls[0].device, 1);
+    EXPECT_FLOAT_EQ(HapticStub::rumbleCalls[0].low, 0.4f);
+}
+
+TEST_F(HapticParserTest, TypeAutoDispatchesConstant) {
+    HapticParser::Parse(
+        R"({"type":"auto","device":0,"params":{"strength":0.8,"duration":500}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::constantCalls.size(), 1u);
+    EXPECT_FLOAT_EQ(HapticStub::constantCalls[0].strength, 0.8f);
+}
+
+TEST_F(HapticParserTest, TypeAutoDispatchesPeriodic) {
+    HapticParser::Parse(
+        R"({"type":"auto","device":0,"params":{"period":100,"magnitude":0.7,"offset":0,"duration":1000}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].period, 100);
+}
+
+TEST_F(HapticParserTest, TypeAutoDispatchesCondition) {
+    HapticParser::Parse(
+        R"({"type":"auto","device":0,"params":{"right_sat":0.9,"left_sat":0.9,
+            "right_coeff":0.5,"left_coeff":0.5,"deadband":0.05,"center":0.0,"duration":5000}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::conditionCalls.size(), 1u);
+    EXPECT_FLOAT_EQ(HapticStub::conditionCalls[0].right_sat, 0.9f);
+}
+
+// "type" absent — treated the same as "auto"
+TEST_F(HapticParserTest, MissingTypeAlsoAutoDetects) {
+    HapticParser::Parse(
+        R"({"device":3,"params":{"low":1.0,"high":0.5,"duration":150}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::rumbleCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::rumbleCalls[0].device, 3);
+}
+
+// Unknown field set with "type":"auto" → no dispatch, no crash.
+TEST_F(HapticParserTest, TypeAutoUnrecognisedFieldsProduceNoCalls) {
+    HapticParser::Parse(
+        R"({"type":"auto","device":0,"params":{"foo":1,"bar":2}})",
+        FakeMapper());
+    EXPECT_TRUE(HapticStub::rumbleCalls.empty());
+    EXPECT_TRUE(HapticStub::constantCalls.empty());
+    EXPECT_TRUE(HapticStub::periodicCalls.empty());
+    EXPECT_TRUE(HapticStub::conditionCalls.empty());
+}
+
+// "effect" hint overrides field sniffing when both are present.
+TEST_F(HapticParserTest, TypeAutoEffectHintOverridesFieldSniff) {
+    // The params have both "strength" (constant hint) and explicit effect=rumble.
+    HapticParser::Parse(
+        R"({"type":"auto","effect":"rumble","device":0,
+           "params":{"strength":0.5,"low":0.3,"high":0.2,"duration":200}})",
+        FakeMapper());
+    // Should produce a rumble call, not a constant call.
+    ASSERT_EQ(HapticStub::rumbleCalls.size(), 1u);
+    EXPECT_TRUE(HapticStub::constantCalls.empty());
+}

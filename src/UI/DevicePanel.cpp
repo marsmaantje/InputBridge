@@ -6,6 +6,7 @@
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
 #include "Visualizers/FlightStickVisualizer.h"
+#include "Visualizers/FlightStickHapticsVisualizer.h"
 #include "Visualizers/GamepadHapticsVisualizer.h"
 #include "Visualizers/GamepadVisualizer.h"
 #include "Visualizers/GenericVisualizer.h"
@@ -30,6 +31,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
     static GenericVisualizer              generic_viz;
     static SteeringWheelVisualizer        wheel_viz;
     static FlightStickVisualizer          flight_stick_viz;
+    static FlightStickHapticsVisualizer   flight_stick_haptics_viz;
     static GamepadHapticsVisualizer       gamepad_haptics_viz;
     static SteeringWheelHapticsVisualizer wheel_haptics_viz;
     static WiimoteVisualizer              wiimote_viz;
@@ -104,6 +106,13 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                 || type == SDL_JOYSTICK_TYPE_THROTTLE
                 || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
                 // TabItem("Flight Stick", flight_stick_viz);
+            }
+            if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK
+                || type == SDL_JOYSTICK_TYPE_THROTTLE) {
+                if (ImGui::BeginTabItem("Haptic Test")) {
+                    flight_stick_haptics_viz.Draw(dev, deviceManager);
+                    ImGui::EndTabItem();
+                }
             }
             if (dev.name.find("Nintendo") != std::string::npos
                 || dev.name.find("Wiimote") != std::string::npos) {

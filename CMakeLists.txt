@@ -230,6 +230,7 @@ add_executable(InputBridge
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
     src/Haptics/SteeringWheelHaptics.cpp
+    src/Haptics/FlightStickHaptics.cpp
     src/Haptics/DualSenseTriggerEffectGenerator.cpp
     src/Haptics/DualSenseController.cpp
     src/Haptics/XboxController.cpp
@@ -241,6 +242,7 @@ add_executable(InputBridge
     src/Visualizers/GamepadVisualizer.cpp
     src/Visualizers/GamepadHapticsVisualizer.cpp
     src/Visualizers/FlightStickVisualizer.cpp
+    src/Visualizers/FlightStickHapticsVisualizer.cpp
     src/Visualizers/SteeringWheelVisualizer.cpp
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
     src/Visualizers/VirtualDeviceVisualizer.cpp
