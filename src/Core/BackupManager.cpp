@@ -1,13 +1,11 @@
 #include "BackupManager.h"
+#include <filesystem>
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <cstdio>
-#include <filesystem>
-#include <chrono>
 
 namespace fs = std::filesystem;
-
 BackupManager::BackupManager(const std::string& backupDir, size_t maxBackups)
     : m_backupDir(backupDir)
     , m_maxBackups(maxBackups)
@@ -55,8 +53,7 @@ std::string BackupManager::CreateDirectoryBackup(const std::string& dirPath) {
         fs::path backupPath = fs::path(m_backupDir) / backupName;
 
         // Copy directory recursively
-        fs::copy(dirPath, backupPath,
-                fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+        fs::copy(dirPath, backupPath, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
 
         return backupPath.string();
     } catch (const std::exception& e) {
@@ -230,19 +227,18 @@ std::string BackupManager::GenerateBackupName(const std::string& originalPath) c
 }
 
 std::string BackupManager::ExtractOriginalName(const std::string& backupName) const {
-    // Remove timestamp: originalname_YYYYMMDD_HHMMSS.ext -> originalname.ext
-    size_t lastUnderscore = backupName.find_last_of('_');
-    if (lastUnderscore != std::string::npos) {
-        size_t secondLastUnderscore = backupName.find_last_of('_', lastUnderscore - 1);
-        if (secondLastUnderscore != std::string::npos) {
-            std::string baseName = backupName.substr(0, secondLastUnderscore);
-            size_t extPos = backupName.find_last_of('.');
-            if (extPos != std::string::npos) {
-                return baseName + backupName.substr(extPos);
-            }
-            return baseName;
-        }
+    fs::path backupPath(backupName);
+    std::string filename = backupPath.filename().string();
+
+    // Split filename into parts using '_' as delimiter
+    std::vector<std::string> parts;
+    std::stringstream ss(filename);
+    std::string part;
+
+    while (std::getline(ss, part, '_')) {
+        parts.push_back(part);
     }
+
     return backupName;
 }
 

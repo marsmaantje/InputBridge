@@ -182,6 +182,22 @@ TEST_F(BackupManagerTest, ListBackupsReturnsMultiple) {
     EXPECT_EQ(list.size(), 2u);
 }
 
+TEST_F(BackupManagerTest, ListBackupsHandlesSameStemDifferentExtensions) {
+    BackupManager mgr(backupDir.string());
+    auto srcJson = MakeSrcFile("data.json", "json data");
+    auto srcTxt  = MakeSrcFile("data.txt",  "txt data");
+
+    mgr.CreateBackup(srcJson.string());
+    mgr.CreateBackup(srcTxt.string());
+
+    auto listJson = mgr.ListBackups(srcJson.string());
+    auto listTxt  = mgr.ListBackups(srcTxt.string());
+
+    EXPECT_EQ(listJson.size(), 1u);
+    EXPECT_EQ(listTxt.size(), 1u);
+}
+
+
 TEST_F(BackupManagerTest, ListBackupsDoesNotIncludeOtherFiles) {
     BackupManager mgr(backupDir.string());
     auto srcA = MakeSrcFile("alpha.json", "a");
