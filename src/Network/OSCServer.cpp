@@ -393,11 +393,12 @@ void OSCServer::SetHandler(OSCHandler handler) {
 }
 
 int OSCServer::generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data) {
-    try {
-        if (s_isDestroyed) return 0;
-        auto* server = static_cast<OSCServer*>(user_data);
-        if (!server) return 0;
+    if (s_isDestroyed) return 0;
+    auto* server = static_cast<OSCServer*>(user_data);
+    if (!server) return 0;
 
+    OutputMapper* mapper = nullptr;
+    try {
         // --- Snapshot all state we need under the lock, then release it.
         // Holding m_mutex while doing protocol dispatch or ProtocolManager calls
         // can stall Send(), Stop(), and the UI thread, and creates a lock-order
@@ -412,6 +413,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
             std::lock_guard<std::mutex> lock(server->m_mutex);
             server->m_lastMessageTime = SDL_GetTicks();
             isRunning  = server->m_running;
+            mapper = server->m_OutputMapper;
 
             // Track the source client while we still hold the lock
             lo_address src = lo_message_get_source(msg);
@@ -439,6 +441,8 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
             }
             logEntry += "]";
             server->m_logs.push_back(logEntry);
+
+
             if (server->m_logs.size() > 100) server->m_logs.pop_front();
 
             protoCopy    = server->m_protocol;
@@ -464,7 +468,11 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         } else if (handlerCopy) {
             handlerCopy(path, types, argv, argc);
         }
-    } catch (...) {}
+    } catch (...) {} // inner try/catch for message processing
+
+    if (server->m_running && !server->HasClients() && mapper) { // outer if condition
+        mapper->StopAllHapticEffects();
+    }
     return 0;
 }
 
