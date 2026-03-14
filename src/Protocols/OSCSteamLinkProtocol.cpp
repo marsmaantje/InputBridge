@@ -32,7 +32,7 @@ static void RegisterSteamLinkFields() {
     add("ft_tongue_left",  "Tongue Left",     "Steam Link Face Tracking", "/avatar/parameters/TongueLeft",  "TongueLeft");
     add("ft_tongue_right", "Tongue Right",    "Steam Link Face Tracking", "/avatar/parameters/TongueRight", "TongueRight");
     add("ft_tongue_roll",  "Tongue Roll",     "Steam Link Face Tracking", "/avatar/parameters/TongueRoll",  "TongueRoll");
-
+    
     // ── Eye Tracking ─────────────────────────────────────────────────────────
     add("et_eye_left_x",   "Eye Left X",      "Steam Link Eye Tracking",  "/avatar/parameters/EyeLeftX",    "EyeLeftX");
     add("et_eye_left_y",   "Eye Left Y",      "Steam Link Eye Tracking",  "/avatar/parameters/EyeLeftY",    "EyeLeftY");
@@ -45,11 +45,13 @@ static void RegisterSteamLinkFields() {
 // Ensure fields are registered at startup, so they appear in InputMapper
 // even if the protocol instance hasn't been created yet.
 static struct SteamLinkFieldRegistrar {
-    SteamLinkFieldRegistrar() { RegisterSteamLinkFields(); }
+    SteamLinkFieldRegistrar() { 
+        //RegisterSteamLinkFields(); 
+    }
 } g_SteamLinkFieldRegistrar;
 
 OSCSteamLinkProtocol::OSCSteamLinkProtocol() {
-    RegisterSteamLinkFields();
+    //RegisterSteamLinkFields();
 }
 
 std::string OSCSteamLinkProtocol::getProtocolName() const {

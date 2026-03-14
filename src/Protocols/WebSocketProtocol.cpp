@@ -105,7 +105,7 @@ void WebSocketProtocol::parse(const std::string &message) {
         std::replace(msg.begin(), msg.end(), ',', '.');
         float value = -std::stof(msg);
 
-        OutputMapper::GetInstance().QueueConstantForce(0, value * 50, -1);
+        OutputMapper::GetInstance().QueueConstantForce(0, 0, value * 50, -1);
 
     } catch (const std::exception &e) {
         // Not a valid float message, ignore
@@ -122,7 +122,7 @@ void WebSocketProtocol::parse(const std::string &message) {
             float large_magnitude = params.at("large_magnitude");
             float small_magnitude = params.at("small_magnitude");
             int duration_ms = params.at("duration_ms");
-            OutputMapper::GetInstance().QueueRumble(0, large_magnitude, small_magnitude, duration_ms);
+            OutputMapper::GetInstance().QueueRumble(0, 0, large_magnitude, small_magnitude, duration_ms);
         } else if (type == "gamepad" && effect == "dualsense_trigger") {
             // DualSense adaptive trigger effect
             std::string trigger = params.value("trigger", "left");  // "left", "right", or "both"
@@ -149,7 +149,7 @@ void WebSocketProtocol::parse(const std::string &message) {
             if (effect == "constant") {
                 float strength = params.at("strength");
                 int duration_ms = params.at("duration_ms");
-                OutputMapper::GetInstance().QueueConstantForce(0, strength, duration_ms);
+                OutputMapper::GetInstance().QueueConstantForce(0, 0, strength, duration_ms);
             } else if (effect == "periodic") {
                 float strength = params.at("strength");
                 int period = params.at("period");
@@ -157,7 +157,7 @@ void WebSocketProtocol::parse(const std::string &message) {
                 float offset = params.at("offset");
                 int phase = params.at("phase");
                 int duration_ms = params.at("duration_ms");
-                OutputMapper::GetInstance().QueuePeriodic(0, strength, period, magnitude, offset, phase, duration_ms);
+                OutputMapper::GetInstance().QueuePeriodic(0, 0, strength, period, magnitude, offset, phase, duration_ms);
             } else if (effect == "condition") {
                 int slot = params.value("slot", 0);
                 uint16_t condition_type = params.value("condition_type", (uint16_t)SDL_HAPTIC_SPRING);

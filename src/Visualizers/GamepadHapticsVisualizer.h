@@ -8,6 +8,7 @@ public:
 
 private:
     // Rumble
+    int m_rumble_slot = 0;
     float m_low_freq = 0.5f;
     float m_high_freq = 0.5f;
     int m_duration = 1000;

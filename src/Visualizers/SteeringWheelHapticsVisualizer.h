@@ -12,11 +12,13 @@ public:
 
 private:
     // Constant
+    int m_constant_slot = 0;
     float m_constant_strength = 0.5f;
     int m_constant_duration = 1000;
     bool m_constant_infinite_duration = false;
 
     // Periodic
+    int m_periodic_slot = 0;
     float m_periodic_strength = 1.0f;
     int m_periodic_period = 1000;
     float m_periodic_magnitude = 0.5f;

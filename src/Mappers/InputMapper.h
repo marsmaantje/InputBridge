@@ -88,6 +88,18 @@ class InputMapper {
         std::string wsOutputProtocolId;
         std::string wsInputProtocolId;
         int selectedProtocolView = 0;
+
+        // OSC server settings (per-profile)
+        std::string oscSendHost  = "127.0.0.1";
+        int         oscSendPort  = 9066;
+        int         oscRecvPort  = 9068;
+        bool        oscOutputEnabled = true;
+        bool        oscInputEnabled  = true;
+
+        // WebSocket server settings (per-profile)
+        int  wsPort           = 4269;
+        bool wsOutputEnabled  = true;
+        bool wsInputEnabled   = true;
     };
 
     static InputMapper &GetInstance();
@@ -113,6 +125,7 @@ class InputMapper {
     void SaveProfile(const MappingProfile &profile) const;
     void HandleDeviceConnectionChange();
     std::vector<HapticTarget>* GetCurrentHapticTargets();
+    bool IsOutputAddressBound(const std::string& address) const;
 
     void CancelListening();
 
@@ -159,6 +172,7 @@ class InputMapper {
     void StartListening(ListeningState::Type type, const std::string& name, int index = -1);
     void UpdateListening();
     void UpdateActiveProtocols();
+    void SnapshotServerSettings(MappingProfile& profile) const;
 #ifdef ENABLE_EXCLUSIVE_INPUT
     void ApplyExclusiveMode();
 #endif

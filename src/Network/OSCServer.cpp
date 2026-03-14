@@ -1,10 +1,12 @@
 #include "Network/OSCServer.h"
 #include "Mappers/OutputMapper.h"
+#include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
 #include "imgui.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
+#include <SDL3/SDL_timer.h>
 #include <iostream>
 #include <string>
 #include <cstdarg>
@@ -13,6 +15,43 @@
 #include <cstring>
 #include <atomic>
 #include <thread>
+
+namespace {
+    // Preference Keys
+    const char* const kOSCSection = "OSC";
+    const char* const kSendHostKey = "SendHost";
+    const char* const kSendPortKey = "SendPort";
+    const char* const kRecvPortKey = "RecvPort";
+    const char* const kProtocolKey = "Protocol";
+    const char* const kInputProtocolKey = "InputProtocol";
+    const char* const kOutputDefIdKey = "OutputDefinitionId";
+    const char* const kInputDefIdKey = "InputDefinitionId";
+    const char* const kEnabledKey = "Enabled";
+    const char* const kOutputEnabledKey = "OutputEnabled";
+    const char* const kInputEnabledKey  = "InputEnabled";
+
+    // Default values
+    const char* const kDefaultHost = "127.0.0.1";
+    const char* const kDefaultProtocol = "OSC Back Ally Racing";
+
+    // OSC Paths
+    const char* const kHapticRumblePath = "/haptic/rumble";
+    const char* const kHapticConstantPath = "/haptic/constant";
+    const char* const kHapticPeriodicPath = "/haptic/periodic";
+    const char* const kHapticConditionPath = "/haptic/condition";
+    const char* const kHapticGainPath = "/haptic/gain";
+
+    const char* const kWheelSteerPath = "/wheel/steer";
+    const char* const kWheelBrakePath = "/wheel/brake";
+    const char* const kWheelThrottlePath = "/wheel/throttle";
+    const char* const kWheelPitchPath = "/wheel/pitch";
+    const char* const kWheelRollPath = "/wheel/roll";
+
+    const char* const kWheelButtons0Path = "/wheel/buttons/0";
+    const char* const kWheelButtons1Path = "/wheel/buttons/1";
+    const char* const kWheelButtons2Path = "/wheel/buttons/2";
+    const char* const kWheelButtons3Path = "/wheel/buttons/3";
+}
 
 static std::atomic<bool> s_isDestroyed{false};
 
@@ -23,11 +62,17 @@ OSCServer& OSCServer::GetInstance() {
 
 OSCServer::OSCServer() {
     s_isDestroyed = false;
-    SetProtocol("OSC Back Ally Racing");
+    SetProtocol(kDefaultProtocol);
+    strncpy(m_send_host, kDefaultHost, sizeof(m_send_host) - 1);
+    m_send_host[sizeof(m_send_host) - 1] = '\0';
 }
 
 OSCServer::~OSCServer() {
     Stop();
+    // Join the cleanup thread (if any) so it finishes accessing our members
+    // before the destructor body returns and the members are destroyed.
+    if (m_cleanupThread.joinable())
+        m_cleanupThread.join();
     s_isDestroyed = true;
 }
 
@@ -41,12 +86,13 @@ int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 4) {
+        if (argc >= 5) {
             int id = argv[0]->i;
-            float low = argv[1]->f;
-            float high = argv[2]->f;
-            int duration = argv[3]->i;
-            server->m_OutputMapper->QueueRumble(id, low, high, duration);
+            int slot = argv[1]->i;
+            float low = argv[2]->f;
+            float high = argv[3]->f;
+            int duration = argv[4]->i;
+            server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
         }
     } catch (...) {}
     return 0;
@@ -57,8 +103,13 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 3)
-            server->m_OutputMapper->QueueConstantForce(argv[0]->i, argv[1]->f, argv[2]->i);
+        if (argc >= 4) {
+            int id = argv[0]->i;
+            int slot = argv[1]->i;
+            float strength = argv[2]->f;
+            int duration = argv[3]->i;
+            server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
+        }
     } catch (...) {}
     return 0;
 }
@@ -68,8 +119,17 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 7)
-            server->m_OutputMapper->QueuePeriodic(argv[0]->i, argv[1]->f, argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->i, argv[6]->i);
+        if (argc >= 8) {
+            int id = argv[0]->i;
+            int slot = argv[1]->i;
+            float strength = argv[2]->f;
+            int period = argv[3]->i;
+            float magnitude = argv[4]->f;
+            float offset = argv[5]->f;
+            int phase = argv[6]->i;
+            int duration = argv[7]->i;
+            server->m_OutputMapper->QueuePeriodic(id, slot, strength, period, magnitude, offset, phase, duration);
+        }
     } catch (...) {}
     return 0;
 }
@@ -79,19 +139,34 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 10)
-            server->m_OutputMapper->QueueCondition(argv[0]->i, argv[1]->i, (uint16_t)argv[2]->i, argv[3]->f, argv[4]->f, argv[5]->f, argv[6]->f, argv[7]->f, argv[8]->f, argv[9]->i);
+        if (argc >= 10) {
+            int id = argv[0]->i;
+            int slot = argv[1]->i;
+            uint16_t ctype = (uint16_t)argv[2]->i;
+            float rsat = argv[3]->f;
+            float lsat = argv[4]->f;
+            float rcoeff = argv[5]->f;
+            float lcoeff = argv[6]->f;
+            float db = argv[7]->f;
+            float center = argv[8]->f;
+            int duration = argv[9]->i;
+            server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
+        }
     } catch (...) {}
     return 0;
 }
+
 
 int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
     try {
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 2)
-            server->m_OutputMapper->QueueSetGain(argv[0]->i, argv[1]->i);
+        if (argc >= 2) {
+            int id = argv[0]->i;
+            int gain = argv[1]->i;
+            server->m_OutputMapper->QueueSetGain(id, gain);
+        }
     } catch (...) {}
     return 0;
 }
@@ -131,16 +206,26 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
         return false;
     }
 
-    lo_server_thread_add_method(m_server_thread, "/haptic/rumble", "iffi", haptic_rumble_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/constant", "ifi", haptic_constant_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/periodic", "ififfii", haptic_periodic_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/condition", "iiiffffffi", haptic_condition_handler, this);
-    lo_server_thread_add_method(m_server_thread, "/haptic/gain", "ii", haptic_gain_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticRumblePath,      "iiffi",      haptic_rumble_handler,    this);
+    lo_server_thread_add_method(m_server_thread, kHapticConstantPath,    "iifi",       haptic_constant_handler,  this);
+    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iififfii",   haptic_periodic_handler,  this);
+    lo_server_thread_add_method(m_server_thread, kHapticConditionPath, "iiiffffffi", haptic_condition_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticGainPath, "ii", haptic_gain_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);
 
     m_running = true;
     m_isConnected = true;
+
+    // Restore the OutputMapper that was saved when Stop() was last called.
+    // Stop() deliberately nulls m_OutputMapper to guard against use-after-free
+    // during shutdown, but this leaves it null when the server is restarted from
+    // the UI.  Restoring the saved pointer here ensures haptic effects keep
+    // working across Stop/Start cycles without requiring the caller to
+    // re-call SetOutputMapper().
+    if (!m_OutputMapper && m_savedOutputMapper)
+        m_OutputMapper = m_savedOutputMapper;
+
     std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
               << ", Listening on port " << recv_port << std::endl;
 
@@ -153,6 +238,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
 void OSCServer::Stop() {
     lo_server_thread thread_to_stop = nullptr;
     lo_address address_to_free = nullptr;
+    OutputMapper* mapper = nullptr;
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -173,6 +259,22 @@ void OSCServer::Stop() {
         // as soon as Stop() is called, rather than keeping stale entries
         // until the next Start().
         m_clients.clear();
+
+        // Capture and null m_OutputMapper inside the lock.  The static haptic
+        // handlers check m_running (atomic) first, but a handler that passed
+        // that check before we set m_running=false could still call into
+        // m_OutputMapper.  Clearing the pointer here closes that window: any
+        // such handler will see nullptr on the next check and bail out safely.
+        // We also save a copy in m_savedOutputMapper so that a subsequent
+        // Start() call can restore it without requiring an external
+        // SetOutputMapper() call (fixing the "effects stop after UI restart" bug).
+        mapper = m_OutputMapper;
+        m_savedOutputMapper = m_OutputMapper;
+        m_OutputMapper = nullptr;
+    }
+
+    if (mapper) {
+        mapper->StopAllHapticEffects();
     }
 
     // lo_server_thread_stop() blocks until the liblo receive thread exits.
@@ -182,7 +284,13 @@ void OSCServer::Stop() {
     // Both handles are captured by value; the OSCServer singleton outlives
     // the detached thread, so the final log append is safe.
     if (thread_to_stop || address_to_free) {
-        std::thread([this, thread_to_stop, address_to_free]() {
+        // Join any previous cleanup thread before launching a new one.
+        // This prevents overlapping cleanups and ensures the stored thread
+        // is always in a joinable or default (not-a-thread) state.
+        if (m_cleanupThread.joinable())
+            m_cleanupThread.join();
+
+        m_cleanupThread = std::thread([this, thread_to_stop, address_to_free]() {
             if (thread_to_stop) {
                 lo_server_thread_stop(thread_to_stop);
                 lo_server_thread_free(thread_to_stop);
@@ -194,18 +302,89 @@ void OSCServer::Stop() {
             std::cout << "OSC server stopped." << std::endl;
             m_logs.push_back("OSC server stopped.");
             if (m_logs.size() > 100) m_logs.pop_front();
-        }).detach();
+        });
     }
+}
+
+void OSCServer::WaitStopped() {
+    // Block until the liblo cleanup thread (spawned by Stop()) has finished
+    // calling lo_server_thread_stop().  Once joined, no more liblo callbacks
+    // can fire, so it is safe to destroy objects those callbacks reference
+    // (e.g. OutputMapper).
+    if (m_cleanupThread.joinable())
+        m_cleanupThread.join();
+}
+
+bool OSCServer::IsDestroyed() {
+    return s_isDestroyed.load();
 }
 
 bool OSCServer::IsRunning() const {
     return m_running;
 }
 
+bool OSCServer::HasClients() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return !m_clients.empty();
+}
+
+void OSCServer::CheckInactivity() {
+    const uint64_t OSC_INACTIVITY_TIMEOUT_MS = 5000;
+    bool timed_out = false;
+    OutputMapper* mapper = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_running && !m_clients.empty()
+                && m_lastMessageTime > 0
+                && (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS)) {
+            timed_out = true;
+            m_clients.clear();
+            m_lastMessageTime = 0;
+            m_logs.push_back("OSC clients timed out (no data). Stopping haptics.");
+            if (m_logs.size() > 100) m_logs.pop_front();
+            mapper = m_OutputMapper;
+        }
+    }
+    if (timed_out && mapper) {
+        mapper->StopAllHapticEffects();
+    }
+}
+
+void OSCServer::SetPortsFromProfile(const std::string& sendHost, int sendPort, int recvPort) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    strncpy(m_send_host, sendHost.c_str(), sizeof(m_send_host) - 1);
+    m_send_host[sizeof(m_send_host) - 1] = '\0';
+    m_send_port = sendPort;
+    m_recv_port = recvPort;
+}
+
+bool OSCServer::IsOutputEnabled() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_outputEnabled;
+}
+bool OSCServer::IsInputEnabled() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_inputEnabled;
+}
+void OSCServer::SetOutputEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_outputEnabled = enabled;
+}
+void OSCServer::SetInputEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_inputEnabled = enabled;
+}
+
 void OSCServer::Send(const std::string& path, const char* types, ...) {
     if (s_isDestroyed) return;
+
+    // Avoid sending updates for unbound outputs
+    if (!InputMapper::GetInstance().IsOutputAddressBound(path)) {
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_running || !m_send_address) return;
+    if (!m_running || !m_send_address || !m_outputEnabled) return;
 
     va_list ap;
     va_start(ap, types);
@@ -235,11 +414,11 @@ void OSCServer::SendWheel(float steer, float brake, float throttle, float pitch,
     // Ideally this would delegate to m_protocol->format_wheel, but we need to handle binary bundles.
     // For now, we keep the logic here but it applies to all selected OSC protocols.
     if (m_protocol) {
-        Send("/wheel/steer", "f", steer);
-        Send("/wheel/brake", "f", brake);
-        Send("/wheel/throttle", "f", throttle);
-        Send("/wheel/pitch", "f", pitch);
-        Send("/wheel/roll", "f", roll);
+        Send(kWheelSteerPath, "f", steer);
+        Send(kWheelBrakePath, "f", brake);
+        Send(kWheelThrottlePath, "f", throttle);
+        Send(kWheelPitchPath, "f", pitch);
+        Send(kWheelRollPath, "f", roll);
     }
 }
 
@@ -250,10 +429,10 @@ void OSCServer::SendButtons(const std::vector<uint32_t>& buttons) {
     int b3 = buttons.size() > 3 ? static_cast<int>(buttons[3]) : 0;
 
     if (m_protocol) {
-        Send("/wheel/buttons/0", "i", b0);
-        Send("/wheel/buttons/1", "i", b1);
-        Send("/wheel/buttons/2", "i", b2);
-        Send("/wheel/buttons/3", "i", b3);
+        Send(kWheelButtons0Path, "i", b0);
+        Send(kWheelButtons1Path, "i", b1);
+        Send(kWheelButtons2Path, "i", b2);
+        Send(kWheelButtons3Path, "i", b3);
     }
 }
 
@@ -263,11 +442,12 @@ void OSCServer::SetHandler(OSCHandler handler) {
 }
 
 int OSCServer::generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data) {
-    try {
-        if (s_isDestroyed) return 0;
-        auto* server = static_cast<OSCServer*>(user_data);
-        if (!server) return 0;
+    if (s_isDestroyed) return 0;
+    auto* server = static_cast<OSCServer*>(user_data);
+    if (!server) return 0;
 
+    OutputMapper* mapper = nullptr;
+    try {
         // --- Snapshot all state we need under the lock, then release it.
         // Holding m_mutex while doing protocol dispatch or ProtocolManager calls
         // can stall Send(), Stop(), and the UI thread, and creates a lock-order
@@ -276,11 +456,15 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         std::shared_ptr<IProtocol>  protoCopy;
         OSCHandler                  handlerCopy;
         bool                        isRunning;
+        bool                        inputEnabled;
         std::string                 legacyInputProto;
 
         {
             std::lock_guard<std::mutex> lock(server->m_mutex);
-            isRunning  = server->m_running;
+            server->m_lastMessageTime = SDL_GetTicks();
+            isRunning    = server->m_running;
+            inputEnabled = server->m_inputEnabled;
+            mapper = server->m_OutputMapper;
 
             // Track the source client while we still hold the lock
             lo_address src = lo_message_get_source(msg);
@@ -292,7 +476,24 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 }
             }
 
-            server->m_logs.push_back("Recv: " + std::string(path));
+            // Build a log entry showing the path and all typed arguments so
+            // the UI log is useful regardless of which dedicated handler fired.
+            std::string logEntry = "Recv: " + std::string(path) + " [";
+            for (int i = 0; i < argc; ++i) {
+                if (i > 0) logEntry += ", ";
+                char argBuf[64];
+                switch (types[i]) {
+                    case 'i': std::snprintf(argBuf, sizeof(argBuf), "%d",   argv[i]->i); break;
+                    case 'f': std::snprintf(argBuf, sizeof(argBuf), "%.3f", argv[i]->f); break;
+                    case 's': std::snprintf(argBuf, sizeof(argBuf), "\"%s\"", &argv[i]->s); break;
+                    default:  std::snprintf(argBuf, sizeof(argBuf), "(%c)", types[i]); break;
+                }
+                logEntry += argBuf;
+            }
+            logEntry += "]";
+            server->m_logs.push_back(logEntry);
+
+
             if (server->m_logs.size() > 100) server->m_logs.pop_front();
 
             protoCopy    = server->m_protocol;
@@ -301,6 +502,9 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         // m_mutex is now released — safe to do slow work below.
 
         if (!isRunning) return 0;
+
+        // If input is disabled, log the message but do not dispatch it.
+        if (!inputEnabled) return 0;
 
         // Resolve the active legacy input protocol outside the lock so we don't
         // hold m_mutex while calling into ProtocolManager.
@@ -318,7 +522,11 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         } else if (handlerCopy) {
             handlerCopy(path, types, argv, argc);
         }
-    } catch (...) {}
+    } catch (...) {} // inner try/catch for message processing
+
+    if (server->m_running && !server->HasClients() && mapper) { // outer if condition
+        mapper->StopAllHapticEffects();
+    }
     return 0;
 }
 
@@ -386,14 +594,16 @@ std::string OSCServer::GetInputDefinitionId() const {
 }
 
 void OSCServer::LoadConfig(const PreferencesManager& prefs) {
-    std::string send_host = prefs.GetString("OSC", "SendHost", "127.0.0.1");
-    int send_port = prefs.GetInt("OSC", "SendPort", 9066);
-    int recv_port = prefs.GetInt("OSC", "RecvPort", 9068);
-    std::string protocol   = prefs.GetString("OSC", "Protocol", "OSC Back Ally Racing");
-    std::string inputProtocol = prefs.GetString("OSC", "InputProtocol", "");
-    std::string outDefId   = prefs.GetString("OSC", "OutputDefinitionId", "");
-    std::string inDefId    = prefs.GetString("OSC", "InputDefinitionId",  "");
-    bool enabled = prefs.GetBool("OSC", "Enabled", false);
+    std::string send_host = prefs.GetString(kOSCSection, kSendHostKey, kDefaultHost);
+    int send_port = prefs.GetInt(kOSCSection, kSendPortKey, 9066);
+    int recv_port = prefs.GetInt(kOSCSection, kRecvPortKey, 9068);
+    std::string protocol   = prefs.GetString(kOSCSection, kProtocolKey, kDefaultProtocol);
+    std::string inputProtocol = prefs.GetString(kOSCSection, kInputProtocolKey, "");
+    std::string outDefId   = prefs.GetString(kOSCSection, kOutputDefIdKey, "");
+    std::string inDefId    = prefs.GetString(kOSCSection, kInputDefIdKey,  "");
+    bool enabled = prefs.GetBool(kOSCSection, kEnabledKey, false);
+    bool outputEnabled = prefs.GetBool(kOSCSection, kOutputEnabledKey, true);
+    bool inputEnabled  = prefs.GetBool(kOSCSection, kInputEnabledKey,  true);
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -401,6 +611,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
         m_send_host[sizeof(m_send_host) - 1] = '\0';
         m_send_port = send_port;
         m_recv_port = recv_port;
+        m_outputEnabled = outputEnabled;
+        m_inputEnabled  = inputEnabled;
     }
 
     SetProtocol(protocol);
@@ -418,14 +630,16 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
 
 void OSCServer::SaveConfig(PreferencesManager& prefs) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    prefs.SetString("OSC", "SendHost",           m_send_host);
-    prefs.SetInt   ("OSC", "SendPort",            m_send_port);
-    prefs.SetInt   ("OSC", "ReceivePort",         m_recv_port);
-    prefs.SetString("OSC", "Protocol",            m_protocolName);
-    prefs.SetString("OSC", "InputProtocol",       ProtocolManager::GetInstance().GetActiveInputLegacyProtocol());
-    prefs.SetString("OSC", "OutputDefinitionId",  m_outputDefinitionId);
-    prefs.SetString("OSC", "InputDefinitionId",   m_inputDefinitionId);
-    prefs.SetBool  ("OSC", "Enabled",             m_running);
+    prefs.SetString(kOSCSection, kSendHostKey,           m_send_host);
+    prefs.SetInt   (kOSCSection, kSendPortKey,            m_send_port);
+    prefs.SetInt   (kOSCSection, kRecvPortKey,         m_recv_port);
+    prefs.SetString(kOSCSection, kProtocolKey,            m_protocolName);
+    prefs.SetString(kOSCSection, kInputProtocolKey,       ProtocolManager::GetInstance().GetActiveInputLegacyProtocol());
+    prefs.SetString(kOSCSection, kOutputDefIdKey,  m_outputDefinitionId);
+    prefs.SetString(kOSCSection, kInputDefIdKey,   m_inputDefinitionId);
+    prefs.SetBool  (kOSCSection, kEnabledKey,             m_running);
+    prefs.SetBool  (kOSCSection, kOutputEnabledKey,       m_outputEnabled);
+    prefs.SetBool  (kOSCSection, kInputEnabledKey,        m_inputEnabled);
 }
 
 void OSCServer::SetSelectedDevice(int id) {
@@ -457,11 +671,14 @@ void OSCServer::DrawContent() {
 
     // ── Read state under lock ─────────────────────────────────────────────────
     std::string outDefId, inDefId, currentProto;
+    bool outputEnabled, inputEnabled;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        outDefId     = m_outputDefinitionId;
-        inDefId      = m_inputDefinitionId;
-        currentProto = m_protocolName;
+        outDefId      = m_outputDefinitionId;
+        inDefId       = m_inputDefinitionId;
+        currentProto  = m_protocolName;
+        outputEnabled = m_outputEnabled;
+        inputEnabled  = m_inputEnabled;
     }
 
     std::string currentInputProto = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
@@ -521,6 +738,12 @@ void OSCServer::DrawContent() {
 
     // ── Output protocol (server → client) ─────────────────────────────────────
     {
+        if (ImGui::Checkbox("##osc_out_en", &outputEnabled)) {
+            SetOutputEnabled(outputEnabled);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        ImGui::SameLine();
+        if (!outputEnabled) ImGui::BeginDisabled();
         auto entries = buildEntries(ProtocolDirection::Output);
         int curIdx = findIdx(entries, outDefId, currentProto);
         int newIdx = curIdx;
@@ -533,10 +756,17 @@ void OSCServer::DrawContent() {
         }
         if (!outDefId.empty() && ProtocolRegistry::GetInstance().FindById(outDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(ports synced)"); }
+        if (!outputEnabled) ImGui::EndDisabled();
     }
 
     // ── Input protocol (client → server) ──────────────────────────────────────
     {
+        if (ImGui::Checkbox("##osc_in_en", &inputEnabled)) {
+            SetInputEnabled(inputEnabled);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        ImGui::SameLine();
+        if (!inputEnabled) ImGui::BeginDisabled();
         auto entries = buildEntries(ProtocolDirection::Input);
         int curIdx = findIdx(entries, inDefId, currentInputProto);
         int newIdx = curIdx;
@@ -552,6 +782,7 @@ void OSCServer::DrawContent() {
         }
         if (!inDefId.empty() && ProtocolRegistry::GetInstance().FindById(inDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(recv port synced)"); }
+        if (!inputEnabled) ImGui::EndDisabled();
     }
 
     // ── Start / stop ──────────────────────────────────────────────────────────
@@ -563,17 +794,24 @@ void OSCServer::DrawContent() {
             if (ImGui::Button("Restart to apply")) {
                 Stop();
                 Start(m_send_host, m_send_port, m_recv_port);
+                InputMapper::GetInstance().SaveCurrentProfile();
             }
             ImGui::SameLine();
         }
-        if (ImGui::Button("Stop OSC")) Stop();
+        if (ImGui::Button("Stop OSC")) {
+            Stop();
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0,1,0,1), "Running");
         ImGui::SameLine();
         ImGui::TextColored(m_isConnected ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1),
                            m_isConnected ? "Connected" : "Send Error");
     } else {
-        if (ImGui::Button("Start OSC")) Start(m_send_host, m_send_port, m_recv_port);
+        if (ImGui::Button("Start OSC")) {
+            Start(m_send_host, m_send_port, m_recv_port);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1,0,0,1), "Stopped");
     }
@@ -604,5 +842,9 @@ void OSCServer::DrawContent() {
 }
 
 void OSCServer::SetOutputMapper(OutputMapper* mapper) {
+    // Protect with the mutex: the static haptic handlers read m_OutputMapper
+    // from the liblo receive thread, so writes from the main thread must be
+    // synchronised to prevent a data race.
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_OutputMapper = mapper;
 }

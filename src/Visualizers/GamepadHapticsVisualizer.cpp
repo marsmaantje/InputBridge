@@ -11,7 +11,9 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             SDL_Haptic* sdl_haptic = SDL_OpenHapticFromJoystick(dev.joystick);
             if (sdl_haptic) {
                 ImGui::SameLine();
-                ImGui::TextDisabled("(%d effect slots)", SDL_GetMaxHapticEffects(sdl_haptic));
+                int max_effects = SDL_GetMaxHapticEffects(sdl_haptic);
+                int max_playing = SDL_GetMaxHapticEffectsPlaying(sdl_haptic);
+                ImGui::TextDisabled("(%d slots, %d max playing)", max_effects, max_playing);
                 SDL_CloseHaptic(sdl_haptic);
             }
         } else {
@@ -32,6 +34,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     ImGui::Separator();
     ImGui::Text("Haptics Test");
 
+    ImGui::SliderInt("Slot##rumble", &m_rumble_slot, 0, 7);
     ImGui::SliderFloat("Low Freq", &m_low_freq, 0.0f, 1.0f);
     ImGui::SliderFloat("High Freq", &m_high_freq, 0.0f, 1.0f);
     ImGui::Checkbox("Infinite Duration", &m_infinite_duration);
@@ -42,10 +45,77 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     if (ImGui::Button("Play Rumble")) {
         if (haptic) {
             if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
-                gamepadHaptics->Rumble(m_low_freq, m_high_freq,
-                                       m_infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)m_duration);
+                gamepadHaptics->PlayRumble(m_rumble_slot, m_low_freq, m_high_freq,
+                                           m_infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)m_duration);
             }
         }
+    }
+
+    if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic)) {
+        ImGui::Separator();
+        ImGui::Text("Active Haptic Effects");
+        if (ImGui::BeginChild("ActiveHaptics", ImVec2(0, 150), true)) {
+            bool anyActive = false;
+
+            // --- Rumble (per-slot) ---
+            auto active_rumbles = gamepadHaptics->GetActiveRumbles();
+            for (const auto& [slot, info] : active_rumbles) {
+                if (!info.active) continue;
+                anyActive = true;
+                if (ImGui::TreeNodeEx((void*)(intptr_t)(slot + 1000), ImGuiTreeNodeFlags_DefaultOpen,
+                                     "Rumble [slot %d]", slot)) {
+                    ImGui::Text("Large Motor: %.3f", info.large_magnitude);
+                    ImGui::Text("Small Motor: %.3f", info.small_magnitude);
+                    if (info.duration_ms == SDL_HAPTIC_INFINITY)
+                        ImGui::Text("Duration: Infinite");
+                    else
+                        ImGui::Text("Duration: %u ms", info.duration_ms);
+                    ImGui::TreePop();
+                }
+            }
+
+            // --- DualSense Triggers ---
+            if (gamepadHaptics->IsDualSense()) {
+                auto active_triggers = gamepadHaptics->GetActiveDualSenseTriggers();
+                if (!active_triggers.empty()) {
+                    anyActive = true;
+                    if (ImGui::TreeNodeEx("DualSense Triggers", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        for (const auto& [trigger_name, info] : active_triggers) {
+                            if (ImGui::TreeNode(trigger_name.c_str())) {
+                                ImGui::Text("Effect: %s", info.effect_type.c_str());
+                                for (const auto& [param_name, val] : info.params) {
+                                    ImGui::Text("%s: %d", param_name.c_str(), val);
+                                }
+                                ImGui::TreePop();
+                            }
+                        }
+                        ImGui::TreePop();
+                    }
+                }
+            }
+
+            // --- Constant force (per-slot) ---
+            auto active_constants = gamepadHaptics->GetActiveConstants();
+            for (const auto& [slot, info] : active_constants) {
+                if (!info.active) continue;
+                anyActive = true;
+                if (ImGui::TreeNodeEx((void*)(intptr_t)(slot + 2000), ImGuiTreeNodeFlags_DefaultOpen,
+                                     "Constant Force [slot %d]", slot)) {
+                    ImGui::Text("Strength: %.3f", info.strength);
+                    if (info.duration_ms == SDL_HAPTIC_INFINITY)
+                        ImGui::Text("Duration: Infinite");
+                    else
+                        ImGui::Text("Duration: %u ms", info.duration_ms);
+                    ImGui::TreePop();
+                }
+            }
+
+
+            if (!anyActive) {
+                ImGui::TextDisabled("No active haptic effects.");
+            }
+        }
+        ImGui::EndChild();
     }
 
     // Check for trigger rumble capability
@@ -68,9 +138,8 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     // Only show DualSense UI if it's actually a DualSense controller
     bool isDualSense = false;
     if (haptic) {
-        if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
+        if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic))
             isDualSense = gamepadHaptics->IsDualSense();
-        }
     }
 
     if (isDualSense) {
@@ -135,7 +204,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
 
         if (ImGui::Button("Send Effect")) {
             if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
-                const char* effect_names[] = { "off", "feedback", "weapon", "vibration", "bow", "galloping", "machine" };
+                const char* effect_names[] = { "off", "feedback", "weapon", "vibration", "bow", "galloping", "machine" }; // must match ds_effect_names
                 
                 // Send left trigger effect
                 std::map<std::string, int> leftParams;
@@ -179,7 +248,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                         break;
                 }
                 
-                int result = gamepadHaptics->SendDualSenseTrigger("left", leftEffectName.c_str(), leftParams);
+                int result = gamepadHaptics->PlayDualSenseTrigger("left", leftEffectName, leftParams);
                 SDL_Log("Left trigger effect '%s' result: %d", leftEffectName.c_str(), result);
                 
                 // Send right trigger effect
@@ -224,7 +293,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                         break;
                 }
                 
-                result = gamepadHaptics->SendDualSenseTrigger("right", rightEffectName.c_str(), rightParams);
+                result = gamepadHaptics->PlayDualSenseTrigger("right", rightEffectName, rightParams);
                 SDL_Log("Right trigger effect '%s' result: %d", rightEffectName.c_str(), result);
             }
         }
