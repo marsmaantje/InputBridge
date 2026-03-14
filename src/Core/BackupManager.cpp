@@ -100,16 +100,17 @@ std::vector<std::string> BackupManager::ListBackups(const std::string& filePath)
 
     try {
         fs::path originalFile(filePath);
-        std::string stemPrefix = originalFile.stem().string() + "_";
+        std::string filenamePrefix = originalFile.filename().string() + "_";
 
         // Find all backups matching the base name
-        // Backup format: stem_YYYYMMDD_HHMMSS.ext — match on "stem_" prefix
+        // Backup format: original.ext_YYYYMMDD_HHMMSS
         for (const auto& entry : fs::directory_iterator(m_backupDir)) {
-            if (entry.is_regular_file()) {
+            // We check for regular file OR directory, as this function is used for both.
+            if (entry.is_regular_file() || entry.is_directory()) {
                 std::string filename = entry.path().filename().string();
 
                 // Check if this backup matches the original file
-                if (filename.find(stemPrefix) == 0) {
+                if (filename.find(filenamePrefix) == 0) {
                     backups.push_back(entry.path().string());
                 }
             }
@@ -222,14 +223,7 @@ std::string BackupManager::GenerateBackupName(const std::string& originalPath) c
     fs::path path(originalPath);
     std::string filename = path.filename().string();
     std::string timestamp = GetTimestamp();
-
-    // Format: originalname_YYYYMMDD_HHMMSS.ext
-    size_t extPos = filename.find_last_of('.');
-    if (extPos != std::string::npos) {
-        return filename.substr(0, extPos) + "_" + timestamp + filename.substr(extPos);
-    } else {
-        return filename + "_" + timestamp;
-    }
+    return filename + "_" + timestamp;
 }
 
 std::string BackupManager::ExtractOriginalName(const std::string& backupName) const {
