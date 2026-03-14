@@ -1,0 +1,4 @@
+{
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "cmake.configureArgs": ["-DBUILD_TESTS=ON"]
+}
