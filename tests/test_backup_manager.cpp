@@ -10,14 +10,6 @@ namespace fs = std::filesystem;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-static fs::path TempDir() {
-    return fs::temp_directory_path() / "ib_test_backups";
-}
-
-static fs::path TempSrcDir() {
-    return fs::temp_directory_path() / "ib_test_src";
-}
-
 static void WriteFile(const fs::path& path, const std::string& content) {
     fs::create_directories(path.parent_path());
     std::ofstream f(path);
@@ -33,10 +25,30 @@ static std::string ReadFile(const fs::path& path) {
 
 class BackupManagerTest : public ::testing::Test {
 protected:
-    fs::path backupDir = TempDir();
-    fs::path srcDir    = TempSrcDir();
+    fs::path backupDir;
+    fs::path srcDir;
 
     void SetUp() override {
+        // Build a directory name that is unique to *this* test case so that
+        // tests running in parallel (e.g. via --gtest_recreate_environments_when_repeating
+        // or a parallel test runner) never share the same temp tree.
+        //
+        // Root cause of the flaky ListBackupsReturnsMultiple failure:
+        //   All instances previously used the same hard-coded paths returned by
+        //   TempDir() / TempSrcDir().  A SetUp() from a concurrently-running
+        //   test would call fs::remove_all() on that shared directory in the
+        //   middle of another test, wiping the first backup before ListBackups
+        //   could see it.
+        auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        std::string suffix = std::string(info->test_suite_name())
+                           + "_" + info->name();
+        // Sanitise: replace any characters that are invalid in path components.
+        for (char& c : suffix)
+            if (c == '/' || c == '\\' || c == ' ' || c == ':') c = '_';
+
+        backupDir = fs::temp_directory_path() / ("ib_test_backups_" + suffix);
+        srcDir    = fs::temp_directory_path() / ("ib_test_src_"     + suffix);
+
         fs::remove_all(backupDir);
         fs::remove_all(srcDir);
         fs::create_directories(srcDir);

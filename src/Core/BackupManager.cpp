@@ -260,8 +260,19 @@ std::string BackupManager::GetTimestamp() const {
     auto ms   = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now.time_since_epoch()) % 1000;
 
+    // std::localtime() returns a pointer to a single shared static buffer and
+    // is therefore not thread-safe.  Use the platform-specific re-entrant
+    // variant so concurrent CreateBackup calls on different threads do not
+    // corrupt each other's timestamp.
+    struct tm tm_result{};
+#ifdef _WIN32
+    localtime_s(&tm_result, &time);
+#else
+    localtime_r(&time, &tm_result);
+#endif
+
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
+    ss << std::put_time(&tm_result, "%Y%m%d_%H%M%S");
     // Append milliseconds directly (no extra underscore) so the backup
     // filename still has exactly two underscores and ExtractOriginalName
     // keeps working: stem_YYYYMMDD_HHMMSSmmm.ext
