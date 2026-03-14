@@ -211,7 +211,7 @@ jobs:
         container: archlinux:latest
         steps:
             - name: Install Dependencies
-              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes-devel libxinerama-devel libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
+              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
 
             - uses: actions/checkout@v4
               with: { submodules: recursive }
