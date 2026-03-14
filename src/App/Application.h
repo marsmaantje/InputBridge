@@ -70,6 +70,10 @@ private:
     bool m_vsync          = true;
     int  m_framerateLimit = 60;
 
+    // Tracks the previous no-clients state so StopAllHapticEffects fires
+    // exactly once on the transition from clients-present to no-clients.
+    bool m_hadNoClients = false;
+
     // ── Network update-rate tracking ──────────────────────────────────────
     int    m_serverUpdateRate  = 60;
     bool   m_serverDynamicRate = false;

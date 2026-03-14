@@ -321,6 +321,11 @@ bool OSCServer::IsRunning() const {
     return m_running;
 }
 
+bool OSCServer::HasClients() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return !m_clients.empty();
+}
+
 void OSCServer::Send(const std::string& path, const char* types, ...) {
     if (s_isDestroyed) return;
 

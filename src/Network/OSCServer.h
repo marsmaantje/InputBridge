@@ -41,6 +41,7 @@ public:
     void WaitStopped();
 
     bool IsRunning() const;
+    bool HasClients() const;
 
     // Returns true after the OSCServer singleton has been fully destroyed.
     // Use in destructors of objects that may outlive the server (e.g. OSCProtocol)

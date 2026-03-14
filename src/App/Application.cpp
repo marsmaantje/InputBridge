@@ -232,6 +232,26 @@ void Application::UpdateLogic(Uint64 frame_start_time)
     // Haptics always run at full frame rate for minimum latency.
     om.Update();
 
+    // If both servers are running but neither has any connected clients,
+    // stop all haptic effects so devices don't stay active indefinitely.
+    // We fire once per transition (clients → no clients) to avoid calling
+    // StopAllHapticEffects every frame.
+    {
+        const bool oscRunning = OSCServer::GetInstance().IsRunning();
+        const bool wsRunning  = WebSocketServer::GetInstance().IsRunning();
+        const bool anyServerRunning = oscRunning || wsRunning;
+
+        const bool oscHasClients = oscRunning && OSCServer::GetInstance().HasClients();
+        const bool wsHasClients  = wsRunning  && (WebSocketServer::GetInstance().GetClientCount() > 0);
+        const bool anyClients    = oscHasClients || wsHasClients;
+
+        const bool noClientsNow = anyServerRunning && !anyClients;
+        if (noClientsNow && !m_hadNoClients) {
+            om.StopAllHapticEffects();
+        }
+        m_hadNoClients = noClientsNow;
+    }
+
     // Push virtual device state so InputMapper reads current values.
     VirtualDeviceManager::GetInstance().PushAllStates();
 
