@@ -84,19 +84,20 @@ int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 4) {
+        if (argc >= 5) {
             int id = argv[0]->i;
-            float low = argv[1]->f;
-            float high = argv[2]->f;
-            int duration = argv[3]->i;
+            int slot = argv[1]->i;
+            float low = argv[2]->f;
+            float high = argv[3]->f;
+            int duration = argv[4]->i;
             {
                 std::lock_guard<std::mutex> lk(server->m_mutex);
                 char buf[128];
-                std::snprintf(buf, sizeof(buf), "Haptic rumble: dev=%d low=%.2f high=%.2f dur=%dms", id, low, high, duration);
+                std::snprintf(buf, sizeof(buf), "Haptic rumble: dev=%d slot=%d low=%.2f high=%.2f dur=%dms", id, slot, low, high, duration);
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
-            server->m_OutputMapper->QueueRumble(id, 0, low, high, duration);
+            server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
         }
     } catch (...) {}
     return 0;
@@ -107,18 +108,19 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 3) {
+        if (argc >= 4) {
             int id = argv[0]->i;
-            float strength = argv[1]->f;
-            int duration = argv[2]->i;
+            int slot = argv[1]->i;
+            float strength = argv[2]->f;
+            int duration = argv[3]->i;
             {
                 std::lock_guard<std::mutex> lk(server->m_mutex);
                 char buf[128];
-                std::snprintf(buf, sizeof(buf), "Haptic constant: dev=%d strength=%.2f dur=%dms", id, strength, duration);
+                std::snprintf(buf, sizeof(buf), "Haptic constant: dev=%d slot=%d strength=%.2f dur=%dms", id, slot, strength, duration);
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
-            server->m_OutputMapper->QueueConstantForce(id, 0, strength, duration);
+            server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
         }
     } catch (...) {}
     return 0;
@@ -129,22 +131,23 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 7) {
+        if (argc >= 8) {
             int id = argv[0]->i;
-            float strength = argv[1]->f;
-            int period = argv[2]->i;
-            float magnitude = argv[3]->f;
-            float offset = argv[4]->f;
-            int phase = argv[5]->i;
-            int duration = argv[6]->i;
+            int slot = argv[1]->i;
+            float strength = argv[2]->f;
+            int period = argv[3]->i;
+            float magnitude = argv[4]->f;
+            float offset = argv[5]->f;
+            int phase = argv[6]->i;
+            int duration = argv[7]->i;
             {
                 std::lock_guard<std::mutex> lk(server->m_mutex);
                 char buf[256];
-                std::snprintf(buf, sizeof(buf), "Haptic periodic: dev=%d str=%.2f per=%d mag=%.2f off=%.2f phase=%d dur=%dms", id, strength, period, magnitude, offset, phase, duration);
+                std::snprintf(buf, sizeof(buf), "Haptic periodic: dev=%d slot=%d str=%.2f per=%d mag=%.2f off=%.2f phase=%d dur=%dms", id, slot, strength, period, magnitude, offset, phase, duration);
                 server->m_logs.push_back(buf);
                 if (server->m_logs.size() > 100) server->m_logs.pop_front();
             }
-            server->m_OutputMapper->QueuePeriodic(id, 0, strength, period, magnitude, offset, phase, duration);
+            server->m_OutputMapper->QueuePeriodic(id, slot, strength, period, magnitude, offset, phase, duration);
         }
     } catch (...) {}
     return 0;
@@ -236,9 +239,9 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
         return false;
     }
 
-    lo_server_thread_add_method(m_server_thread, kHapticRumblePath, "iffi", haptic_rumble_handler, this);
-    lo_server_thread_add_method(m_server_thread, kHapticConstantPath, "ifi", haptic_constant_handler, this);
-    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath, "ififfii", haptic_periodic_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticRumblePath,      "iiffi",      haptic_rumble_handler,    this);
+    lo_server_thread_add_method(m_server_thread, kHapticConstantPath,    "iifi",       haptic_constant_handler,  this);
+    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iififfii",   haptic_periodic_handler,  this);
     lo_server_thread_add_method(m_server_thread, kHapticConditionPath, "iiiffffffi", haptic_condition_handler, this);
     lo_server_thread_add_method(m_server_thread, kHapticGainPath, "ii", haptic_gain_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);

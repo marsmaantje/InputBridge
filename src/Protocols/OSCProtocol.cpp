@@ -47,33 +47,36 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     std::string_view path_sv(path);
 
     // Incoming haptics messages
-    // Example: /inputbridge/haptics/rumble i f f i (deviceId, low_freq, high_freq, duration_ms)
-    if (path_sv == "/inputbridge/haptics/rumble" && std::strcmp(types, "iffi") == 0 && argc == 4) {
-        float low_freq = argv[1]->f;
-        float high_freq = argv[2]->f;
-        int duration_ms = argv[3]->i;
+    // Example: /inputbridge/haptics/rumble i i f f i (deviceId, slot, low_freq, high_freq, duration_ms)
+    if (path_sv == "/inputbridge/haptics/rumble" && std::strcmp(types, "iiffi") == 0 && argc == 5) {
+        int slot = argv[1]->i;
+        float low_freq = argv[2]->f;
+        float high_freq = argv[3]->f;
+        int duration_ms = argv[4]->i;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            gamepad->PlayRumble(0, low_freq, high_freq, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            gamepad->PlayRumble(slot, low_freq, high_freq, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
         });
     }
-    // Example: /inputbridge/haptics/force i f i (deviceId, strength, duration_ms)
-    else if (path_sv == "/inputbridge/haptics/force" && std::strcmp(types, "ifi") == 0 && argc == 3) {
-        float strength = argv[1]->f;
-        int duration_int = argv[2]->i;
+    // Example: /inputbridge/haptics/force i i f i (deviceId, slot, strength, duration_ms)
+    else if (path_sv == "/inputbridge/haptics/force" && std::strcmp(types, "iifi") == 0 && argc == 4) {
+        int slot = argv[1]->i;
+        float strength = argv[2]->f;
+        int duration_int = argv[3]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayConstant(0, strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayConstant(slot, strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
-    // Example: /inputbridge/haptics/periodic i f i f f i i (deviceId, strength, period, magnitude, offset, phase, duration_ms)
-    else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "ififfii") == 0 && argc == 7) {
-        float strength = argv[1]->f;
-        int period = argv[2]->i;
-        float magnitude = argv[3]->f;
-        float offset = argv[4]->f;
-        int phase = argv[5]->i;
-        int duration_int = argv[6]->i;
+    // Example: /inputbridge/haptics/periodic i i f i f f i i (deviceId, slot, strength, period, magnitude, offset, phase, duration_ms)
+    else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "iififfii") == 0 && argc == 8) {
+        int slot = argv[1]->i;
+        float strength = argv[2]->f;
+        int period = argv[3]->i;
+        float magnitude = argv[4]->f;
+        float offset = argv[5]->f;
+        int phase = argv[6]->i;
+        int duration_int = argv[7]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayPeriodic(0, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayPeriodic(slot, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
     // Example: /inputbridge/haptics/condition i i i f f f f f f i (deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)
