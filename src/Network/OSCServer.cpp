@@ -27,6 +27,8 @@ namespace {
     const char* const kOutputDefIdKey = "OutputDefinitionId";
     const char* const kInputDefIdKey = "InputDefinitionId";
     const char* const kEnabledKey = "Enabled";
+    const char* const kOutputEnabledKey = "OutputEnabled";
+    const char* const kInputEnabledKey  = "InputEnabled";
 
     // Default values
     const char* const kDefaultHost = "127.0.0.1";
@@ -326,6 +328,53 @@ bool OSCServer::HasClients() const {
     return !m_clients.empty();
 }
 
+void OSCServer::CheckInactivity() {
+    const uint64_t OSC_INACTIVITY_TIMEOUT_MS = 5000;
+    bool timed_out = false;
+    OutputMapper* mapper = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_running && !m_clients.empty()
+                && m_lastMessageTime > 0
+                && (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS)) {
+            timed_out = true;
+            m_clients.clear();
+            m_lastMessageTime = 0;
+            m_logs.push_back("OSC clients timed out (no data). Stopping haptics.");
+            if (m_logs.size() > 100) m_logs.pop_front();
+            mapper = m_OutputMapper;
+        }
+    }
+    if (timed_out && mapper) {
+        mapper->StopAllHapticEffects();
+    }
+}
+
+void OSCServer::SetPortsFromProfile(const std::string& sendHost, int sendPort, int recvPort) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    strncpy(m_send_host, sendHost.c_str(), sizeof(m_send_host) - 1);
+    m_send_host[sizeof(m_send_host) - 1] = '\0';
+    m_send_port = sendPort;
+    m_recv_port = recvPort;
+}
+
+bool OSCServer::IsOutputEnabled() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_outputEnabled;
+}
+bool OSCServer::IsInputEnabled() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_inputEnabled;
+}
+void OSCServer::SetOutputEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_outputEnabled = enabled;
+}
+void OSCServer::SetInputEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_inputEnabled = enabled;
+}
+
 void OSCServer::Send(const std::string& path, const char* types, ...) {
     if (s_isDestroyed) return;
 
@@ -335,7 +384,7 @@ void OSCServer::Send(const std::string& path, const char* types, ...) {
     }
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_running || !m_send_address) return;
+    if (!m_running || !m_send_address || !m_outputEnabled) return;
 
     va_list ap;
     va_start(ap, types);
@@ -407,12 +456,14 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         std::shared_ptr<IProtocol>  protoCopy;
         OSCHandler                  handlerCopy;
         bool                        isRunning;
+        bool                        inputEnabled;
         std::string                 legacyInputProto;
 
         {
             std::lock_guard<std::mutex> lock(server->m_mutex);
             server->m_lastMessageTime = SDL_GetTicks();
-            isRunning  = server->m_running;
+            isRunning    = server->m_running;
+            inputEnabled = server->m_inputEnabled;
             mapper = server->m_OutputMapper;
 
             // Track the source client while we still hold the lock
@@ -451,6 +502,9 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         // m_mutex is now released — safe to do slow work below.
 
         if (!isRunning) return 0;
+
+        // If input is disabled, log the message but do not dispatch it.
+        if (!inputEnabled) return 0;
 
         // Resolve the active legacy input protocol outside the lock so we don't
         // hold m_mutex while calling into ProtocolManager.
@@ -548,6 +602,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     std::string outDefId   = prefs.GetString(kOSCSection, kOutputDefIdKey, "");
     std::string inDefId    = prefs.GetString(kOSCSection, kInputDefIdKey,  "");
     bool enabled = prefs.GetBool(kOSCSection, kEnabledKey, false);
+    bool outputEnabled = prefs.GetBool(kOSCSection, kOutputEnabledKey, true);
+    bool inputEnabled  = prefs.GetBool(kOSCSection, kInputEnabledKey,  true);
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -555,6 +611,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
         m_send_host[sizeof(m_send_host) - 1] = '\0';
         m_send_port = send_port;
         m_recv_port = recv_port;
+        m_outputEnabled = outputEnabled;
+        m_inputEnabled  = inputEnabled;
     }
 
     SetProtocol(protocol);
@@ -580,6 +638,8 @@ void OSCServer::SaveConfig(PreferencesManager& prefs) {
     prefs.SetString(kOSCSection, kOutputDefIdKey,  m_outputDefinitionId);
     prefs.SetString(kOSCSection, kInputDefIdKey,   m_inputDefinitionId);
     prefs.SetBool  (kOSCSection, kEnabledKey,             m_running);
+    prefs.SetBool  (kOSCSection, kOutputEnabledKey,       m_outputEnabled);
+    prefs.SetBool  (kOSCSection, kInputEnabledKey,        m_inputEnabled);
 }
 
 void OSCServer::SetSelectedDevice(int id) {
@@ -606,35 +666,19 @@ int OSCServer::GetReceivePort() const {
 }
 
 void OSCServer::DrawContent() {
-    // --- Client timeout logic --------------------------------------------------
-    const uint64_t OSC_CLIENT_TIMEOUT_MS = 5000; // 5 seconds
-    bool clients_timed_out = false;
-    OutputMapper* mapper = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_running && !m_clients.empty() && m_lastMessageTime > 0 && (SDL_GetTicks() - m_lastMessageTime > OSC_CLIENT_TIMEOUT_MS)) {
-            clients_timed_out = true;
-            m_clients.clear();
-            m_lastMessageTime = 0; // Prevent re-triggering
-            m_logs.push_back("OSC clients timed out. Stopping haptics.");
-            if (m_logs.size() > 100) m_logs.pop_front();
-            mapper = m_OutputMapper;
-        }
-    }
-    if (clients_timed_out && mapper) {
-        mapper->StopAllHapticEffects();
-    }
-
     ImGui::InputInt("Send Port",    &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 
     // ── Read state under lock ─────────────────────────────────────────────────
     std::string outDefId, inDefId, currentProto;
+    bool outputEnabled, inputEnabled;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        outDefId     = m_outputDefinitionId;
-        inDefId      = m_inputDefinitionId;
-        currentProto = m_protocolName;
+        outDefId      = m_outputDefinitionId;
+        inDefId       = m_inputDefinitionId;
+        currentProto  = m_protocolName;
+        outputEnabled = m_outputEnabled;
+        inputEnabled  = m_inputEnabled;
     }
 
     std::string currentInputProto = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
@@ -694,6 +738,12 @@ void OSCServer::DrawContent() {
 
     // ── Output protocol (server → client) ─────────────────────────────────────
     {
+        if (ImGui::Checkbox("##osc_out_en", &outputEnabled)) {
+            SetOutputEnabled(outputEnabled);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        ImGui::SameLine();
+        if (!outputEnabled) ImGui::BeginDisabled();
         auto entries = buildEntries(ProtocolDirection::Output);
         int curIdx = findIdx(entries, outDefId, currentProto);
         int newIdx = curIdx;
@@ -706,10 +756,17 @@ void OSCServer::DrawContent() {
         }
         if (!outDefId.empty() && ProtocolRegistry::GetInstance().FindById(outDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(ports synced)"); }
+        if (!outputEnabled) ImGui::EndDisabled();
     }
 
     // ── Input protocol (client → server) ──────────────────────────────────────
     {
+        if (ImGui::Checkbox("##osc_in_en", &inputEnabled)) {
+            SetInputEnabled(inputEnabled);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        ImGui::SameLine();
+        if (!inputEnabled) ImGui::BeginDisabled();
         auto entries = buildEntries(ProtocolDirection::Input);
         int curIdx = findIdx(entries, inDefId, currentInputProto);
         int newIdx = curIdx;
@@ -725,6 +782,7 @@ void OSCServer::DrawContent() {
         }
         if (!inDefId.empty() && ProtocolRegistry::GetInstance().FindById(inDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(recv port synced)"); }
+        if (!inputEnabled) ImGui::EndDisabled();
     }
 
     // ── Start / stop ──────────────────────────────────────────────────────────
@@ -736,17 +794,24 @@ void OSCServer::DrawContent() {
             if (ImGui::Button("Restart to apply")) {
                 Stop();
                 Start(m_send_host, m_send_port, m_recv_port);
+                InputMapper::GetInstance().SaveCurrentProfile();
             }
             ImGui::SameLine();
         }
-        if (ImGui::Button("Stop OSC")) Stop();
+        if (ImGui::Button("Stop OSC")) {
+            Stop();
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0,1,0,1), "Running");
         ImGui::SameLine();
         ImGui::TextColored(m_isConnected ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1),
                            m_isConnected ? "Connected" : "Send Error");
     } else {
-        if (ImGui::Button("Start OSC")) Start(m_send_host, m_send_port, m_recv_port);
+        if (ImGui::Button("Start OSC")) {
+            Start(m_send_host, m_send_port, m_recv_port);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1,0,0,1), "Stopped");
     }

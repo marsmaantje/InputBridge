@@ -1,6 +1,7 @@
 #include "OutputMapper.h"
 #include "imgui.h"
 #include "InputMapper.h"
+#include "Haptics/HapticDevice.h"
 #include <algorithm>
 #include <memory>
 #include <map>
@@ -275,20 +276,31 @@ void OutputMapper::Update() {
 
 void OutputMapper::StopAllHapticEffects()
 {
-    if (!m_active_targets) {
-        return;
+    // Stop effects on OutputMapper-managed targets (output mapping UI slots).
+    if (m_active_targets) {
+        for (auto& target : *m_active_targets) {
+            if (target.haptic_device) {
+                SDL_StopHapticEffects(target.haptic_device);
+            }
+            // For gamepads that don't use the haptic_device path for rumble
+            else if (target.instance_id != 0 && SDL_IsGamepad(target.instance_id)) {
+                SDL_Gamepad* pad = SDL_GetGamepadFromID(target.instance_id);
+                if (pad) {
+                    SDL_RumbleGamepad(pad, 0, 0, 0);
+                }
+            }
+        }
     }
 
-    for (auto& target : *m_active_targets) {
-        if (target.haptic_device) {
-            SDL_StopHapticEffects(target.haptic_device);
-        }
-        // For gamepads that don't use the haptic_device path for rumble
-        else if (target.instance_id != 0 && SDL_IsGamepad(target.instance_id)) {
-            SDL_Gamepad* pad = SDL_GetGamepadFromID(target.instance_id);
-            if (pad) {
-                SDL_RumbleGamepad(pad, 0, 0, 0);
-            }
+    // Also stop effects on every HapticDevice owned by DeviceManager.
+    // These are the devices used by OSCBaseProtocol / OSCProtocol via
+    // DispatchHapticCommand, which bypass the OutputMapper target list
+    // entirely.  StopAll() clears per-slot effect maps and destroys SDL
+    // effect IDs so that the next Play* call starts from a clean state.
+    for (const auto& dev : m_DeviceManager.GetDevices()) {
+        HapticDevice* haptic = m_DeviceManager.GetHapticDevice(dev.instance_id);
+        if (haptic) {
+            haptic->StopAll();
         }
     }
 }

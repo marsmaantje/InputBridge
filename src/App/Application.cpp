@@ -232,10 +232,13 @@ void Application::UpdateLogic(Uint64 frame_start_time)
     // Haptics always run at full frame rate for minimum latency.
     om.Update();
 
-    // If both servers are running but neither has any connected clients,
-    // stop all haptic effects so devices don't stay active indefinitely.
-    // We fire once per transition (clients → no clients) to avoid calling
-    // StopAllHapticEffects every frame.
+    // Per-server inactivity checks: fire StopAllHapticEffects once when
+    // a connected client stops sending data for 5 seconds.
+    OSCServer::GetInstance().CheckInactivity();
+    WebSocketServer::GetInstance().CheckInactivity();
+
+    // Cross-server check: if at least one server is running but neither has
+    // any clients at all, stop all haptic effects on the transition edge.
     {
         const bool oscRunning = OSCServer::GetInstance().IsRunning();
         const bool wsRunning  = WebSocketServer::GetInstance().IsRunning();

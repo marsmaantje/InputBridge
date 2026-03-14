@@ -55,6 +55,18 @@ class WebSocketServer {
     void SaveConfig(PreferencesManager& prefs);
 
     void SetOutputMapper(OutputMapper* mapper);
+
+    // Call once per frame from the main loop — fires StopAllHapticEffects when
+    // connected clients go silent for longer than the inactivity timeout.
+    // Write port field from a profile without restarting the server.
+    void SetPortFromProfile(int port);
+
+    void CheckInactivity();
+
+    bool IsOutputEnabled() const;
+    bool IsInputEnabled()  const;
+    void SetOutputEnabled(bool enabled);
+    void SetInputEnabled(bool enabled);
 #else
     static WebSocketServer &GetInstance() {
         static WebSocketServer i;
@@ -93,6 +105,15 @@ class WebSocketServer {
     void SaveConfig(PreferencesManager& prefs) {}
 
     void SetOutputMapper(OutputMapper* mapper) {}
+
+    void SetPortFromProfile(int port) {}
+
+    void CheckInactivity() {}
+
+    bool IsOutputEnabled() const { return true; }
+    bool IsInputEnabled()  const { return true; }
+    void SetOutputEnabled(bool) {}
+    void SetInputEnabled(bool)  {}
 #endif
 
   private:

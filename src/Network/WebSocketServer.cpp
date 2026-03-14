@@ -23,6 +23,8 @@ namespace {
     const char* const kOutputDefIdKey = "OutputDefinitionId";
     const char* const kInputDefIdKey = "InputDefinitionId";
     const char* const kEnabledKey = "Enabled";
+    const char* const kOutputEnabledKey = "OutputEnabled";
+    const char* const kInputEnabledKey  = "InputEnabled";
 
     // Default values
     const char* const kDefaultProtocol = "Marsmaantje (New)";
@@ -52,6 +54,13 @@ struct WebSocketServer::Impl {
     struct us_listen_socket_t *listen_socket = nullptr;
     // Preserved across Stop()/Start() cycles — mirrors OSCServer::m_savedOutputMapper.
     OutputMapper* savedOutputMapper = nullptr;
+
+    // Inactivity timeout — updated on every received message.
+    uint64_t lastMessageTime = 0;
+
+    // Direction enable flags.
+    bool outputEnabled = true;
+    bool inputEnabled  = true;
 };
 
 WebSocketServer &WebSocketServer::GetInstance() {
@@ -129,15 +138,21 @@ void WebSocketServer::Start(int port) {
                                    //      a deadlock results.
                                    std::shared_ptr<IProtocol> protoCopy;
                                    OutputMapper* mapperCopy = nullptr;
+                                   bool inputEnabled = true;
                                    {
                                        std::lock_guard<std::mutex> lock(m_Impl->mutex);
                                        m_Impl->logs.push_back("Client data: " + std::string(message));
                                        if (m_Impl->logs.size() > 100)
                                            m_Impl->logs.pop_front();
-                                       protoCopy = m_Impl->protocol;
-                                       mapperCopy = m_OutputMapper;
+                                       m_Impl->lastMessageTime = SDL_GetTicks();
+                                       protoCopy    = m_Impl->protocol;
+                                       mapperCopy   = m_OutputMapper;
+                                       inputEnabled = m_Impl->inputEnabled;
                                    }
                                    // Mutex is released — do slow work now.
+
+                                   // Skip dispatch when input is disabled.
+                                   if (!inputEnabled) return;
 
                                    if (protoCopy) {
                                        protoCopy->parse(std::string(message));
@@ -345,6 +360,8 @@ std::string WebSocketServer::GetInputDefinitionId() const {
 void WebSocketServer::Broadcast(const std::string &msg, uWS::OpCode opCode) {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
 
+    if (!m_Impl->outputEnabled) return;
+
     // Ensure the event loop is active
     if (m_Impl->loop && !m_Impl->clients.empty()) {
 
@@ -461,9 +478,17 @@ void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
     std::string outDefId = prefs.GetString(kWebSocketSection, kOutputDefIdKey, "");
     std::string inDefId  = prefs.GetString(kWebSocketSection, kInputDefIdKey,  "");
     bool enabled = prefs.GetBool(kWebSocketSection, kEnabledKey, false);
+    bool outputEnabled = prefs.GetBool(kWebSocketSection, kOutputEnabledKey, true);
+    bool inputEnabled  = prefs.GetBool(kWebSocketSection, kInputEnabledKey,  true);
 
     SetPort(port);
     SetProtocol(protocol);
+
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        m_Impl->outputEnabled = outputEnabled;
+        m_Impl->inputEnabled  = inputEnabled;
+    }
 
     if (!outDefId.empty()) SetOutputDefinition(outDefId);
     if (!inDefId.empty())  SetInputDefinition(inDefId);
@@ -488,6 +513,8 @@ void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
     prefs.SetString(kWebSocketSection, kOutputDefIdKey, outDef);
     prefs.SetString(kWebSocketSection, kInputDefIdKey,  inDef);
     prefs.SetBool(kWebSocketSection,   kEnabledKey,            running);
+    prefs.SetBool(kWebSocketSection,   kOutputEnabledKey,      m_Impl->outputEnabled);
+    prefs.SetBool(kWebSocketSection,   kInputEnabledKey,       m_Impl->inputEnabled);
 }
 
 void WebSocketServer::DrawContent() {
@@ -508,6 +535,7 @@ void WebSocketServer::DrawContent() {
     bool running, restartPending;
     int  currentPort, runningPort, clientCount;
     std::string outDefId, inDefId, currentProto;
+    bool outputEnabled, inputEnabled;
     std::deque<std::string> logs;
     std::map<void*, std::string> clients;
     {
@@ -520,6 +548,8 @@ void WebSocketServer::DrawContent() {
         outDefId       = m_Impl->outputDefinitionId;
         inDefId        = m_Impl->inputDefinitionId;
         currentProto   = m_Impl->selectedProtocol;
+        outputEnabled  = m_Impl->outputEnabled;
+        inputEnabled   = m_Impl->inputEnabled;
         logs           = m_Impl->logs;
         clients        = m_Impl->clients;
     }
@@ -583,6 +613,12 @@ void WebSocketServer::DrawContent() {
 
     // ── Output protocol (server → client) ────────────────────────────────────
     {
+        if (ImGui::Checkbox("##ws_out_en", &outputEnabled)) {
+            SetOutputEnabled(outputEnabled);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        ImGui::SameLine();
+        if (!outputEnabled) ImGui::BeginDisabled();
         auto entries = buildEntries(ProtocolDirection::Output);
         int curIdx = findIdx(entries, outDefId);
         int newIdx = curIdx;
@@ -595,10 +631,17 @@ void WebSocketServer::DrawContent() {
         }
         if (!outDefId.empty() && ProtocolRegistry::GetInstance().FindById(outDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(port synced)"); }
+        if (!outputEnabled) ImGui::EndDisabled();
     }
 
     // ── Input protocol (client → server) ─────────────────────────────────────
     {
+        if (ImGui::Checkbox("##ws_in_en", &inputEnabled)) {
+            SetInputEnabled(inputEnabled);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        ImGui::SameLine();
+        if (!inputEnabled) ImGui::BeginDisabled();
         auto entries = buildEntries(ProtocolDirection::Input);
         int curIdx = findIdx(entries, inDefId);
         int newIdx = curIdx;
@@ -609,6 +652,7 @@ void WebSocketServer::DrawContent() {
             if (c.isDefinition) SetInputDefinition(c.definitionId);
             else                { SetInputDefinition(""); SetProtocol(c.protocolName); }
         }
+        if (!inputEnabled) ImGui::EndDisabled();
     }
 
     // ── Status / start / stop ─────────────────────────────────────────────────
@@ -620,12 +664,18 @@ void WebSocketServer::DrawContent() {
                 ImGui::TextDisabled("(Restarting...)");
             } else if (ImGui::Button("Restart to apply")) {
                 Stop();
-                std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                m_Impl->restartPending = true; m_Impl->restartPort = currentPort;
+                {
+                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+                    m_Impl->restartPending = true; m_Impl->restartPort = currentPort;
+                }
+                InputMapper::GetInstance().SaveCurrentProfile();
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Stop")) Stop();
+        if (ImGui::Button("Stop")) {
+            Stop();
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
         ImGui::Separator();
         ImGui::Text("Connected Clients: %d", clientCount);
         if (ImGui::TreeNode("Client List")) {
@@ -636,7 +686,10 @@ void WebSocketServer::DrawContent() {
     } else {
         ImGui::TextColored(ImVec4(1,0,0,1), "Status: Stopped");
         ImGui::SameLine();
-        if (ImGui::Button("Start")) Start(portInput);
+        if (ImGui::Button("Start")) {
+            Start(portInput);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
     }
 
     ImGui::Separator(); ImGui::Text("Log");
@@ -653,5 +706,49 @@ void WebSocketServer::SetOutputMapper(OutputMapper* mapper) {
     // the same lock those callbacks use.
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     m_OutputMapper = mapper;
+}
+
+void WebSocketServer::SetPortFromProfile(int port) {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    m_Impl->port = port;
+}
+
+void WebSocketServer::CheckInactivity() {
+    const uint64_t WS_INACTIVITY_TIMEOUT_MS = 5000;
+    bool timed_out = false;
+    OutputMapper* mapper = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        if (m_Impl->running
+                && !m_Impl->clients.empty()
+                && m_Impl->lastMessageTime > 0
+                && (SDL_GetTicks() - m_Impl->lastMessageTime > WS_INACTIVITY_TIMEOUT_MS)) {
+            timed_out = true;
+            m_Impl->lastMessageTime = 0;
+            m_Impl->logs.push_back("WebSocket clients timed out (no data). Stopping haptics.");
+            if (m_Impl->logs.size() > 100) m_Impl->logs.pop_front();
+            mapper = m_OutputMapper;
+        }
+    }
+    if (timed_out && mapper) {
+        mapper->StopAllHapticEffects();
+    }
+}
+
+bool WebSocketServer::IsOutputEnabled() const {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    return m_Impl->outputEnabled;
+}
+bool WebSocketServer::IsInputEnabled() const {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    return m_Impl->inputEnabled;
+}
+void WebSocketServer::SetOutputEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    m_Impl->outputEnabled = enabled;
+}
+void WebSocketServer::SetInputEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    m_Impl->inputEnabled = enabled;
 }
 #endif

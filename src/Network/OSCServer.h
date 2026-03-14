@@ -43,6 +43,10 @@ public:
     bool IsRunning() const;
     bool HasClients() const;
 
+    // Call once per frame from the main loop. Handles client inactivity
+    // timeout and fires StopAllHapticEffects on the transition.
+    void CheckInactivity();
+
     // Returns true after the OSCServer singleton has been fully destroyed.
     // Use in destructors of objects that may outlive the server (e.g. OSCProtocol)
     // to guard against use-after-destruction when calling GetInstance().
@@ -85,6 +89,15 @@ public:
 
     void SetOutputMapper(OutputMapper* mapper);
 
+    bool IsOutputEnabled() const;
+    bool IsInputEnabled()  const;
+    void SetOutputEnabled(bool enabled);
+    void SetInputEnabled(bool enabled);
+
+    // Write port/host fields from a profile without restarting the server.
+    // The caller must restart manually (or the UI shows "Restart to apply").
+    void SetPortsFromProfile(const std::string& sendHost, int sendPort, int recvPort);
+
 private:
     static int generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_rumble_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
@@ -124,6 +137,10 @@ private:
     // Preserved across Stop()/Start() cycles so that restarting the server
     // from the UI does not silently disable all haptic effects.
     OutputMapper* m_savedOutputMapper = nullptr;
+
+    // Direction enable flags — persisted to prefs.
+    bool m_outputEnabled = true;  // send OSC messages to clients
+    bool m_inputEnabled  = true;  // receive OSC messages from clients
 
     // Cleanup thread used by Stop() to run lo_server_thread_stop off the
     // main/UI thread.  Stored (not detached) so the destructor can join it
