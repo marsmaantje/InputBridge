@@ -262,10 +262,16 @@ bool BackupManager::EnsureBackupDirectoryExists() {
 }
 
 std::string BackupManager::GetTimestamp() const {
-    auto now = std::chrono::system_clock::now();
+    auto now  = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
+    auto ms   = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now.time_since_epoch()) % 1000;
 
     std::stringstream ss;
     ss << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
+    // Append milliseconds directly (no extra underscore) so the backup
+    // filename still has exactly two underscores and ExtractOriginalName
+    // keeps working: stem_YYYYMMDD_HHMMSSmmm.ext
+    ss << std::setfill('0') << std::setw(3) << ms.count();
     return ss.str();
 }
