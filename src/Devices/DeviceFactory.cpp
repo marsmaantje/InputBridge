@@ -1,6 +1,7 @@
 #include "DeviceFactory.h"
 #include "Haptics/GamepadHaptics.h"
 #include "Haptics/SteeringWheelHaptics.h"
+#include "Haptics/FlightStickHaptics.h"
 #include <SDL3/SDL_log.h>
 
 namespace InputBridge {
@@ -82,7 +83,6 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateGenericDevice(SDL_Joyst
     state.gamepad = nullptr;
     state.joystick = joystick;
     
-    // TODO: Implement haptics for flight sticks when FlightStickHaptics class exists
     auto haptic = CreateHapticDevice(joystick, SDL_GetJoystickTypeForID(instance_id));
     
     return DeviceCreationResult{std::move(state), std::move(haptic)};
@@ -129,9 +129,8 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
             
         case SDL_JOYSTICK_TYPE_FLIGHT_STICK:
         case SDL_JOYSTICK_TYPE_THROTTLE:
-            // TODO: Create FlightStickHaptics when implemented
-            SDL_Log("Haptics for flight stick/throttle not yet implemented");
-            return nullptr;
+            haptic = std::make_unique<FlightStickHaptics>(joystick);
+            break;
             
         default:
             SDL_Log("Unknown haptic device type: %d", static_cast<int>(device_type));
