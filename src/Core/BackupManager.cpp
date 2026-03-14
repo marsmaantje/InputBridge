@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <system_error>
 #include <cstdio>
 
 namespace fs = std::filesystem;
@@ -116,10 +117,20 @@ std::vector<std::string> BackupManager::ListBackups(const std::string& filePath)
             }
         }
 
-        // Sort by modification time (newest first)
+        // Sort by modification time (newest first).
+        // Use the error_code overload so the comparator never throws — if a
+        // file disappears between the directory scan and the sort (e.g. due to
+        // a concurrent cleanup on another thread), the throwing overload would
+        // propagate out of std::sort and leave the vector in an unspecified
+        // state, silently dropping entries. Falling back to lexicographic
+        // order on error is safe: the caller only cares about relative age.
         std::sort(backups.begin(), backups.end(),
-                 [](const std::string& a, const std::string& b) {
-                     return fs::last_write_time(a) > fs::last_write_time(b);
+                 [](const std::string& a, const std::string& b) noexcept {
+                     std::error_code ecA, ecB;
+                     auto tA = fs::last_write_time(a, ecA);
+                     auto tB = fs::last_write_time(b, ecB);
+                     if (ecA || ecB) return a > b;   // fall back to name order
+                     return tA > tB;
                  });
     } catch (const std::exception& e) {
         fprintf(stderr, "Failed to list backups: %s\n", e.what());
@@ -143,10 +154,16 @@ void BackupManager::CleanupOldBackups(const std::string& filePath) {
                 }
             }
 
-            // Sort by modification time (oldest first)
+            // Sort by modification time (oldest first).
+            // Same rationale as in ListBackups: use the error_code overload
+            // so a file vanishing mid-sort cannot corrupt the vector state.
             std::sort(allBackups.begin(), allBackups.end(),
-                     [](const fs::path& a, const fs::path& b) {
-                         return fs::last_write_time(a) < fs::last_write_time(b);
+                     [](const fs::path& a, const fs::path& b) noexcept {
+                         std::error_code ecA, ecB;
+                         auto tA = fs::last_write_time(a, ecA);
+                         auto tB = fs::last_write_time(b, ecB);
+                         if (ecA || ecB) return a.string() < b.string();
+                         return tA < tB;
                      });
 
             // Remove oldest backups if count exceeds limit
