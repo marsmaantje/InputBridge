@@ -142,6 +142,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             isDualSense = gamepadHaptics->IsDualSense();
     }
 
+    /*
     if (isDualSense) {
         ImGui::Separator();
         ImGui::Text("DualSense Adaptive Triggers");
@@ -298,4 +299,5 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             }
         }
     }
+    */
 }
