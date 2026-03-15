@@ -259,7 +259,7 @@ add_executable(InputBridge
     src/Protocols/MarsmaantjeOldProtocol.cpp
     src/Protocols/MarsmaantjeNewProtocol.cpp
     src/Protocols/OSCBaseProtocol.cpp
-    src/Protocols/OSCBackAllyRacingProtocol.cpp
+    src/Protocols/OSCBackAlleyRacingProtocol.cpp
     src/Protocols/OSCSteamLinkProtocol.cpp
     src/Protocols/OSCProjectBabbleProtocol.cpp
     src/Protocols/ProtocolEditorWindow.cpp

@@ -22,7 +22,7 @@ void AboutWindow::DrawContent() {
 
         ImGui::Spacing();
         ImGui::TextWrapped(
-            "The project was originally motivated by Water from the BackAllyRacing group in "
+            "The project was originally motivated by Water from the BackAlleyRacing group in "
             "Resonite, who needed help with fixing a previous minimal Windows prototype."
         );
 
