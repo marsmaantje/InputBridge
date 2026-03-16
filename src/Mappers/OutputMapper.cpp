@@ -258,7 +258,7 @@ void OutputMapper::Update() {
                 TriggerPeriodic(cmd.virtual_id, cmd.iParams[0], cmd.fParams[0], cmd.iParams[1], cmd.fParams[1], cmd.fParams[2], cmd.iParams[2], cmd.iParams[3]);
                 break;
             case HapticCommand::CONDITION:
-                TriggerCondition(cmd.virtual_id, cmd.iParams[0], (uint16_t)cmd.iParams[1], cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[2]);
+                TriggerCondition(cmd.virtual_id, cmd.iParams[0], static_cast<HapticConditionType>(cmd.iParams[1]), cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[2]);
                 break;
             case HapticCommand::GAIN:
                 TriggerSetGain(cmd.virtual_id, cmd.iParams[0]);
@@ -441,7 +441,7 @@ void OutputMapper::QueuePeriodic(int virtual_id, int slot, float strength, int p
     QueueCommand(std::move(cmd));
 }
 
-void OutputMapper::QueueCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
+void OutputMapper::QueueCondition(int virtual_id, int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
     m_lastHapticActivityTime = SDL_GetTicks();
     HapticCommand cmd;
     cmd.type = HapticCommand::CONDITION;
@@ -453,7 +453,7 @@ void OutputMapper::QueueCondition(int virtual_id, int slot, uint16_t type, float
     cmd.fParams[4] = deadband;
     cmd.fParams[5] = center;
     cmd.iParams[0] = slot;
-    cmd.iParams[1] = type;
+    cmd.iParams[1] = static_cast<int>(type);  // store as 0–3 index
     cmd.iParams[2] = duration_ms;
     QueueCommand(std::move(cmd));
 }
@@ -645,7 +645,7 @@ void OutputMapper::TriggerPeriodic(int virtual_id, int slot, float strength, int
     }
 }
 
-void OutputMapper::TriggerCondition(int virtual_id, int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
+void OutputMapper::TriggerCondition(int virtual_id, int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, int duration_ms) {
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
@@ -667,7 +667,7 @@ void OutputMapper::TriggerCondition(int virtual_id, int slot, uint16_t type, flo
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(effect));
-        effect.type = type;
+        effect.type = ToSDLConditionType(type);  // translate once, here
         effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
         effect.condition.direction.dir[0] = 1;
         effect.condition.length = (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms;

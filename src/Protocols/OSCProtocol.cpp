@@ -80,9 +80,10 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         });
     }
     // Example: /inputbridge/haptics/condition i i i f f f f f f i (deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)
+    // condition_type: 0=Spring, 1=Damper, 2=Inertia, 3=Friction
     else if (path_sv == "/inputbridge/haptics/condition" && std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
         int slot = argv[1]->i;
-        uint16_t condition_type = (uint16_t)argv[2]->i;
+        HapticConditionType condition_type = ConditionTypeFromIndex(argv[2]->i);
         float right_sat = argv[3]->f;
         float left_sat = argv[4]->f;
         float right_coeff = argv[5]->f;

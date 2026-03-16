@@ -129,7 +129,8 @@ namespace {
         } else if (effect == kEffectCondition) {
             int      duration       = get_duration(data);
             int      slot           = data.value(kConditionSlot, 0);
-            uint16_t condition_type = data.value(kConditionType, (uint16_t)SDL_HAPTIC_SPRING);
+            // condition_type is now a user-facing index: 0=Spring, 1=Damper, 2=Inertia, 3=Friction
+            HapticConditionType condition_type = ConditionTypeFromIndex(data.value(kConditionType, 0));
 
             mapper->QueueCondition(device, slot, condition_type,
                 data.value(kConditionRightSat,   0.0f),
@@ -157,7 +158,7 @@ namespace {
         // 2. Condition: distinguishing fields are the sat/coeff pair or condition_type.
         if (flat.contains(kConditionRightSat) || flat.contains(kConditionLeftSat)
                 || flat.contains(kConditionType)) {
-            out.condition_type = flat.value(kConditionType, (uint16_t)SDL_HAPTIC_SPRING);
+            out.condition_type = ConditionTypeFromIndex(flat.value(kConditionType, 0));
             out.right_sat      = flat.value(kConditionRightSat,   0.0f);
             out.left_sat       = flat.value(kConditionLeftSat,    0.0f);
             out.right_coeff    = flat.value(kConditionRightCoeff, 0.0f);

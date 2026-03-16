@@ -124,7 +124,7 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
 int HapticDevice::PlayConstant(int slot, float strength, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayPeriodic(int slot, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayRumble(int slot, float large_magnitude, float small_magnitude, uint32_t duration_ms) { return -1; }
-int HapticDevice::PlayCondition(int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) { return -1; }
+int HapticDevice::PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayDualSenseTrigger(const std::string& trigger, const std::string& effect_type, const std::map<std::string, int>& params) { return -1; }
 
 // --- Stop Methods (base stubs) ---
@@ -220,17 +220,17 @@ void HapticDevice::SetPeriodic(Uint16 type, float magnitude, int period, float d
     });
 }
 
-void HapticDevice::SetCondition(Uint16 type, float saturation, float coefficient, float deadband, float center) {
+void HapticDevice::SetCondition(HapticConditionType type, float saturation, float coefficient, float deadband, float center) {
     RunAsync([this, type, saturation, coefficient, deadband, center]() {
         if (!m_haptic) return;
 
         // Use a negative type-based key so these internal slots can never clash
         // with user-assigned condition slots (0, 1, 2, ...).
-        const int internalKey = kInternalSlot - (int)type;
+        const int internalKey = kInternalSlot - static_cast<int>(type);
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = type;
+        effect.type = ToSDLConditionType(type);  // translate once, here
         effect.condition.length = SDL_HAPTIC_INFINITY;
 
         Uint16 sat   = (Uint16)(std::clamp(saturation,   0.0f, 1.0f) * 0xFFFF);

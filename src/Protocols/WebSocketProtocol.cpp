@@ -160,7 +160,8 @@ void WebSocketProtocol::parse(const std::string &message) {
                 OutputMapper::GetInstance().QueuePeriodic(0, 0, strength, period, magnitude, offset, phase, duration_ms);
             } else if (effect == "condition") {
                 int slot = params.value("slot", 0);
-                uint16_t condition_type = params.value("condition_type", (uint16_t)SDL_HAPTIC_SPRING);
+                // condition_type: 0=Spring, 1=Damper, 2=Inertia, 3=Friction
+                HapticConditionType condition_type = ConditionTypeFromIndex(params.value("condition_type", 0));
 
                 float right_sat = params.at("right_sat");
                 float left_sat = params.at("left_sat");

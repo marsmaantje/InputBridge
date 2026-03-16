@@ -54,7 +54,7 @@ void OutputMapper::QueuePeriodic(int id, int slot, float strength, int period,
     HapticStub::periodicCalls.push_back({id, slot, strength, period, magnitude, offset, phase, dur});
 }
 
-void OutputMapper::QueueCondition(int id, int slot, uint16_t type,
+void OutputMapper::QueueCondition(int id, int slot, HapticConditionType type,
                                   float rsat, float lsat,
                                   float rcoeff, float lcoeff,
                                   float db, float center, int dur) {
@@ -94,7 +94,7 @@ void OutputMapper::CloseHapticDevice(HapticTarget&)                    {}
 void OutputMapper::TriggerRumble(int, int, float, float, int)          {}
 void OutputMapper::TriggerConstantForce(int, int, float, int)          {}
 void OutputMapper::TriggerPeriodic(int, int, float, int, float, float, int, int) {}
-void OutputMapper::TriggerCondition(int, int, uint16_t,
+void OutputMapper::TriggerCondition(int, int, HapticConditionType,
                                     float, float, float, float, float, float, int) {}
 void OutputMapper::TriggerSetGain(int, int)                            {}
 void OutputMapper::TriggerDualSenseTrigger(int, const char*, const char*,

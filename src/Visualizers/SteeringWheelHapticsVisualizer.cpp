@@ -122,14 +122,8 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             }
 
             if (ImGui::Button("Play Condition")) {
-                uint16_t sdl_type = SDL_HAPTIC_SPRING;
-                switch (m_condition_type) {
-                    case 0: sdl_type = SDL_HAPTIC_SPRING;   break;
-                    case 1: sdl_type = SDL_HAPTIC_DAMPER;   break;
-                    case 2: sdl_type = SDL_HAPTIC_INERTIA;  break;
-                    case 3: sdl_type = SDL_HAPTIC_FRICTION; break;
-                }
-                wheelHaptics->PlayCondition(m_condition_slot, sdl_type,
+                wheelHaptics->PlayCondition(m_condition_slot,
+                                            ConditionTypeFromIndex(m_condition_type),
                                             m_condition_right_sat, m_condition_left_sat,
                                             m_condition_right_coeff, m_condition_left_coeff,
                                             m_condition_deadband, m_condition_center,
@@ -186,14 +180,7 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             for (const auto& [slot, info] : active_conditions) {
                 anyActive = true;
                 if (ImGui::TreeNode((void*)(intptr_t)(slot + 3000), "Condition [slot %d]", slot)) {
-                    const char* type_str = "Unknown";
-                    switch (info.type) {
-                        case SDL_HAPTIC_SPRING:   type_str = "Spring";   break;
-                        case SDL_HAPTIC_DAMPER:   type_str = "Damper";   break;
-                        case SDL_HAPTIC_INERTIA:  type_str = "Inertia";  break;
-                        case SDL_HAPTIC_FRICTION: type_str = "Friction"; break;
-                    }
-                    ImGui::Text("Type: %s", type_str);
+                    ImGui::Text("Type: %s", ConditionTypeName(info.type));
                     if (info.duration_ms == SDL_HAPTIC_INFINITY)
                         ImGui::Text("Duration: Infinite");
                     else

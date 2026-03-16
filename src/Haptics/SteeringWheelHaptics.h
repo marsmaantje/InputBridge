@@ -10,7 +10,7 @@ public:
     // All effects accept a slot, consistent with PlayCondition.
     int PlayConstant(int slot, float strength, uint32_t duration_ms) override;
     int PlayPeriodic(int slot, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) override;
-    int PlayCondition(int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) override;
+    int PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) override;
 
     int StopConstant(int slot) override;
     int StopPeriodic(int slot) override;

@@ -10,7 +10,63 @@
 #include "Utils/SDLHandles.h"
 #include "Core/Result.h"
 
-// --- Active Effect Info Structs ---
+// ─── Condition effect type ────────────────────────────────────────────────────
+//
+// User-facing index (0–3) that maps to the four SDL condition effect types.
+// Using a clean 0-based enum everywhere avoids exposing SDL's internal bitmask
+// values (128 / 256 / 512 / 1024) to users, network protocols, and UI code.
+//
+// The translation to SDL_HAPTIC_* happens in exactly one place:
+//   ToSDLConditionType()  →  called inside PlayCondition() implementations.
+
+enum class HapticConditionType : int {
+    Spring   = 0,   // SDL_HAPTIC_SPRING   (restoring force toward centre)
+    Damper   = 1,   // SDL_HAPTIC_DAMPER   (resistance proportional to velocity)
+    Inertia  = 2,   // SDL_HAPTIC_INERTIA  (resistance proportional to acceleration)
+    Friction = 3,   // SDL_HAPTIC_FRICTION (constant resistance)
+};
+
+// Convert a user-facing index to the SDL bitmask.  Returns SDL_HAPTIC_SPRING
+// for any out-of-range value so callers always get a valid type.
+inline Uint16 ToSDLConditionType(HapticConditionType t) {
+    switch (t) {
+        case HapticConditionType::Spring:   return SDL_HAPTIC_SPRING;
+        case HapticConditionType::Damper:   return SDL_HAPTIC_DAMPER;
+        case HapticConditionType::Inertia:  return SDL_HAPTIC_INERTIA;
+        case HapticConditionType::Friction: return SDL_HAPTIC_FRICTION;
+        default:                            return SDL_HAPTIC_SPRING;
+    }
+}
+
+// Convert a raw integer (0–3) to HapticConditionType, clamping to Spring on
+// out-of-range input.
+inline HapticConditionType ConditionTypeFromIndex(int index) {
+    if (index < 0 || index > 3) return HapticConditionType::Spring;
+    return static_cast<HapticConditionType>(index);
+}
+
+// Convert an SDL bitmask back to the user-facing enum (for display).
+inline HapticConditionType ConditionTypeFromSDL(Uint16 sdlType) {
+    switch (sdlType) {
+        case SDL_HAPTIC_SPRING:   return HapticConditionType::Spring;
+        case SDL_HAPTIC_DAMPER:   return HapticConditionType::Damper;
+        case SDL_HAPTIC_INERTIA:  return HapticConditionType::Inertia;
+        case SDL_HAPTIC_FRICTION: return HapticConditionType::Friction;
+        default:                  return HapticConditionType::Spring;
+    }
+}
+
+inline const char* ConditionTypeName(HapticConditionType t) {
+    switch (t) {
+        case HapticConditionType::Spring:   return "Spring";
+        case HapticConditionType::Damper:   return "Damper";
+        case HapticConditionType::Inertia:  return "Inertia";
+        case HapticConditionType::Friction: return "Friction";
+        default:                            return "Spring";
+    }
+}
+
+// ─── Active Effect Info Structs ───────────────────────────────────────────────
 struct ActiveConstantInfo {
     bool active = false;
     float strength = 0.0f;
@@ -30,7 +86,7 @@ struct ActivePeriodicInfo {
 };
 
 struct ActiveConditionInfo {
-    uint16_t type = 0;
+    HapticConditionType type = HapticConditionType::Spring;
     float right_sat = 0.0f;
     float left_sat = 0.0f;
     float right_coeff = 0.0f;
@@ -75,7 +131,7 @@ public:
     virtual int PlayConstant(int slot, float strength, uint32_t duration_ms);
     virtual int PlayPeriodic(int slot, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms);
     virtual int PlayRumble(int slot, float large_magnitude, float small_magnitude, uint32_t duration_ms);
-    virtual int PlayCondition(int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms);
+    virtual int PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms);
 
     // --- Stop Methods ---
     virtual int StopConstant(int slot);
@@ -103,12 +159,12 @@ public:
     // direction: 0.0 to 360.0 (degrees)
     void SetPeriodic(Uint16 type, float magnitude, int period, float direction = 0.0f);
 
-    // type: SDL_HAPTIC_SPRING, SDL_HAPTIC_DAMPER, etc.
+    // type: HapticConditionType::Spring, Damper, Inertia or Friction
     // saturation: 0.0 to 1.0
     // coefficient: 0.0 to 1.0
     // deadband: 0.0 to 1.0
     // center: -1.0 to 1.0
-    void SetCondition(Uint16 type, float saturation, float coefficient, float deadband, float center);
+    void SetCondition(HapticConditionType type, float saturation, float coefficient, float deadband, float center);
 
     // Gamepad Effects
     // low_freq, high_freq: 0.0 to 1.0

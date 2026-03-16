@@ -207,22 +207,22 @@ TEST_F(HapticParserTest, PeriodicDurationMsAlias) {
 TEST_F(HapticParserTest, ConditionEffectCallsQueueCondition) {
     HapticParser::Parse(
         R"({"type":"haptic","effect":"condition","device":0,
-            "params":{"slot":1,"condition_type":32768,
+            "params":{"slot":1,"condition_type":1,
                       "right_sat":0.9,"left_sat":0.8,
                       "right_coeff":0.5,"left_coeff":0.4,
                       "deadband":0.1,"center":0.0,"duration":500}})",
         FakeMapper());
     ASSERT_EQ(HapticStub::conditionCalls.size(), 1u);
     const auto& c = HapticStub::conditionCalls[0];
-    EXPECT_EQ(c.slot,             1);
-    EXPECT_EQ(c.type,             32768u);
-    EXPECT_FLOAT_EQ(c.right_sat,  0.9f);
-    EXPECT_FLOAT_EQ(c.left_sat,   0.8f);
+    EXPECT_EQ(c.slot,              1);
+    EXPECT_EQ(c.type,              HapticConditionType::Damper);
+    EXPECT_FLOAT_EQ(c.right_sat,   0.9f);
+    EXPECT_FLOAT_EQ(c.left_sat,    0.8f);
     EXPECT_FLOAT_EQ(c.right_coeff, 0.5f);
     EXPECT_FLOAT_EQ(c.left_coeff,  0.4f);
-    EXPECT_FLOAT_EQ(c.deadband,   0.1f);
-    EXPECT_FLOAT_EQ(c.center,     0.0f);
-    EXPECT_EQ(c.duration,         500);
+    EXPECT_FLOAT_EQ(c.deadband,    0.1f);
+    EXPECT_FLOAT_EQ(c.center,      0.0f);
+    EXPECT_EQ(c.duration,          500);
 }
 
 TEST_F(HapticParserTest, ConditionDurationMsAlias) {
@@ -369,7 +369,7 @@ TEST_F(HapticParserTest, TypeFlightStickConstantIsAccepted) {
 TEST_F(HapticParserTest, TypeFlightStickConditionIsAccepted) {
     HapticParser::Parse(
         R"({"type":"flight_stick","effect":"condition","device":0,
-            "params":{"condition_type":16385,"right_sat":1.0,"left_sat":1.0,
+            "params":{"condition_type":2,"right_sat":1.0,"left_sat":1.0,
                       "right_coeff":0.5,"left_coeff":0.5,
                       "deadband":0.1,"center":0.0,"duration":5000}})",
         FakeMapper());
@@ -444,8 +444,9 @@ TEST_F(HapticParserTest, AutoDetectConditionFromRightSat) {
 
 TEST_F(HapticParserTest, AutoDetectConditionFromConditionTypeKey) {
     // condition_type alone is enough to identify the effect.
+    // Uses index 2 (Inertia) to verify any valid index is accepted.
     auto det = HapticParser::AutoDetect(
-        R"({"params":{"condition_type":16385,"duration":3000}})");
+        R"({"params":{"condition_type":2,"duration":3000}})");
     EXPECT_EQ(det.kind, DetectedEffect::Kind::Condition);
 }
 

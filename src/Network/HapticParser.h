@@ -3,6 +3,7 @@
 #include <string_view>
 #include <string>
 #include <cstdint>
+#include "Haptics/HapticDevice.h"
 
 class OutputMapper;
 
@@ -42,7 +43,7 @@ struct DetectedEffect {
     int     phase     = 0;
 
     // Condition
-    uint16_t condition_type  = 0;   // SDL_HAPTIC_SPRING etc.
+    HapticConditionType condition_type = HapticConditionType::Spring;  // 0=Spring, 1=Damper, 2=Inertia, 3=Friction
     float    right_sat       = 0.0f;
     float    left_sat        = 0.0f;
     float    right_coeff     = 0.0f;

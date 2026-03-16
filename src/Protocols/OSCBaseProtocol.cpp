@@ -76,7 +76,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     }
     else if (match("/inputbridge/haptics/condition", "haptic_condition") && std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
         int slot = argv[1]->i;
-        uint16_t condition_type = argv[2]->i;
+        HapticConditionType condition_type = ConditionTypeFromIndex(argv[2]->i);
         float right_sat = argv[3]->f;
         float left_sat = argv[4]->f;
         float right_coeff = argv[5]->f;

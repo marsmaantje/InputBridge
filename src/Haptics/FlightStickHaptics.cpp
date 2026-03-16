@@ -145,7 +145,7 @@ int FlightStickHaptics::PlayRumble(int slot, float large_magnitude,
 // PlayCondition
 // ---------------------------------------------------------------------------
 
-int FlightStickHaptics::PlayCondition(int slot, uint16_t type,
+int FlightStickHaptics::PlayCondition(int slot, HapticConditionType type,
                                       float right_sat, float left_sat,
                                       float right_coeff, float left_coeff,
                                       float deadband, float center,
@@ -166,15 +166,11 @@ int FlightStickHaptics::PlayCondition(int slot, uint16_t type,
             }
         }
 
-        if (type != SDL_HAPTIC_SPRING   && type != SDL_HAPTIC_DAMPER &&
-            type != SDL_HAPTIC_INERTIA  && type != SDL_HAPTIC_FRICTION) {
-            SDL_Log("FlightStickHaptics::PlayCondition - Invalid condition type: %d", type);
-            return;
-        }
+        const Uint16 sdlType = ToSDLConditionType(type);  // translate once, here
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = type;
+        effect.type = sdlType;
         effect.condition.direction.type   = SDL_HAPTIC_CARTESIAN;
         effect.condition.direction.dir[0] = 1;
         effect.condition.direction.dir[1] = 0;
@@ -211,8 +207,8 @@ int FlightStickHaptics::PlayCondition(int slot, uint16_t type,
                 info.duration_ms  = duration_ms;
                 info.last_updated = SDL_GetTicks();
             } else {
-                SDL_Log("FlightStickHaptics::PlayCondition - Run failed for type %d: %s",
-                        type, SDL_GetError());
+                SDL_Log("FlightStickHaptics::PlayCondition - Run failed for type %s: %s",
+                        ConditionTypeName(type), SDL_GetError());
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 m_activeConditions.erase(slot);
             }

@@ -142,7 +142,7 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
         if (argc >= 10) {
             int id = argv[0]->i;
             int slot = argv[1]->i;
-            uint16_t ctype = (uint16_t)argv[2]->i;
+            HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
             float rsat = argv[3]->f;
             float lsat = argv[4]->f;
             float rcoeff = argv[5]->f;
