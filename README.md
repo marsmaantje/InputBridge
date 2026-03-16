@@ -242,23 +242,128 @@ InputBridge also supports sending and receiving Open Sound Control (OSC) message
 
 ### Incoming (Control) Messages
 
-All incoming haptics messages are under the `/inputbridge/haptics/*` namespace. Type tags use liblo notation (`i` = int, `f` = float). The first argument is the device ID; the server currently uses the UI-selected device (the ID is still required in the message signature).
+InputBridge listens on two separate sets of paths depending on which protocol handler is active.
 
-| Path | Type string | Arguments |
+**`/inputbridge/haptics/*`** — Used by the OSCProtocol / OSCBaseProtocol handler (selected via the Protocol Editor). The first argument is always the device ID (`i`); the server currently uses the UI-selected device (the ID is still required in the message signature).
+
+**`/haptic/*`** — Shorter paths registered directly by OSCServer as dedicated handlers. Same argument layout as their `/inputbridge/haptics/*` equivalents.
+
+All type tags use liblo notation: `i` = int32, `f` = float32. For duration arguments, send `-1` to play indefinitely (`SDL_HAPTIC_INFINITY`).
+
+---
+
+#### Rumble
+
+Triggers low- and high-frequency motor vibration (gamepads and rumble-capable devices).
+
+| Path | Types | Arguments |
 |---|---|---|
-| `/inputbridge/haptics/rumble` | `"iffi"` | deviceId, low_freq, high_freq, duration_ms |
-| `/inputbridge/haptics/force` | `"ifi"` | deviceId, strength, duration_ms |
-| `/inputbridge/haptics/periodic` | `"ififfii"` | deviceId, strength, period, magnitude, offset, phase, duration_ms |
-| `/inputbridge/haptics/condition` | `"iiiffffffi"` | deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
-| `/inputbridge/haptics/gain` | `"ii"` | deviceId, gain |
+| `/inputbridge/haptics/rumble` | `iiffi` | deviceId, slot, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
+| `/haptic/rumble` | `iiffi` | deviceId, slot, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
 
-`condition_type` for the `/condition` message: `0`=Spring, `1`=Damper, `2`=Inertia, `3`=Friction.
+Example: `[1, 0, 0.8, 0.2, 500]`
 
-Example condition (spring centering, infinite): `[1, 0, 0, 1.0, 1.0, 0.5, 0.5, 0.1, 0.0, -1]`
+---
 
-> **Migration note:** The `condition_type` argument previously used SDL bitmask values (`128`/`256`/`512`/`1024`). It now uses the 0–3 index above.
+#### Constant Force
+
+Applies a steady directional force (steering wheels and flight sticks).
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/force` | `iifi` | deviceId, slot, strength (-1.0–1.0), duration_ms |
+| `/haptic/constant` | `iifi` | deviceId, slot, strength (-1.0–1.0), duration_ms |
+
+Example: `[1, 0, 0.5, 1000]`
+
+---
+
+#### Periodic Effect
+
+Applies a repeating wave effect (engine vibration, road texture, etc.).
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/periodic` | `iififfii` | deviceId, slot, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/haptic/periodic` | `iififfii` | deviceId, slot, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+
+Example: `[1, 0, 1.0, 100, 0.5, 0.0, 0, 2000]`
+
+---
+
+#### Condition Effect
+
+Position-dependent forces. On flight sticks the effect is applied on both pitch and roll axes.
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/condition` | `iiiffffffi` | deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+| `/haptic/condition` | `iiiffffffi` | deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+
+`condition_type`: `0`=Spring, `1`=Damper, `2`=Inertia, `3`=Friction
+
+Ranges: `right_sat` / `left_sat` 0.0–1.0 · `right_coeff` / `left_coeff` −1.0–1.0 · `deadband` 0.0–1.0 · `center` −1.0–1.0
+
+Example (spring, slot 0, infinite): `[1, 0, 0, 1.0, 1.0, 0.5, 0.5, 0.1, 0.0, -1]`
+
+---
+
+#### Global Gain
+
+Sets the overall haptic output gain for a device (0–100).
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/gain` | `ii` | deviceId, gain (0–100) |
+| `/haptic/gain` | `ii` | deviceId, gain (0–100) |
+
+Example: `[1, 80]`
+
+---
+
+#### DualSense Adaptive Triggers
+
+Controls Sony DualSense adaptive trigger effects on PS5 controllers. All paths begin with `/inputbridge/haptics/dualsense/trigger/{side}/` where `{side}` is `left` or `right`.
+
+| Path | Types | Arguments | Description |
+|---|---|---|---|
+| `/inputbridge/haptics/dualsense/trigger/{side}/feedback` | `iii` | deviceId, position (0–9), strength (0–8) | Resistance starting at `position` |
+| `/inputbridge/haptics/dualsense/trigger/{side}/weapon` | `iiii` | deviceId, start_position (2–7), end_position (start+1–8), strength (0–8) | Weapon click effect |
+| `/inputbridge/haptics/dualsense/trigger/{side}/vibration` | `iiii` | deviceId, position (0–9), amplitude (0–8), frequency (0–255) | Vibration effect |
+| `/inputbridge/haptics/dualsense/trigger/{side}/off` | `i` | deviceId | Disable adaptive trigger |
+
+Examples:
+```
+# Feedback on right trigger, resistance from position 4 at strength 6
+[1, 4, 6]  →  /inputbridge/haptics/dualsense/trigger/right/feedback
+
+# Weapon click on left trigger between positions 3 and 7, strength 8
+[1, 3, 7, 8]  →  /inputbridge/haptics/dualsense/trigger/left/weapon
+
+# Vibration on right trigger at position 2, amplitude 5, frequency 120 Hz
+[1, 2, 5, 120]  →  /inputbridge/haptics/dualsense/trigger/right/vibration
+
+# Turn off left trigger effect
+[1]  →  /inputbridge/haptics/dualsense/trigger/left/off
+```
+
+---
+
+#### RPM LED Bar
+
+Sets the RPM LED strip brightness on all connected RPM-capable steering wheels (Fanatec, Logitech, Thrustmaster). Value is normalised 0.0–1.0.
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/wheel/led_rpm` | `f` | rpm_percent (0.0–1.0) |
+
+Example: `[0.75]` — set LEDs to 75 % of the bar
+
+---
 
 ### Outgoing (Telemetry) Messages
+
+InputBridge sends wheel telemetry under `/wheel/*` and button states under `/wheel/buttons/*`.
 
 | Path | Type | Description |
 |---|---|---|
