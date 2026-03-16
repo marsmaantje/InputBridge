@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
-set(ENABLE_EXCLUSIVE_INPUT OFF CACHE BOOL "Enable exclusive input mode support" FORCE)
+set(ENABLE_EXCLUSIVE_INPUT ON CACHE BOOL "Enable device-hide support (HidHide on Windows, evdev grab on Linux, IOKit seize on macOS)" FORCE)
 set(ENABLE_WEBSOCKETS ON CACHE BOOL "Enable WebSocket server support" FORCE)
 set(ENABLE_OSC ON CACHE BOOL "Enable WebSocket server support" FORCE)
 
@@ -370,8 +370,9 @@ endif()
 
 if(WIN32)
     if(ENABLE_EXCLUSIVE_INPUT)
-        # Link in correct order: dinput8 -> dxguid
-        target_link_libraries(InputBridge PRIVATE dinput8 dxguid)
+        # HidHide uses SetupDi (setupapi) to enumerate HID instance paths
+        # and CfgMgr32 for device info.  No DirectInput dependency needed.
+        target_link_libraries(InputBridge PRIVATE setupapi cfgmgr32)
     endif()
     # Windows native file dialogs and networking
     target_link_libraries(InputBridge PRIVATE ws2_32 comdlg32)

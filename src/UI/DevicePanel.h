@@ -13,8 +13,11 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                           PreferencesManager& prefs);
 
 /// Draws a collapsible header for one connected device.  Includes a battery
-/// indicator drawn over the header bar and, when expanded, the full
-/// visualizer tab bar.
-void DrawDeviceItem(const DeviceState&  dev,
+/// indicator, a "Device Visibility" section for the per-device hide toggle,
+/// and the full visualizer tab bar when expanded.
+///
+/// DeviceState is taken by non-const reference because the hide toggle
+/// updates dev.hide_from_other_apps in place.
+void DrawDeviceItem(DeviceState&        dev,
                     DeviceManager&      deviceManager,
                     PreferencesManager& prefs);

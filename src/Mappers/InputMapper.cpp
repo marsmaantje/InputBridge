@@ -830,13 +830,6 @@ void InputMapper::DrawMappingContent() {
     // Protocol Selection
     ImGui::Spacing(); ImGui::Separator();
 
-#ifdef ENABLE_EXCLUSIVE_INPUT
-    ImGui::BeginDisabled(true);
-    bool ex = m_ExclusiveModeHandler.IsEnabled();
-    ImGui::Checkbox("Exclusive Mode (Hide from other apps)", &ex);
-    ImGui::EndDisabled();
-#endif
-
     if (changed) SaveProfile(profile);
 
     ImGui::Separator();
@@ -1447,5 +1440,5 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
 }
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
-void InputMapper::ApplyExclusiveMode() {}
+
 #endif
