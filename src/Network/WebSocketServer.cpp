@@ -175,7 +175,12 @@ void WebSocketServer::Start(int port) {
 
                                            if (m_Impl->clients.empty()) {
                                                doStopHaptics = true;
-                                               mapperCopy = m_OutputMapper;
+                                               // m_OutputMapper is nulled by Stop() before deferred
+                                               // close callbacks run — fall back to the saved copy so
+                                               // haptics are always stopped on last-client-disconnect.
+                                               mapperCopy = m_OutputMapper
+                                                                ? m_OutputMapper
+                                                                : m_Impl->savedOutputMapper;
                                            }
                                        }
                                    }
@@ -720,15 +725,21 @@ void WebSocketServer::CheckInactivity() {
     OutputMapper* mapper = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
-        if (m_Impl->running
-                && !m_Impl->clients.empty()
-                && m_Impl->lastMessageTime > 0
-                && (SDL_GetTicks() - m_Impl->lastMessageTime > WS_INACTIVITY_TIMEOUT_MS)) {
-            timed_out = true;
-            m_Impl->lastMessageTime = 0;
-            m_Impl->logs.push_back("WebSocket clients timed out (no data). Stopping haptics.");
-            if (m_Impl->logs.size() > 100) m_Impl->logs.pop_front();
-            mapper = m_OutputMapper;
+        if (m_Impl->running && !m_Impl->clients.empty()) {
+            if (m_Impl->lastMessageTime == 0) {
+                // Timeout already fired; re-arm so we keep checking on every
+                // future frame.  If the client resumes sending, the .message
+                // handler will write a fresh tick and normal detection resumes.
+                m_Impl->lastMessageTime = SDL_GetTicks();
+            } else if (SDL_GetTicks() - m_Impl->lastMessageTime > WS_INACTIVITY_TIMEOUT_MS) {
+                timed_out = true;
+                // Reset to 0 so this branch doesn't fire every frame; the
+                // re-arm above will restore it on the next CheckInactivity call.
+                m_Impl->lastMessageTime = 0;
+                m_Impl->logs.push_back("WebSocket clients timed out (no data). Stopping haptics.");
+                if (m_Impl->logs.size() > 100) m_Impl->logs.pop_front();
+                mapper = m_OutputMapper ? m_OutputMapper : m_Impl->savedOutputMapper;
+            }
         }
     }
     if (timed_out && mapper) {

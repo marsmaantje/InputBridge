@@ -334,15 +334,22 @@ void OSCServer::CheckInactivity() {
     OutputMapper* mapper = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_running && !m_clients.empty()
-                && m_lastMessageTime > 0
-                && (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS)) {
-            timed_out = true;
-            m_clients.clear();
-            m_lastMessageTime = 0;
-            m_logs.push_back("OSC clients timed out (no data). Stopping haptics.");
-            if (m_logs.size() > 100) m_logs.pop_front();
-            mapper = m_OutputMapper;
+        if (m_running && !m_clients.empty()) {
+            if (m_lastMessageTime == 0) {
+                // Timeout already fired; re-arm so we keep checking on future
+                // frames.  If the client sends again, the handler will write a
+                // fresh tick and normal detection resumes.
+                m_lastMessageTime = SDL_GetTicks();
+            } else if (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS) {
+                timed_out = true;
+                m_clients.clear();
+                m_lastMessageTime = 0;
+                m_logs.push_back("OSC clients timed out (no data). Stopping haptics.");
+                if (m_logs.size() > 100) m_logs.pop_front();
+                // m_OutputMapper may be null if Stop() ran during the same frame;
+                // m_savedOutputMapper always holds the last valid pointer.
+                mapper = m_OutputMapper ? m_OutputMapper : m_savedOutputMapper;
+            }
         }
     }
     if (timed_out && mapper) {
@@ -524,9 +531,13 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         }
     } catch (...) {} // inner try/catch for message processing
 
-    if (server->m_running && !server->HasClients() && mapper) { // outer if condition
-        mapper->StopAllHapticEffects();
-    }
+    // Note: StopAllHapticEffects on no-clients is handled by the per-frame
+    // CheckInactivity() and the edge-detection in Application::UpdateLogic(),
+    // not here.  Calling it inside the message handler is incorrect because
+    // m_clients is populated earlier in this same call — HasClients() can
+    // return false on the very first message from a new client if the insert
+    // above was skipped (e.g. lo_message_get_source returned null), causing
+    // a spurious stop that interrupts valid haptic sessions.
     return 0;
 }
 
