@@ -13,6 +13,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
+#include <algorithm>
 
 #ifndef EVIOCGRAB
 #define EVIOCGRAB _IOW('E', 0x90, int)
