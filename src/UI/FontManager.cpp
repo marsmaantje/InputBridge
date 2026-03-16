@@ -31,7 +31,7 @@ void UpdateUIScale(SDL_Window*         window,
     // Reset to a clean base so scale values are never compounded.
     ImGuiStyle& style = ImGui::GetStyle();
     style = ImGuiStyle();
-    ImGui::StyleColorsDark();
+    ThemeManager::GetInstance().ApplyBaseColors();
 
     // Re-apply the active theme on top of the fresh default style.
     ThemeManager::GetInstance().Reapply();

@@ -110,11 +110,19 @@ void DrawSettingsContent(float&              user_ui_scale,
     ThemeManager& theme   = ThemeManager::GetInstance();
     const auto&   entries = theme.GetAvailableThemes();
 
-    int comboIndex = theme.HasCustomTheme() ? theme.GetCurrentEntryIndex() + 1 : 0;
+    // Indices: 0 = Default (Dark), 1 = Default (Light), 2+ = file-based themes.
+    int comboIndex;
+    if (theme.HasCustomTheme())
+        comboIndex = theme.GetCurrentEntryIndex() + 2;  // offset past the two built-ins
+    else if (theme.IsDefaultLight())
+        comboIndex = 1;
+    else
+        comboIndex = 0;
 
     std::vector<const char*> comboItems;
-    comboItems.reserve(entries.size() + 1);
+    comboItems.reserve(entries.size() + 2);
     comboItems.push_back("Default (Dark)");
+    comboItems.push_back("Default (Light)");
     for (const auto& e : entries)
         comboItems.push_back(e.displayName.c_str());
 
@@ -127,8 +135,14 @@ void DrawSettingsContent(float&              user_ui_scale,
             prefs.Save();
             UpdateUIScale(window, user_ui_scale, user_font_scale,
                           scale_with_window, initial_width, prefs);
+        } else if (comboIndex == 1) {
+            theme.ApplyDefaultLight();
+            theme.SaveToPreferences(prefs);
+            prefs.Save();
+            UpdateUIScale(window, user_ui_scale, user_font_scale,
+                          scale_with_window, initial_width, prefs);
         } else {
-            const int entryIdx = comboIndex - 1;
+            const int entryIdx = comboIndex - 2;
             if (entryIdx >= 0 && entryIdx < static_cast<int>(entries.size())) {
                 auto result = theme.LoadFromFile(entries[entryIdx].path);
                 if (result.IsOk()) {
@@ -138,7 +152,7 @@ void DrawSettingsContent(float&              user_ui_scale,
                                   scale_with_window, initial_width, prefs);
                 }
                 comboIndex = theme.HasCustomTheme()
-                             ? theme.GetCurrentEntryIndex() + 1 : 0;
+                             ? theme.GetCurrentEntryIndex() + 2 : 0;
             }
         }
     }

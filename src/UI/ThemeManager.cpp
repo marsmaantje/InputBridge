@@ -138,6 +138,7 @@ Result<bool, std::string> ThemeManager::LoadFromFile(const std::string& path) {
 
 void ThemeManager::ApplyDefault() {
     m_hasCustomTheme    = false;
+    m_useDefaultLight   = false;
     m_currentEntryIndex = -1;
     m_themeName         = "Default (Dark)";
     m_themePath.clear();
@@ -150,10 +151,32 @@ void ThemeManager::ApplyDefault() {
     // Caller is responsible for calling ImGui::StyleColorsDark() first.
 }
 
+void ThemeManager::ApplyDefaultLight() {
+    m_hasCustomTheme    = false;
+    m_useDefaultLight   = true;
+    m_currentEntryIndex = -1;
+    m_themeName         = "Default (Light)";
+    m_themePath.clear();
+    m_lastError.clear();
+    m_current = ThemeData{};
+    // Reset font to built-in default.
+    m_resolvedFontPath.clear();
+    m_fontSize          = 16.f;
+    m_pendingFontChange = true;
+    // Caller is responsible for calling ImGui::StyleColorsLight() first.
+}
+
+void ThemeManager::ApplyBaseColors() {
+    if (m_useDefaultLight)
+        ImGui::StyleColorsLight();
+    else
+        ImGui::StyleColorsDark();
+}
+
 void ThemeManager::Reapply() {
     if (m_hasCustomTheme)
         ApplyData(m_current);
-    // Default: nothing to overlay — StyleColorsDark() from caller is enough.
+    // Default variants: nothing to overlay — StyleColorsDark/Light() from caller is enough.
 }
 
 // ============================================================================
@@ -192,7 +215,28 @@ static std::string SanitizeThemePath(const std::string& raw) {
 
 void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
     std::string path = prefs.GetString("Theme", "ThemePath", "");
-    if (path.empty()) return;
+
+    // ── Sentinel for Default (Light) ─────────────────────────────────────────
+    if (path == "__default_light__") {
+        ApplyDefaultLight();
+        return;
+    }
+
+    // ── No saved preference → auto-load Resonite as the default theme ────────
+    if (path.empty()) {
+        if (!m_scanBasePath.empty()) {
+            fs::path resonitePath = fs::path(m_scanBasePath) / "themes" / "resonite.json";
+            if (fs::exists(resonitePath)) {
+                auto result = LoadFromFile(resonitePath.string());
+                if (result.IsOk()) {
+                    SDL_Log("[ThemeManager] No saved theme — applied Resonite as default.");
+                    return;
+                }
+            }
+        }
+        // Resonite not found → silently stay on the built-in dark default.
+        return;
+    }
 
     // Recover from any previously over-escaped paths (repeated double-escaping
     // turns one backslash into 2^N backslashes after N bad round-trips).
@@ -211,9 +255,12 @@ void ThemeManager::SaveToPreferences(PreferencesManager& prefs) const {
         // Always persist with forward slashes so the TOML escape/unescape cycle
         // never has to deal with backslashes (which it historically doubled).
         prefs.SetString("Theme", "ThemePath", SanitizeThemePath(m_themePath));
-    }
-    else
+    } else if (m_useDefaultLight) {
+        // Persist the light default selection via a sentinel value.
+        prefs.SetString("Theme", "ThemePath", "__default_light__");
+    } else {
         prefs.DeleteKey("Theme", "ThemePath");
+    }
 }
 
 // ============================================================================

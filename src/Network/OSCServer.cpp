@@ -693,10 +693,11 @@ void OSCServer::DrawContent() {
         std::string definitionId;
     };
 
-    // Built-in OSC protocols
+    // Built-in OSC protocols (named community protocols only — exclude the
+    // generic "OSC" fallback which has no real behaviour of its own).
     std::vector<std::string> builtins;
     for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols())
-        if (p.find("OSC") != std::string::npos)
+        if (p.find("OSC") != std::string::npos && p != "OSC")
             builtins.push_back(p);
 
     auto buildEntries = [&](ProtocolDirection dir) {

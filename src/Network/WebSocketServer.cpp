@@ -568,10 +568,11 @@ void WebSocketServer::DrawContent() {
         std::string definitionId; // user-defined
     };
 
-    // Collect built-in WebSocket protocols once
+    // Collect built-in WebSocket protocols (named community protocols only —
+    // exclude the generic "WebSocket" fallback which has no real behaviour).
     std::vector<std::string> builtins;
     for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols())
-        if (p.find("OSC") == std::string::npos)
+        if (p.find("OSC") == std::string::npos && p != "WebSocket")
             builtins.push_back(p);
 
     auto buildEntries = [&](ProtocolDirection dir) {

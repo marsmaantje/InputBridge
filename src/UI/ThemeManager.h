@@ -93,6 +93,20 @@ public:
     void ApplyDefault();
 
     /**
+     * Restore the built-in ImGui light theme and default font.
+     * Always marks HasPendingFontChange().
+     */
+    void ApplyDefaultLight();
+
+    /**
+     * Apply the base ImGui colour palette for the current default variant
+     * (dark or light).  Call this instead of ImGui::StyleColorsDark() whenever
+     * re-initialising style so the light-default selection is respected.
+     * No-op when a custom theme file is active (Reapply() will handle it).
+     */
+    void ApplyBaseColors();
+
+    /**
      * Re-apply colours and style to the live ImGuiStyle without re-reading disk.
      * Call after any code that resets ImGuiStyle (e.g. UpdateUIScale).
      * Does NOT touch fonts — handle those via HasPendingFontChange().
@@ -138,6 +152,7 @@ public:
     const std::string& GetCurrentThemeName()  const { return m_themeName; }
     const std::string& GetCurrentThemePath()  const { return m_themePath; }
     bool               HasCustomTheme()        const { return m_hasCustomTheme; }
+    bool               IsDefaultLight()        const { return m_useDefaultLight; }
     int                GetCurrentEntryIndex()  const { return m_currentEntryIndex; }
     const std::string& GetLastError()          const { return m_lastError; }
 
@@ -188,6 +203,7 @@ private:
     std::string             m_scanBasePath;
 
     bool        m_hasCustomTheme    = false;
+    bool        m_useDefaultLight   = false;
     int         m_currentEntryIndex = -1;
     ThemeData   m_current;
     std::string m_themeName = "Default (Dark)";
