@@ -9,12 +9,25 @@ void GenericVisualizer::Draw(const DeviceState &dev) {
         ImGui::Text("Name: %s", SDL_GetJoystickName(dev.joystick));
 
         if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (int i = 0; i < dev.num_axes; ++i) {
-                Sint16 val = SDL_GetJoystickAxis(dev.joystick, i);
-                float norm = (float)val / 32767.0f;
-                ImGui::Text("Axis %d: %d", i, val);
-                ImGui::SameLine();
-                ImGui::ProgressBar((norm + 1.0f) * 0.5f, ImVec2(-1, 0), "");
+            if (ImGui::BeginTable("AxesTable", 2, ImGuiTableFlags_BordersInnerV)) {
+                ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                ImGui::TableSetupColumn("Bar", ImGuiTableColumnFlags_WidthStretch);
+
+                for (int i = 0; i < dev.num_axes; ++i) {
+                    Sint16 val = SDL_GetJoystickAxis(dev.joystick, i);
+                    float norm = (float)val / 32767.0f;
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Axis %d: %d", i, val);
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::ProgressBar((norm + 1.0f) * 0.5f, ImVec2(-1, 0), "");
+
+                    ImVec2 p_min = ImGui::GetItemRectMin();
+                    ImVec2 p_max = ImGui::GetItemRectMax();
+                    float center_x = (p_min.x + p_max.x) * 0.5f;
+                    ImGui::GetWindowDrawList()->AddLine(ImVec2(center_x, p_min.y), ImVec2(center_x, p_max.y), IM_COL32(255, 255, 255, 200), 2.0f);
+                }
+                ImGui::EndTable();
             }
         }
 
