@@ -3,13 +3,13 @@
 #ifdef _WIN32
 
 #include <SDL3/SDL.h>
-#include <setupapi.h>
+#include <algorithm>
+#include <cfgmgr32.h>
+#include <cstring>
 #include <devguid.h>
 #include <regstr.h>
-#include <cfgmgr32.h>
+#include <setupapi.h>
 #include <shlobj.h>
-#include <algorithm>
-#include <cstring>
 
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
@@ -28,28 +28,20 @@
 //   IOCTL_SET_ACTIVE     Function=0x100  (same code, write direction)
 
 #ifndef CTL_CODE
-#define CTL_CODE(DeviceType, Function, Method, Access) \
-    (((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method))
+#define CTL_CODE(DeviceType, Function, Method, Access) (((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method))
 #endif
 
-static constexpr DWORD kIoctlGetWhitelist =
-    CTL_CODE(0x22, 0x101, 0 /*METHOD_BUFFERED*/, 0x0003);
-static constexpr DWORD kIoctlSetWhitelist =
-    CTL_CODE(0x22, 0x102, 0, 0x0003);
-static constexpr DWORD kIoctlGetBlacklist =
-    CTL_CODE(0x22, 0x104, 0, 0x0003);
-static constexpr DWORD kIoctlSetBlacklist =
-    CTL_CODE(0x22, 0x105, 0, 0x0003);
-static constexpr DWORD kIoctlGetActive =
-    CTL_CODE(0x22, 0x100, 0, 0x0003);
-static constexpr DWORD kIoctlSetActive =
-    CTL_CODE(0x22, 0x100, 0, 0x0003);
-
+static constexpr DWORD kIoctlGetWhitelist = CTL_CODE(0x22, 0x101, 0 /*METHOD_BUFFERED*/, 0x0003);
+static constexpr DWORD kIoctlSetWhitelist = CTL_CODE(0x22, 0x102, 0, 0x0003);
+static constexpr DWORD kIoctlGetBlacklist = CTL_CODE(0x22, 0x104, 0, 0x0003);
+static constexpr DWORD kIoctlSetBlacklist = CTL_CODE(0x22, 0x105, 0, 0x0003);
+static constexpr DWORD kIoctlGetActive = CTL_CODE(0x22, 0x100, 0, 0x0003);
+static constexpr DWORD kIoctlSetActive = CTL_CODE(0x22, 0x100, 0, 0x0003);
 
 // ─── Constructor / destructor ─────────────────────────────────────────────────
 
 WindowsExclusiveMode::WindowsExclusiveMode() {
-    m_OwnExePath   = GetOwnExePath();
+    m_OwnExePath = GetOwnExePath();
     m_SteamExePath = FindSteamExePath();
 }
 
@@ -62,7 +54,8 @@ WindowsExclusiveMode::~WindowsExclusiveMode() {
 
 bool WindowsExclusiveMode::IsAvailable() const {
     HANDLE h = OpenControlDevice();
-    if (h == INVALID_HANDLE_VALUE) return false;
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
     CloseHandle(h);
     return true;
 }
@@ -73,7 +66,8 @@ void WindowsExclusiveMode::SetSteamInputCompatible(bool enabled) {
     m_SteamCompatible = enabled;
 
     // Immediately reflect in the allow-list if we're already whitelisted.
-    if (!m_SelfWhitelisted) return;
+    if (!m_SelfWhitelisted)
+        return;
 
     auto wl = GetAllowList();
 
@@ -88,16 +82,12 @@ void WindowsExclusiveMode::SetSteamInputCompatible(bool enabled) {
 
 // ─── EnsureSelfWhitelisted (internal helper) ──────────────────────────────────
 
-static bool EnsureWhitelisted(const std::wstring& own,
-                               const std::wstring& steam,
-                               bool steamCompat,
-                               bool& selfWhitelistedFlag,
-                               const WindowsExclusiveMode* self)
-{
+bool WindowsExclusiveMode::EnsureWhitelisted(const std::wstring &own, const std::wstring &steam, bool steamCompat, bool &selfWhitelistedFlag) {
     // Avoid repeated work.
-    if (selfWhitelistedFlag) return true;
+    if (selfWhitelistedFlag)
+        return true;
 
-    auto wl = self->GetAllowList();
+    auto wl = GetAllowList();
 
     bool changed = false;
     if (!own.empty() && wl.find(own) == wl.end()) {
@@ -109,7 +99,7 @@ static bool EnsureWhitelisted(const std::wstring& own,
         changed = true;
     }
 
-    if (changed && !self->SetAllowList(wl)) {
+    if (changed && !SetAllowList(wl)) {
         SDL_Log("HidHide: failed to add InputBridge to the allow-list.");
         return false;
     }
@@ -121,24 +111,23 @@ static bool EnsureWhitelisted(const std::wstring& own,
 
 // ─── HideDevice ───────────────────────────────────────────────────────────────
 
-bool WindowsExclusiveMode::HideDevice(SDL_Joystick* joystick) {
-    if (!IsAvailable()) return false;
+bool WindowsExclusiveMode::HideDevice(SDL_Joystick *joystick) {
+    if (!IsAvailable())
+        return false;
 
     // Make sure we are in the allow-list before hiding anything.
-    if (!EnsureWhitelisted(m_OwnExePath, m_SteamExePath,
-                            m_SteamCompatible, m_SelfWhitelisted, this))
+    if (!EnsureWhitelisted(m_OwnExePath, m_SteamExePath, m_SteamCompatible, m_SelfWhitelisted))
         return false;
 
     auto paths = GetInstancePaths(joystick);
     if (paths.empty()) {
-        SDL_Log("HidHide: could not determine instance path for '%s'.",
-                SDL_GetJoystickName(joystick));
+        SDL_Log("HidHide: could not determine instance path for '%s'.", SDL_GetJoystickName(joystick));
         return false;
     }
 
     auto bl = GetBlockList();
     bool changed = false;
-    for (auto& p : paths) {
+    for (auto &p : paths) {
         if (bl.find(p) == bl.end()) {
             bl.insert(p);
             changed = true;
@@ -146,7 +135,8 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick* joystick) {
         }
     }
 
-    if (!changed) return true; // already hidden
+    if (!changed)
+        return true; // already hidden
 
     if (!SetBlockList(bl)) {
         SDL_Log("HidHide: failed to write block-list.");
@@ -158,8 +148,7 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick* joystick) {
     if (h != INVALID_HANDLE_VALUE) {
         BOOL active = TRUE;
         DWORD returned = 0;
-        DeviceIoControl(h, kIoctlSetActive, &active, sizeof(active),
-                        nullptr, 0, &returned, nullptr);
+        DeviceIoControl(h, kIoctlSetActive, &active, sizeof(active), nullptr, 0, &returned, nullptr);
         CloseHandle(h);
     }
 
@@ -169,15 +158,17 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick* joystick) {
 
 // ─── UnhideDevice ─────────────────────────────────────────────────────────────
 
-bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
-    if (!IsAvailable()) return false;
+bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick *joystick) {
+    if (!IsAvailable())
+        return false;
 
     auto paths = GetInstancePaths(joystick);
-    if (paths.empty()) return false;
+    if (paths.empty())
+        return false;
 
     auto bl = GetBlockList();
     bool changed = false;
-    for (auto& p : paths) {
+    for (auto &p : paths) {
         auto it = bl.find(p);
         if (it != bl.end()) {
             bl.erase(it);
@@ -186,29 +177,22 @@ bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
         }
     }
 
-    if (!changed) return true;
+    if (!changed)
+        return true;
 
     if (!SetBlockList(bl)) {
         SDL_Log("HidHide: failed to write block-list on unhide.");
         return false;
     }
 
-    SDL_Log("HidHide: '%s' is now visible to all applications.",
-            SDL_GetJoystickName(joystick));
+    SDL_Log("HidHide: '%s' is now visible to all applications.", SDL_GetJoystickName(joystick));
     return true;
 }
 
 // ─── IOCTL helpers ────────────────────────────────────────────────────────────
 
 HANDLE WindowsExclusiveMode::OpenControlDevice() const {
-    HANDLE h = CreateFileW(
-        kHidHideDevice,
-        GENERIC_READ | GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        nullptr,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr);
+    HANDLE h = CreateFileW(kHidHideDevice, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) {
         // Driver not installed — this is expected on systems without HidHide.
         SDL_Log("HidHide: control device not found (driver not installed?).");
@@ -222,12 +206,11 @@ static std::vector<wchar_t> IoctlGetMultiString(HANDLE h, DWORD code) {
     DWORD returned = 0;
     DeviceIoControl(h, code, nullptr, 0, nullptr, 0, &returned, nullptr);
 
-    if (returned == 0) return {};
+    if (returned == 0)
+        return {};
 
     std::vector<wchar_t> buf(returned / sizeof(wchar_t) + 2, L'\0');
-    if (!DeviceIoControl(h, code, nullptr, 0,
-                         buf.data(), static_cast<DWORD>(buf.size() * sizeof(wchar_t)),
-                         &returned, nullptr))
+    if (!DeviceIoControl(h, code, nullptr, 0, buf.data(), static_cast<DWORD>(buf.size() * sizeof(wchar_t)), &returned, nullptr))
         return {};
 
     return buf;
@@ -235,7 +218,8 @@ static std::vector<wchar_t> IoctlGetMultiString(HANDLE h, DWORD code) {
 
 std::set<std::wstring> WindowsExclusiveMode::GetBlockList() const {
     HANDLE h = OpenControlDevice();
-    if (h == INVALID_HANDLE_VALUE) return {};
+    if (h == INVALID_HANDLE_VALUE)
+        return {};
     auto buf = IoctlGetMultiString(h, kIoctlGetBlacklist);
     CloseHandle(h);
     return ParseMultiString(buf);
@@ -243,56 +227,57 @@ std::set<std::wstring> WindowsExclusiveMode::GetBlockList() const {
 
 std::set<std::wstring> WindowsExclusiveMode::GetAllowList() const {
     HANDLE h = OpenControlDevice();
-    if (h == INVALID_HANDLE_VALUE) return {};
+    if (h == INVALID_HANDLE_VALUE)
+        return {};
     auto buf = IoctlGetMultiString(h, kIoctlGetWhitelist);
     CloseHandle(h);
     return ParseMultiString(buf);
 }
 
-bool WindowsExclusiveMode::SetBlockList(const std::set<std::wstring>& list) const {
+bool WindowsExclusiveMode::SetBlockList(const std::set<std::wstring> &list) const {
     HANDLE h = OpenControlDevice();
-    if (h == INVALID_HANDLE_VALUE) return false;
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
     auto buf = BuildMultiString(list);
     DWORD returned = 0;
-    BOOL ok = DeviceIoControl(h, kIoctlSetBlacklist,
-                               buf.data(), static_cast<DWORD>(buf.size() * sizeof(wchar_t)),
-                               nullptr, 0, &returned, nullptr);
+    BOOL ok = DeviceIoControl(h, kIoctlSetBlacklist, buf.data(), static_cast<DWORD>(buf.size() * sizeof(wchar_t)), nullptr, 0, &returned, nullptr);
     CloseHandle(h);
     return ok != FALSE;
 }
 
-bool WindowsExclusiveMode::SetAllowList(const std::set<std::wstring>& list) const {
+bool WindowsExclusiveMode::SetAllowList(const std::set<std::wstring> &list) const {
     HANDLE h = OpenControlDevice();
-    if (h == INVALID_HANDLE_VALUE) return false;
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
     auto buf = BuildMultiString(list);
     DWORD returned = 0;
-    BOOL ok = DeviceIoControl(h, kIoctlSetWhitelist,
-                               buf.data(), static_cast<DWORD>(buf.size() * sizeof(wchar_t)),
-                               nullptr, 0, &returned, nullptr);
+    BOOL ok = DeviceIoControl(h, kIoctlSetWhitelist, buf.data(), static_cast<DWORD>(buf.size() * sizeof(wchar_t)), nullptr, 0, &returned, nullptr);
     CloseHandle(h);
     return ok != FALSE;
 }
 
 // ─── Multi-string parsing ─────────────────────────────────────────────────────
 
-std::set<std::wstring> WindowsExclusiveMode::ParseMultiString(const std::vector<wchar_t>& buf) {
+std::set<std::wstring> WindowsExclusiveMode::ParseMultiString(const std::vector<wchar_t> &buf) {
     std::set<std::wstring> result;
-    if (buf.empty()) return result;
+    if (buf.empty())
+        return result;
 
-    const wchar_t* p = buf.data();
-    const wchar_t* end = p + buf.size();
+    const wchar_t *p = buf.data();
+    const wchar_t *end = p + buf.size();
 
     while (p < end && *p != L'\0') {
         std::wstring entry(p);
-        if (!entry.empty()) result.insert(entry);
+        if (!entry.empty())
+            result.insert(entry);
         p += entry.size() + 1;
     }
     return result;
 }
 
-std::vector<wchar_t> WindowsExclusiveMode::BuildMultiString(const std::set<std::wstring>& entries) {
+std::vector<wchar_t> WindowsExclusiveMode::BuildMultiString(const std::set<std::wstring> &entries) {
     std::vector<wchar_t> buf;
-    for (const auto& s : entries) {
+    for (const auto &s : entries) {
         buf.insert(buf.end(), s.begin(), s.end());
         buf.push_back(L'\0');
     }
@@ -310,7 +295,7 @@ std::vector<wchar_t> WindowsExclusiveMode::BuildMultiString(const std::set<std::
 // SDL_GetJoystickProduct.  We use SetupDI to walk all HID devices and find
 // the matching instance path(s).
 
-std::vector<std::wstring> WindowsExclusiveMode::GetInstancePaths(SDL_Joystick* joystick) const {
+std::vector<std::wstring> WindowsExclusiveMode::GetInstancePaths(SDL_Joystick *joystick) const {
     std::vector<std::wstring> result;
 
     Uint16 vid = SDL_GetJoystickVendor(joystick);
@@ -323,19 +308,17 @@ std::vector<std::wstring> WindowsExclusiveMode::GetInstancePaths(SDL_Joystick* j
     std::wstring prefix(hwIdPrefix);
     std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::towlower);
 
-    HDEVINFO devInfo = SetupDiGetClassDevsW(
-        nullptr, L"HID", nullptr,
-        DIGCF_PRESENT | DIGCF_ALLCLASSES);
+    HDEVINFO devInfo = SetupDiGetClassDevsW(nullptr, L"HID", nullptr, DIGCF_PRESENT | DIGCF_ALLCLASSES);
 
-    if (devInfo == INVALID_HANDLE_VALUE) return result;
+    if (devInfo == INVALID_HANDLE_VALUE)
+        return result;
 
     SP_DEVINFO_DATA devData{};
     devData.cbSize = sizeof(devData);
 
     for (DWORD i = 0; SetupDiEnumDeviceInfo(devInfo, i, &devData); ++i) {
         wchar_t instancePath[MAX_PATH]{};
-        if (!SetupDiGetDeviceInstanceIdW(devInfo, &devData,
-                                          instancePath, MAX_PATH, nullptr))
+        if (!SetupDiGetDeviceInstanceIdW(devInfo, &devData, instancePath, MAX_PATH, nullptr))
             continue;
 
         std::wstring ip(instancePath);
@@ -365,26 +348,21 @@ std::wstring WindowsExclusiveMode::GetOwnExePath() {
 std::wstring WindowsExclusiveMode::FindSteamExePath() {
     // Check the registry key set by the Steam installer.
     HKEY hKey = nullptr;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
-                       L"SOFTWARE\\WOW6432Node\\Valve\\Steam",
-                       0, KEY_READ, &hKey) != ERROR_SUCCESS)
-    {
-        RegOpenKeyExW(HKEY_LOCAL_MACHINE,
-                       L"SOFTWARE\\Valve\\Steam",
-                       0, KEY_READ, &hKey);
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Valve\\Steam", 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Valve\\Steam", 0, KEY_READ, &hKey);
     }
 
-    if (!hKey) return {};
+    if (!hKey)
+        return {};
 
     wchar_t steamPath[MAX_PATH]{};
     DWORD size = sizeof(steamPath);
     DWORD type = REG_SZ;
-    if (RegQueryValueExW(hKey, L"InstallPath", nullptr, &type,
-                          reinterpret_cast<LPBYTE>(steamPath), &size) == ERROR_SUCCESS)
-    {
+    if (RegQueryValueExW(hKey, L"InstallPath", nullptr, &type, reinterpret_cast<LPBYTE>(steamPath), &size) == ERROR_SUCCESS) {
         RegCloseKey(hKey);
         std::wstring path(steamPath);
-        if (!path.empty() && path.back() != L'\\') path += L'\\';
+        if (!path.empty() && path.back() != L'\\')
+            path += L'\\';
         path += L"steam.exe";
         if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES)
             return path;
