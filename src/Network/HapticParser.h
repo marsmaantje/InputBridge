@@ -41,6 +41,7 @@ struct DetectedEffect {
     float   magnitude = 0.0f;
     float   offset    = 0.0f;
     int     phase     = 0;
+    HapticPeriodicType wave_type = HapticPeriodicType::Sine;  // 0=Sine, 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
 
     // Condition
     HapticConditionType condition_type = HapticConditionType::Spring;  // 0=Spring, 1=Damper, 2=Inertia, 3=Friction

@@ -183,12 +183,34 @@ TEST_F(HapticParserTest, PeriodicEffectCallsQueuePeriodic) {
     ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
     const auto& c = HapticStub::periodicCalls[0];
     EXPECT_EQ(c.slot,             0);   // no "slot" key → defaults to 0
+    EXPECT_EQ(c.wave_type,        HapticPeriodicType::Sine);  // no "wave_type" → defaults to Sine
     EXPECT_FLOAT_EQ(c.strength,   0.8f);
     EXPECT_EQ(c.period,           50);
     EXPECT_FLOAT_EQ(c.magnitude,  0.9f);
     EXPECT_FLOAT_EQ(c.offset,     0.1f);
     EXPECT_EQ(c.phase,            45);
     EXPECT_EQ(c.duration,         600);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypePassedThrough) {
+    // wave_type 2 = SawtoothUp
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,
+            "params":{"strength":0.5,"period":100,"magnitude":0.5,
+                      "offset":0.0,"phase":0,"duration":500,"wave_type":2}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::SawtoothUp);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypeOutOfRangeDefaultsToSine) {
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,
+            "params":{"strength":0.5,"period":100,"magnitude":0.5,
+                      "offset":0.0,"phase":0,"duration":500,"wave_type":99}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::Sine);
 }
 
 TEST_F(HapticParserTest, PeriodicDurationMsAlias) {

@@ -63,8 +63,8 @@ int SteeringWheelHaptics::StopConstant(int slot) {
     return 0;
 }
 
-int SteeringWheelHaptics::PlayPeriodic(int slot, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) {
-    RunAsync([this, slot, strength, period, magnitude, offset, phase, duration_ms]() {
+int SteeringWheelHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) {
+    RunAsync([this, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms]() {
         if (!m_haptic) {
             SDL_Log("SteeringWheelHaptics::PlayPeriodic - Haptic device not ready");
             return;
@@ -72,7 +72,7 @@ int SteeringWheelHaptics::PlayPeriodic(int slot, float strength, uint32_t period
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = SDL_HAPTIC_SINE;
+        effect.type = ToSDLPeriodicType(wave_type);  // translate once, here
         effect.periodic.direction.type = SDL_HAPTIC_CARTESIAN;
         effect.periodic.direction.dir[0] = 1;
         effect.periodic.period    = static_cast<Uint16>(period);
@@ -93,6 +93,7 @@ int SteeringWheelHaptics::PlayPeriodic(int slot, float strength, uint32_t period
             } else {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 auto& info = m_activePeriodicEffects[slot];
+                info.wave_type    = wave_type;
                 info.strength     = strength;
                 info.period       = period;
                 info.magnitude    = magnitude;
@@ -129,7 +130,7 @@ int SteeringWheelHaptics::PlayRumble(int slot, float large_magnitude, float smal
         return StopPeriodic(slot);
     }
     // 50 ms period = 20 Hz — a recognisable vibration feel.
-    return PlayPeriodic(slot, strength, 50, strength, 0.0f, 0, duration_ms);
+    return PlayPeriodic(slot, HapticPeriodicType::Sine, strength, 50, strength, 0.0f, 0, duration_ms);
 }
 
 int SteeringWheelHaptics::PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) {

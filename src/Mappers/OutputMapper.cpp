@@ -255,7 +255,7 @@ void OutputMapper::Update() {
                 TriggerConstantForce(cmd.virtual_id, cmd.iParams[0], cmd.fParams[0], cmd.iParams[1]);
                 break;
             case HapticCommand::PERIODIC:
-                TriggerPeriodic(cmd.virtual_id, cmd.iParams[0], cmd.fParams[0], cmd.iParams[1], cmd.fParams[1], cmd.fParams[2], cmd.iParams[2], cmd.iParams[3]);
+                TriggerPeriodic(cmd.virtual_id, cmd.iParams[0], static_cast<HapticPeriodicType>(cmd.iParams[4]), cmd.fParams[0], cmd.iParams[1], cmd.fParams[1], cmd.fParams[2], cmd.iParams[2], cmd.iParams[3]);
                 break;
             case HapticCommand::CONDITION:
                 TriggerCondition(cmd.virtual_id, cmd.iParams[0], static_cast<HapticConditionType>(cmd.iParams[1]), cmd.fParams[0], cmd.fParams[1], cmd.fParams[2], cmd.fParams[3], cmd.fParams[4], cmd.fParams[5], cmd.iParams[2]);
@@ -424,7 +424,7 @@ void OutputMapper::QueueConstantForce(int virtual_id, int slot, float strength, 
     QueueCommand(std::move(cmd));
 }
 
-void OutputMapper::QueuePeriodic(int virtual_id, int slot, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
+void OutputMapper::QueuePeriodic(int virtual_id, int slot, HapticPeriodicType wave_type, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
     if (strength > 0.0f && magnitude > 0.0f) {
         m_lastHapticActivityTime = SDL_GetTicks();
     }
@@ -438,6 +438,7 @@ void OutputMapper::QueuePeriodic(int virtual_id, int slot, float strength, int p
     cmd.iParams[1] = period;
     cmd.iParams[2] = phase;
     cmd.iParams[3] = duration_ms;
+    cmd.iParams[4] = static_cast<int>(wave_type);  // 0=Sine, 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
     QueueCommand(std::move(cmd));
 }
 
@@ -594,7 +595,7 @@ void OutputMapper::TriggerConstantForce(int virtual_id, int slot, float strength
     }
 }
 
-void OutputMapper::TriggerPeriodic(int virtual_id, int slot, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
+void OutputMapper::TriggerPeriodic(int virtual_id, int slot, HapticPeriodicType wave_type, float strength, int period, float magnitude, float offset, int phase, int duration_ms) {
     std::vector<HapticTarget*> targets;
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
@@ -602,7 +603,7 @@ void OutputMapper::TriggerPeriodic(int virtual_id, int slot, float strength, int
 
         HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
         if (hapticDevice) {
-            hapticDevice->PlayPeriodic(slot, strength, (uint32_t)period, magnitude, offset, (uint32_t)phase, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            hapticDevice->PlayPeriodic(slot, wave_type, strength, (uint32_t)period, magnitude, offset, (uint32_t)phase, (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
             continue;
         }
 
@@ -611,7 +612,7 @@ void OutputMapper::TriggerPeriodic(int virtual_id, int slot, float strength, int
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(effect));
-        effect.type = SDL_HAPTIC_SINE;
+        effect.type = ToSDLPeriodicType(wave_type);  // translate once, here
         effect.periodic.direction.type = SDL_HAPTIC_CARTESIAN;
         effect.periodic.direction.dir[0] = 1;
         effect.periodic.length    = (duration_ms <= 0) ? SDL_HAPTIC_INFINITY : (Uint32)duration_ms;

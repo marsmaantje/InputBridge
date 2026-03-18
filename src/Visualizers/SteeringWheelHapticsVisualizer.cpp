@@ -71,7 +71,9 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNode("Periodic (Sine)")) {
+        if (ImGui::TreeNode("Periodic Effects")) {
+            const char* wave_types[] = { "Sine", "Triangle", "Sawtooth Up", "Sawtooth Down" };
+            ImGui::Combo("Wave Type##p", &m_periodic_wave_type, wave_types, IM_ARRAYSIZE(wave_types));
             ImGui::SliderInt("Slot##periodic", &m_periodic_slot, 0, 7);
             ImGui::SliderFloat("Strength##p", &m_periodic_strength, 0.0f, 1.0f);
             ImGui::SliderInt("Period (ms)", &m_periodic_period, 1, 5000);
@@ -83,7 +85,9 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
                 ImGui::SliderInt("Duration (ms)##periodic", &m_periodic_duration, 0, 5000);
             }
             if (ImGui::Button("Play Periodic")) {
-                wheelHaptics->PlayPeriodic(m_periodic_slot, m_periodic_strength,
+                wheelHaptics->PlayPeriodic(m_periodic_slot,
+                                           PeriodicTypeFromIndex(m_periodic_wave_type),
+                                           m_periodic_strength,
                                            (uint32_t)m_periodic_period, m_periodic_magnitude,
                                            m_periodic_offset, (uint32_t)m_periodic_phase,
                                            m_periodic_infinite_duration ? SDL_HAPTIC_INFINITY : (uint32_t)m_periodic_duration);
@@ -161,7 +165,8 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             for (const auto& [slot, info] : active_periodics) {
                 if (!info.active) continue;
                 anyActive = true;
-                if (ImGui::TreeNode((void*)(intptr_t)(slot + 2000), "Periodic (Sine) [slot %d]", slot)) {
+                if (ImGui::TreeNode((void*)(intptr_t)(slot + 2000), "Periodic (%s) [slot %d]", PeriodicTypeName(info.wave_type), slot)) {
+                    ImGui::Text("Wave: %s", PeriodicTypeName(info.wave_type));
                     ImGui::Text("Strength: %.3f",   info.strength);
                     ImGui::Text("Period: %u ms",    info.period);
                     ImGui::Text("Magnitude: %.3f",  info.magnitude);

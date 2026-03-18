@@ -83,10 +83,12 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
     }
 
     // -----------------------------------------------------------------------
-    // Periodic (Sine)
+    // Periodic
     // -----------------------------------------------------------------------
-    if (ImGui::TreeNode("Periodic (Vibration)")) {
+    if (ImGui::TreeNode("Periodic Effects")) {
         ImGui::TextDisabled("Engine hum, turbulence, weapons fire, buffet effects.");
+        const char* wave_types[] = { "Sine", "Triangle", "Sawtooth Up", "Sawtooth Down" };
+        ImGui::Combo("Wave Type##per_fs", &m_periodic_wave_type, wave_types, IM_ARRAYSIZE(wave_types));
         ImGui::SliderInt("Slot##per_fs", &m_periodic_slot, 0, 7);
         ImGui::SliderFloat("Strength##per_fs",   &m_periodic_strength,  0.0f, 1.0f);
         ImGui::SliderInt("Period (ms)##per_fs",  &m_periodic_period,    1, 2000);
@@ -99,7 +101,8 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
 
         if (ImGui::Button("Play Periodic##fs")) {
             fsHaptics->PlayPeriodic(
-                m_periodic_slot, m_periodic_strength,
+                m_periodic_slot, PeriodicTypeFromIndex(m_periodic_wave_type),
+                m_periodic_strength,
                 static_cast<uint32_t>(m_periodic_period), m_periodic_magnitude,
                 m_periodic_offset, static_cast<uint32_t>(m_periodic_phase),
                 m_periodic_infinite_duration ? SDL_HAPTIC_INFINITY
@@ -217,7 +220,8 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
             if (!info.active) continue;
             anyActive = true;
             if (ImGui::TreeNode(reinterpret_cast<void*>(static_cast<intptr_t>(slot + 2000)),
-                                "Periodic [slot %d]", slot)) {
+                                "Periodic (%s) [slot %d]", PeriodicTypeName(info.wave_type), slot)) {
+                ImGui::Text("Wave: %s",       PeriodicTypeName(info.wave_type));
                 ImGui::Text("Magnitude: %.3f", info.magnitude);
                 ImGui::Text("Period: %u ms",   info.period);
                 ImGui::Text("Offset: %.3f",    info.offset);

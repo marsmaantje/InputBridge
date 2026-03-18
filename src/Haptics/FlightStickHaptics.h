@@ -50,7 +50,7 @@ public:
      * @param phase       Phase in hundredths of a degree [0, 35999].
      * @param duration_ms Duration in milliseconds or SDL_HAPTIC_INFINITY.
      */
-    int PlayPeriodic(int slot, float strength, uint32_t period,
+    int PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period,
                      float magnitude, float offset, uint32_t phase,
                      uint32_t duration_ms) override;
 

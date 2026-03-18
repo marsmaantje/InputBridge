@@ -37,14 +37,15 @@ struct ConstantArgs {
 };
 
 struct PeriodicArgs {
-    int   device;
-    int   slot;
-    float strength;
-    int   period;
-    float magnitude;
-    float offset;
-    int   phase;
-    int   duration;
+    int                device;
+    int                slot;
+    HapticPeriodicType wave_type;
+    float              strength;
+    int                period;
+    float              magnitude;
+    float              offset;
+    int                phase;
+    int                duration;
 };
 
 struct ConditionArgs {

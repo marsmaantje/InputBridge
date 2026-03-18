@@ -187,12 +187,27 @@ The WebSocket server accepts JSON messages to trigger haptic effects on connecte
 ### 3. Steering Wheel / Flight Stick: Periodic Effect
 
 *   **type**: `"steering_wheel"` or `"flight_stick"` · **effect**: `"periodic"`
-*   **params**: `strength` (0.0–1.0), `period` (ms), `magnitude` (0.0–1.0), `offset` (-1.0–1.0), `phase` (0–36000), `duration_ms`
+*   **params**:
+    *   `wave_type` — Waveform shape:
+
+        | Value | Name | Character |
+        |---|---|---|
+        | `0` | Sine *(default)* | Smooth sinusoidal oscillation |
+        | `1` | Triangle | Linear ramp up then down |
+        | `2` | Sawtooth Up | Gradual rise, instant drop |
+        | `3` | Sawtooth Down | Instant rise, gradual drop |
+
+    *   `strength` (0.0–1.0) — Overall output gain
+    *   `period` (ms) — Duration of one full cycle
+    *   `magnitude` (0.0–1.0) — Peak amplitude of the wave
+    *   `offset` (-1.0–1.0) — Mean value (centre point) of the wave
+    *   `phase` (0–36000) — Starting phase offset in hundredths of a degree
+    *   `duration_ms` — Duration in ms; use `-1` for infinite
 
 ```json
 { "device": 1, "type": "steering_wheel", "effect": "periodic",
-  "params": { "strength": 1.0, "period": 100, "magnitude": 0.5,
-              "offset": 0.0, "phase": 0, "duration_ms": 2000 } }
+  "params": { "wave_type": 1, "strength": 1.0, "period": 100,
+              "magnitude": 0.5, "offset": 0.0, "phase": 0, "duration_ms": 2000 } }
 ```
 
 ### 4. Steering Wheel / Flight Stick: Condition Effect
@@ -280,14 +295,16 @@ Example: `[1, 0, 0.5, 1000]`
 
 #### Periodic Effect
 
-Applies a repeating wave effect (engine vibration, road texture, etc.).
+Applies a repeating wave effect (engine vibration, road texture, etc.). The wave shape is selected with `wave_type`: `0`=Sine (default), `1`=Triangle, `2`=Sawtooth Up, `3`=Sawtooth Down.
 
 | Path | Types | Arguments |
 |---|---|---|
-| `/inputbridge/haptics/periodic` | `iififfii` | deviceId, slot, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
-| `/haptic/periodic` | `iififfii` | deviceId, slot, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/inputbridge/haptics/periodic` | `iiififfii` | deviceId, slot, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/haptic/periodic` | `iiififfii` | deviceId, slot, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
 
-Example: `[1, 0, 1.0, 100, 0.5, 0.0, 0, 2000]`
+Example (triangle wave, 150 ms period, 2 seconds): `[1, 0, 1, 1.0, 150, 0.5, 0.0, 0, 2000]`
+
+> **Backward compatibility:** The legacy 8-argument format `iififfii` (without `wave_type`) is still accepted and defaults to Sine.
 
 ---
 

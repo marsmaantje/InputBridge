@@ -119,16 +119,29 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 8) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            float strength = argv[2]->f;
-            int period = argv[3]->i;
+        if (argc >= 9) {
+            // New format: i i i f i f f i i  (id, slot, wave_type, strength, period, magnitude, offset, phase, duration)
+            int id       = argv[0]->i;
+            int slot     = argv[1]->i;
+            HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
+            float strength  = argv[3]->f;
+            int period      = argv[4]->i;
+            float magnitude = argv[5]->f;
+            float offset    = argv[6]->f;
+            int phase       = argv[7]->i;
+            int duration    = argv[8]->i;
+            server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
+        } else if (argc >= 8) {
+            // Legacy format: i i f i f f i i  (id, slot, strength, period, magnitude, offset, phase, duration) — defaults to Sine
+            int id       = argv[0]->i;
+            int slot     = argv[1]->i;
+            float strength  = argv[2]->f;
+            int period      = argv[3]->i;
             float magnitude = argv[4]->f;
-            float offset = argv[5]->f;
-            int phase = argv[6]->i;
-            int duration = argv[7]->i;
-            server->m_OutputMapper->QueuePeriodic(id, slot, strength, period, magnitude, offset, phase, duration);
+            float offset    = argv[5]->f;
+            int phase       = argv[6]->i;
+            int duration    = argv[7]->i;
+            server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
         }
     } catch (...) {}
     return 0;

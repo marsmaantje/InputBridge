@@ -62,6 +62,20 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
             wheel->PlayConstant(slot, strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
+    else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "iiififfii") == 0 && argc == 9) {
+        int slot = argv[1]->i;
+        HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
+        float strength = argv[3]->f;
+        int period = argv[4]->i;
+        float magnitude = argv[5]->f;
+        float offset = argv[6]->f;
+        int phase = argv[7]->i;
+        int duration_int = argv[8]->i;
+        DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
+            wheel->PlayPeriodic(slot, wave_type, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+        });
+    }
+    // Legacy: no wave_type argument — defaults to Sine.
     else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "iififfii") == 0 && argc == 8) {
         int slot = argv[1]->i;
         float strength = argv[2]->f;
@@ -71,7 +85,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         int phase = argv[6]->i;
         int duration_int = argv[7]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayPeriodic(slot, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayPeriodic(slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
     else if (match("/inputbridge/haptics/condition", "haptic_condition") && std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {

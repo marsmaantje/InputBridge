@@ -66,7 +66,22 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
             wheel->PlayConstant(slot, strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
-    // Example: /inputbridge/haptics/periodic i i f i f f i i (deviceId, slot, strength, period, magnitude, offset, phase, duration_ms)
+    // Example: /inputbridge/haptics/periodic i i i f i f f i i (deviceId, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms)
+    // wave_type: 0=Sine, 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
+    else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "iiififfii") == 0 && argc == 9) {
+        int slot = argv[1]->i;
+        HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
+        float strength = argv[3]->f;
+        int period = argv[4]->i;
+        float magnitude = argv[5]->f;
+        float offset = argv[6]->f;
+        int phase = argv[7]->i;
+        int duration_int = argv[8]->i;
+        DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
+            wheel->PlayPeriodic(slot, wave_type, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+        });
+    }
+    // Legacy: no wave_type argument — defaults to Sine.
     else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "iififfii") == 0 && argc == 8) {
         int slot = argv[1]->i;
         float strength = argv[2]->f;
@@ -76,7 +91,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         int phase = argv[6]->i;
         int duration_int = argv[7]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayPeriodic(slot, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayPeriodic(slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
     // Example: /inputbridge/haptics/condition i i i f f f f f f i (deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)

@@ -66,6 +66,54 @@ inline const char* ConditionTypeName(HapticConditionType t) {
     }
 }
 
+// ─── Periodic effect wave type ────────────────────────────────────────────────
+//
+// User-facing index (0–3) for the four SDL periodic waveform types.
+// The translation to SDL_HAPTIC_* happens in exactly one place:
+//   ToSDLPeriodicType()  →  called inside PlayPeriodic() implementations.
+
+enum class HapticPeriodicType : int {
+    Sine        = 0,  // SDL_HAPTIC_SINE        — smooth sinusoidal wave
+    Triangle    = 1,  // SDL_HAPTIC_TRIANGLE    — linear ramp up/down
+    SawtoothUp  = 2,  // SDL_HAPTIC_SAWTOOTHUP  — fast rise, instant drop
+    SawtoothDown = 3, // SDL_HAPTIC_SAWTOOTHDOWN — instant rise, fast drop
+};
+
+inline Uint16 ToSDLPeriodicType(HapticPeriodicType t) {
+    switch (t) {
+        case HapticPeriodicType::Sine:         return SDL_HAPTIC_SINE;
+        case HapticPeriodicType::Triangle:     return SDL_HAPTIC_TRIANGLE;
+        case HapticPeriodicType::SawtoothUp:   return SDL_HAPTIC_SAWTOOTHUP;
+        case HapticPeriodicType::SawtoothDown: return SDL_HAPTIC_SAWTOOTHDOWN;
+        default:                               return SDL_HAPTIC_SINE;
+    }
+}
+
+inline HapticPeriodicType PeriodicTypeFromIndex(int index) {
+    if (index < 0 || index > 3) return HapticPeriodicType::Sine;
+    return static_cast<HapticPeriodicType>(index);
+}
+
+inline HapticPeriodicType PeriodicTypeFromSDL(Uint16 sdlType) {
+    switch (sdlType) {
+        case SDL_HAPTIC_SINE:         return HapticPeriodicType::Sine;
+        case SDL_HAPTIC_TRIANGLE:     return HapticPeriodicType::Triangle;
+        case SDL_HAPTIC_SAWTOOTHUP:   return HapticPeriodicType::SawtoothUp;
+        case SDL_HAPTIC_SAWTOOTHDOWN: return HapticPeriodicType::SawtoothDown;
+        default:                      return HapticPeriodicType::Sine;
+    }
+}
+
+inline const char* PeriodicTypeName(HapticPeriodicType t) {
+    switch (t) {
+        case HapticPeriodicType::Sine:         return "Sine";
+        case HapticPeriodicType::Triangle:     return "Triangle";
+        case HapticPeriodicType::SawtoothUp:   return "Sawtooth Up";
+        case HapticPeriodicType::SawtoothDown: return "Sawtooth Down";
+        default:                               return "Sine";
+    }
+}
+
 // ─── Active Effect Info Structs ───────────────────────────────────────────────
 struct ActiveConstantInfo {
     bool active = false;
@@ -76,6 +124,7 @@ struct ActiveConstantInfo {
 
 struct ActivePeriodicInfo {
     bool active = false;
+    HapticPeriodicType wave_type = HapticPeriodicType::Sine;
     float strength = 0.0f;
     uint32_t period = 0;
     float magnitude = 0.0f;
@@ -129,7 +178,7 @@ public:
     // All Play* methods accept a slot so multiple independent instances of the
     // same effect type can run simultaneously, mirroring PlayCondition's design.
     virtual int PlayConstant(int slot, float strength, uint32_t duration_ms);
-    virtual int PlayPeriodic(int slot, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms);
+    virtual int PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms);
     virtual int PlayRumble(int slot, float large_magnitude, float small_magnitude, uint32_t duration_ms);
     virtual int PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms);
 
@@ -153,11 +202,11 @@ public:
     // direction: 0.0 to 360.0 (degrees)
     void SetConstantForce(float level, float direction = 0.0f);
 
-    // type: SDL_HAPTIC_SINE, SDL_HAPTIC_TRIANGLE, etc.
+    // type: HapticPeriodicType::Sine, Triangle, SawtoothUp or SawtoothDown
     // magnitude: 0.0 to 1.0
     // period: milliseconds
     // direction: 0.0 to 360.0 (degrees)
-    void SetPeriodic(Uint16 type, float magnitude, int period, float direction = 0.0f);
+    void SetPeriodic(HapticPeriodicType type, float magnitude, int period, float direction = 0.0f);
 
     // type: HapticConditionType::Spring, Damper, Inertia or Friction
     // saturation: 0.0 to 1.0

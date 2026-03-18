@@ -157,7 +157,9 @@ void WebSocketProtocol::parse(const std::string &message) {
                 float offset = params.at("offset");
                 int phase = params.at("phase");
                 int duration_ms = params.at("duration_ms");
-                OutputMapper::GetInstance().QueuePeriodic(0, 0, strength, period, magnitude, offset, phase, duration_ms);
+                // wave_type: 0=Sine (default), 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
+                HapticPeriodicType wave_type = PeriodicTypeFromIndex(params.value("wave_type", 0));
+                OutputMapper::GetInstance().QueuePeriodic(0, 0, wave_type, strength, period, magnitude, offset, phase, duration_ms);
             } else if (effect == "condition") {
                 int slot = params.value("slot", 0);
                 // condition_type: 0=Spring, 1=Damper, 2=Inertia, 3=Friction

@@ -122,7 +122,7 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
 // --- Play Methods (base stubs — subclasses override for real hardware) ---
 
 int HapticDevice::PlayConstant(int slot, float strength, uint32_t duration_ms) { return -1; }
-int HapticDevice::PlayPeriodic(int slot, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) { return -1; }
+int HapticDevice::PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayRumble(int slot, float large_magnitude, float small_magnitude, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayDualSenseTrigger(const std::string& trigger, const std::string& effect_type, const std::map<std::string, int>& params) { return -1; }
@@ -193,13 +193,13 @@ void HapticDevice::SetConstantForce(float level, float direction) {
     });
 }
 
-void HapticDevice::SetPeriodic(Uint16 type, float magnitude, int period, float direction) {
+void HapticDevice::SetPeriodic(HapticPeriodicType type, float magnitude, int period, float direction) {
     RunAsync([this, type, magnitude, period, direction]() {
         if (!m_haptic) return;
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = type;
+        effect.type = ToSDLPeriodicType(type);  // translate once, here
         effect.periodic.direction.type = SDL_HAPTIC_POLAR;
         effect.periodic.direction.dir[0] = (Sint32)(direction * 100.0f);
         effect.periodic.length = SDL_HAPTIC_INFINITY;

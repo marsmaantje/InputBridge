@@ -65,10 +65,10 @@ int FlightStickHaptics::StopConstant(int slot) {
 // PlayPeriodic
 // ---------------------------------------------------------------------------
 
-int FlightStickHaptics::PlayPeriodic(int slot, float strength, uint32_t period,
+int FlightStickHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period,
                                      float magnitude, float offset, uint32_t phase,
                                      uint32_t duration_ms) {
-    RunAsync([this, slot, strength, period, magnitude, offset, phase, duration_ms]() {
+    RunAsync([this, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms]() {
         if (!m_haptic) {
             SDL_Log("FlightStickHaptics::PlayPeriodic - Haptic device not ready");
             return;
@@ -76,7 +76,7 @@ int FlightStickHaptics::PlayPeriodic(int slot, float strength, uint32_t period,
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = SDL_HAPTIC_SINE;
+        effect.type = ToSDLPeriodicType(wave_type);  // translate once, here
         effect.periodic.direction.type   = SDL_HAPTIC_CARTESIAN;
         effect.periodic.direction.dir[0] = 1;
         effect.periodic.direction.dir[1] = 0;
@@ -98,6 +98,7 @@ int FlightStickHaptics::PlayPeriodic(int slot, float strength, uint32_t period,
             } else {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 auto& info        = m_activePeriodicEffects[slot];
+                info.wave_type    = wave_type;
                 info.strength     = strength;
                 info.period       = period;
                 info.magnitude    = magnitude;
@@ -138,7 +139,7 @@ int FlightStickHaptics::PlayRumble(int slot, float large_magnitude,
         return StopPeriodic(slot);
     }
     // ~33 Hz square-ish vibration — a noticeable impact feel on force-feedback sticks.
-    return PlayPeriodic(slot, strength, /*period_ms=*/30, strength, 0.0f, 0, duration_ms);
+    return PlayPeriodic(slot, HapticPeriodicType::Sine, strength, /*period_ms=*/30, strength, 0.0f, 0, duration_ms);
 }
 
 // ---------------------------------------------------------------------------

@@ -38,6 +38,7 @@ namespace {
     const char* const kPeriodicMagnitude = "magnitude";
     const char* const kPeriodicOffset    = "offset";
     const char* const kPeriodicPhase     = "phase";
+    const char* const kPeriodicWaveType  = "wave_type";  // 0=Sine, 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
 
     // Condition params
     const char* const kConditionSlot      = "slot";
@@ -115,10 +116,11 @@ namespace {
             mapper->QueueConstantForce(device, slot, strength, duration);
 
         } else if (effect == kEffectPeriodic) {
-            int   duration = get_duration(data);
-            int   slot     = data.value(kSlot, 0);
+            int   duration  = get_duration(data);
+            int   slot      = data.value(kSlot, 0);
+            HapticPeriodicType wave_type = PeriodicTypeFromIndex(data.value(kPeriodicWaveType, 0));
 
-            mapper->QueuePeriodic(device, slot,
+            mapper->QueuePeriodic(device, slot, wave_type,
                 data.value(kConstantStrength, 0.0f),
                 data.value(kPeriodicPeriod,   0),
                 data.value(kPeriodicMagnitude,0.0f),
@@ -179,6 +181,7 @@ namespace {
             out.magnitude   = flat.value(kPeriodicMagnitude, 0.0f);
             out.offset      = flat.value(kPeriodicOffset,    0.0f);
             out.phase       = flat.value(kPeriodicPhase,     0);
+            out.wave_type   = PeriodicTypeFromIndex(flat.value(kPeriodicWaveType, 0));
             out.slot        = flat.value(kSlot, 0);
             out.duration_ms = get_duration(flat);
             return DetectedEffect::Kind::Periodic;
