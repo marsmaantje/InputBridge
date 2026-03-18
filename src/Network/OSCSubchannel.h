@@ -26,18 +26,25 @@
  * Because each slot gets a distinct OSC path, a host that limits messages to
  * one per path per frame can still address multiple slots simultaneously.
  *
- * Message formats (slot absent from arguments — it is in the path)
+ * Message formats (slot in both path AND arguments — path for routing, arg is authoritative)
  * ----------------------------------------------------------------
- *   /haptic/rumble/<N>       iffi   id, low_freq, high_freq, duration_ms
- *   /haptic/constant/<N>     ifi    id, strength, duration_ms
- *   /haptic/periodic/<N>     iififfii  id, wave_type, strength, period,
- *                                      magnitude, offset, phase, duration_ms
- *                                      wave_type: 0=Sine 1=Square 2=Triangle
- *                                                 3=SawtoothUp 4=SawtoothDown
- *   /haptic/periodic/<N>     ififfii   (legacy — no wave_type, defaults Sine)
- *   /haptic/condition/<N>    iiffffffi id, condition_type, right_sat, left_sat,
- *                                      right_coeff, left_coeff, deadband,
- *                                      center, duration_ms
+ * The argument layout is identical to the fixed paths; only the path differs.
+ * This means senders can share the same message-building code for both path
+ * styles — just change the path string to select a different routing channel.
+ *
+ *   /haptic/rumble/<N>       iiffi   id, slot, low_freq, high_freq, duration_ms
+ *   /haptic/constant/<N>     iifi    id, slot, strength, duration_ms
+ *   /haptic/periodic/<N>     iiififfii  id, slot, wave_type, strength, period,
+ *                                       magnitude, offset, phase, duration_ms
+ *                            wave_type: 0=Sine 1=Square 2=Triangle
+ *                                       3=SawtoothUp 4=SawtoothDown
+ *   /haptic/periodic/<N>     iififfii   id, slot, strength, period, magnitude,
+ *                                       offset, phase, duration_ms
+ *                                       (legacy — no wave_type, defaults Sine)
+ *   /haptic/condition/<N>    iiiffffffi id, slot, ctype, right_sat, left_sat,
+ *                                       right_coeff, left_coeff, deadband,
+ *                                       center, duration_ms
+ *                            ctype: 0=Spring 1=Damper 2=Inertia 3=Friction
  *
  * /haptic/gain has no slot dimension and therefore has no subchannel variant.
  *
