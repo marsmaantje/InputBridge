@@ -42,14 +42,17 @@ std::string OSCProtocol::format(const std::string &address, float value) { retur
 std::string OSCProtocol::format(const std::string &address, int value) { return ""; }
 std::string OSCProtocol::format(const std::string &address, const std::string &value) { return ""; }
 std::string OSCProtocol::format_wheel(const std::map<std::string, float>& values) { return ""; }
-void OSCProtocol::parse(const std::string& message) { }
+bool OSCProtocol::parse(const std::string& message) { return false; }
 
-void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc) {
+bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc) {
     std::string_view path_sv(path);
+
+    bool handled = false;
 
     // Incoming haptics messages
     // Example: /inputbridge/haptics/rumble i i f f i (deviceId, slot, low_freq, high_freq, duration_ms)
     if (path_sv == "/inputbridge/haptics/rumble" && std::strcmp(types, "iiffi") == 0 && argc == 5) {
+        handled = true;
         int slot = argv[1]->i;
         float low_freq = argv[2]->f;
         float high_freq = argv[3]->f;
@@ -60,6 +63,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // Example: /inputbridge/haptics/force i i f i (deviceId, slot, strength, duration_ms)
     else if (path_sv == "/inputbridge/haptics/force" && std::strcmp(types, "iifi") == 0 && argc == 4) {
+        handled = true;
         int slot = argv[1]->i;
         float strength = argv[2]->f;
         int duration_int = argv[3]->i;
@@ -70,6 +74,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     // Example: /inputbridge/haptics/periodic i i i f i f f i i (deviceId, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms)
     // wave_type: 0=Sine, 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
     else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "iiififfii") == 0 && argc == 9) {
+        handled = true;
         int slot = argv[1]->i;
         HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
         float strength = argv[3]->f;
@@ -84,6 +89,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // Legacy: no wave_type argument — defaults to Sine.
     else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "iififfii") == 0 && argc == 8) {
+        handled = true;
         int slot = argv[1]->i;
         float strength = argv[2]->f;
         int period = argv[3]->i;
@@ -98,6 +104,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     // Example: /inputbridge/haptics/condition i i i f f f f f f i (deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)
     // condition_type: 0=Spring, 1=Damper, 2=Inertia, 3=Friction
     else if (path_sv == "/inputbridge/haptics/condition" && std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
+        handled = true;
         int slot = argv[1]->i;
         HapticConditionType condition_type = ConditionTypeFromIndex(argv[2]->i);
         float right_sat = argv[3]->f;
@@ -113,6 +120,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // Example: /inputbridge/haptics/gain i i (deviceId, gain)
     else if (path_sv == "/inputbridge/haptics/gain" && std::strcmp(types, "ii") == 0 && argc == 2) {
+        handled = true;
         int gain = argv[1]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
             wheel->SetGain(gain);
@@ -121,6 +129,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     // DualSense Trigger Effects
     // Example: /inputbridge/haptics/dualsense/trigger/left/feedback i i i (deviceId, position, strength)
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/feedback" && std::strcmp(types, "iii") == 0 && argc == 3) {
+        handled = true;
         int position = argv[1]->i;
         int strength = argv[2]->i;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
@@ -131,6 +140,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         });
     }
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/feedback" && std::strcmp(types, "iii") == 0 && argc == 3) {
+        handled = true;
         int position = argv[1]->i;
         int strength = argv[2]->i;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
@@ -142,6 +152,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // Example: /inputbridge/haptics/dualsense/trigger/left/weapon i i i i (deviceId, start_position, end_position, strength)
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/weapon" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        handled = true;
         int start_pos = argv[1]->i;
         int end_pos = argv[2]->i;
         int strength = argv[3]->i;
@@ -154,6 +165,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         });
     }
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/weapon" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        handled = true;
         int start_pos = argv[1]->i;
         int end_pos = argv[2]->i;
         int strength = argv[3]->i;
@@ -167,6 +179,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // Example: /inputbridge/haptics/dualsense/trigger/left/vibration i i i i (deviceId, position, amplitude, frequency)
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/vibration" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        handled = true;
         int position = argv[1]->i;
         int amplitude = argv[2]->i;
         int frequency = argv[3]->i;
@@ -179,6 +192,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         });
     }
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/vibration" && std::strcmp(types, "iiii") == 0 && argc == 4) {
+        handled = true;
         int position = argv[1]->i;
         int amplitude = argv[2]->i;
         int frequency = argv[3]->i;
@@ -192,12 +206,14 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // Example: /inputbridge/haptics/dualsense/trigger/left/off i (deviceId)
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/off" && std::strcmp(types, "i") == 0 && argc == 1) {
+        handled = true;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
             std::map<std::string, int> params;
             gamepad->SendDualSenseTrigger("left", "off", params);
         });
     }
     else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/off" && std::strcmp(types, "i") == 0 && argc == 1) {
+        handled = true;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
             std::map<std::string, int> params;
             gamepad->SendDualSenseTrigger("right", "off", params);
@@ -206,6 +222,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     // RPM LED meter — /inputbridge/wheel/led_rpm f  (value 0.0 – 1.0)
     // Sets the RPM LED bar on all connected RPM-capable steering wheels.
     else if (path_sv == "/inputbridge/wheel/led_rpm" && std::strcmp(types, "f") == 0 && argc == 1) {
+        handled = true;
         float rpm_percent = argv[0]->f;
         if (rpm_percent < 0.0f) rpm_percent = 0.0f;
         if (rpm_percent > 1.0f) rpm_percent = 1.0f;
@@ -226,12 +243,12 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     //   /inputbridge/haptics/rumble/1   iffi  (id, low_freq, high_freq, dur)
 
     const auto last_slash = path_sv.rfind('/');
-    if (last_slash == std::string_view::npos) return;
+    if (last_slash == std::string_view::npos) return handled;
     const auto tail = path_sv.substr(last_slash + 1);
-    if (tail.empty()) return;
+    if (tail.empty()) return handled;
     bool all_digits = true;
     for (char c : tail) { if (c < '0' || c > '9') { all_digits = false; break; } }
-    if (!all_digits) return;
+    if (!all_digits) return handled;
 
     int slot = 0;
     for (char c : tail) slot = slot * 10 + (c - '0');
@@ -239,6 +256,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
 
     // /inputbridge/haptics/rumble/N  iffi  (id, low_freq, high_freq, duration_ms)
     if (base == "/inputbridge/haptics/rumble" && std::strcmp(types, "iffi") == 0 && argc == 4) {
+        handled = true;
         const float low      = argv[1]->f;
         const float high     = argv[2]->f;
         const int   duration = argv[3]->i;
@@ -248,6 +266,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // /inputbridge/haptics/force/N  ifi  (id, strength, duration_ms)
     else if (base == "/inputbridge/haptics/force" && std::strcmp(types, "ifi") == 0 && argc == 3) {
+        handled = true;
         const float strength = argv[1]->f;
         const int   duration = argv[2]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
@@ -256,6 +275,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // /inputbridge/haptics/periodic/N  iififfii  (id, wave_type, strength, period, magnitude, offset, phase, duration_ms)
     else if (base == "/inputbridge/haptics/periodic" && std::strcmp(types, "iififfii") == 0 && argc == 8) {
+        handled = true;
         const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[1]->i);
         const float strength  = argv[2]->f;
         const int   period    = argv[3]->i;
@@ -270,6 +290,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // Legacy: /inputbridge/haptics/periodic/N  ififfii  — no wave_type, defaults to Sine
     else if (base == "/inputbridge/haptics/periodic" && std::strcmp(types, "ififfii") == 0 && argc == 7) {
+        handled = true;
         const float strength  = argv[1]->f;
         const int   period    = argv[2]->i;
         const float magnitude = argv[3]->f;
@@ -283,6 +304,7 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     }
     // /inputbridge/haptics/condition/N  iiffffffi  (id, condition_type, rsat, lsat, rcoeff, lcoeff, deadband, center, duration_ms)
     else if (base == "/inputbridge/haptics/condition" && std::strcmp(types, "iiffffffi") == 0 && argc == 9) {
+        handled = true;
         const HapticConditionType ctype   = ConditionTypeFromIndex(argv[1]->i);
         const float right_sat  = argv[2]->f;
         const float left_sat   = argv[3]->f;
@@ -297,4 +319,6 @@ void OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         });
     }
     // Note: /inputbridge/haptics/gain has no slot dimension — no subchannel variant is defined.
+
+    return handled;
 }

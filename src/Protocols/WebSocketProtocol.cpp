@@ -97,7 +97,9 @@ std::string WebSocketProtocol::format_wheel(const std::map<std::string, float>& 
     return msg;
 }
 
-void WebSocketProtocol::parse(const std::string &message) {
+bool WebSocketProtocol::parse(const std::string &message) {
+    bool handled = false;
+
     // try parse a single float
     try {
         // replace comma with dot for float parsing
@@ -106,6 +108,7 @@ void WebSocketProtocol::parse(const std::string &message) {
         float value = -std::stof(msg);
 
         OutputMapper::GetInstance().QueueConstantForce(0, 0, value * 50, -1);
+        handled = true;
 
     } catch (const std::exception &e) {
         // Not a valid float message, ignore
@@ -189,9 +192,12 @@ void WebSocketProtocol::parse(const std::string &message) {
                 w->setRPM(rpm_percent);
             }
         }
+        handled = true;
     } catch (const json::exception &e) {
         // Not a valid haptic message, ignore
     }
+
+    return handled;
 }
 
 const char *WebSocketProtocol::GetVersionLabel(int index) {

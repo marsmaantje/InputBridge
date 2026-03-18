@@ -353,7 +353,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
               << ", Listening on port " << recv_port << std::endl;
 
-    m_logs.push_back("OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port));
+    m_logs.push_back({"OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port), false});
     if (m_logs.size() > 100) m_logs.pop_front();
 
     return true;
@@ -424,7 +424,7 @@ void OSCServer::Stop() {
             }
             std::lock_guard<std::mutex> lock(m_mutex);
             std::cout << "OSC server stopped." << std::endl;
-            m_logs.push_back("OSC server stopped.");
+            m_logs.push_back({"OSC server stopped.", false});
             if (m_logs.size() > 100) m_logs.pop_front();
         });
     }
@@ -468,7 +468,7 @@ void OSCServer::CheckInactivity() {
                 timed_out = true;
                 m_clients.clear();
                 m_lastMessageTime = 0;
-                m_logs.push_back("OSC clients timed out (no data). Stopping haptics.");
+                m_logs.push_back({"OSC clients timed out (no data). Stopping haptics.", false});
                 if (m_logs.size() > 100) m_logs.pop_front();
                 // m_OutputMapper may be null if Stop() ran during the same frame;
                 // m_savedOutputMapper always holds the last valid pointer.
@@ -622,7 +622,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 logEntry += argBuf;
             }
             logEntry += "]";
-            server->m_logs.push_back(logEntry);
+            server->m_logs.push_back({logEntry, false});
 
 
             if (server->m_logs.size() > 100) server->m_logs.pop_front();
@@ -648,7 +648,12 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         if (protoCopy) {
             auto oscProtocol = std::dynamic_pointer_cast<OSCBaseProtocol>(protoCopy);
             if (oscProtocol) {
-                oscProtocol->handle_osc_message(path, types, argv, argc);
+                bool handled = oscProtocol->handle_osc_message(path, types, argv, argc);
+                if (!handled) {
+                    std::lock_guard<std::mutex> errLock(server->m_mutex);
+                    server->m_logs.push_back({"Invalid OSC path: " + std::string(path), true});
+                    if (server->m_logs.size() > 100) server->m_logs.pop_front();
+                }
             }
         } else if (handlerCopy) {
             handlerCopy(path, types, argv, argc);
@@ -952,7 +957,7 @@ void OSCServer::DrawContent() {
         ImGui::TextColored(ImVec4(1,0,0,1), "Stopped");
     }
 
-    std::deque<std::string> logs;
+    std::deque<LogEntry> logs;
     std::set<std::string> clients;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -971,7 +976,12 @@ void OSCServer::DrawContent() {
     ImGui::Separator();
     ImGui::Text("Log");
     if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
-        for (const auto& l : logs) ImGui::TextUnformatted(l.c_str());
+        for (const auto& l : logs) {
+            if (l.isError)
+                ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", l.text.c_str());
+            else
+                ImGui::TextUnformatted(l.text.c_str());
+        }
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
     }
     ImGui::EndChild();

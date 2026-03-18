@@ -23,7 +23,7 @@ namespace {
     }
 }
 
-void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc) {
+bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc) {
     std::string_view path_sv(path);
 
     std::string activeId = ProtocolManager::GetInstance().GetActiveInputProtocolId();
@@ -45,7 +45,10 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         return (fieldId == fid) || (fieldId.empty() && path_sv == legacyPath);
     };
 
+    bool handled = false;
+
     if (match("/inputbridge/haptics/rumble", "haptic_rumble") && std::strcmp(types, "iiffi") == 0 && argc == 5) {
+        handled = true;
         int slot = argv[1]->i;
         float low_freq = argv[2]->f;
         float high_freq = argv[3]->f;
@@ -55,6 +58,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         });
     }
     else if (match("/inputbridge/haptics/force", "haptic_constant") && std::strcmp(types, "iifi") == 0 && argc == 4) {
+        handled = true;
         int slot = argv[1]->i;
         float strength = argv[2]->f;
         int duration_int = argv[3]->i;
@@ -63,6 +67,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         });
     }
     else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "iiififfii") == 0 && argc == 9) {
+        handled = true;
         int slot = argv[1]->i;
         HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
         float strength = argv[3]->f;
@@ -77,6 +82,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     }
     // Legacy: no wave_type argument — defaults to Sine.
     else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "iififfii") == 0 && argc == 8) {
+        handled = true;
         int slot = argv[1]->i;
         float strength = argv[2]->f;
         int period = argv[3]->i;
@@ -89,6 +95,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         });
     }
     else if (match("/inputbridge/haptics/condition", "haptic_condition") && std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
+        handled = true;
         int slot = argv[1]->i;
         HapticConditionType condition_type = ConditionTypeFromIndex(argv[2]->i);
         float right_sat = argv[3]->f;
@@ -103,12 +110,14 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         });
     }
     else if (match("/inputbridge/haptics/gain", "haptic_gain") && std::strcmp(types, "ii") == 0 && argc == 2) {
+        handled = true;
         int gain = argv[1]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
             wheel->SetGain(gain);
         });
     }
     else if (path_sv.find("/inputbridge/haptics/dualsense/trigger/") != std::string_view::npos) {
+        handled = true;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
             std::string trigger = (path_sv.find("/left/") != std::string_view::npos) ? "left" : "right";
             std::string effect = "off";
@@ -151,12 +160,12 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     // trailing /N), so user-defined paths like "/my/rumble/0" also work.
 
     const auto last_slash = path_sv.rfind('/');
-    if (last_slash == std::string_view::npos) return;
+    if (last_slash == std::string_view::npos) return handled;
     const auto tail = path_sv.substr(last_slash + 1);
-    if (tail.empty()) return;
+    if (tail.empty()) return handled;
     bool all_digits = true;
     for (char c : tail) { if (c < '0' || c > '9') { all_digits = false; break; } }
-    if (!all_digits) return;
+    if (!all_digits) return handled;
 
     int slot = 0;
     for (char c : tail) slot = slot * 10 + (c - '0');
@@ -179,6 +188,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     // /inputbridge/haptics/rumble/N  iffi  (id, low_freq, high_freq, duration_ms)
     if (matchBase("/inputbridge/haptics/rumble", "haptic_rumble")
         && std::strcmp(types, "iffi") == 0 && argc == 4) {
+        handled = true;
         const float low      = argv[1]->f;
         const float high     = argv[2]->f;
         const int   duration = argv[3]->i;
@@ -189,6 +199,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     // /inputbridge/haptics/force/N  ifi  (id, strength, duration_ms)
     else if (matchBase("/inputbridge/haptics/force", "haptic_constant")
         && std::strcmp(types, "ifi") == 0 && argc == 3) {
+        handled = true;
         const float strength = argv[1]->f;
         const int   duration = argv[2]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
@@ -198,6 +209,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     // /inputbridge/haptics/periodic/N  iififfii  (id, wave_type, strength, period, magnitude, offset, phase, duration_ms)
     else if (matchBase("/inputbridge/haptics/periodic", "haptic_periodic")
         && std::strcmp(types, "iififfii") == 0 && argc == 8) {
+        handled = true;
         const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[1]->i);
         const float strength  = argv[2]->f;
         const int   period    = argv[3]->i;
@@ -213,6 +225,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     // Legacy: /inputbridge/haptics/periodic/N  ififfii  — no wave_type, defaults to Sine
     else if (matchBase("/inputbridge/haptics/periodic", "haptic_periodic")
         && std::strcmp(types, "ififfii") == 0 && argc == 7) {
+        handled = true;
         const float strength  = argv[1]->f;
         const int   period    = argv[2]->i;
         const float magnitude = argv[3]->f;
@@ -227,6 +240,7 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     // /inputbridge/haptics/condition/N  iiffffffi  (id, condition_type, rsat, lsat, rcoeff, lcoeff, deadband, center, duration_ms)
     else if (matchBase("/inputbridge/haptics/condition", "haptic_condition")
         && std::strcmp(types, "iiffffffi") == 0 && argc == 9) {
+        handled = true;
         const HapticConditionType ctype  = ConditionTypeFromIndex(argv[1]->i);
         const float right_sat  = argv[2]->f;
         const float left_sat   = argv[3]->f;
@@ -241,4 +255,6 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         });
     }
     // Note: /haptic/gain has no slot dimension — no subchannel variant is defined.
+
+    return handled;
 }
