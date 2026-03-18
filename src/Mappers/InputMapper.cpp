@@ -976,6 +976,18 @@ bool InputMapper::Update(bool dynamic_rate) {
 #endif
 
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+            // Only send if this field actually has a device input assigned.
+            bool hasSrc = false;
+            {
+                auto it = profile.outputToInput.find(pf->fieldId);
+                if (it != profile.outputToInput.end() && it->second.instance_id != 0) hasSrc = true;
+            }
+            if (!hasSrc) {
+                for (const auto& bm : profile.buttonMappings)
+                    if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+            }
+            if (!hasSrc) continue;
+
             float val = analogValues.count(pf->fieldId) ? analogValues[pf->fieldId] : 0.f;
             if (osc.IsRunning() && oscDef)
                 for (const auto& op : oscDef->fields)
@@ -987,6 +999,12 @@ bool InputMapper::Update(bool dynamic_rate) {
 #endif
         }
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+            // Only send if this field has a button mapped to it.
+            bool hasSrc = false;
+            for (const auto& dm : profile.digitalMappings)
+                if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+            if (!hasSrc) continue;
+
             int val = digitalValues.count(pf->fieldId) && digitalValues[pf->fieldId] ? 1 : 0;
             if (osc.IsRunning() && oscDef)
                 for (const auto& op : oscDef->fields)
@@ -1104,6 +1122,17 @@ std::string InputMapper::GetOutputPreview() {
 
             int sentCount = 0;
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+                // Check device mapping
+                bool hasSrc = false;
+                {
+                    auto it = profile.outputToInput.find(pf->fieldId);
+                    if (it != profile.outputToInput.end() && it->second.instance_id != 0) hasSrc = true;
+                }
+                if (!hasSrc)
+                    for (const auto& bm : profile.buttonMappings)
+                        if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc) continue;
+
                 const ProtocolField* op = nullptr;
                 for (const auto& f : oscDef->fields)
                     if (f.fieldId == pf->fieldId && f.enabled) { op = &f; break; }
@@ -1112,6 +1141,12 @@ std::string InputMapper::GetOutputPreview() {
                 ++sentCount;
             }
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+                // Check device mapping
+                bool hasSrc = false;
+                for (const auto& dm : profile.digitalMappings)
+                    if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc) continue;
+
                 const ProtocolField* op = nullptr;
                 for (const auto& f : oscDef->fields)
                     if (f.fieldId == pf->fieldId && f.enabled) { op = &f; break; }
@@ -1120,7 +1155,7 @@ std::string InputMapper::GetOutputPreview() {
                 ++sentCount;
             }
             if (sentCount == 0)
-                ss << "  (No fields matched between output and OSC definitions)\n";
+                ss << "  (No mapped fields — assign device inputs on this page)\n";
         } else { // WebSocket
 #ifdef ENABLE_WEBSOCKETS
             // Mirror Update()'s wsDef resolution.
@@ -1140,6 +1175,16 @@ std::string InputMapper::GetOutputPreview() {
             if (protocol && wsDef) {
                 int sentCount = 0;
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+                    bool hasSrc = false;
+                    {
+                        auto it = profile.outputToInput.find(pf->fieldId);
+                        if (it != profile.outputToInput.end() && it->second.instance_id != 0) hasSrc = true;
+                    }
+                    if (!hasSrc)
+                        for (const auto& bm : profile.buttonMappings)
+                            if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc) continue;
+
                     const ProtocolField* wp = nullptr;
                     for (const auto& f : wsDef->fields)
                         if (f.fieldId == pf->fieldId && f.enabled) { wp = &f; break; }
@@ -1148,6 +1193,11 @@ std::string InputMapper::GetOutputPreview() {
                     ++sentCount;
                 }
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+                    bool hasSrc = false;
+                    for (const auto& dm : profile.digitalMappings)
+                        if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc) continue;
+
                     const ProtocolField* wp = nullptr;
                     for (const auto& f : wsDef->fields)
                         if (f.fieldId == pf->fieldId && f.enabled) { wp = &f; break; }
@@ -1156,7 +1206,7 @@ std::string InputMapper::GetOutputPreview() {
                     ++sentCount;
                 }
                 if (sentCount == 0)
-                    ss << "  (No fields matched between output and WS definitions)\n";
+                    ss << "  (No mapped fields — assign device inputs on this page)\n";
             } else if (!protocol) {
                 ss << "  (Unknown Protocol)\n";
             } else {
