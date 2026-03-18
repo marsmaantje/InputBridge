@@ -1075,43 +1075,92 @@ std::string InputMapper::GetOutputPreview() {
         ss << "Active Definition: " << outDef->name << "\n\n";
 
         if (m_SelectedProtocolView == 0) { // OSC
-            std::string oscDefId = osc.GetOutputDefinitionId();
+            // Mirror Update()'s oscDef resolution so the preview only shows
+            // fields that the OSC server will actually transmit.
+            const ProtocolDefinition* oscDef = outDef;
+            {
+                std::string oscId = osc.GetOutputDefinitionId();
+                if (!oscId.empty()) {
+                    const ProtocolDefinition* found = ProtocolRegistry::GetInstance().FindById(oscId);
+                    if (found) oscDef = found;
+                } else {
+                    std::string protocol = osc.GetProtocol();
+                    if (protocol == "SteamLink OSC") {
+                        static ProtocolDefinition s_slDef;
+                        s_slDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
+                        oscDef = &s_slDef;
+                    } else if (protocol == "Project Babble OSC") {
+                        static ProtocolDefinition s_pbDef;
+                        s_pbDef = OSCProjectBabbleProtocol::CreateDefaultDefinition();
+                        oscDef = &s_pbDef;
+                    }
+                }
+            }
+
             ss << "[OSC Output]";
             if (!osc.IsRunning()) ss << " (Stopped)";
-            else if (oscDefId != outDef->id) {
-                bool match = false;
-                if (oscDefId.empty()) {
-                    if (osc.GetProtocol() == outDef->name) match = true;
-                }
-                if (!match) ss << " (Definition Mismatch)";
-            }
+            else if (oscDef != outDef) ss << " (Separate OSC Definition: " << oscDef->name << ")";
             ss << "\n";
 
+            int sentCount = 0;
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
-                ss << "  " << pf->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
+                const ProtocolField* op = nullptr;
+                for (const auto& f : oscDef->fields)
+                    if (f.fieldId == pf->fieldId && f.enabled) { op = &f; break; }
+                if (!op) continue;
+                ss << "  " << op->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
+                ++sentCount;
             }
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                ss << "  " << pf->oscPath << " " << (digitalValues[pf->fieldId] ? "T" : "F") << "\n";
+                const ProtocolField* op = nullptr;
+                for (const auto& f : oscDef->fields)
+                    if (f.fieldId == pf->fieldId && f.enabled) { op = &f; break; }
+                if (!op) continue;
+                ss << "  " << op->oscPath << " " << (digitalValues[pf->fieldId] ? "T" : "F") << "\n";
+                ++sentCount;
             }
+            if (sentCount == 0)
+                ss << "  (No fields matched between output and OSC definitions)\n";
         } else { // WebSocket
 #ifdef ENABLE_WEBSOCKETS
-            std::string wsDefId = ws.GetOutputDefinitionId();
+            // Mirror Update()'s wsDef resolution.
+            const ProtocolDefinition* wsDef = nullptr;
+            {
+                std::string wsId = ws.GetOutputDefinitionId();
+                if (!wsId.empty()) wsDef = ProtocolRegistry::GetInstance().FindById(wsId);
+            }
+
             ss << "[WebSocket Output]";
             if (!ws.IsRunning()) ss << " (Stopped)";
-            else if (wsDefId != outDef->id) ss << " (Definition Mismatch)";
+            else if (!wsDef) ss << " (No WS Definition Selected)";
             ss << "\n";
 
             std::string protoName = ws.GetProtocol();
             auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
-            if (protocol) {
+            if (protocol && wsDef) {
+                int sentCount = 0;
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
-                    ss << "  " << protocol->format(pf->wsKey, analogValues[pf->fieldId]) << "\n";
+                    const ProtocolField* wp = nullptr;
+                    for (const auto& f : wsDef->fields)
+                        if (f.fieldId == pf->fieldId && f.enabled) { wp = &f; break; }
+                    if (!wp) continue;
+                    ss << "  " << protocol->format(wp->wsKey, analogValues[pf->fieldId]) << "\n";
+                    ++sentCount;
                 }
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                    ss << "  " << protocol->format(pf->wsKey, digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                    const ProtocolField* wp = nullptr;
+                    for (const auto& f : wsDef->fields)
+                        if (f.fieldId == pf->fieldId && f.enabled) { wp = &f; break; }
+                    if (!wp) continue;
+                    ss << "  " << protocol->format(wp->wsKey, digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                    ++sentCount;
                 }
-            } else {
+                if (sentCount == 0)
+                    ss << "  (No fields matched between output and WS definitions)\n";
+            } else if (!protocol) {
                 ss << "  (Unknown Protocol)\n";
+            } else {
+                ss << "  (No WS definition — select one in the Network tab)\n";
             }
 #else
             ss << "WebSockets disabled.\n";
