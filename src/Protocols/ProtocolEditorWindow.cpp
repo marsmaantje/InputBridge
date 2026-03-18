@@ -684,12 +684,31 @@ void ProtocolEditorWindow::DrawContent() {
     ImGui::Separator();
 
     // ── Two-column layout: left=list, right=editor ────────────────────────
-    const float listWidth = 220.0f;
-    ImGui::BeginChild("##ProtocolList", ImVec2(listWidth, 0), true);
+    static float s_splitWidth = 220.0f;
+    const float splitterW  = 6.0f;
+    const float totalWidth = ImGui::GetContentRegionAvail().x;
+
+    ImGui::BeginChild("##ProtocolList", ImVec2(s_splitWidth, 0), true);
     DrawProtocolList();
     ImGui::EndChild();
 
-    ImGui::SameLine();
+    ImGui::SameLine(0, 0);
+
+    // Draggable splitter handle
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_SeparatorHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImGui::GetStyleColorVec4(ImGuiCol_SeparatorActive));
+    ImGui::Button("##hsplit", ImVec2(splitterW, -1));
+    ImGui::PopStyleColor(3);
+
+    if (ImGui::IsItemActive())
+        s_splitWidth += ImGui::GetIO().MouseDelta.x;
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+
+    s_splitWidth = std::clamp(s_splitWidth, 100.0f, totalWidth - splitterW - 100.0f);
+
+    ImGui::SameLine(0, 0);
 
     ImGui::BeginChild("##ProtocolEditor", ImVec2(0, 0), true);
     DrawEditor();
