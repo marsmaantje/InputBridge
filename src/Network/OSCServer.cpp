@@ -1,4 +1,5 @@
 #include "Network/OSCServer.h"
+#include "Network/OSCSubchannel.h"
 #include "Mappers/OutputMapper.h"
 #include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
@@ -6,6 +7,7 @@
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
+#include "Haptics/HapticDevice.h"
 #include <SDL3/SDL_timer.h>
 #include <iostream>
 #include <string>
@@ -15,6 +17,7 @@
 #include <cstring>
 #include <atomic>
 #include <thread>
+#include <string_view>
 
 namespace {
     // Preference Keys
@@ -184,6 +187,101 @@ int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg *
     return 0;
 }
 
+// Handles subchannel paths of the form /haptic/<effect>/<slot>
+// where the slot integer is encoded as the final path component instead of
+// being passed as a message argument.  This allows a host that can only send
+// one OSC message per frame per path (e.g. Resonite) to send multiple effects
+// of the same type simultaneously by addressing different subchannels.
+//
+// Path parsing is delegated to ParseSubchannelPath() (OSCSubchannel.h) so that
+// the logic can be unit-tested independently of the liblo runtime.
+//
+// See OSCSubchannel.h for the full path/argument-format specification.
+// Note: /haptic/gain has no slot dimension and therefore has no subchannel variant.
+int OSCServer::haptic_subchannel_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+
+        // Delegate path parsing to the testable free function.
+        const SubchannelPath sub = ParseSubchannelPath(path);
+        if (!sub.valid) return 0;
+
+        const int slot = sub.slot;
+
+        switch (sub.effect) {
+        // /haptic/rumble/N  iffi  (id, low_freq, high_freq, duration_ms)
+        case SubchannelPath::Effect::Rumble:
+            if (std::strcmp(types, "iffi") == 0 && argc == 4) {
+                const int   id       = argv[0]->i;
+                const float low      = argv[1]->f;
+                const float high     = argv[2]->f;
+                const int   duration = argv[3]->i;
+                server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
+            }
+            break;
+
+        // /haptic/constant/N  ifi  (id, strength, duration_ms)
+        case SubchannelPath::Effect::Constant:
+            if (std::strcmp(types, "ifi") == 0 && argc == 3) {
+                const int   id       = argv[0]->i;
+                const float strength = argv[1]->f;
+                const int   duration = argv[2]->i;
+                server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
+            }
+            break;
+
+        // /haptic/periodic/N
+        //   iififfii  — id, wave_type, strength, period, magnitude, offset, phase, duration_ms
+        //   ififfii   — legacy (no wave_type); defaults to Sine
+        case SubchannelPath::Effect::Periodic:
+            if (std::strcmp(types, "iififfii") == 0 && argc == 8) {
+                const int   id        = argv[0]->i;
+                const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[1]->i);
+                const float strength  = argv[2]->f;
+                const int   period    = argv[3]->i;
+                const float magnitude = argv[4]->f;
+                const float offset    = argv[5]->f;
+                const int   phase     = argv[6]->i;
+                const int   duration  = argv[7]->i;
+                server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
+            } else if (std::strcmp(types, "ififfii") == 0 && argc == 7) {
+                const int   id        = argv[0]->i;
+                const float strength  = argv[1]->f;
+                const int   period    = argv[2]->i;
+                const float magnitude = argv[3]->f;
+                const float offset    = argv[4]->f;
+                const int   phase     = argv[5]->i;
+                const int   duration  = argv[6]->i;
+                server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
+            }
+            break;
+
+        // /haptic/condition/N  iiffffffi
+        //   id, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms
+        case SubchannelPath::Effect::Condition:
+            if (std::strcmp(types, "iiffffffi") == 0 && argc == 9) {
+                const int   id       = argv[0]->i;
+                const HapticConditionType ctype = ConditionTypeFromIndex(argv[1]->i);
+                const float rsat     = argv[2]->f;
+                const float lsat     = argv[3]->f;
+                const float rcoeff   = argv[4]->f;
+                const float lcoeff   = argv[5]->f;
+                const float db       = argv[6]->f;
+                const float center   = argv[7]->f;
+                const int   duration = argv[8]->i;
+                server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
+            }
+            break;
+
+        default:
+            break;
+        }
+    } catch (...) {}
+    return 0;
+}
+
 bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_running) {
@@ -224,6 +322,9 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iififfii",   haptic_periodic_handler,  this);
     lo_server_thread_add_method(m_server_thread, kHapticConditionPath, "iiiffffffi", haptic_condition_handler, this);
     lo_server_thread_add_method(m_server_thread, kHapticGainPath, "ii", haptic_gain_handler, this);
+    // Subchannel handler: catches /haptic/<effect>/<slot> paths (slot in path, no slot arg).
+    // Registered before the generic catch-all so it runs first for subchannel messages.
+    lo_server_thread_add_method(m_server_thread, nullptr, nullptr, haptic_subchannel_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);
 

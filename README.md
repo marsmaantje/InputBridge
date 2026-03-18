@@ -338,6 +338,48 @@ Example: `[1, 80]`
 
 ---
 
+#### Subchannel Paths (Slot-in-Path)
+
+Some OSC hosts (notably **Resonite**) permit only one message per frame to the same OSC path. Because the standard haptic paths encode the slot as a message argument, two effects of the same type targeting different slots would collide — only the last message per frame would be acted on.
+
+**Subchannel paths** solve this by moving the slot out of the argument list and into the path itself as a trailing integer component. Each distinct slot gets a unique path, so all of them can be sent in the same frame without conflict.
+
+##### Short subchannel paths (`/haptic/<effect>/<slot>`)
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/haptic/rumble/<slot>` | `iffi` | deviceId, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
+| `/haptic/constant/<slot>` | `ifi` | deviceId, strength (-1.0–1.0), duration_ms |
+| `/haptic/periodic/<slot>` | `iififfii` | deviceId, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/haptic/periodic/<slot>` | `ififfii` | deviceId, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms *(legacy — defaults to Sine)* |
+| `/haptic/condition/<slot>` | `iiffffffi` | deviceId, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+
+##### Long subchannel paths (`/inputbridge/haptics/<effect>/<slot>`)
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/rumble/<slot>` | `iffi` | deviceId, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
+| `/inputbridge/haptics/force/<slot>` | `ifi` | deviceId, strength (-1.0–1.0), duration_ms |
+| `/inputbridge/haptics/periodic/<slot>` | `iififfii` | deviceId, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/inputbridge/haptics/periodic/<slot>` | `ififfii` | deviceId, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms *(legacy — defaults to Sine)* |
+| `/inputbridge/haptics/condition/<slot>` | `iiffffffi` | deviceId, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+
+Note that `gain` has no subchannel variant because it is device-wide and has no slot dimension.
+
+**Comparison — standard vs subchannel:**
+
+```
+# Standard paths (slot as argument) — only one message per path per frame in Resonite:
+[1, 0, 0.8, 0.4, 500]  →  /haptic/rumble        ← slot 0  ✓
+[1, 1, 0.2, 0.1, 250]  →  /haptic/rumble        ← slot 1  ✗ collides, dropped
+
+# Subchannel paths (slot in path) — unique path per slot, all delivered:
+[1, 0.8, 0.4, 500]  →  /haptic/rumble/0         ← slot 0  ✓
+[1, 0.2, 0.1, 250]  →  /haptic/rumble/1         ← slot 1  ✓
+```
+
+---
+
 #### DualSense Adaptive Triggers
 
 Controls Sony DualSense adaptive trigger effects on PS5 controllers. All paths begin with `/inputbridge/haptics/dualsense/trigger/{side}/` where `{side}` is `left` or `right`.

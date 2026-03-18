@@ -301,6 +301,7 @@ endif()
 if(ENABLE_OSC)
     target_sources(InputBridge PRIVATE
         src/Network/OSCServer.cpp
+        src/Network/OSCSubchannel.cpp
         src/Protocols/OSCProtocol.cpp
     )
 endif()

@@ -15,7 +15,6 @@
 // Call HapticStub::Reset() in SetUp() to clear state between tests.
 // ─────────────────────────────────────────────────────────────────────────────
 
-#include <cstdint>
 #include <vector>
 #include "Haptics/HapticDevice.h"
 

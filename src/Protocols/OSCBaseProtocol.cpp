@@ -137,4 +137,108 @@ void OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
             }
         });
     }
+
+    // ── Subchannel paths: /inputbridge/haptics/<effect>/<slot> ───────────────
+    // The slot is encoded as the trailing decimal path component instead of
+    // being passed as a message argument.  This lets hosts that can send only
+    // one OSC message per frame per path (e.g. Resonite) address multiple
+    // independent slots by using distinct paths:
+    //
+    //   /inputbridge/haptics/rumble/0   iffi  (id, low_freq, high_freq, dur)
+    //   /inputbridge/haptics/rumble/1   iffi  (id, low_freq, high_freq, dur)
+    //
+    // Custom-protocol field IDs are matched against the base path (without the
+    // trailing /N), so user-defined paths like "/my/rumble/0" also work.
+
+    const auto last_slash = path_sv.rfind('/');
+    if (last_slash == std::string_view::npos) return;
+    const auto tail = path_sv.substr(last_slash + 1);
+    if (tail.empty()) return;
+    bool all_digits = true;
+    for (char c : tail) { if (c < '0' || c > '9') { all_digits = false; break; } }
+    if (!all_digits) return;
+
+    int slot = 0;
+    for (char c : tail) slot = slot * 10 + (c - '0');
+    const std::string_view base = path_sv.substr(0, last_slash);
+
+    // Re-run field-id lookup against the base path (without the /N suffix).
+    std::string baseFieldId;
+    if (def) {
+        for (const auto& field : def->fields) {
+            if (field.enabled && field.oscPath == base) {
+                baseFieldId = field.fieldId;
+                break;
+            }
+        }
+    }
+    auto matchBase = [&](const char* legacyPath, const char* fid) {
+        return (baseFieldId == fid) || (baseFieldId.empty() && base == legacyPath);
+    };
+
+    // /inputbridge/haptics/rumble/N  iffi  (id, low_freq, high_freq, duration_ms)
+    if (matchBase("/inputbridge/haptics/rumble", "haptic_rumble")
+        && std::strcmp(types, "iffi") == 0 && argc == 4) {
+        const float low      = argv[1]->f;
+        const float high     = argv[2]->f;
+        const int   duration = argv[3]->i;
+        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
+            gamepad->PlayRumble(slot, low, high, (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
+        });
+    }
+    // /inputbridge/haptics/force/N  ifi  (id, strength, duration_ms)
+    else if (matchBase("/inputbridge/haptics/force", "haptic_constant")
+        && std::strcmp(types, "ifi") == 0 && argc == 3) {
+        const float strength = argv[1]->f;
+        const int   duration = argv[2]->i;
+        DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
+            wheel->PlayConstant(slot, strength, (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
+        });
+    }
+    // /inputbridge/haptics/periodic/N  iififfii  (id, wave_type, strength, period, magnitude, offset, phase, duration_ms)
+    else if (matchBase("/inputbridge/haptics/periodic", "haptic_periodic")
+        && std::strcmp(types, "iififfii") == 0 && argc == 8) {
+        const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[1]->i);
+        const float strength  = argv[2]->f;
+        const int   period    = argv[3]->i;
+        const float magnitude = argv[4]->f;
+        const float offset    = argv[5]->f;
+        const int   phase     = argv[6]->i;
+        const int   duration  = argv[7]->i;
+        DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
+            wheel->PlayPeriodic(slot, wave_type, strength, period, magnitude, offset, phase,
+                (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
+        });
+    }
+    // Legacy: /inputbridge/haptics/periodic/N  ififfii  — no wave_type, defaults to Sine
+    else if (matchBase("/inputbridge/haptics/periodic", "haptic_periodic")
+        && std::strcmp(types, "ififfii") == 0 && argc == 7) {
+        const float strength  = argv[1]->f;
+        const int   period    = argv[2]->i;
+        const float magnitude = argv[3]->f;
+        const float offset    = argv[4]->f;
+        const int   phase     = argv[5]->i;
+        const int   duration  = argv[6]->i;
+        DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
+            wheel->PlayPeriodic(slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase,
+                (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
+        });
+    }
+    // /inputbridge/haptics/condition/N  iiffffffi  (id, condition_type, rsat, lsat, rcoeff, lcoeff, deadband, center, duration_ms)
+    else if (matchBase("/inputbridge/haptics/condition", "haptic_condition")
+        && std::strcmp(types, "iiffffffi") == 0 && argc == 9) {
+        const HapticConditionType ctype  = ConditionTypeFromIndex(argv[1]->i);
+        const float right_sat  = argv[2]->f;
+        const float left_sat   = argv[3]->f;
+        const float right_coeff = argv[4]->f;
+        const float left_coeff  = argv[5]->f;
+        const float deadband   = argv[6]->f;
+        const float center     = argv[7]->f;
+        const int   duration   = argv[8]->i;
+        DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
+            wheel->PlayCondition(slot, ctype, right_sat, left_sat, right_coeff, left_coeff, deadband, center,
+                (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
+        });
+    }
+    // Note: /haptic/gain has no slot dimension — no subchannel variant is defined.
 }
