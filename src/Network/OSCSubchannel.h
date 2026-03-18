@@ -32,6 +32,8 @@
  *   /haptic/constant/<N>     ifi    id, strength, duration_ms
  *   /haptic/periodic/<N>     iififfii  id, wave_type, strength, period,
  *                                      magnitude, offset, phase, duration_ms
+ *                                      wave_type: 0=Sine 1=Square 2=Triangle
+ *                                                 3=SawtoothUp 4=SawtoothDown
  *   /haptic/periodic/<N>     ififfii   (legacy — no wave_type, defaults Sine)
  *   /haptic/condition/<N>    iiffffffi id, condition_type, right_sat, left_sat,
  *                                      right_coeff, left_coeff, deadband,

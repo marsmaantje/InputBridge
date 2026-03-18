@@ -87,7 +87,7 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
     // -----------------------------------------------------------------------
     if (ImGui::TreeNode("Periodic Effects")) {
         ImGui::TextDisabled("Engine hum, turbulence, weapons fire, buffet effects.");
-        const char* wave_types[] = { "Sine", "Triangle", "Sawtooth Up", "Sawtooth Down" };
+        const char* wave_types[] = { "Sine", "Square", "Triangle", "Sawtooth Up", "Sawtooth Down" };
         ImGui::Combo("Wave Type##per_fs", &m_periodic_wave_type, wave_types, IM_ARRAYSIZE(wave_types));
         ImGui::SliderInt("Slot##per_fs", &m_periodic_slot, 0, 7);
         ImGui::SliderFloat("Strength##per_fs",   &m_periodic_strength,  0.0f, 1.0f);

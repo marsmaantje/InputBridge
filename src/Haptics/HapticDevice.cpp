@@ -199,12 +199,35 @@ void HapticDevice::SetPeriodic(HapticPeriodicType type, float magnitude, int per
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = ToSDLPeriodicType(type);  // translate once, here
-        effect.periodic.direction.type = SDL_HAPTIC_POLAR;
-        effect.periodic.direction.dir[0] = (Sint32)(direction * 100.0f);
-        effect.periodic.length = SDL_HAPTIC_INFINITY;
-        effect.periodic.period = (Uint16)period;
-        effect.periodic.magnitude = (Sint16)(std::clamp(magnitude, 0.0f, 1.0f) * 32767.0f);
+
+        // Square wave: SDL3 has no native SQUARE type; synthesise it as a
+        // SDL_HAPTIC_CUSTOM effect.  SetPeriodic has no offset parameter, so
+        // the wave is centred at 0 (hi = +magnitude, lo = -magnitude).
+        if (type == HapticPeriodicType::Square) {
+            const auto hi_val = std::clamp( magnitude, -1.0f, 1.0f);
+            const auto lo_val = std::clamp(-magnitude, -1.0f, 1.0f);
+            Uint16 wave_data[2] = {
+                static_cast<Uint16>(static_cast<Sint16>(hi_val * 32767.0f)),
+                static_cast<Uint16>(static_cast<Sint16>(lo_val * 32767.0f))
+            };
+            const Uint16 half_period = static_cast<Uint16>(std::max(1, period / 2));
+
+            effect.type = SDL_HAPTIC_CUSTOM;
+            effect.custom.direction.type   = SDL_HAPTIC_POLAR;
+            effect.custom.direction.dir[0] = (Sint32)(direction * 100.0f);
+            effect.custom.channels         = 1;
+            effect.custom.period           = half_period;
+            effect.custom.samples          = 2;
+            effect.custom.data             = wave_data;  // copied by SDL
+            effect.custom.length           = SDL_HAPTIC_INFINITY;
+        } else {
+            effect.type = ToSDLPeriodicType(type);  // translate once, here
+            effect.periodic.direction.type = SDL_HAPTIC_POLAR;
+            effect.periodic.direction.dir[0] = (Sint32)(direction * 100.0f);
+            effect.periodic.length = SDL_HAPTIC_INFINITY;
+            effect.periodic.period = (Uint16)period;
+            effect.periodic.magnitude = (Sint16)(std::clamp(magnitude, 0.0f, 1.0f) * 32767.0f);
+        }
 
         SDL_HapticEffectID existing = -1;
         auto it = m_periodicEffects.find(kInternalSlot);

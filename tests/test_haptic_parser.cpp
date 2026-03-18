@@ -193,11 +193,11 @@ TEST_F(HapticParserTest, PeriodicEffectCallsQueuePeriodic) {
 }
 
 TEST_F(HapticParserTest, PeriodicWaveTypePassedThrough) {
-    // wave_type 2 = SawtoothUp
+    // wave_type 3 = SawtoothUp
     HapticParser::Parse(
         R"({"type":"haptic","effect":"periodic","device":0,
             "params":{"strength":0.5,"period":100,"magnitude":0.5,
-                      "offset":0.0,"phase":0,"duration":500,"wave_type":2}})",
+                      "offset":0.0,"phase":0,"duration":500,"wave_type":3}})",
         FakeMapper());
     ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
     EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::SawtoothUp);
@@ -211,6 +211,32 @@ TEST_F(HapticParserTest, PeriodicWaveTypeOutOfRangeDefaultsToSine) {
         FakeMapper());
     ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
     EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::Sine);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypeSquarePassedThrough) {
+    // wave_type 1 = Square — must reach the mapper as Square, not fall back to Sine.
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,
+            "params":{"strength":0.8,"period":200,"magnitude":0.7,
+                      "offset":0.1,"phase":0,"duration":1000,"wave_type":1}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::Square);
+    // Verify the other fields are still passed through correctly.
+    EXPECT_FLOAT_EQ(HapticStub::periodicCalls[0].magnitude, 0.7f);
+    EXPECT_FLOAT_EQ(HapticStub::periodicCalls[0].offset,    0.1f);
+    EXPECT_EQ(HapticStub::periodicCalls[0].period,          200);
+    EXPECT_EQ(HapticStub::periodicCalls[0].duration,        1000);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypeSquareAutoDetect) {
+    // AutoDetect path must also pass Square through without downgrading it.
+    HapticParser::Parse(
+        R"({"type":"auto","device":0,
+            "params":{"period":100,"magnitude":0.5,"offset":0.0,"duration":500,"wave_type":1}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::Square);
 }
 
 TEST_F(HapticParserTest, PeriodicDurationMsAlias) {

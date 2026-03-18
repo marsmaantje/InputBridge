@@ -76,15 +76,42 @@ int FlightStickHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, flo
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = ToSDLPeriodicType(wave_type);  // translate once, here
-        effect.periodic.direction.type   = SDL_HAPTIC_CARTESIAN;
-        effect.periodic.direction.dir[0] = 1;
-        effect.periodic.direction.dir[1] = 0;
-        effect.periodic.period    = static_cast<Uint16>(period);
-        effect.periodic.magnitude = static_cast<Sint16>(magnitude * 32767.0f);
-        effect.periodic.offset    = static_cast<Sint16>(offset * 32767.0f);
-        effect.periodic.phase     = static_cast<Uint16>(phase);
-        effect.periodic.length    = duration_ms;
+
+        // Square wave: SDL3 has no native SQUARE type; synthesise it as a
+        // SDL_HAPTIC_CUSTOM effect with two equal-duration samples (high, low).
+        // Each sample lasts period/2 ms, giving a 50 % duty-cycle square wave
+        // with the requested period.
+        if (wave_type == HapticPeriodicType::Square) {
+            // Clamp to [-1, 1] before scaling so SDL Sint16 never overflows.
+            const auto hi_val = std::clamp( magnitude + offset, -1.0f, 1.0f);
+            const auto lo_val = std::clamp(-magnitude + offset, -1.0f, 1.0f);
+            // SDL_HapticCustom::data is Uint16* but values are treated as Sint16.
+            Uint16 wave_data[2] = {
+                static_cast<Uint16>(static_cast<Sint16>(hi_val * 32767.0f)),
+                static_cast<Uint16>(static_cast<Sint16>(lo_val * 32767.0f))
+            };
+            const Uint16 half_period = static_cast<Uint16>(std::max(1u, period / 2u));
+
+            effect.type = SDL_HAPTIC_CUSTOM;
+            effect.custom.direction.type   = SDL_HAPTIC_CARTESIAN;
+            effect.custom.direction.dir[0] = 1;
+            effect.custom.direction.dir[1] = 0;
+            effect.custom.channels         = 1;
+            effect.custom.period           = half_period;
+            effect.custom.samples          = 2;
+            effect.custom.data             = wave_data;  // copied by SDL
+            effect.custom.length           = duration_ms;
+        } else {
+            effect.type = ToSDLPeriodicType(wave_type);  // translate once, here
+            effect.periodic.direction.type   = SDL_HAPTIC_CARTESIAN;
+            effect.periodic.direction.dir[0] = 1;
+            effect.periodic.direction.dir[1] = 0;
+            effect.periodic.period    = static_cast<Uint16>(period);
+            effect.periodic.magnitude = static_cast<Sint16>(magnitude * 32767.0f);
+            effect.periodic.offset    = static_cast<Sint16>(offset * 32767.0f);
+            effect.periodic.phase     = static_cast<Uint16>(phase);
+            effect.periodic.length    = duration_ms;
+        }
 
         SDL_HapticEffectID existing = -1;
         auto it = m_periodicEffects.find(slot);

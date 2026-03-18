@@ -68,15 +68,27 @@ inline const char* ConditionTypeName(HapticConditionType t) {
 
 // ─── Periodic effect wave type ────────────────────────────────────────────────
 //
-// User-facing index (0–3) for the four SDL periodic waveform types.
+// User-facing index (0–4) for the five supported periodic waveform types.
+// The order matches the SDL3 SDL_HapticType enumeration:
+//   SDL_HAPTIC_SINE / SDL_HAPTIC_SQUARE / SDL_HAPTIC_TRIANGLE /
+//   SDL_HAPTIC_SAWTOOTHUP / SDL_HAPTIC_SAWTOOTHDOWN
+//
+// Square does not have a native SDL3 type (SDL_HAPTIC_SQUARE was removed); it
+// is synthesised as a SDL_HAPTIC_CUSTOM effect with a 2-sample waveform inside
+// PlayPeriodic() implementations.  ToSDLPeriodicType() must therefore NOT be
+// called with Square; it returns SDL_HAPTIC_SINE as a safe fallback if it
+// ever is.
+//
 // The translation to SDL_HAPTIC_* happens in exactly one place:
-//   ToSDLPeriodicType()  →  called inside PlayPeriodic() implementations.
+//   ToSDLPeriodicType()  →  called inside PlayPeriodic() implementations
+//                           (for all types except Square).
 
 enum class HapticPeriodicType : int {
-    Sine        = 0,  // SDL_HAPTIC_SINE        — smooth sinusoidal wave
-    Triangle    = 1,  // SDL_HAPTIC_TRIANGLE    — linear ramp up/down
-    SawtoothUp  = 2,  // SDL_HAPTIC_SAWTOOTHUP  — fast rise, instant drop
-    SawtoothDown = 3, // SDL_HAPTIC_SAWTOOTHDOWN — instant rise, fast drop
+    Sine         = 0,  // SDL_HAPTIC_SINE        — smooth sinusoidal wave
+    Square       = 1,  // SDL_HAPTIC_CUSTOM (synthesised) — instant high/low
+    Triangle     = 2,  // SDL_HAPTIC_TRIANGLE    — linear ramp up/down
+    SawtoothUp   = 3,  // SDL_HAPTIC_SAWTOOTHUP  — fast rise, instant drop
+    SawtoothDown = 4,  // SDL_HAPTIC_SAWTOOTHDOWN — instant rise, fast drop
 };
 
 inline Uint16 ToSDLPeriodicType(HapticPeriodicType t) {
@@ -85,12 +97,15 @@ inline Uint16 ToSDLPeriodicType(HapticPeriodicType t) {
         case HapticPeriodicType::Triangle:     return SDL_HAPTIC_TRIANGLE;
         case HapticPeriodicType::SawtoothUp:   return SDL_HAPTIC_SAWTOOTHUP;
         case HapticPeriodicType::SawtoothDown: return SDL_HAPTIC_SAWTOOTHDOWN;
+        // Square is synthesised via SDL_HAPTIC_CUSTOM in PlayPeriodic().
+        // This path should never be reached; return Sine as a safe fallback.
+        case HapticPeriodicType::Square:
         default:                               return SDL_HAPTIC_SINE;
     }
 }
 
 inline HapticPeriodicType PeriodicTypeFromIndex(int index) {
-    if (index < 0 || index > 3) return HapticPeriodicType::Sine;
+    if (index < 0 || index > 4) return HapticPeriodicType::Sine;
     return static_cast<HapticPeriodicType>(index);
 }
 
@@ -100,6 +115,7 @@ inline HapticPeriodicType PeriodicTypeFromSDL(Uint16 sdlType) {
         case SDL_HAPTIC_TRIANGLE:     return HapticPeriodicType::Triangle;
         case SDL_HAPTIC_SAWTOOTHUP:   return HapticPeriodicType::SawtoothUp;
         case SDL_HAPTIC_SAWTOOTHDOWN: return HapticPeriodicType::SawtoothDown;
+        // SDL_HAPTIC_CUSTOM has no single equivalent; default to Sine.
         default:                      return HapticPeriodicType::Sine;
     }
 }
@@ -107,6 +123,7 @@ inline HapticPeriodicType PeriodicTypeFromSDL(Uint16 sdlType) {
 inline const char* PeriodicTypeName(HapticPeriodicType t) {
     switch (t) {
         case HapticPeriodicType::Sine:         return "Sine";
+        case HapticPeriodicType::Square:       return "Square";
         case HapticPeriodicType::Triangle:     return "Triangle";
         case HapticPeriodicType::SawtoothUp:   return "Sawtooth Up";
         case HapticPeriodicType::SawtoothDown: return "Sawtooth Down";
