@@ -219,6 +219,23 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
 }
 
 // ---------------------------------------------------------------------------
+// GetBatteryColor
+// ---------------------------------------------------------------------------
+static ImU32 GetBatteryColor(const DeviceState& dev)
+{
+    if (dev.battery_state == SDL_POWERSTATE_CHARGING
+        || dev.battery_state == SDL_POWERSTATE_CHARGED) {
+        return IM_COL32(50, 255, 50, 255);
+    }
+    if (dev.battery_percent >= 0) {
+        if      (dev.battery_percent <= 20) return IM_COL32(255,  50,  50, 255);
+        else if (dev.battery_percent <= 50) return IM_COL32(255, 200,  50, 255);
+        else                                return IM_COL32( 50, 255,  50, 255);
+    }
+    return ImGui::GetColorU32(ImGuiCol_Text);
+}
+
+// ---------------------------------------------------------------------------
 // DrawDeviceItem
 // ---------------------------------------------------------------------------
 
@@ -253,15 +270,7 @@ void DrawDeviceItem(DeviceState&        dev,
             rect_max.x - icon_w - pad,
             rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
 
-        ImU32 bat_col = ImGui::GetColorU32(ImGuiCol_Text);
-        if (dev.battery_state == SDL_POWERSTATE_CHARGING
-            || dev.battery_state == SDL_POWERSTATE_CHARGED) {
-            bat_col = IM_COL32(50, 255, 50, 255);
-        } else if (dev.battery_percent >= 0) {
-            if      (dev.battery_percent <= 20) bat_col = IM_COL32(255,  50,  50, 255);
-            else if (dev.battery_percent <= 50) bat_col = IM_COL32(255, 200,  50, 255);
-            else                                bat_col = IM_COL32( 50, 255,  50, 255);
-        }
+        ImU32 bat_col = GetBatteryColor(dev);
 
         const float body_w = icon_w * 0.85f;
         const float term_w = icon_w * 0.15f;
@@ -314,11 +323,7 @@ void DrawDeviceItem(DeviceState&        dev,
                 ImGui::Text("(%d%%)", dev.battery_percent);
 
                 const float   battery_fraction = dev.battery_percent / 100.0f;
-                ImVec4        bar_color         = ImVec4(0.2f, 1.0f, 0.2f, 1.0f);
-                if      (dev.battery_percent < 30) bar_color = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
-                else if (dev.battery_percent < 70) bar_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
-
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, GetBatteryColor(dev));
                 ImGui::ProgressBar(battery_fraction, ImVec2(-1, 0), "");
                 ImGui::PopStyleColor();
             }
