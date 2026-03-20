@@ -106,6 +106,13 @@ private:
     static int haptic_condition_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_gain_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
+    // Handles subchannel paths of the form /haptic/<effect>/<slot>
+    // where the slot is encoded in the path instead of as a message argument.
+    // This allows multiple effects of the same type to be sent in the same
+    // frame (required by hosts like Resonite that allow only one message per
+    // OSC path per frame).
+    static int haptic_subchannel_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+
     lo_address m_send_address = nullptr;
     lo_server_thread m_server_thread = nullptr;
 
@@ -130,7 +137,8 @@ private:
     std::string m_selectedDefinitionId; // legacy single-slot
     std::string m_outputDefinitionId; // selected output (server→client) definition
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
-    std::deque<std::string> m_logs;
+    struct LogEntry { std::string text; bool isError = false; };
+    std::deque<LogEntry> m_logs;
     std::set<std::string> m_clients;
     uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;

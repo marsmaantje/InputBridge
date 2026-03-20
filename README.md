@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (Ubuntu)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(ubuntu-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (Windows)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(windows-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml) [![Test Results (macOS)](https://github.com/marsmaantje/InputBridge/workflows/Test%20Results%20(macos-latest)/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml)
 
-InputBridge is a cross-platform input device bridge that relays joystick, gamepad, steering wheel, and other controller data over OSC and WebSocket. It supports haptic feedback control, adaptive trigger effects, and a fully configurable protocol system.
+InputBridge is a cross-platform input device bridge that relays joystick, gamepad, steering wheel, and other controller data over OSC and WebSocket. It supports haptic feedback control, adaptive trigger effects, a fully configurable protocol system, and per-device visibility control to hide physical devices from other applications while keeping them fully accessible to InputBridge.
 
 ---
 
@@ -13,9 +13,31 @@ InputBridge is a cross-platform input device bridge that relays joystick, gamepa
 | Generic Gamepad | Rumble (low/high frequency motors) |
 | Xbox One / Series X\|S | Rumble + impulse trigger motors (left/right independently) |
 | Sony DualSense (PS5) | Adaptive triggers (7 effect types), rumble, LED control, player indicators — USB & Bluetooth |
-| Steering Wheel | Constant force, periodic effects, condition effects |
-| Flight Stick | Axis + button visualisation |
+| Steering Wheel | Constant force, periodic effects, condition effects (Spring / Damper / Inertia / Friction) |
+| Flight Stick / Throttle | Constant force, periodic, condition effects (applied on both pitch and roll axes), rumble |
 | Wiimote | Button + axis visualisation |
+
+---
+
+## Device Visibility (Hide from Other Applications)
+
+Each connected device has a **Device Visibility** section in its panel. Enabling **"Hide from other applications"** prevents any other process from receiving input from that device while InputBridge continues to read it normally. This is useful when you want a physical controller to be exclusively used by InputBridge — for example, when bridging inputs to a virtual device in VRChat or Resonite.
+
+The hide is implemented using the best available mechanism per platform:
+
+| Platform | Mechanism | Notes |
+|---|---|---|
+| **Windows** | [HidHide](https://github.com/nefarius/HidHide) kernel-mode filter driver | Must be installed separately. InputBridge is added to the allow-list automatically. See below for Steam Input compatibility. |
+| **Linux** | `EVIOCGRAB` exclusive evdev grab + open `jsN` fd | Grabs both `eventN` and `jsN` nodes so no access path leaks events. Released automatically on exit. |
+| **macOS** | `IOHIDOptionsTypeSeizeDevice` (IOKit) | Released automatically on exit. |
+
+If the underlying mechanism is unavailable (e.g. HidHide is not installed on Windows), the checkbox is shown greyed out with an explanatory message.
+
+### Steam Input Compatibility (Windows)
+
+When using HidHide on Windows, an additional **"Keep Steam Input access"** checkbox is shown (enabled by default). When checked, `steam.exe` is added to the HidHide allow-list alongside InputBridge, so Steam Input features (gyro, haptics, controller glyphs, etc.) continue to work even while the device is hidden from every other application.
+
+> **Note:** HidHide's block-list persists in the kernel driver across application restarts. Unchecking the hide toggle always removes the device from the block-list immediately. If InputBridge exits unexpectedly while a device is hidden, open the [HidHide Configuration Client](https://github.com/nefarius/HidHide) to clear the block-list manually.
 
 ---
 
@@ -133,132 +155,97 @@ The WebSocket server accepts JSON messages to trigger haptic effects on connecte
 
 ### General Structure
 
-All messages must be a JSON object containing the target device ID, the device type, the effect name, and a parameters object.
-
 ```json
 {
   "device": <integer>,      // SDL Joystick Instance ID
-  "type": "<string>",       // "gamepad" or "steering_wheel"
-  "effect": "<string>",     // Effect name (e.g., "rumble", "constant")
-  "params": {               // Effect-specific parameters
-    ...
-  }
+  "type": "<string>",       // "gamepad", "steering_wheel", or "flight_stick"
+  "effect": "<string>",     // Effect name (e.g., "rumble", "constant", "condition")
+  "params": { ... }
 }
 ```
 
 ### 1. Gamepad Rumble
-Used for standard controller vibration.
 
-*   **type**: `"gamepad"`
-*   **effect**: `"rumble"`
-*   **params**:
-    *   `large_magnitude`: Float (0.0 to 1.0) - Low frequency motor intensity.
-    *   `small_magnitude`: Float (0.0 to 1.0) - High frequency motor intensity.
-    *   `duration_ms`: Integer - Duration in milliseconds.
+*   **type**: `"gamepad"` · **effect**: `"rumble"`
+*   **params**: `large_magnitude` (0.0–1.0), `small_magnitude` (0.0–1.0), `duration_ms`
 
-**Example:**
 ```json
-{
-  "device": 1,
-  "type": "gamepad",
-  "effect": "rumble",
-  "params": {
-    "large_magnitude": 0.8,
-    "small_magnitude": 0.2,
-    "duration_ms": 500
-  }
-}
+{ "device": 1, "type": "gamepad", "effect": "rumble",
+  "params": { "large_magnitude": 0.8, "small_magnitude": 0.2, "duration_ms": 500 } }
 ```
 
-### 2. Steering Wheel: Constant Force
-Used for constant resistance or force feedback.
+### 2. Steering Wheel / Flight Stick: Constant Force
 
-*   **type**: `"steering_wheel"`
-*   **effect**: `"constant"`
-*   **params**:
-    *   `strength`: Float (-1.0 to 1.0) - Force level.
-    *   `duration_ms`: Integer - Duration in milliseconds.
+*   **type**: `"steering_wheel"` or `"flight_stick"` · **effect**: `"constant"`
+*   **params**: `strength` (-1.0–1.0), `duration_ms`
 
-**Example:**
 ```json
-{
-  "device": 1,
-  "type": "steering_wheel",
-  "effect": "constant",
-  "params": {
-    "strength": 0.5,
-    "duration_ms": 1000
-  }
-}
+{ "device": 1, "type": "steering_wheel", "effect": "constant",
+  "params": { "strength": 0.5, "duration_ms": 1000 } }
 ```
 
-### 3. Steering Wheel: Periodic Effect
-Used for sine waves or vibration textures (e.g., engine vibration, road surface).
+### 3. Steering Wheel / Flight Stick: Periodic Effect
 
-*   **type**: `"steering_wheel"`
-*   **effect**: `"periodic"`
+*   **type**: `"steering_wheel"` or `"flight_stick"` · **effect**: `"periodic"`
 *   **params**:
-    *   `strength`: Float (0.0 to 1.0) - Overall gain/strength.
-    *   `period`: Integer - Period of the wave in milliseconds.
-    *   `magnitude`: Float (0.0 to 1.0) - Peak magnitude of the wave.
-    *   `offset`: Float (-1.0 to 1.0) - Mean value of the wave.
-    *   `phase`: Integer - Phase shift (0 to 36000, representing 0.00 to 360.00 degrees).
-    *   `duration_ms`: Integer - Duration in milliseconds.
+    *   `wave_type` — Waveform shape:
 
-**Example:**
+        | Value | Name | Character |
+        |---|---|---|
+        | `0` | Sine *(default)* | Smooth sinusoidal oscillation |
+        | `1` | Triangle | Linear ramp up then down |
+        | `2` | Sawtooth Up | Gradual rise, instant drop |
+        | `3` | Sawtooth Down | Instant rise, gradual drop |
+
+    *   `strength` (0.0–1.0) — Overall output gain
+    *   `period` (ms) — Duration of one full cycle
+    *   `magnitude` (0.0–1.0) — Peak amplitude of the wave
+    *   `offset` (-1.0–1.0) — Mean value (centre point) of the wave
+    *   `phase` (0–36000) — Starting phase offset in hundredths of a degree
+    *   `duration_ms` — Duration in ms; use `-1` for infinite
+
 ```json
-{
-  "device": 1,
-  "type": "steering_wheel",
-  "effect": "periodic",
-  "params": {
-    "strength": 1.0,
-    "period": 100,
-    "magnitude": 0.5,
-    "offset": 0.0,
-    "phase": 0,
-    "duration_ms": 2000
-  }
-}
+{ "device": 1, "type": "steering_wheel", "effect": "periodic",
+  "params": { "wave_type": 1, "strength": 1.0, "period": 100,
+              "magnitude": 0.5, "offset": 0.0, "phase": 0, "duration_ms": 2000 } }
 ```
 
-### 4. Steering Wheel: Condition Effect
-Used for spring, damper, friction, or inertia effects (e.g., centering spring).
+### 4. Steering Wheel / Flight Stick: Condition Effect
 
-*   **type**: `"steering_wheel"`
-*   **effect**: `"condition"`
+Position-dependent forces. On flight sticks, the effect is applied on both the pitch and roll axes simultaneously.
+
+*   **type**: `"steering_wheel"` or `"flight_stick"` · **effect**: `"condition"`
 *   **params**:
-    *   `slot`: Integer - The effect slot to use (0 to device max). Defaults to 0.
-    *   `condition_type`: Integer - The haptic condition type ID.
-        *   `128` (Spring), `256` (Damper), `512` (Inertia), `1024` (Friction).
-        *   Defaults to 128 (Spring).
-    *   `right_sat`: Float (0.0 to 1.0) - Saturation level on the positive side.
-    *   `left_sat`: Float (0.0 to 1.0) - Saturation level on the negative side.
-    *   `right_coeff`: Float (-1.0 to 1.0) - Coefficient (slope) on the positive side.
-    *   `left_coeff`: Float (-1.0 to 1.0) - Coefficient (slope) on the negative side.
-    *   `deadband`: Float (0.0 to 1.0) - Range around center where no force is applied.
-    *   `center`: Float (-1.0 to 1.0) - Center point for the effect.
-    *   `duration_ms`: Integer - Duration in milliseconds.
+    *   `slot` — Effect slot (0 to device max, default `0`). Multiple slots allow independent effects to run simultaneously.
+    *   `condition_type` — Condition type index:
 
-**Example:**
+        | Value | Name | Description |
+        |---|---|---|
+        | `0` | Spring | Restoring force toward centre |
+        | `1` | Damper | Resistance proportional to velocity |
+        | `2` | Inertia | Resistance proportional to acceleration |
+        | `3` | Friction | Constant resistance regardless of speed |
+
+        Defaults to `0` (Spring).
+    *   `right_sat` (0.0–1.0) — Saturation on the positive side
+    *   `left_sat` (0.0–1.0) — Saturation on the negative side
+    *   `right_coeff` (-1.0–1.0) — Slope on the positive side
+    *   `left_coeff` (-1.0–1.0) — Slope on the negative side
+    *   `deadband` (0.0–1.0) — Range around centre with no force
+    *   `center` (-1.0–1.0) — Centre point of the effect
+    *   `duration_ms` — Duration in ms; use `-1` for infinite
+
 ```json
-{
-  "device": 1,
-  "type": "steering_wheel",
-  "effect": "condition",
-  "params": {
-    "slot": 0,
-    "condition_type": 128,
-    "right_sat": 1.0,
-    "left_sat": 1.0,
-    "right_coeff": 0.5,
-    "left_coeff": 0.5,
-    "deadband": 0.1,
-    "center": 0.0,
-    "duration_ms": 5000
-  }
-}
+{ "device": 1, "type": "steering_wheel", "effect": "condition",
+  "params": { "slot": 0, "condition_type": 0,
+              "right_sat": 1.0, "left_sat": 1.0,
+              "right_coeff": 0.5, "left_coeff": 0.5,
+              "deadband": 0.1, "center": 0.0, "duration_ms": -1 } }
 ```
+
+> **Migration note:** Prior to this change, `condition_type` used SDL's internal bitmask values (`128`=Spring, `256`=Damper, `512`=Inertia, `1024`=Friction). It now uses the simple 0–3 index shown above. Any existing integrations must be updated.
+
+---
 
 ## OSC Format and Messages 🔊
 
@@ -270,39 +257,181 @@ InputBridge also supports sending and receiving Open Sound Control (OSC) message
 
 ### Incoming (Control) Messages
 
-All incoming haptics messages are under the `/inputbridge/haptics/*` namespace. Types use liblo-style type tags where `i` = int and `f` = float. The first argument is reserved for a device id (int), but the server currently uses the *selected* device from the UI (the id is still expected to match the signature).
+InputBridge listens on two separate sets of paths depending on which protocol handler is active.
 
-- `/inputbridge/haptics/rumble` — types: "iffi" (deviceId, low_freq, high_freq, duration_ms)
-  - Example arguments: `[1, 0.8, 0.2, 500]` — Rumble with low/high magnitude and duration.
+**`/inputbridge/haptics/*`** — Used by the OSCProtocol / OSCBaseProtocol handler (selected via the Protocol Editor). The first argument is always the device ID (`i`); the server currently uses the UI-selected device (the ID is still required in the message signature).
 
-- `/inputbridge/haptics/force` — types: "ifi" (deviceId, strength, duration_ms)
-  - Example: `[1, 0.5, 1000]` — Constant force on steering wheels.
+**`/haptic/*`** — Shorter paths registered directly by OSCServer as dedicated handlers. Same argument layout as their `/inputbridge/haptics/*` equivalents.
 
-- `/inputbridge/haptics/periodic` — types: "ififfii" (deviceId, strength, period, magnitude, offset, phase, duration_ms)
-  - Example: `[1, 1.0, 100, 0.5, 0.0, 0, 2000]`
+All type tags use liblo notation: `i` = int32, `f` = float32. For duration arguments, send `-1` to play indefinitely (`SDL_HAPTIC_INFINITY`).
 
-- `/inputbridge/haptics/condition` — types: "iiiffffffi" (deviceId, slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms).
-  - `slot`: Integer - The effect slot to use (0 to device max).
-  - `type`: Integer - The haptic condition type ID: `128` (Spring), `256` (Damper), `512` (Inertia), `1024` (Friction).
-  - Example: `[1, 0, 128, 1.0, 1.0, 0.5, 0.5, 0.1, 0.0, 5000]`
+---
 
-- `/inputbridge/haptics/gain` — types: "ii" (deviceId, gain)
-  - Example: `[1, 100]`
+#### Rumble
 
-> Note: the device ID argument is currently ignored by the handlers in favor of the UI-selected device ID, but the message signature still requires the ID value to be present.
+Triggers low- and high-frequency motor vibration (gamepads and rumble-capable devices).
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/rumble` | `iiffi` | deviceId, slot, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
+| `/haptic/rumble` | `iiffi` | deviceId, slot, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
+
+Example: `[1, 0, 0.8, 0.2, 500]`
+
+---
+
+#### Constant Force
+
+Applies a steady directional force (steering wheels and flight sticks).
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/force` | `iifi` | deviceId, slot, strength (-1.0–1.0), duration_ms |
+| `/haptic/constant` | `iifi` | deviceId, slot, strength (-1.0–1.0), duration_ms |
+
+Example: `[1, 0, 0.5, 1000]`
+
+---
+
+#### Periodic Effect
+
+Applies a repeating wave effect (engine vibration, road texture, etc.). The wave shape is selected with `wave_type`: `0`=Sine (default), `1`=Triangle, `2`=Sawtooth Up, `3`=Sawtooth Down.
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/periodic` | `iiififfii` | deviceId, slot, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/haptic/periodic` | `iiififfii` | deviceId, slot, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+
+Example (triangle wave, 150 ms period, 2 seconds): `[1, 0, 1, 1.0, 150, 0.5, 0.0, 0, 2000]`
+
+> **Backward compatibility:** The legacy 8-argument format `iififfii` (without `wave_type`) is still accepted and defaults to Sine.
+
+---
+
+#### Condition Effect
+
+Position-dependent forces. On flight sticks the effect is applied on both pitch and roll axes.
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/condition` | `iiiffffffi` | deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+| `/haptic/condition` | `iiiffffffi` | deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+
+`condition_type`: `0`=Spring, `1`=Damper, `2`=Inertia, `3`=Friction
+
+Ranges: `right_sat` / `left_sat` 0.0–1.0 · `right_coeff` / `left_coeff` −1.0–1.0 · `deadband` 0.0–1.0 · `center` −1.0–1.0
+
+Example (spring, slot 0, infinite): `[1, 0, 0, 1.0, 1.0, 0.5, 0.5, 0.1, 0.0, -1]`
+
+---
+
+#### Global Gain
+
+Sets the overall haptic output gain for a device (0–100).
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/gain` | `ii` | deviceId, gain (0–100) |
+| `/haptic/gain` | `ii` | deviceId, gain (0–100) |
+
+Example: `[1, 80]`
+
+---
+
+#### Subchannel Paths (Slot-in-Path)
+
+Some OSC hosts (notably **Resonite**) permit only one message per frame to the same OSC path. Because the standard haptic paths encode the slot as a message argument, two effects of the same type targeting different slots would collide — only the last message per frame would be acted on.
+
+**Subchannel paths** solve this by moving the slot out of the argument list and into the path itself as a trailing integer component. Each distinct slot gets a unique path, so all of them can be sent in the same frame without conflict.
+
+##### Short subchannel paths (`/haptic/<effect>/<slot>`)
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/haptic/rumble/<slot>` | `iffi` | deviceId, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
+| `/haptic/constant/<slot>` | `ifi` | deviceId, strength (-1.0–1.0), duration_ms |
+| `/haptic/periodic/<slot>` | `iififfii` | deviceId, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/haptic/periodic/<slot>` | `ififfii` | deviceId, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms *(legacy — defaults to Sine)* |
+| `/haptic/condition/<slot>` | `iiffffffi` | deviceId, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+
+##### Long subchannel paths (`/inputbridge/haptics/<effect>/<slot>`)
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/haptics/rumble/<slot>` | `iffi` | deviceId, low_freq (0.0–1.0), high_freq (0.0–1.0), duration_ms |
+| `/inputbridge/haptics/force/<slot>` | `ifi` | deviceId, strength (-1.0–1.0), duration_ms |
+| `/inputbridge/haptics/periodic/<slot>` | `iififfii` | deviceId, wave_type, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms |
+| `/inputbridge/haptics/periodic/<slot>` | `ififfii` | deviceId, strength (0.0–1.0), period (ms), magnitude (0.0–1.0), offset (-1.0–1.0), phase (0–36000), duration_ms *(legacy — defaults to Sine)* |
+| `/inputbridge/haptics/condition/<slot>` | `iiffffffi` | deviceId, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms |
+
+Note that `gain` has no subchannel variant because it is device-wide and has no slot dimension.
+
+**Comparison — standard vs subchannel:**
+
+```
+# Standard paths (slot as argument) — only one message per path per frame in Resonite:
+[1, 0, 0.8, 0.4, 500]  →  /haptic/rumble        ← slot 0  ✓
+[1, 1, 0.2, 0.1, 250]  →  /haptic/rumble        ← slot 1  ✗ collides, dropped
+
+# Subchannel paths (slot in path) — unique path per slot, all delivered:
+[1, 0.8, 0.4, 500]  →  /haptic/rumble/0         ← slot 0  ✓
+[1, 0.2, 0.1, 250]  →  /haptic/rumble/1         ← slot 1  ✓
+```
+
+---
+
+#### DualSense Adaptive Triggers
+
+Controls Sony DualSense adaptive trigger effects on PS5 controllers. All paths begin with `/inputbridge/haptics/dualsense/trigger/{side}/` where `{side}` is `left` or `right`.
+
+| Path | Types | Arguments | Description |
+|---|---|---|---|
+| `/inputbridge/haptics/dualsense/trigger/{side}/feedback` | `iii` | deviceId, position (0–9), strength (0–8) | Resistance starting at `position` |
+| `/inputbridge/haptics/dualsense/trigger/{side}/weapon` | `iiii` | deviceId, start_position (2–7), end_position (start+1–8), strength (0–8) | Weapon click effect |
+| `/inputbridge/haptics/dualsense/trigger/{side}/vibration` | `iiii` | deviceId, position (0–9), amplitude (0–8), frequency (0–255) | Vibration effect |
+| `/inputbridge/haptics/dualsense/trigger/{side}/off` | `i` | deviceId | Disable adaptive trigger |
+
+Examples:
+```
+# Feedback on right trigger, resistance from position 4 at strength 6
+[1, 4, 6]  →  /inputbridge/haptics/dualsense/trigger/right/feedback
+
+# Weapon click on left trigger between positions 3 and 7, strength 8
+[1, 3, 7, 8]  →  /inputbridge/haptics/dualsense/trigger/left/weapon
+
+# Vibration on right trigger at position 2, amplitude 5, frequency 120 Hz
+[1, 2, 5, 120]  →  /inputbridge/haptics/dualsense/trigger/right/vibration
+
+# Turn off left trigger effect
+[1]  →  /inputbridge/haptics/dualsense/trigger/left/off
+```
+
+---
+
+#### RPM LED Bar
+
+Sets the RPM LED strip brightness on all connected RPM-capable steering wheels (Fanatec, Logitech, Thrustmaster). Value is normalised 0.0–1.0.
+
+| Path | Types | Arguments |
+|---|---|---|
+| `/inputbridge/wheel/led_rpm` | `f` | rpm_percent (0.0–1.0) |
+
+Example: `[0.75]` — set LEDs to 75 % of the bar
+
+---
 
 ### Outgoing (Telemetry) Messages
 
 InputBridge sends wheel telemetry under `/wheel/*` and button states under `/wheel/buttons/*`.
 
-- `/wheel/steer` — type: `f` (float)
-- `/wheel/brake` — type: `f`
-- `/wheel/throttle` — type: `f`
-- `/wheel/pitch` — type: `f`
-- `/wheel/roll` — type: `f`
-- `/wheel/buttons/0`...`/wheel/buttons/3` — type: `i` (int)
-
-These messages are emitted using the configured protocol/version (selectable in the UI) and are useful for external telemetry or integrations.
+| Path | Type | Description |
+|---|---|---|
+| `/wheel/steer` | `f` | Steering axis |
+| `/wheel/brake` | `f` | Brake axis |
+| `/wheel/throttle` | `f` | Throttle axis |
+| `/wheel/pitch` | `f` | Pitch axis |
+| `/wheel/roll` | `f` | Roll axis |
+| `/wheel/buttons/0` … `/wheel/buttons/3` | `i` | Button states |
 
 ---
 
@@ -310,7 +439,7 @@ These messages are emitted using the configured protocol/version (selectable in 
 
 ### Backup Manager
 
-InputBridge automatically creates timestamped backups of protocol definitions before destructive operations (e.g., delete, overwrite). Backups are stored in a `backups/` directory next to the executable. Up to 10 backups are retained per file by default; older ones are cleaned up automatically.
+InputBridge automatically creates timestamped backups of protocol definitions before destructive operations (e.g., delete, overwrite). Backups are stored in a `backups/` directory next to the executable. Up to 10 backups are retained per file; older ones are cleaned up automatically.
 
 ### Undo / Redo
 
@@ -319,3 +448,37 @@ The Protocol Editor supports up to 50 levels of undo/redo for all editing operat
 ### Protocol Validation
 
 When importing a protocol definition file, InputBridge validates its JSON structure, field IDs, OSC paths, WebSocket keys, host addresses, and port numbers before applying any changes, reporting errors and warnings clearly.
+
+### RPM LEDs
+
+For supported steering wheels (Fanatec, Logitech, Thrustmaster), InputBridge can drive the RPM LED strip directly via the **RPM LEDs** tab in the device panel. Devices are detected automatically when a wheel is connected.
+
+---
+
+## Building
+
+### Prerequisites
+
+- CMake 3.16+
+- C++20 compiler
+- SDL3 (source in `lib/sdl/` or installed system-wide)
+
+### CMake Options
+
+| Option | Default | Description |
+|---|---|---|
+| `ENABLE_EXCLUSIVE_INPUT` | `ON` | Device hide support (HidHide / evdev grab / IOKit seize) |
+| `ENABLE_WEBSOCKETS` | `ON` | WebSocket server support |
+| `ENABLE_OSC` | `ON` | OSC server support |
+
+### Windows
+
+Requires [HidHide](https://github.com/nefarius/HidHide) to be installed at runtime for the device-hide feature to function. The build itself has no HidHide SDK dependency — communication uses only `setupapi`, `cfgmgr32`, and standard Win32 `DeviceIoControl`. Links: `setupapi`, `cfgmgr32`, `ws2_32`, `comdlg32`.
+
+### Linux
+
+The device-hide feature uses `EVIOCGRAB` (evdev), available on all modern Linux kernels. No extra packages required. The process must have read/write access to `/dev/input/event*` nodes — adding the user to the `input` group is typically sufficient.
+
+### macOS
+
+The device-hide feature uses `IOHIDOptionsTypeSeizeDevice` from the IOKit framework, which is linked automatically when `ENABLE_EXCLUSIVE_INPUT=ON`.

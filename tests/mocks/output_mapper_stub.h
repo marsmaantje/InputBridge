@@ -15,8 +15,8 @@
 // Call HapticStub::Reset() in SetUp() to clear state between tests.
 // ─────────────────────────────────────────────────────────────────────────────
 
-#include <cstdint>
 #include <vector>
+#include "Haptics/HapticDevice.h"
 
 namespace HapticStub {
 
@@ -36,27 +36,28 @@ struct ConstantArgs {
 };
 
 struct PeriodicArgs {
-    int   device;
-    int   slot;
-    float strength;
-    int   period;
-    float magnitude;
-    float offset;
-    int   phase;
-    int   duration;
+    int                device;
+    int                slot;
+    HapticPeriodicType wave_type;
+    float              strength;
+    int                period;
+    float              magnitude;
+    float              offset;
+    int                phase;
+    int                duration;
 };
 
 struct ConditionArgs {
-    int      device;
-    int      slot;
-    uint16_t type;
-    float    right_sat;
-    float    left_sat;
-    float    right_coeff;
-    float    left_coeff;
-    float    deadband;
-    float    center;
-    int      duration;
+    int                device;
+    int                slot;
+    HapticConditionType type;   // 0=Spring, 1=Damper, 2=Inertia, 3=Friction
+    float              right_sat;
+    float              left_sat;
+    float              right_coeff;
+    float              left_coeff;
+    float              deadband;
+    float              center;
+    int                duration;
 };
 
 // Populated by the stub implementations in output_mapper_stub.cpp.

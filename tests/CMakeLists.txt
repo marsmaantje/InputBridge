@@ -112,3 +112,16 @@ target_link_libraries(test_haptic_parser PRIVATE
     Threads::Threads
 )
 gtest_discover_tests(test_haptic_parser DISCOVERY_MODE PRE_TEST)
+
+# 9. test_osc_subchannel ───────────────────────────────────────────────────────
+# Tests ParseSubchannelPath() in isolation — no liblo dependency required.
+# This covers the path-parsing logic that OSCServer::haptic_subchannel_handler
+# delegates to, verifying all four effect types, valid/invalid paths, slot
+# extraction, and the Resonite multi-slot scenario.
+add_executable(test_osc_subchannel
+    test_osc_subchannel.cpp
+    ${IB_SRC}/Network/OSCSubchannel.cpp
+)
+target_include_directories(test_osc_subchannel PRIVATE ${IB_SRC})
+target_link_libraries(test_osc_subchannel PRIVATE GTest::gtest_main)
+gtest_discover_tests(test_osc_subchannel)

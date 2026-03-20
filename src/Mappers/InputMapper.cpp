@@ -830,13 +830,6 @@ void InputMapper::DrawMappingContent() {
     // Protocol Selection
     ImGui::Spacing(); ImGui::Separator();
 
-#ifdef ENABLE_EXCLUSIVE_INPUT
-    ImGui::BeginDisabled(true);
-    bool ex = m_ExclusiveModeHandler.IsEnabled();
-    ImGui::Checkbox("Exclusive Mode (Hide from other apps)", &ex);
-    ImGui::EndDisabled();
-#endif
-
     if (changed) SaveProfile(profile);
 
     ImGui::Separator();
@@ -983,6 +976,18 @@ bool InputMapper::Update(bool dynamic_rate) {
 #endif
 
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
+            // Only send if this field actually has a device input assigned.
+            bool hasSrc = false;
+            {
+                auto it = profile.outputToInput.find(pf->fieldId);
+                if (it != profile.outputToInput.end() && it->second.instance_id != 0) hasSrc = true;
+            }
+            if (!hasSrc) {
+                for (const auto& bm : profile.buttonMappings)
+                    if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+            }
+            if (!hasSrc) continue;
+
             float val = analogValues.count(pf->fieldId) ? analogValues[pf->fieldId] : 0.f;
             if (osc.IsRunning() && oscDef)
                 for (const auto& op : oscDef->fields)
@@ -994,6 +999,12 @@ bool InputMapper::Update(bool dynamic_rate) {
 #endif
         }
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+            // Only send if this field has a button mapped to it.
+            bool hasSrc = false;
+            for (const auto& dm : profile.digitalMappings)
+                if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+            if (!hasSrc) continue;
+
             int val = digitalValues.count(pf->fieldId) && digitalValues[pf->fieldId] ? 1 : 0;
             if (osc.IsRunning() && oscDef)
                 for (const auto& op : oscDef->fields)
@@ -1082,43 +1093,124 @@ std::string InputMapper::GetOutputPreview() {
         ss << "Active Definition: " << outDef->name << "\n\n";
 
         if (m_SelectedProtocolView == 0) { // OSC
-            std::string oscDefId = osc.GetOutputDefinitionId();
+            // Mirror Update()'s oscDef resolution so the preview only shows
+            // fields that the OSC server will actually transmit.
+            const ProtocolDefinition* oscDef = outDef;
+            {
+                std::string oscId = osc.GetOutputDefinitionId();
+                if (!oscId.empty()) {
+                    const ProtocolDefinition* found = ProtocolRegistry::GetInstance().FindById(oscId);
+                    if (found) oscDef = found;
+                } else {
+                    std::string protocol = osc.GetProtocol();
+                    if (protocol == "SteamLink OSC") {
+                        static ProtocolDefinition s_slDef;
+                        s_slDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
+                        oscDef = &s_slDef;
+                    } else if (protocol == "Project Babble OSC") {
+                        static ProtocolDefinition s_pbDef;
+                        s_pbDef = OSCProjectBabbleProtocol::CreateDefaultDefinition();
+                        oscDef = &s_pbDef;
+                    }
+                }
+            }
+
             ss << "[OSC Output]";
             if (!osc.IsRunning()) ss << " (Stopped)";
-            else if (oscDefId != outDef->id) {
-                bool match = false;
-                if (oscDefId.empty()) {
-                    if (osc.GetProtocol() == outDef->name) match = true;
-                }
-                if (!match) ss << " (Definition Mismatch)";
-            }
+            else if (oscDef != outDef) ss << " (Separate OSC Definition: " << oscDef->name << ")";
             ss << "\n";
 
+            int sentCount = 0;
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
-                ss << "  " << pf->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
+                // Check device mapping
+                bool hasSrc = false;
+                {
+                    auto it = profile.outputToInput.find(pf->fieldId);
+                    if (it != profile.outputToInput.end() && it->second.instance_id != 0) hasSrc = true;
+                }
+                if (!hasSrc)
+                    for (const auto& bm : profile.buttonMappings)
+                        if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc) continue;
+
+                const ProtocolField* op = nullptr;
+                for (const auto& f : oscDef->fields)
+                    if (f.fieldId == pf->fieldId && f.enabled) { op = &f; break; }
+                if (!op) continue;
+                ss << "  " << op->oscPath << " " << std::fixed << std::setprecision(4) << analogValues[pf->fieldId] << "\n";
+                ++sentCount;
             }
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                ss << "  " << pf->oscPath << " " << (digitalValues[pf->fieldId] ? "T" : "F") << "\n";
+                // Check device mapping
+                bool hasSrc = false;
+                for (const auto& dm : profile.digitalMappings)
+                    if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc) continue;
+
+                const ProtocolField* op = nullptr;
+                for (const auto& f : oscDef->fields)
+                    if (f.fieldId == pf->fieldId && f.enabled) { op = &f; break; }
+                if (!op) continue;
+                ss << "  " << op->oscPath << " " << (digitalValues[pf->fieldId] ? "T" : "F") << "\n";
+                ++sentCount;
             }
+            if (sentCount == 0)
+                ss << "  (No mapped fields — assign device inputs on this page)\n";
         } else { // WebSocket
 #ifdef ENABLE_WEBSOCKETS
-            std::string wsDefId = ws.GetOutputDefinitionId();
+            // Mirror Update()'s wsDef resolution.
+            const ProtocolDefinition* wsDef = nullptr;
+            {
+                std::string wsId = ws.GetOutputDefinitionId();
+                if (!wsId.empty()) wsDef = ProtocolRegistry::GetInstance().FindById(wsId);
+            }
+
             ss << "[WebSocket Output]";
             if (!ws.IsRunning()) ss << " (Stopped)";
-            else if (wsDefId != outDef->id) ss << " (Definition Mismatch)";
+            else if (!wsDef) ss << " (No WS Definition Selected)";
             ss << "\n";
 
             std::string protoName = ws.GetProtocol();
             auto protocol = ProtocolManager::GetInstance().GetProtocol(protoName);
-            if (protocol) {
+            if (protocol && wsDef) {
+                int sentCount = 0;
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
-                    ss << "  " << protocol->format(pf->wsKey, analogValues[pf->fieldId]) << "\n";
+                    bool hasSrc = false;
+                    {
+                        auto it = profile.outputToInput.find(pf->fieldId);
+                        if (it != profile.outputToInput.end() && it->second.instance_id != 0) hasSrc = true;
+                    }
+                    if (!hasSrc)
+                        for (const auto& bm : profile.buttonMappings)
+                            if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc) continue;
+
+                    const ProtocolField* wp = nullptr;
+                    for (const auto& f : wsDef->fields)
+                        if (f.fieldId == pf->fieldId && f.enabled) { wp = &f; break; }
+                    if (!wp) continue;
+                    ss << "  " << protocol->format(wp->wsKey, analogValues[pf->fieldId]) << "\n";
+                    ++sentCount;
                 }
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                    ss << "  " << protocol->format(pf->wsKey, digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                    bool hasSrc = false;
+                    for (const auto& dm : profile.digitalMappings)
+                        if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc) continue;
+
+                    const ProtocolField* wp = nullptr;
+                    for (const auto& f : wsDef->fields)
+                        if (f.fieldId == pf->fieldId && f.enabled) { wp = &f; break; }
+                    if (!wp) continue;
+                    ss << "  " << protocol->format(wp->wsKey, digitalValues[pf->fieldId] ? 1 : 0) << "\n";
+                    ++sentCount;
                 }
-            } else {
+                if (sentCount == 0)
+                    ss << "  (No mapped fields — assign device inputs on this page)\n";
+            } else if (!protocol) {
                 ss << "  (Unknown Protocol)\n";
+            } else {
+                ss << "  (No WS definition — select one in the Network tab)\n";
             }
 #else
             ss << "WebSockets disabled.\n";
@@ -1447,5 +1539,5 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
 }
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
-void InputMapper::ApplyExclusiveMode() {}
+
 #endif

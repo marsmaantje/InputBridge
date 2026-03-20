@@ -26,5 +26,5 @@ class IProtocol {
 
     // Specific message formatters
     virtual std::string format_wheel(const std::map<std::string, float>& values) = 0;
-    virtual void parse(const std::string& message) = 0;
+    virtual bool parse(const std::string& message) = 0;
 };

@@ -63,8 +63,8 @@ int SteeringWheelHaptics::StopConstant(int slot) {
     return 0;
 }
 
-int SteeringWheelHaptics::PlayPeriodic(int slot, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) {
-    RunAsync([this, slot, strength, period, magnitude, offset, phase, duration_ms]() {
+int SteeringWheelHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) {
+    RunAsync([this, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms]() {
         if (!m_haptic) {
             SDL_Log("SteeringWheelHaptics::PlayPeriodic - Haptic device not ready");
             return;
@@ -72,7 +72,7 @@ int SteeringWheelHaptics::PlayPeriodic(int slot, float strength, uint32_t period
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = SDL_HAPTIC_SINE;
+        effect.type = ToSDLPeriodicType(wave_type);  // translate once, here
         effect.periodic.direction.type = SDL_HAPTIC_CARTESIAN;
         effect.periodic.direction.dir[0] = 1;
         effect.periodic.period    = static_cast<Uint16>(period);
@@ -93,6 +93,7 @@ int SteeringWheelHaptics::PlayPeriodic(int slot, float strength, uint32_t period
             } else {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 auto& info = m_activePeriodicEffects[slot];
+                info.wave_type    = wave_type;
                 info.strength     = strength;
                 info.period       = period;
                 info.magnitude    = magnitude;
@@ -129,10 +130,10 @@ int SteeringWheelHaptics::PlayRumble(int slot, float large_magnitude, float smal
         return StopPeriodic(slot);
     }
     // 50 ms period = 20 Hz — a recognisable vibration feel.
-    return PlayPeriodic(slot, strength, 50, strength, 0.0f, 0, duration_ms);
+    return PlayPeriodic(slot, HapticPeriodicType::Sine, strength, 50, strength, 0.0f, 0, duration_ms);
 }
 
-int SteeringWheelHaptics::PlayCondition(int slot, uint16_t type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) {
+int SteeringWheelHaptics::PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) {
     RunAsync([this, slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms]() {
         if (!m_haptic) {
             SDL_Log("SteeringWheelHaptics::PlayCondition - Haptic device not ready");
@@ -147,15 +148,11 @@ int SteeringWheelHaptics::PlayCondition(int slot, uint16_t type, float right_sat
             }
         }
 
-        if (type != SDL_HAPTIC_SPRING && type != SDL_HAPTIC_DAMPER &&
-            type != SDL_HAPTIC_INERTIA && type != SDL_HAPTIC_FRICTION) {
-            SDL_Log("SteeringWheelHaptics::PlayCondition - Invalid condition type: %d", type);
-            return;
-        }
+        const Uint16 sdlType = ToSDLConditionType(type);  // translate once, here
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = type;
+        effect.type = sdlType;
         effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
         effect.condition.direction.dir[0] = 1;
         effect.condition.right_sat[0]   = static_cast<Uint16>(right_sat   * 65535.0f);
@@ -186,7 +183,8 @@ int SteeringWheelHaptics::PlayCondition(int slot, uint16_t type, float right_sat
                 info.duration_ms = duration_ms;
                 info.last_updated = SDL_GetTicks();
             } else {
-                SDL_Log("SteeringWheelHaptics::PlayCondition - Run failed for type %d: %s", type, SDL_GetError());
+                SDL_Log("SteeringWheelHaptics::PlayCondition - Run failed for type %s: %s",
+                        ConditionTypeName(type), SDL_GetError());
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 m_activeConditions.erase(slot);
             }

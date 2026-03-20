@@ -14,6 +14,7 @@ DeviceManager::DeviceManager() {}
 DeviceManager::~DeviceManager() { CloseAllDevices(); }
 
 const std::vector<DeviceState> &DeviceManager::GetDevices() const { return m_Devices; }
+std::vector<DeviceState>       &DeviceManager::GetDevices()       { return m_Devices; }
 
 std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
     SDL_Joystick* joystick = SDL_GetJoystickFromID(dev.instance_id);
@@ -203,4 +204,44 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
         dev.battery_state   = SDL_POWERSTATE_UNKNOWN;
         dev.battery_percent = -1;
     }
+}
+// ---------------------------------------------------------------------------
+// Device hide support
+// ---------------------------------------------------------------------------
+
+bool DeviceManager::IsHideAvailable() const {
+#ifdef ENABLE_EXCLUSIVE_INPUT
+    return m_HideManager.IsAvailable();
+#else
+    return false;
+#endif
+}
+
+bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
+#ifdef ENABLE_EXCLUSIVE_INPUT
+    SDL_Joystick* joy = dev.joystick
+                         ? dev.joystick
+                         : (dev.gamepad ? SDL_GetGamepadJoystick(dev.gamepad) : nullptr);
+    if (!joy) {
+        SDL_Log("DeviceManager::SetDeviceHidden: no joystick handle for '%s'.",
+                dev.name.c_str());
+        return false;
+    }
+
+    bool ok = m_HideManager.SetHidden(joy, hidden);
+    if (ok) dev.hide_from_other_apps = hidden;
+    return ok;
+#else
+    (void)dev; (void)hidden;
+    SDL_Log("DeviceManager::SetDeviceHidden: exclusive input support not compiled in.");
+    return false;
+#endif
+}
+
+void DeviceManager::SetSteamInputCompatible(bool enabled) {
+#ifdef ENABLE_EXCLUSIVE_INPUT
+    m_HideManager.SetSteamInputCompatible(enabled);
+#else
+    (void)enabled;
+#endif
 }

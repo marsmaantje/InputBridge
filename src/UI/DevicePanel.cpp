@@ -25,8 +25,6 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                           DeviceManager&      deviceManager,
                           PreferencesManager& prefs)
 {
-    // Visualizer instances are kept alive across frames (ImGui immediate mode
-    // pattern: static locals are initialised once and reused every frame).
     static GamepadVisualizer              gamepad_viz;
     static GenericVisualizer              generic_viz;
     static SteeringWheelVisualizer        wheel_viz;
@@ -44,12 +42,10 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
     if (apply_pref)
         prefs.MarkPreferenceApplied(dev.instance_id);
 
-    // Virtual devices default to the Simulate Inputs tab.
     const bool isVirtual = SDL_IsJoystickVirtual(dev.instance_id);
     if (apply_pref && isVirtual && preferred_viz.empty())
         preferred_viz = "Simulate Inputs";
 
-    // Helper: opens a tab item and persists the user's selection.
     auto TabItem = [&](const char* label, DeviceVisualizer& visualizer) {
         ImGuiTabItemFlags flags = 0;
         if (apply_pref && preferred_viz == label)
@@ -65,7 +61,6 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
         }
     };
 
-    // Helper: opens the Simulate Inputs tab for virtual devices and persists selection.
     auto SimulateTab = [&]() {
         if (!isVirtual) return;
 
@@ -99,14 +94,6 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
 
             const SDL_JoystickType type = SDL_GetJoystickType(dev.joystick);
 
-            if (type == SDL_JOYSTICK_TYPE_WHEEL || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                // TabItem("Steering Wheel", wheel_viz);
-            }
-            if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK
-                || type == SDL_JOYSTICK_TYPE_THROTTLE
-                || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                // TabItem("Flight Stick", flight_stick_viz);
-            }
             if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK
                 || type == SDL_JOYSTICK_TYPE_THROTTLE) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
@@ -125,9 +112,6 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                 }
             }
 
-            // RPM LED tab: shown for any non-gamepad device when wheel-rpm-lib
-            // has found at least one supported device, regardless of whether SDL
-            // recognises the wheel's haptic interface.
             {
                 const bool hasRPM = !deviceManager.GetWheelRPMDevices().empty();
                 if (hasRPM || type == SDL_JOYSTICK_TYPE_WHEEL
@@ -146,10 +130,116 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
 }
 
 // ---------------------------------------------------------------------------
+// DrawDeviceHideControls  (internal helper)
+// ---------------------------------------------------------------------------
+// Draws the "Hide from other apps" toggle and the Steam-compat checkbox.
+// DeviceState is taken by non-const reference so we can update the flag.
+
+static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManager)
+{
+    const bool available = deviceManager.IsHideAvailable();
+
+    if (!available) {
+#ifdef _WIN32
+        ImGui::TextDisabled("Device hiding unavailable (HidHide driver not installed).");
+#elif defined(__linux__)
+        ImGui::TextDisabled("Device hiding unavailable.");
+#elif defined(__APPLE__)
+        ImGui::TextDisabled("Device hiding unavailable.");
+#else
+        ImGui::TextDisabled("Device hiding not supported on this platform.");
+#endif
+        return;
+    }
+
+    // ── Hide toggle ───────────────────────────────────────────────────────
+    bool hidden = dev.hide_from_other_apps;
+
+    // Snapshot BEFORE ImGui::Checkbox can modify `hidden`.
+    // PushStyleColor / PopStyleColor must be balanced regardless of whether
+    // the user just clicked the checkbox (which toggles the local bool mid-frame).
+    const bool pushedColors = hidden;
+
+    // Highlight the checkbox red when the device is currently hidden.
+    if (pushedColors) {
+        ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive,  ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_CheckMark,      ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    }
+
+    if (ImGui::Checkbox("Hide from other applications", &hidden)) {
+        if (!deviceManager.SetDeviceHidden(dev, hidden)) {
+            SDL_Log("DevicePanel: SetDeviceHidden failed for '%s'.", dev.name.c_str());
+        }
+    }
+
+    // Always pop based on the pre-click snapshot, never on the post-click value.
+    if (pushedColors)
+        ImGui::PopStyleColor(4);
+
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "When enabled, this device is hidden from all other applications.\n"
+            "InputBridge can still read it normally.\n"
+#ifdef _WIN32
+            "Requires the HidHide driver (https://github.com/nefarius/HidHide).\n"
+            "The hide persists until you uncheck this box or restart the driver."
+#elif defined(__linux__)
+            "Uses an exclusive evdev grab (EVIOCGRAB).\n"
+            "The hide is released automatically when InputBridge exits."
+#elif defined(__APPLE__)
+            "Uses IOHIDOptionsTypeSeizeDevice.\n"
+            "The hide is released automatically when InputBridge exits."
+#endif
+        );
+    }
+
+    // ── Status label ─────────────────────────────────────────────────────
+    if (hidden) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "(hidden)");
+    }
+
+#ifdef _WIN32
+    // ── Steam Input compatibility (Windows / HidHide only) ────────────────
+    ImGui::Spacing();
+    static bool steamCompat = true; // global preference; persisted separately if needed
+    if (ImGui::Checkbox("Keep Steam Input access", &steamCompat)) {
+        deviceManager.SetSteamInputCompatible(steamCompat);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "When enabled, steam.exe is kept in the HidHide allow-list so that\n"
+            "Steam Input (gyro, haptics, etc.) continues to work even while\n"
+            "the device is hidden from every other application."
+        );
+    }
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// GetBatteryColor
+// ---------------------------------------------------------------------------
+static ImU32 GetBatteryColor(const DeviceState& dev)
+{
+    if (dev.battery_state == SDL_POWERSTATE_CHARGING
+        || dev.battery_state == SDL_POWERSTATE_CHARGED) {
+        return IM_COL32(50, 255, 50, 255);
+    }
+    if (dev.battery_percent >= 0) {
+        if      (dev.battery_percent <= 20) return IM_COL32(255,  50,  50, 255);
+        else if (dev.battery_percent <= 50) return IM_COL32(255, 200,  50, 255);
+        else                                return IM_COL32( 50, 255,  50, 255);
+    }
+    return ImGui::GetColorU32(ImGuiCol_Text);
+}
+
+// ---------------------------------------------------------------------------
 // DrawDeviceItem
 // ---------------------------------------------------------------------------
 
-void DrawDeviceItem(const DeviceState&  dev,
+void DrawDeviceItem(DeviceState&        dev,
                     DeviceManager&      deviceManager,
                     PreferencesManager& prefs)
 {
@@ -157,12 +247,13 @@ void DrawDeviceItem(const DeviceState&  dev,
 
     const std::string label = dev.name
         + " [ID: " + std::to_string(dev.instance_id) + "]"
-        + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)");
+        + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)")
+        + (dev.hide_from_other_apps ? "  [HIDDEN]" : "");
 
     const bool header_open = ImGui::CollapsingHeader(
         label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
 
-    // Battery indicator drawn over the right edge of the collapsing header.
+    // ── Battery indicator ─────────────────────────────────────────────────
     const bool hasBattery = (dev.battery_state != SDL_POWERSTATE_UNKNOWN
                              || dev.battery_percent >= 0)
                             && dev.battery_state != SDL_POWERSTATE_NO_BATTERY;
@@ -179,32 +270,20 @@ void DrawDeviceItem(const DeviceState&  dev,
             rect_max.x - icon_w - pad,
             rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
 
-        // Choose colour by charge state / level.
-        ImU32 bat_col = ImGui::GetColorU32(ImGuiCol_Text);
-        if (dev.battery_state == SDL_POWERSTATE_CHARGING
-            || dev.battery_state == SDL_POWERSTATE_CHARGED) {
-            bat_col = IM_COL32(50, 255, 50, 255);
-        } else if (dev.battery_percent >= 0) {
-            if      (dev.battery_percent <= 20) bat_col = IM_COL32(255,  50,  50, 255);
-            else if (dev.battery_percent <= 50) bat_col = IM_COL32(255, 200,  50, 255);
-            else                                bat_col = IM_COL32( 50, 255,  50, 255);
-        }
+        ImU32 bat_col = GetBatteryColor(dev);
 
         const float body_w = icon_w * 0.85f;
         const float term_w = icon_w * 0.15f;
         const float term_h = icon_h * 0.4f;
-        (void)term_w; // calculated but only used for terminal nub via AddRectFilled
+        (void)term_w;
 
-        // Battery body outline.
         draw_list->AddRect(icon_pos, icon_pos + ImVec2(body_w, icon_h),
                            bat_col, 0.0f, 0, 2.0f);
-        // Terminal nub.
         draw_list->AddRectFilled(
             icon_pos + ImVec2(body_w, (icon_h - term_h) * 0.5f),
             icon_pos + ImVec2(icon_w, (icon_h + term_h) * 0.5f),
             bat_col);
 
-        // Fill level.
         if (dev.battery_percent >= 0) {
             const float fill_w = (body_w - 4.0f) * (dev.battery_percent / 100.0f);
             if (fill_w > 0.0f) {
@@ -215,7 +294,6 @@ void DrawDeviceItem(const DeviceState&  dev,
             }
         }
 
-        // Charging cross / plus symbol.
         if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
             const ImVec2 center = icon_pos + ImVec2(body_w * 0.5f, icon_h * 0.5f);
             draw_list->AddLine(center + ImVec2(-3, 0), center + ImVec2(3, 0),
@@ -228,7 +306,7 @@ void DrawDeviceItem(const DeviceState&  dev,
     if (header_open) {
         ImGui::Indent();
 
-        // Detailed battery information.
+        // ── Battery detail ────────────────────────────────────────────────
         if (hasBattery) {
             const char* state_str = "Unknown";
             switch (dev.battery_state) {
@@ -245,15 +323,22 @@ void DrawDeviceItem(const DeviceState&  dev,
                 ImGui::Text("(%d%%)", dev.battery_percent);
 
                 const float   battery_fraction = dev.battery_percent / 100.0f;
-                ImVec4        bar_color         = ImVec4(0.2f, 1.0f, 0.2f, 1.0f);
-                if      (dev.battery_percent < 30) bar_color = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
-                else if (dev.battery_percent < 70) bar_color = ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
-
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, GetBatteryColor(dev));
                 ImGui::ProgressBar(battery_fraction, ImVec2(-1, 0), "");
                 ImGui::PopStyleColor();
             }
         }
+
+        // ── Hide controls ─────────────────────────────────────────────────
+        /* TODO: fix in future update
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Device Visibility")) {
+            ImGui::Indent();
+            DrawDeviceHideControls(dev, deviceManager);
+            ImGui::Unindent();
+        }
+        ImGui::Spacing();
+        */
 
         DrawDeviceVisualizer(dev, deviceManager, prefs);
         ImGui::Unindent();

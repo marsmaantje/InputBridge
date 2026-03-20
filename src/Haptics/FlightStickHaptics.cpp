@@ -65,10 +65,10 @@ int FlightStickHaptics::StopConstant(int slot) {
 // PlayPeriodic
 // ---------------------------------------------------------------------------
 
-int FlightStickHaptics::PlayPeriodic(int slot, float strength, uint32_t period,
+int FlightStickHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period,
                                      float magnitude, float offset, uint32_t phase,
                                      uint32_t duration_ms) {
-    RunAsync([this, slot, strength, period, magnitude, offset, phase, duration_ms]() {
+    RunAsync([this, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms]() {
         if (!m_haptic) {
             SDL_Log("FlightStickHaptics::PlayPeriodic - Haptic device not ready");
             return;
@@ -76,15 +76,42 @@ int FlightStickHaptics::PlayPeriodic(int slot, float strength, uint32_t period,
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = SDL_HAPTIC_SINE;
-        effect.periodic.direction.type   = SDL_HAPTIC_CARTESIAN;
-        effect.periodic.direction.dir[0] = 1;
-        effect.periodic.direction.dir[1] = 0;
-        effect.periodic.period    = static_cast<Uint16>(period);
-        effect.periodic.magnitude = static_cast<Sint16>(magnitude * 32767.0f);
-        effect.periodic.offset    = static_cast<Sint16>(offset * 32767.0f);
-        effect.periodic.phase     = static_cast<Uint16>(phase);
-        effect.periodic.length    = duration_ms;
+
+        // Square wave: SDL3 has no native SQUARE type; synthesise it as a
+        // SDL_HAPTIC_CUSTOM effect with two equal-duration samples (high, low).
+        // Each sample lasts period/2 ms, giving a 50 % duty-cycle square wave
+        // with the requested period.
+        if (wave_type == HapticPeriodicType::Square) {
+            // Clamp to [-1, 1] before scaling so SDL Sint16 never overflows.
+            const auto hi_val = std::clamp( magnitude + offset, -1.0f, 1.0f);
+            const auto lo_val = std::clamp(-magnitude + offset, -1.0f, 1.0f);
+            // SDL_HapticCustom::data is Uint16* but values are treated as Sint16.
+            Uint16 wave_data[2] = {
+                static_cast<Uint16>(static_cast<Sint16>(hi_val * 32767.0f)),
+                static_cast<Uint16>(static_cast<Sint16>(lo_val * 32767.0f))
+            };
+            const Uint16 half_period = static_cast<Uint16>(std::max(1u, period / 2u));
+
+            effect.type = SDL_HAPTIC_CUSTOM;
+            effect.custom.direction.type   = SDL_HAPTIC_CARTESIAN;
+            effect.custom.direction.dir[0] = 1;
+            effect.custom.direction.dir[1] = 0;
+            effect.custom.channels         = 1;
+            effect.custom.period           = half_period;
+            effect.custom.samples          = 2;
+            effect.custom.data             = wave_data;  // copied by SDL
+            effect.custom.length           = duration_ms;
+        } else {
+            effect.type = ToSDLPeriodicType(wave_type);  // translate once, here
+            effect.periodic.direction.type   = SDL_HAPTIC_CARTESIAN;
+            effect.periodic.direction.dir[0] = 1;
+            effect.periodic.direction.dir[1] = 0;
+            effect.periodic.period    = static_cast<Uint16>(period);
+            effect.periodic.magnitude = static_cast<Sint16>(magnitude * 32767.0f);
+            effect.periodic.offset    = static_cast<Sint16>(offset * 32767.0f);
+            effect.periodic.phase     = static_cast<Uint16>(phase);
+            effect.periodic.length    = duration_ms;
+        }
 
         SDL_HapticEffectID existing = -1;
         auto it = m_periodicEffects.find(slot);
@@ -98,6 +125,7 @@ int FlightStickHaptics::PlayPeriodic(int slot, float strength, uint32_t period,
             } else {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 auto& info        = m_activePeriodicEffects[slot];
+                info.wave_type    = wave_type;
                 info.strength     = strength;
                 info.period       = period;
                 info.magnitude    = magnitude;
@@ -138,14 +166,14 @@ int FlightStickHaptics::PlayRumble(int slot, float large_magnitude,
         return StopPeriodic(slot);
     }
     // ~33 Hz square-ish vibration — a noticeable impact feel on force-feedback sticks.
-    return PlayPeriodic(slot, strength, /*period_ms=*/30, strength, 0.0f, 0, duration_ms);
+    return PlayPeriodic(slot, HapticPeriodicType::Sine, strength, /*period_ms=*/30, strength, 0.0f, 0, duration_ms);
 }
 
 // ---------------------------------------------------------------------------
 // PlayCondition
 // ---------------------------------------------------------------------------
 
-int FlightStickHaptics::PlayCondition(int slot, uint16_t type,
+int FlightStickHaptics::PlayCondition(int slot, HapticConditionType type,
                                       float right_sat, float left_sat,
                                       float right_coeff, float left_coeff,
                                       float deadband, float center,
@@ -166,15 +194,11 @@ int FlightStickHaptics::PlayCondition(int slot, uint16_t type,
             }
         }
 
-        if (type != SDL_HAPTIC_SPRING   && type != SDL_HAPTIC_DAMPER &&
-            type != SDL_HAPTIC_INERTIA  && type != SDL_HAPTIC_FRICTION) {
-            SDL_Log("FlightStickHaptics::PlayCondition - Invalid condition type: %d", type);
-            return;
-        }
+        const Uint16 sdlType = ToSDLConditionType(type);  // translate once, here
 
         SDL_HapticEffect effect;
         SDL_memset(&effect, 0, sizeof(SDL_HapticEffect));
-        effect.type = type;
+        effect.type = sdlType;
         effect.condition.direction.type   = SDL_HAPTIC_CARTESIAN;
         effect.condition.direction.dir[0] = 1;
         effect.condition.direction.dir[1] = 0;
@@ -211,8 +235,8 @@ int FlightStickHaptics::PlayCondition(int slot, uint16_t type,
                 info.duration_ms  = duration_ms;
                 info.last_updated = SDL_GetTicks();
             } else {
-                SDL_Log("FlightStickHaptics::PlayCondition - Run failed for type %d: %s",
-                        type, SDL_GetError());
+                SDL_Log("FlightStickHaptics::PlayCondition - Run failed for type %s: %s",
+                        ConditionTypeName(type), SDL_GetError());
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 m_activeConditions.erase(slot);
             }

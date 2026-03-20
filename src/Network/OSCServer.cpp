@@ -1,4 +1,5 @@
 #include "Network/OSCServer.h"
+#include "Network/OSCSubchannel.h"
 #include "Mappers/OutputMapper.h"
 #include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
@@ -6,6 +7,7 @@
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
+#include "Haptics/HapticDevice.h"
 #include <SDL3/SDL_timer.h>
 #include <iostream>
 #include <string>
@@ -15,6 +17,7 @@
 #include <cstring>
 #include <atomic>
 #include <thread>
+#include <string_view>
 
 namespace {
     // Preference Keys
@@ -119,16 +122,29 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 8) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            float strength = argv[2]->f;
-            int period = argv[3]->i;
+        if (argc >= 9) {
+            // New format: i i i f i f f i i  (id, slot, wave_type, strength, period, magnitude, offset, phase, duration)
+            int id       = argv[0]->i;
+            int slot     = argv[1]->i;
+            HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
+            float strength  = argv[3]->f;
+            int period      = argv[4]->i;
+            float magnitude = argv[5]->f;
+            float offset    = argv[6]->f;
+            int phase       = argv[7]->i;
+            int duration    = argv[8]->i;
+            server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
+        } else if (argc >= 8) {
+            // Legacy format: i i f i f f i i  (id, slot, strength, period, magnitude, offset, phase, duration) — defaults to Sine
+            int id       = argv[0]->i;
+            int slot     = argv[1]->i;
+            float strength  = argv[2]->f;
+            int period      = argv[3]->i;
             float magnitude = argv[4]->f;
-            float offset = argv[5]->f;
-            int phase = argv[6]->i;
-            int duration = argv[7]->i;
-            server->m_OutputMapper->QueuePeriodic(id, slot, strength, period, magnitude, offset, phase, duration);
+            float offset    = argv[5]->f;
+            int phase       = argv[6]->i;
+            int duration    = argv[7]->i;
+            server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
         }
     } catch (...) {}
     return 0;
@@ -142,7 +158,7 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
         if (argc >= 10) {
             int id = argv[0]->i;
             int slot = argv[1]->i;
-            uint16_t ctype = (uint16_t)argv[2]->i;
+            HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
             float rsat = argv[3]->f;
             float lsat = argv[4]->f;
             float rcoeff = argv[5]->f;
@@ -166,6 +182,110 @@ int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg *
             int id = argv[0]->i;
             int gain = argv[1]->i;
             server->m_OutputMapper->QueueSetGain(id, gain);
+        }
+    } catch (...) {}
+    return 0;
+}
+
+// Handles subchannel paths of the form /haptic/<effect>/<slot>
+// where the slot integer is encoded as the final path component instead of
+// being passed as a message argument.  This allows a host that can only send
+// one OSC message per frame per path (e.g. Resonite) to send multiple effects
+// of the same type simultaneously by addressing different subchannels.
+//
+// Path parsing is delegated to ParseSubchannelPath() (OSCSubchannel.h) so that
+// the logic can be unit-tested independently of the liblo runtime.
+//
+// See OSCSubchannel.h for the full path/argument-format specification.
+// Note: /haptic/gain has no slot dimension and therefore has no subchannel variant.
+int OSCServer::haptic_subchannel_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+
+        // Delegate path parsing to the testable free function.
+        const SubchannelPath sub = ParseSubchannelPath(path);
+        if (!sub.valid) return 0;
+
+        // The slot is carried as argv[1] (int), identical to the old fixed paths.
+        // The slot in the OSC path (/haptic/<effect>/<N>) is used purely to give
+        // each slot a distinct path so hosts like Resonite — which only deliver
+        // one message per path per frame — can address multiple slots in the same
+        // frame.  The argument slot is always authoritative.
+
+        switch (sub.effect) {
+        // /haptic/rumble/<N>  iiffi  (id, slot, low_freq, high_freq, duration_ms)
+        case SubchannelPath::Effect::Rumble:
+            if (std::strcmp(types, "iiffi") == 0 && argc == 5) {
+                const int   id       = argv[0]->i;
+                const int   slot     = argv[1]->i;
+                const float low      = argv[2]->f;
+                const float high     = argv[3]->f;
+                const int   duration = argv[4]->i;
+                server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
+            }
+            break;
+
+        // /haptic/constant/<N>  iifi  (id, slot, strength, duration_ms)
+        case SubchannelPath::Effect::Constant:
+            if (std::strcmp(types, "iifi") == 0 && argc == 4) {
+                const int   id       = argv[0]->i;
+                const int   slot     = argv[1]->i;
+                const float strength = argv[2]->f;
+                const int   duration = argv[3]->i;
+                server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
+            }
+            break;
+
+        // /haptic/periodic/<N>
+        //   iiififfii — id, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms
+        //   iififfii  — legacy (no wave_type); defaults to Sine
+        case SubchannelPath::Effect::Periodic:
+            if (std::strcmp(types, "iiififfii") == 0 && argc == 9) {
+                const int   id        = argv[0]->i;
+                const int   slot      = argv[1]->i;
+                const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
+                const float strength  = argv[3]->f;
+                const int   period    = argv[4]->i;
+                const float magnitude = argv[5]->f;
+                const float offset    = argv[6]->f;
+                const int   phase     = argv[7]->i;
+                const int   duration  = argv[8]->i;
+                server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
+            } else if (std::strcmp(types, "iififfii") == 0 && argc == 8) {
+                const int   id        = argv[0]->i;
+                const int   slot      = argv[1]->i;
+                const float strength  = argv[2]->f;
+                const int   period    = argv[3]->i;
+                const float magnitude = argv[4]->f;
+                const float offset    = argv[5]->f;
+                const int   phase     = argv[6]->i;
+                const int   duration  = argv[7]->i;
+                server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
+            }
+            break;
+
+        // /haptic/condition/<N>  iiiffffffi
+        //   id, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms
+        case SubchannelPath::Effect::Condition:
+            if (std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
+                const int   id       = argv[0]->i;
+                const int   slot     = argv[1]->i;
+                const HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
+                const float rsat     = argv[3]->f;
+                const float lsat     = argv[4]->f;
+                const float rcoeff   = argv[5]->f;
+                const float lcoeff   = argv[6]->f;
+                const float db       = argv[7]->f;
+                const float center   = argv[8]->f;
+                const int   duration = argv[9]->i;
+                server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
+            }
+            break;
+
+        default:
+            break;
         }
     } catch (...) {}
     return 0;
@@ -206,11 +326,15 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
         return false;
     }
 
-    lo_server_thread_add_method(m_server_thread, kHapticRumblePath,      "iiffi",      haptic_rumble_handler,    this);
-    lo_server_thread_add_method(m_server_thread, kHapticConstantPath,    "iifi",       haptic_constant_handler,  this);
-    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iififfii",   haptic_periodic_handler,  this);
-    lo_server_thread_add_method(m_server_thread, kHapticConditionPath, "iiiffffffi", haptic_condition_handler, this);
-    lo_server_thread_add_method(m_server_thread, kHapticGainPath, "ii", haptic_gain_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticRumblePath,      "iiffi",       haptic_rumble_handler,    this);
+    lo_server_thread_add_method(m_server_thread, kHapticConstantPath,    "iifi",        haptic_constant_handler,  this);
+    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iiififfii",   haptic_periodic_handler,  this);  // with wave_type
+    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iififfii",    haptic_periodic_handler,  this);  // legacy, no wave_type
+    lo_server_thread_add_method(m_server_thread, kHapticConditionPath,   "iiiffffffi",  haptic_condition_handler, this);
+    lo_server_thread_add_method(m_server_thread, kHapticGainPath,        "ii",          haptic_gain_handler,      this);
+    // Subchannel handler: catches /haptic/<effect>/<slot> paths (slot in path, no slot arg).
+    // Registered before the generic catch-all so it runs first for subchannel messages.
+    lo_server_thread_add_method(m_server_thread, nullptr, nullptr, haptic_subchannel_handler, this);
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, generic_handler, this);
     lo_server_thread_start(m_server_thread);
 
@@ -229,7 +353,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
               << ", Listening on port " << recv_port << std::endl;
 
-    m_logs.push_back("OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port));
+    m_logs.push_back({"OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port), false});
     if (m_logs.size() > 100) m_logs.pop_front();
 
     return true;
@@ -300,7 +424,7 @@ void OSCServer::Stop() {
             }
             std::lock_guard<std::mutex> lock(m_mutex);
             std::cout << "OSC server stopped." << std::endl;
-            m_logs.push_back("OSC server stopped.");
+            m_logs.push_back({"OSC server stopped.", false});
             if (m_logs.size() > 100) m_logs.pop_front();
         });
     }
@@ -334,15 +458,22 @@ void OSCServer::CheckInactivity() {
     OutputMapper* mapper = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_running && !m_clients.empty()
-                && m_lastMessageTime > 0
-                && (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS)) {
-            timed_out = true;
-            m_clients.clear();
-            m_lastMessageTime = 0;
-            m_logs.push_back("OSC clients timed out (no data). Stopping haptics.");
-            if (m_logs.size() > 100) m_logs.pop_front();
-            mapper = m_OutputMapper;
+        if (m_running && !m_clients.empty()) {
+            if (m_lastMessageTime == 0) {
+                // Timeout already fired; re-arm so we keep checking on future
+                // frames.  If the client sends again, the handler will write a
+                // fresh tick and normal detection resumes.
+                m_lastMessageTime = SDL_GetTicks();
+            } else if (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS) {
+                timed_out = true;
+                m_clients.clear();
+                m_lastMessageTime = 0;
+                m_logs.push_back({"OSC clients timed out (no data). Stopping haptics.", false});
+                if (m_logs.size() > 100) m_logs.pop_front();
+                // m_OutputMapper may be null if Stop() ran during the same frame;
+                // m_savedOutputMapper always holds the last valid pointer.
+                mapper = m_OutputMapper ? m_OutputMapper : m_savedOutputMapper;
+            }
         }
     }
     if (timed_out && mapper) {
@@ -491,7 +622,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 logEntry += argBuf;
             }
             logEntry += "]";
-            server->m_logs.push_back(logEntry);
+            server->m_logs.push_back({logEntry, false});
 
 
             if (server->m_logs.size() > 100) server->m_logs.pop_front();
@@ -517,16 +648,25 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
         if (protoCopy) {
             auto oscProtocol = std::dynamic_pointer_cast<OSCBaseProtocol>(protoCopy);
             if (oscProtocol) {
-                oscProtocol->handle_osc_message(path, types, argv, argc);
+                bool handled = oscProtocol->handle_osc_message(path, types, argv, argc);
+                if (!handled) {
+                    std::lock_guard<std::mutex> errLock(server->m_mutex);
+                    server->m_logs.push_back({"Invalid OSC path: " + std::string(path), true});
+                    if (server->m_logs.size() > 100) server->m_logs.pop_front();
+                }
             }
         } else if (handlerCopy) {
             handlerCopy(path, types, argv, argc);
         }
     } catch (...) {} // inner try/catch for message processing
 
-    if (server->m_running && !server->HasClients() && mapper) { // outer if condition
-        mapper->StopAllHapticEffects();
-    }
+    // Note: StopAllHapticEffects on no-clients is handled by the per-frame
+    // CheckInactivity() and the edge-detection in Application::UpdateLogic(),
+    // not here.  Calling it inside the message handler is incorrect because
+    // m_clients is populated earlier in this same call — HasClients() can
+    // return false on the very first message from a new client if the insert
+    // above was skipped (e.g. lo_message_get_source returned null), causing
+    // a spurious stop that interrupts valid haptic sessions.
     return 0;
 }
 
@@ -817,7 +957,7 @@ void OSCServer::DrawContent() {
         ImGui::TextColored(ImVec4(1,0,0,1), "Stopped");
     }
 
-    std::deque<std::string> logs;
+    std::deque<LogEntry> logs;
     std::set<std::string> clients;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -836,7 +976,12 @@ void OSCServer::DrawContent() {
     ImGui::Separator();
     ImGui::Text("Log");
     if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
-        for (const auto& l : logs) ImGui::TextUnformatted(l.c_str());
+        for (const auto& l : logs) {
+            if (l.isError)
+                ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", l.text.c_str());
+            else
+                ImGui::TextUnformatted(l.text.c_str());
+        }
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
     }
     ImGui::EndChild();

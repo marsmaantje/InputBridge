@@ -10,5 +10,5 @@ public:
     std::string format(const std::string &address, int value) override;
     std::string format(const std::string &address, const std::string &value) override;
     std::string format_wheel(const std::map<std::string, float>& values) override;
-    void parse(const std::string& message) override;
+    bool parse(const std::string& message) override;
 };

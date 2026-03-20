@@ -21,4 +21,9 @@ struct DeviceState {
     // would repeatedly fire for devices that permanently report UNKNOWN/-1
     // (e.g. wired steering wheels without a battery).
     bool battery_initialized = false;
+
+    // Device hide state ---------------------------------------------------
+    // When true, the physical device is hidden from all other applications;
+    // only InputBridge (and optionally Steam) can still access it.
+    bool hide_from_other_apps = false;
 };

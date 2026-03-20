@@ -20,7 +20,7 @@ class WebSocketProtocol : public IProtocol {
 
     std::string format_wheel(const std::map<std::string, float>& values) override;
 
-    void parse(const std::string& message) override;
+    bool parse(const std::string& message) override;
 
     static const char *GetVersionLabel(int index);
     static int GetVersionCount();

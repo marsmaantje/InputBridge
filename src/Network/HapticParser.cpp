@@ -38,6 +38,7 @@ namespace {
     const char* const kPeriodicMagnitude = "magnitude";
     const char* const kPeriodicOffset    = "offset";
     const char* const kPeriodicPhase     = "phase";
+    const char* const kPeriodicWaveType  = "wave_type";  // 0=Sine, 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
 
     // Condition params
     const char* const kConditionSlot      = "slot";
@@ -115,10 +116,11 @@ namespace {
             mapper->QueueConstantForce(device, slot, strength, duration);
 
         } else if (effect == kEffectPeriodic) {
-            int   duration = get_duration(data);
-            int   slot     = data.value(kSlot, 0);
+            int   duration  = get_duration(data);
+            int   slot      = data.value(kSlot, 0);
+            HapticPeriodicType wave_type = PeriodicTypeFromIndex(data.value(kPeriodicWaveType, 0));
 
-            mapper->QueuePeriodic(device, slot,
+            mapper->QueuePeriodic(device, slot, wave_type,
                 data.value(kConstantStrength, 0.0f),
                 data.value(kPeriodicPeriod,   0),
                 data.value(kPeriodicMagnitude,0.0f),
@@ -129,7 +131,8 @@ namespace {
         } else if (effect == kEffectCondition) {
             int      duration       = get_duration(data);
             int      slot           = data.value(kConditionSlot, 0);
-            uint16_t condition_type = data.value(kConditionType, (uint16_t)SDL_HAPTIC_SPRING);
+            // condition_type is now a user-facing index: 0=Spring, 1=Damper, 2=Inertia, 3=Friction
+            HapticConditionType condition_type = ConditionTypeFromIndex(data.value(kConditionType, 0));
 
             mapper->QueueCondition(device, slot, condition_type,
                 data.value(kConditionRightSat,   0.0f),
@@ -157,7 +160,7 @@ namespace {
         // 2. Condition: distinguishing fields are the sat/coeff pair or condition_type.
         if (flat.contains(kConditionRightSat) || flat.contains(kConditionLeftSat)
                 || flat.contains(kConditionType)) {
-            out.condition_type = flat.value(kConditionType, (uint16_t)SDL_HAPTIC_SPRING);
+            out.condition_type = ConditionTypeFromIndex(flat.value(kConditionType, 0));
             out.right_sat      = flat.value(kConditionRightSat,   0.0f);
             out.left_sat       = flat.value(kConditionLeftSat,    0.0f);
             out.right_coeff    = flat.value(kConditionRightCoeff, 0.0f);
@@ -178,6 +181,7 @@ namespace {
             out.magnitude   = flat.value(kPeriodicMagnitude, 0.0f);
             out.offset      = flat.value(kPeriodicOffset,    0.0f);
             out.phase       = flat.value(kPeriodicPhase,     0);
+            out.wave_type   = PeriodicTypeFromIndex(flat.value(kPeriodicWaveType, 0));
             out.slot        = flat.value(kSlot, 0);
             out.duration_ms = get_duration(flat);
             return DetectedEffect::Kind::Periodic;

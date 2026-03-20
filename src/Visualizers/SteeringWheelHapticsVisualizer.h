@@ -19,6 +19,7 @@ private:
 
     // Periodic
     int m_periodic_slot = 0;
+    int m_periodic_wave_type = 0;  // 0=Sine, 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
     float m_periodic_strength = 1.0f;
     int m_periodic_period = 1000;
     float m_periodic_magnitude = 0.5f;

@@ -9,6 +9,10 @@
 #include "Haptics/HapticDevice.h"
 #include "wheel/wheel_manager.hpp"
 
+#ifdef ENABLE_EXCLUSIVE_INPUT
+#include "Mappers/InputExclusiveMode.h"
+#endif
+
 class DeviceManager {
   public:
     static DeviceManager& GetInstance();
@@ -19,20 +23,29 @@ class DeviceManager {
     void HandleDeviceRemoved(SDL_JoystickID instance_id);
     void CloseAllDevices();
 
-    const std::vector<DeviceState> &GetDevices() const;
-    static std::string GetDeviceGUIDString(const DeviceState &dev);
+    const std::vector<DeviceState>& GetDevices() const;
+    std::vector<DeviceState>&       GetDevices();
+    static std::string GetDeviceGUIDString(const DeviceState& dev);
 
     HapticDevice* GetHapticDevice(SDL_JoystickID instance_id) const;
 
-    void UpdateBatteryInfo(DeviceState &dev);
+    void UpdateBatteryInfo(DeviceState& dev);
 
-    // --- wheel-rpm-lib integration ---
-    // Re-scans HID devices and refreshes the list of RPM-capable wheels.
-    // Safe to call at any time; replaces the previous scan result.
+    // ── Wheel RPM ────────────────────────────────────────────────────────────
     void ScanWheelRPMDevices();
-
-    // Returns the currently-known RPM-capable wheel devices.
     const std::vector<std::unique_ptr<wheel::Wheel>>& GetWheelRPMDevices() const;
+
+    // ── Device hide (HidHide / evdev grab / IOKit seize) ─────────────────────
+    // Toggle the hide state for a single device.  Updates dev.hide_from_other_apps
+    // and calls through to the platform backend.
+    // Returns true on success; false when the backend is unavailable or fails.
+    bool SetDeviceHidden(DeviceState& dev, bool hidden);
+
+    // True when the platform hide mechanism is available on this system.
+    bool IsHideAvailable() const;
+
+    // Allow/disallow Steam Input from seeing hidden devices (Windows only).
+    void SetSteamInputCompatible(bool enabled);
 
   private:
     DeviceManager();
@@ -42,6 +55,9 @@ class DeviceManager {
     std::vector<DeviceState> m_Devices;
     std::map<SDL_JoystickID, std::unique_ptr<HapticDevice>> m_HapticDevices;
 
-    // Wheel RPM devices discovered via wheel-rpm-lib
     std::vector<std::unique_ptr<wheel::Wheel>> m_WheelRPMDevices;
+
+#ifdef ENABLE_EXCLUSIVE_INPUT
+    InputExclusiveMode m_HideManager;
+#endif
 };

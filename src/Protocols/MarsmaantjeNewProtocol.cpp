@@ -62,12 +62,15 @@ std::string MarsmaantjeNewProtocol::format_wheel(const std::map<std::string, flo
     return msg;
 }
 
-void MarsmaantjeNewProtocol::parse(const std::string& message) {
+bool MarsmaantjeNewProtocol::parse(const std::string& message) {
+    bool handled = false;
+
     try {
         std::string msg = message;
         std::replace(msg.begin(), msg.end(), ',', '.');
         float value = -std::stof(msg);
         OutputMapper::GetInstance().QueueConstantForce(0, 0, value * 50, -1);
+        handled = true;
     } catch (...) {}
 
     try {
@@ -76,5 +79,8 @@ void MarsmaantjeNewProtocol::parse(const std::string& message) {
         std::string effect = data.value("effect", "");
 
         // Additional JSON parsing logic can be added here if needed
+        handled = true;
     } catch (...) {}
+
+    return handled;
 }

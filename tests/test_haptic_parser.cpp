@@ -183,12 +183,60 @@ TEST_F(HapticParserTest, PeriodicEffectCallsQueuePeriodic) {
     ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
     const auto& c = HapticStub::periodicCalls[0];
     EXPECT_EQ(c.slot,             0);   // no "slot" key → defaults to 0
+    EXPECT_EQ(c.wave_type,        HapticPeriodicType::Sine);  // no "wave_type" → defaults to Sine
     EXPECT_FLOAT_EQ(c.strength,   0.8f);
     EXPECT_EQ(c.period,           50);
     EXPECT_FLOAT_EQ(c.magnitude,  0.9f);
     EXPECT_FLOAT_EQ(c.offset,     0.1f);
     EXPECT_EQ(c.phase,            45);
     EXPECT_EQ(c.duration,         600);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypePassedThrough) {
+    // wave_type 3 = SawtoothUp
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,
+            "params":{"strength":0.5,"period":100,"magnitude":0.5,
+                      "offset":0.0,"phase":0,"duration":500,"wave_type":3}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::SawtoothUp);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypeOutOfRangeDefaultsToSine) {
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,
+            "params":{"strength":0.5,"period":100,"magnitude":0.5,
+                      "offset":0.0,"phase":0,"duration":500,"wave_type":99}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::Sine);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypeSquarePassedThrough) {
+    // wave_type 1 = Square — must reach the mapper as Square, not fall back to Sine.
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"periodic","device":0,
+            "params":{"strength":0.8,"period":200,"magnitude":0.7,
+                      "offset":0.1,"phase":0,"duration":1000,"wave_type":1}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::Square);
+    // Verify the other fields are still passed through correctly.
+    EXPECT_FLOAT_EQ(HapticStub::periodicCalls[0].magnitude, 0.7f);
+    EXPECT_FLOAT_EQ(HapticStub::periodicCalls[0].offset,    0.1f);
+    EXPECT_EQ(HapticStub::periodicCalls[0].period,          200);
+    EXPECT_EQ(HapticStub::periodicCalls[0].duration,        1000);
+}
+
+TEST_F(HapticParserTest, PeriodicWaveTypeSquareAutoDetect) {
+    // AutoDetect path must also pass Square through without downgrading it.
+    HapticParser::Parse(
+        R"({"type":"auto","device":0,
+            "params":{"period":100,"magnitude":0.5,"offset":0.0,"duration":500,"wave_type":1}})",
+        FakeMapper());
+    ASSERT_EQ(HapticStub::periodicCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::periodicCalls[0].wave_type, HapticPeriodicType::Square);
 }
 
 TEST_F(HapticParserTest, PeriodicDurationMsAlias) {
@@ -207,22 +255,22 @@ TEST_F(HapticParserTest, PeriodicDurationMsAlias) {
 TEST_F(HapticParserTest, ConditionEffectCallsQueueCondition) {
     HapticParser::Parse(
         R"({"type":"haptic","effect":"condition","device":0,
-            "params":{"slot":1,"condition_type":32768,
+            "params":{"slot":1,"condition_type":1,
                       "right_sat":0.9,"left_sat":0.8,
                       "right_coeff":0.5,"left_coeff":0.4,
                       "deadband":0.1,"center":0.0,"duration":500}})",
         FakeMapper());
     ASSERT_EQ(HapticStub::conditionCalls.size(), 1u);
     const auto& c = HapticStub::conditionCalls[0];
-    EXPECT_EQ(c.slot,             1);
-    EXPECT_EQ(c.type,             32768u);
-    EXPECT_FLOAT_EQ(c.right_sat,  0.9f);
-    EXPECT_FLOAT_EQ(c.left_sat,   0.8f);
+    EXPECT_EQ(c.slot,              1);
+    EXPECT_EQ(c.type,              HapticConditionType::Damper);
+    EXPECT_FLOAT_EQ(c.right_sat,   0.9f);
+    EXPECT_FLOAT_EQ(c.left_sat,    0.8f);
     EXPECT_FLOAT_EQ(c.right_coeff, 0.5f);
     EXPECT_FLOAT_EQ(c.left_coeff,  0.4f);
-    EXPECT_FLOAT_EQ(c.deadband,   0.1f);
-    EXPECT_FLOAT_EQ(c.center,     0.0f);
-    EXPECT_EQ(c.duration,         500);
+    EXPECT_FLOAT_EQ(c.deadband,    0.1f);
+    EXPECT_FLOAT_EQ(c.center,      0.0f);
+    EXPECT_EQ(c.duration,          500);
 }
 
 TEST_F(HapticParserTest, ConditionDurationMsAlias) {
@@ -369,7 +417,7 @@ TEST_F(HapticParserTest, TypeFlightStickConstantIsAccepted) {
 TEST_F(HapticParserTest, TypeFlightStickConditionIsAccepted) {
     HapticParser::Parse(
         R"({"type":"flight_stick","effect":"condition","device":0,
-            "params":{"condition_type":16385,"right_sat":1.0,"left_sat":1.0,
+            "params":{"condition_type":2,"right_sat":1.0,"left_sat":1.0,
                       "right_coeff":0.5,"left_coeff":0.5,
                       "deadband":0.1,"center":0.0,"duration":5000}})",
         FakeMapper());
@@ -444,8 +492,9 @@ TEST_F(HapticParserTest, AutoDetectConditionFromRightSat) {
 
 TEST_F(HapticParserTest, AutoDetectConditionFromConditionTypeKey) {
     // condition_type alone is enough to identify the effect.
+    // Uses index 2 (Inertia) to verify any valid index is accepted.
     auto det = HapticParser::AutoDetect(
-        R"({"params":{"condition_type":16385,"duration":3000}})");
+        R"({"params":{"condition_type":2,"duration":3000}})");
     EXPECT_EQ(det.kind, DetectedEffect::Kind::Condition);
 }
 

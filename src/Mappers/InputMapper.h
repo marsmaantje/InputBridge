@@ -1,8 +1,6 @@
 #pragma once
 
-#ifdef ENABLE_EXCLUSIVE_INPUT
-#include "InputExclusiveMode.h"
-#endif
+// InputExclusiveMode / device-hide is managed by DeviceManager, not InputMapper.
 #include <SDL3/SDL.h>
 #include <string>
 #include <vector>
@@ -159,10 +157,6 @@ class InputMapper {
     };
     ListeningState m_ListeningState;
 
-#ifdef ENABLE_EXCLUSIVE_INPUT
-    InputExclusiveMode m_ExclusiveModeHandler;
-#endif
-
     // Legacy fallback outputs when no definition is selected
     const std::vector<std::string> m_GenericOutputs = {
         "Steering", "Throttle", "Brake", "Clutch", "Handbrake", "Pitch", "Roll"};
@@ -173,7 +167,4 @@ class InputMapper {
     void UpdateListening();
     void UpdateActiveProtocols();
     void SnapshotServerSettings(MappingProfile& profile) const;
-#ifdef ENABLE_EXCLUSIVE_INPUT
-    void ApplyExclusiveMode();
-#endif
 };

@@ -97,7 +97,9 @@ std::string WebSocketProtocol::format_wheel(const std::map<std::string, float>& 
     return msg;
 }
 
-void WebSocketProtocol::parse(const std::string &message) {
+bool WebSocketProtocol::parse(const std::string &message) {
+    bool handled = false;
+
     // try parse a single float
     try {
         // replace comma with dot for float parsing
@@ -106,6 +108,7 @@ void WebSocketProtocol::parse(const std::string &message) {
         float value = -std::stof(msg);
 
         OutputMapper::GetInstance().QueueConstantForce(0, 0, value * 50, -1);
+        handled = true;
 
     } catch (const std::exception &e) {
         // Not a valid float message, ignore
@@ -157,10 +160,13 @@ void WebSocketProtocol::parse(const std::string &message) {
                 float offset = params.at("offset");
                 int phase = params.at("phase");
                 int duration_ms = params.at("duration_ms");
-                OutputMapper::GetInstance().QueuePeriodic(0, 0, strength, period, magnitude, offset, phase, duration_ms);
+                // wave_type: 0=Sine (default), 1=Triangle, 2=SawtoothUp, 3=SawtoothDown
+                HapticPeriodicType wave_type = PeriodicTypeFromIndex(params.value("wave_type", 0));
+                OutputMapper::GetInstance().QueuePeriodic(0, 0, wave_type, strength, period, magnitude, offset, phase, duration_ms);
             } else if (effect == "condition") {
                 int slot = params.value("slot", 0);
-                uint16_t condition_type = params.value("condition_type", (uint16_t)SDL_HAPTIC_SPRING);
+                // condition_type: 0=Spring, 1=Damper, 2=Inertia, 3=Friction
+                HapticConditionType condition_type = ConditionTypeFromIndex(params.value("condition_type", 0));
 
                 float right_sat = params.at("right_sat");
                 float left_sat = params.at("left_sat");
@@ -186,9 +192,12 @@ void WebSocketProtocol::parse(const std::string &message) {
                 w->setRPM(rpm_percent);
             }
         }
+        handled = true;
     } catch (const json::exception &e) {
         // Not a valid haptic message, ignore
     }
+
+    return handled;
 }
 
 const char *WebSocketProtocol::GetVersionLabel(int index) {

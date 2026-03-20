@@ -34,13 +34,15 @@ namespace {
 struct us_listen_socket_t;
 
 struct WebSocketServer::Impl {
+    struct LogEntry { std::string text; bool isError = false; };
+
     int port = 4269;
     bool running = false;
     int runningPort = 0;
     bool restartPending = false;
     int restartPort = 0;
     std::mutex mutex;
-    std::deque<std::string> logs;
+    std::deque<LogEntry> logs;
     std::map<void *, std::string> clients;
     std::shared_ptr<IProtocol> protocol;
     std::string selectedProtocol;
@@ -123,7 +125,7 @@ void WebSocketServer::Start(int port) {
                                    std::string ip(ws->getRemoteAddressAsText());
                                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
                                    m_Impl->clients[ws] = ip;
-                                   m_Impl->logs.push_back("Client connected: " + ip);
+                                   m_Impl->logs.push_back({"Client connected: " + ip, false});
                                    if (m_Impl->logs.size() > 100)
                                        m_Impl->logs.pop_front();
                                },
@@ -141,7 +143,7 @@ void WebSocketServer::Start(int port) {
                                    bool inputEnabled = true;
                                    {
                                        std::lock_guard<std::mutex> lock(m_Impl->mutex);
-                                       m_Impl->logs.push_back("Client data: " + std::string(message));
+                                       m_Impl->logs.push_back({"Client data: " + std::string(message), false});
                                        if (m_Impl->logs.size() > 100)
                                            m_Impl->logs.pop_front();
                                        m_Impl->lastMessageTime = SDL_GetTicks();
@@ -154,12 +156,21 @@ void WebSocketServer::Start(int port) {
                                    // Skip dispatch when input is disabled.
                                    if (!inputEnabled) return;
 
+                                   bool handled = false;
                                    if (protoCopy) {
-                                       protoCopy->parse(std::string(message));
+                                       handled = protoCopy->parse(std::string(message));
                                    }
 
                                    // Also parse for generic haptic commands
                                    HapticParser::Parse(message, mapperCopy);
+
+                                   if (!handled) {
+                                       std::lock_guard<std::mutex> errLock(m_Impl->mutex);
+                                       std::string preview = std::string(message.substr(0, 80));
+                                       if (message.size() > 80) preview += "...";
+                                       m_Impl->logs.push_back({"Invalid WebSocket message: " + preview, true});
+                                       if (m_Impl->logs.size() > 100) m_Impl->logs.pop_front();
+                                   }
                                },
                            .close =
                                [this](auto *ws, int code, std::string_view message) {
@@ -168,14 +179,19 @@ void WebSocketServer::Start(int port) {
                                    {
                                        std::lock_guard<std::mutex> lock(m_Impl->mutex);
                                        if (m_Impl->clients.count(ws)) {
-                                           m_Impl->logs.push_back("Client disconnected: " + m_Impl->clients[ws]);
+                                           m_Impl->logs.push_back({"Client disconnected: " + m_Impl->clients[ws], false});
                                            if (m_Impl->logs.size() > 100)
                                                m_Impl->logs.pop_front();
                                            m_Impl->clients.erase(ws);
 
                                            if (m_Impl->clients.empty()) {
                                                doStopHaptics = true;
-                                               mapperCopy = m_OutputMapper;
+                                               // m_OutputMapper is nulled by Stop() before deferred
+                                               // close callbacks run — fall back to the saved copy so
+                                               // haptics are always stopped on last-client-disconnect.
+                                               mapperCopy = m_OutputMapper
+                                                                ? m_OutputMapper
+                                                                : m_Impl->savedOutputMapper;
                                            }
                                        }
                                    }
@@ -188,10 +204,10 @@ void WebSocketServer::Start(int port) {
                     [this](auto *listen_socket) {
                         std::lock_guard<std::mutex> lock(m_Impl->mutex);
                         if (listen_socket) {
-                            m_Impl->logs.push_back("WebSocket server listening on port " + std::to_string(m_Impl->port));
+                            m_Impl->logs.push_back({"WebSocket server listening on port " + std::to_string(m_Impl->port), false});
                             m_Impl->listen_socket = (struct us_listen_socket_t *)listen_socket;
                         } else {
-                            m_Impl->logs.push_back("Failed to listen on port " + std::to_string(m_Impl->port));
+                            m_Impl->logs.push_back({"Failed to listen on port " + std::to_string(m_Impl->port), false});
                             m_Impl->running = false;
                         }
                         if (m_Impl->logs.size() > 100)
@@ -536,7 +552,7 @@ void WebSocketServer::DrawContent() {
     int  currentPort, runningPort, clientCount;
     std::string outDefId, inDefId, currentProto;
     bool outputEnabled, inputEnabled;
-    std::deque<std::string> logs;
+    std::deque<Impl::LogEntry> logs;
     std::map<void*, std::string> clients;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
@@ -695,7 +711,12 @@ void WebSocketServer::DrawContent() {
 
     ImGui::Separator(); ImGui::Text("Log");
     if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
-        for (const auto& l : logs) ImGui::TextUnformatted(l.c_str());
+        for (const auto& l : logs) {
+            if (l.isError)
+                ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", l.text.c_str());
+            else
+                ImGui::TextUnformatted(l.text.c_str());
+        }
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
     }
     ImGui::EndChild();
@@ -720,15 +741,21 @@ void WebSocketServer::CheckInactivity() {
     OutputMapper* mapper = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
-        if (m_Impl->running
-                && !m_Impl->clients.empty()
-                && m_Impl->lastMessageTime > 0
-                && (SDL_GetTicks() - m_Impl->lastMessageTime > WS_INACTIVITY_TIMEOUT_MS)) {
-            timed_out = true;
-            m_Impl->lastMessageTime = 0;
-            m_Impl->logs.push_back("WebSocket clients timed out (no data). Stopping haptics.");
-            if (m_Impl->logs.size() > 100) m_Impl->logs.pop_front();
-            mapper = m_OutputMapper;
+        if (m_Impl->running && !m_Impl->clients.empty()) {
+            if (m_Impl->lastMessageTime == 0) {
+                // Timeout already fired; re-arm so we keep checking on every
+                // future frame.  If the client resumes sending, the .message
+                // handler will write a fresh tick and normal detection resumes.
+                m_Impl->lastMessageTime = SDL_GetTicks();
+            } else if (SDL_GetTicks() - m_Impl->lastMessageTime > WS_INACTIVITY_TIMEOUT_MS) {
+                timed_out = true;
+                // Reset to 0 so this branch doesn't fire every frame; the
+                // re-arm above will restore it on the next CheckInactivity call.
+                m_Impl->lastMessageTime = 0;
+                m_Impl->logs.push_back({"WebSocket clients timed out (no data). Stopping haptics.", false});
+                if (m_Impl->logs.size() > 100) m_Impl->logs.pop_front();
+                mapper = m_OutputMapper ? m_OutputMapper : m_Impl->savedOutputMapper;
+            }
         }
     }
     if (timed_out && mapper) {

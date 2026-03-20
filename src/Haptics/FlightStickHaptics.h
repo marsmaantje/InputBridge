@@ -9,7 +9,7 @@
  * ThrustMaster units) typically expose:
  *   - SDL_HAPTIC_CONSTANT  – constant-force on X and/or Y axis
  *   - SDL_HAPTIC_PERIODIC  – vibration / buffet effects
- *   - SDL_HAPTIC_SPRING / SDL_HAPTIC_DAMPER / SDL_HAPTIC_INERTIA / SDL_HAPTIC_FRICTION
+ *   - HapticConditionType::Spring / Damper / Inertia / Friction
  *                          – position-dependent condition effects (centering, drag, …)
  *
  * Devices without dedicated haptic hardware (SDL_IsJoystickHaptic() == false)
@@ -50,7 +50,7 @@ public:
      * @param phase       Phase in hundredths of a degree [0, 35999].
      * @param duration_ms Duration in milliseconds or SDL_HAPTIC_INFINITY.
      */
-    int PlayPeriodic(int slot, float strength, uint32_t period,
+    int PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period,
                      float magnitude, float offset, uint32_t phase,
                      uint32_t duration_ms) override;
 
@@ -62,7 +62,7 @@ public:
      * models mass, and friction adds a rough feel.
      *
      * @param slot         Effect slot.
-     * @param type         SDL condition type (SDL_HAPTIC_SPRING, etc.).
+     * @param type         Condition type (HapticConditionType::Spring, Damper, Inertia or Friction).
      * @param right_sat    Right-side saturation [0.0, 1.0].
      * @param left_sat     Left-side saturation [0.0, 1.0].
      * @param right_coeff  Right-side coefficient [-1.0, 1.0].
@@ -71,7 +71,7 @@ public:
      * @param center       Effect center position [-1.0, 1.0].
      * @param duration_ms  Duration in milliseconds or SDL_HAPTIC_INFINITY.
      */
-    int PlayCondition(int slot, uint16_t type,
+    int PlayCondition(int slot, HapticConditionType type,
                       float right_sat, float left_sat,
                       float right_coeff, float left_coeff,
                       float deadband, float center,

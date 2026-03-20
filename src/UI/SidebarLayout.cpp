@@ -282,7 +282,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
             static int frame_ctr = 0;
             if (frame_ctr++ >= 60) {
                 frame_ctr = 0;
-                for (auto& dev : const_cast<std::vector<DeviceState>&>(devices)) {
+                for (auto& dev : devices) {
                     ctx.deviceManager.UpdateBatteryInfo(dev);
                     if (s_EnableBatteryLED && dev.gamepad) {
                         Uint8 r = 0, g = 0, b = 0;
@@ -375,7 +375,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
             }
 
             ImGui::Separator();
-            for (const auto& dev : devices)
+            for (auto& dev : devices)
                 DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs);
             break;
         }
