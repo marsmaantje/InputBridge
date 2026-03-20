@@ -32,7 +32,6 @@ See the [Wiki](../../wiki) for a full step-by-step guide and reference documenta
 
 - **Protocol Editor** — define exactly which fields to send, with custom OSC paths and WebSocket keys. Import, export, duplicate, and version-control protocol files.
 - **Mapping Profiles** — multiple named profiles, each with independent axis mappings, button mappings, server settings, and protocol selections.
-- **Device Visibility** — hide a controller from all other applications while InputBridge keeps reading it (HidHide on Windows, evdev on Linux, IOKit on macOS).
 - **Virtual Devices** — create simulated joysticks to test protocols without real hardware.
 - **Undo / Redo** — 50-step history for all protocol editing operations.
 - **Backup Manager** — automatic timestamped backups before every destructive change.

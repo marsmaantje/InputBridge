@@ -1,6 +1,10 @@
 name: Build and Package
 
 on:
+    push:
+        tags:
+            - "v*"   # fires on v1.0.0, v1.2.3-beta, etc.
+
     workflow_dispatch:
         inputs:
             build_target:
@@ -31,12 +35,12 @@ env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
-  checks: write   # for dorny/test-reporter to publish test reports
-  contents: read  # for actions/checkout to fetch code and actions
+  checks: write    # for dorny/test-reporter to publish test reports
+  contents: write  # for actions/checkout to fetch code, and to create GitHub Releases
 
 jobs:
     build-windows:
-        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'windows') && github.event.inputs.run_tests != 'only' }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'windows') && github.event.inputs.run_tests != 'only' }}
         runs-on: windows-latest
         steps:
             - uses: actions/checkout@v6
@@ -64,7 +68,7 @@ jobs:
                   path: package/bin
 
     build-macos:
-        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'macos') && github.event.inputs.run_tests != 'only' }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'macos') && github.event.inputs.run_tests != 'only' }}
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@v6
@@ -89,7 +93,7 @@ jobs:
                   path: build/*.zip
 
     build-ubuntu-appimage:
-        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage') && github.event.inputs.run_tests != 'only' }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
@@ -123,7 +127,7 @@ jobs:
                   path: InputBridge-Ubuntu.AppImage
 
     build-ubuntu-flatpak:
-        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-flatpak') && github.event.inputs.run_tests != 'only' }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-flatpak') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
@@ -149,7 +153,7 @@ jobs:
                   path: InputBridge-Ubuntu.flatpak
 
     build-ubuntu:
-        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu') && github.event.inputs.run_tests != 'only' }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
@@ -180,7 +184,7 @@ jobs:
                   path: dist/InputBridge-Ubuntu.tar.gz
 
     build-fedora:
-        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'fedora') && github.event.inputs.run_tests != 'only' }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'fedora') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         container: fedora:latest
         steps:
@@ -209,7 +213,7 @@ jobs:
                   path: dist/InputBridge-Fedora.tar.gz
 
     build-arch:
-        if: ${{ (github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'arch') && github.event.inputs.run_tests != 'only' }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'arch') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-latest
         container: archlinux:latest
         steps:
@@ -313,3 +317,68 @@ jobs:
               with:
                   name: coverage-report
                   path: coverage-report
+    create-release:
+        name: Create GitHub Release
+        # Only run on tag pushes, not manual dispatches.
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        needs:
+            - build-windows
+            - build-macos
+            - build-ubuntu
+            - build-ubuntu-appimage
+            - build-ubuntu-flatpak
+            - build-fedora
+            - build-arch
+        runs-on: ubuntu-latest
+        steps:
+            - name: Download all artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: artifacts
+
+            # Flatten each artifact folder into a single zip for the release.
+            - name: Repackage artifacts
+              run: |
+                  mkdir release-assets
+
+                  # Windows — folder of files → zip
+                  cd artifacts/InputBridge-Windows
+                  zip -r ../../release-assets/InputBridge-Windows-${{ github.ref_name }}.zip .
+                  cd ../..
+
+                  # macOS — already a zip from cpack
+                  cp artifacts/InputBridge-macOS/*.zip \
+                     release-assets/InputBridge-macOS-${{ github.ref_name }}.zip
+
+                  # Ubuntu tar.gz
+                  cp artifacts/InputBridge-Ubuntu/InputBridge-Ubuntu.tar.gz \
+                     release-assets/InputBridge-Ubuntu-${{ github.ref_name }}.tar.gz
+
+                  # AppImage
+                  cp artifacts/InputBridge-Ubuntu-AppImage/InputBridge-Ubuntu.AppImage \
+                     release-assets/InputBridge-Ubuntu-${{ github.ref_name }}.AppImage
+
+                  # Flatpak
+                  cp artifacts/InputBridge-Ubuntu-Flatpak/InputBridge-Ubuntu.flatpak \
+                     release-assets/InputBridge-Ubuntu-${{ github.ref_name }}.flatpak
+
+                  # Fedora tar.gz
+                  cp artifacts/InputBridge-Fedora/InputBridge-Fedora.tar.gz \
+                     release-assets/InputBridge-Fedora-${{ github.ref_name }}.tar.gz
+
+                  # Arch tar.gz
+                  cp artifacts/InputBridge-Arch/InputBridge-Arch.tar.gz \
+                     release-assets/InputBridge-Arch-${{ github.ref_name }}.tar.gz
+
+                  echo "Release assets:"
+                  ls -lh release-assets/
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  name: InputBridge ${{ github.ref_name }}
+                  # Mark as pre-release automatically for tags containing
+                  # "-alpha", "-beta", or "-rc".
+                  prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+                  generate_release_notes: true
+                  files: release-assets/*
