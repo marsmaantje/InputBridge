@@ -153,7 +153,11 @@ std::string ProtocolRegistry::DuplicateDefinition(const std::string& srcId, cons
     ProtocolDefinition* src = FindById(srcId);
     if (!src) return "";
 
+    // Copy by value BEFORE any mutation of m_definitions. push_back below may
+    // reallocate the vector's buffer, which would leave src dangling.
     ProtocolDefinition def = *src;
+    src = nullptr; // prevent accidental use after the push_back below
+
     def.id = GenerateId();
     def.name = newName;
     def.transport = newTransport;

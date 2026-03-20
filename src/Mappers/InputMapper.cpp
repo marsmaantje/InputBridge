@@ -110,6 +110,10 @@ const ProtocolDefinition* InputMapper::GetActiveOutputDefinition() {
 }
 
 void InputMapper::LoadConfig(PreferencesManager &prefs) {
+    // Null the OutputMapper pointer before LoadProfiles() calls m_Profiles.clear()
+    // followed by many push_backs. Any of those reallocations would leave the
+    // OutputMapper holding a dangling pointer into the old buffer.
+    OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
     LoadProfiles();
     std::string last = prefs.GetString("InputMapper", "LastProfile", "");
     for (int i = 0; i < (int)m_Profiles.size(); ++i)
@@ -304,6 +308,10 @@ void InputMapper::DrawProfileSelector() {
         if (ImGui::Button("Create New") && strlen(m_NewProfileName) > 0) {
             MappingProfile p; p.name = m_NewProfileName;
             SnapshotServerSettings(p);
+            // Null the pointer BEFORE push_back: if the vector reallocates its
+            // buffer, SetActiveHapticTargets would otherwise iterate through
+            // the old (now freed) memory when closing the previous targets.
+            OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
             m_Profiles.push_back(p);
             m_SelectedProfileIndex = (int)m_Profiles.size() - 1;
             SaveProfile(p);
@@ -350,9 +358,13 @@ void InputMapper::DrawProfileSelector() {
                         auto p = GetMappingsDirectory() / (m_Profiles[m_SelectedProfileIndex].name + ".json");
                         if (std::filesystem::exists(p)) std::filesystem::remove(p);
                     } catch (...) {}
+                    // Null the pointer BEFORE erase: erase invalidates all
+                    // iterators and pointers into the vector, so
+                    // SetActiveHapticTargets must not dereference the old
+                    // pointer when closing haptic devices on the deleted profile.
+                    OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
                     m_Profiles.erase(m_Profiles.begin() + m_SelectedProfileIndex);
                     m_SelectedProfileIndex = -1;
-                    OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::SetItemDefaultFocus();
