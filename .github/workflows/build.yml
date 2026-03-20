@@ -27,6 +27,9 @@ on:
                     - "yes"
                     - "only"
 
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   checks: write   # for dorny/test-reporter to publish test reports
   contents: read  # for actions/checkout to fetch code and actions
@@ -290,7 +293,7 @@ jobs:
                   path: build/test-results.xml
 
             - name: Publish Test Report
-              uses: dorny/test-reporter@v2
+              uses: dorny/test-reporter@v2.6.0
               if: always()
               with:
                 name: Test Results (${{ matrix.os }})
