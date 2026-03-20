@@ -1,0 +1,167 @@
+{
+    "active": false,
+    "direction": "output",
+    "fields": [
+        {
+            "enabled": true,
+            "fieldId": "btn_engine",
+            "oscPath": "/input/engine",
+            "wsKey": "engine"
+        },
+        {
+            "enabled": false,
+            "fieldId": "input_power_up",
+            "oscPath": "/input/powerup",
+            "wsKey": "input_powerup"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_steering",
+            "oscPath": "/input/yaw",
+            "wsKey": "yaw"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_throttle",
+            "oscPath": "/input/throttle",
+            "wsKey": "throttle"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_brake",
+            "oscPath": "/input/brake",
+            "wsKey": "brake"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_pitch",
+            "oscPath": "/input/pitch",
+            "wsKey": "pitch"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_roll",
+            "oscPath": "/input/roll",
+            "wsKey": "roll"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_collective",
+            "oscPath": "/input/collective",
+            "wsKey": "collective"
+        },
+        {
+            "enabled": false,
+            "fieldId": "btn_gear_down",
+            "oscPath": "/input/gear_down",
+            "wsKey": "gear_down"
+        },
+        {
+            "enabled": false,
+            "fieldId": "btn_gear_up",
+            "oscPath": "/input/gear_up",
+            "wsKey": "gear_up"
+        },
+        {
+            "enabled": false,
+            "fieldId": "btn_reverse",
+            "oscPath": "/input/reverse",
+            "wsKey": "reverse"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_weapon_main",
+            "oscPath": "/input/weapon_main",
+            "wsKey": "weapon_main"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_weapon_sec",
+            "oscPath": "/input/weapon_sec",
+            "wsKey": "weapon_sec"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_reload",
+            "oscPath": "/input/reload",
+            "wsKey": "reload"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_boost",
+            "oscPath": "/input/boost",
+            "wsKey": "boost"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_landing_gear",
+            "oscPath": "/input/landing_gear",
+            "wsKey": "landing_gear"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_cam_switch",
+            "oscPath": "/input/cam_switch",
+            "wsKey": "cam_switch"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_horn",
+            "oscPath": "/input/horn",
+            "wsKey": "horn"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_lights",
+            "oscPath": "/input/lights",
+            "wsKey": "lights"
+        },
+        {
+            "enabled": false,
+            "fieldId": "btn_fog",
+            "oscPath": "/input/fog",
+            "wsKey": "fog"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_hazard",
+            "oscPath": "/input/hazard",
+            "wsKey": "hazard"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_parking",
+            "oscPath": "/input/parking",
+            "wsKey": "parking"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_beam",
+            "oscPath": "/input/beam",
+            "wsKey": "beam"
+        },
+        {
+            "enabled": true,
+            "fieldId": "btn_jump",
+            "oscPath": "/input/jump",
+            "wsKey": "jump"
+        },
+        {
+            "enabled": false,
+            "fieldId": "btn_difflock_b",
+            "oscPath": "/input/difflock_rear",
+            "wsKey": "difflock_rear"
+        }
+    ],
+    "id": "5e3c0ad01916a500",
+    "name": "MPV OSC Helicopter",
+    "osc": {
+        "host": "127.0.0.1",
+        "recvPort": 9068,
+        "sendPort": 9066
+    },
+    "transport": "osc",
+    "ws": {
+        "port": 4269
+    }
+}

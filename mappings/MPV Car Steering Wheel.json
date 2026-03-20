@@ -1,0 +1,133 @@
+{
+    "button_mappings": [],
+    "digital_mappings": [
+        {
+            "button_index": 13,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "mode": "momentary",
+            "target_field_id": "btn_gear_up"
+        },
+        {
+            "button_index": 12,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "mode": "momentary",
+            "target_field_id": "btn_gear_down"
+        },
+        {
+            "button_index": 34,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "mode": "momentary",
+            "target_field_id": "btn_reverse"
+        },
+        {
+            "button_index": 18,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "mode": "momentary",
+            "target_field_id": "btn_neutral"
+        },
+        {
+            "button_index": 19,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "mode": "momentary",
+            "target_field_id": "unflip"
+        },
+        {
+            "button_index": 22,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "mode": "momentary",
+            "target_field_id": "btn_horn"
+        },
+        {
+            "button_index": 35,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "mode": "toggle",
+            "target_field_id": "btn_engine"
+        }
+    ],
+    "digital_toggle_states": {
+        "btn_engine": false
+    },
+    "haptic_targets": [
+        {
+            "device_guid": "0300ee506e3400000500000011010000",
+            "enable_condition": true,
+            "enable_constant": true,
+            "enable_periodic": true,
+            "enable_rumble": true,
+            "name": "Target 0",
+            "virtual_id": 0
+        }
+    ],
+    "mappings": {
+        "Brake": {
+            "axis": 5,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": true,
+            "range": 1
+        },
+        "Steering": {
+            "axis": 0,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 0
+        },
+        "Throttle": {
+            "axis": 2,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": true,
+            "range": 1
+        },
+        "axis_brake": {
+            "axis": 5,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 1
+        },
+        "axis_collective": {
+            "axis": 2,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 1
+        },
+        "axis_pitch": {
+            "axis": 5,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": true,
+            "range": 2
+        },
+        "axis_steering": {
+            "axis": 0,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 0
+        },
+        "axis_throttle": {
+            "axis": 2,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 1
+        }
+    },
+    "name": "MPV Car Steering Wheel",
+    "osc_input_enabled": true,
+    "osc_input_protocol_id": "f6516c813e6edd00",
+    "osc_output_enabled": true,
+    "osc_output_protocol_id": "7e46de1cc59851f0",
+    "osc_recv_port": 9068,
+    "osc_send_host": "127.0.0.1",
+    "osc_send_port": 9066,
+    "selected_protocol_view": 0,
+    "ws_input_enabled": true,
+    "ws_input_protocol_id": "",
+    "ws_output_enabled": true,
+    "ws_output_protocol_id": "",
+    "ws_port": 4269
+}

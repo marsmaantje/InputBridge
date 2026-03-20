@@ -1,0 +1,25 @@
+{
+    "direction": "Output",
+    "fields": [
+        {
+            "fieldId": "axis_throttle",
+            "oscPath": "/input/throttle",
+            "wsKey": "throttle"
+        },
+        {
+            "fieldId": "axis_steering",
+            "oscPath": "/input/yaw",
+            "wsKey": "yaw"
+        },
+        {
+            "fieldId": "axis_brake",
+            "oscPath": "/input/brake",
+            "wsKey": "brake"
+        }
+    ],
+    "protocol_id": "a0366c64614aa6a2",
+    "protocol_name": "BackAlleyRacing WS",
+    "template_desc": "",
+    "template_name": "BackAlleyRacing WS",
+    "transport": "WebSocket"
+}

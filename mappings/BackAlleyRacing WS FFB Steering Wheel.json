@@ -1,0 +1,74 @@
+{
+    "button_mappings": [],
+    "digital_mappings": [],
+    "digital_toggle_states": {},
+    "haptic_targets": [
+        {
+            "device_guid": "0300ee506e3400000500000011010000",
+            "enable_condition": false,
+            "enable_constant": false,
+            "enable_periodic": false,
+            "enable_rumble": false,
+            "name": "Target 0",
+            "virtual_id": 0
+        }
+    ],
+    "mappings": {
+        "Brake": {
+            "axis": 5,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 1
+        },
+        "Steering": {
+            "axis": 0,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 0
+        },
+        "Throttle": {
+            "axis": 2,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 1
+        },
+        "axis_brake": {
+            "axis": 5,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": true,
+            "range": 1
+        },
+        "axis_steering": {
+            "axis": 0,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": false,
+            "range": 0
+        },
+        "axis_throttle": {
+            "axis": 2,
+            "deadzone": 0.0,
+            "device_guid": "0300ee506e3400000500000011010000",
+            "invert": true,
+            "range": 1
+        }
+    },
+    "name": "BackAlleyRacing WS FFB Steering Wheel",
+    "osc_input_enabled": true,
+    "osc_input_protocol_id": "f6516c813e6edd00",
+    "osc_output_enabled": true,
+    "osc_output_protocol_id": "",
+    "osc_recv_port": 9068,
+    "osc_send_host": "127.0.0.1",
+    "osc_send_port": 9066,
+    "selected_protocol_view": 1,
+    "ws_input_enabled": true,
+    "ws_input_protocol_id": "",
+    "ws_output_enabled": true,
+    "ws_output_protocol_id": "",
+    "ws_port": 4269
+}

@@ -1,0 +1,154 @@
+{
+    "button_mappings": [],
+    "digital_mappings": [
+        {
+            "button_index": 10,
+            "device_guid": "050057564c050000e60c000000006800",
+            "mode": "momentary",
+            "target_field_id": "btn_gear_up"
+        },
+        {
+            "button_index": 9,
+            "device_guid": "050057564c050000e60c000000006800",
+            "mode": "momentary",
+            "target_field_id": "btn_gear_down"
+        },
+        {
+            "button_index": 3,
+            "device_guid": "050057564c050000e60c000000006800",
+            "mode": "momentary",
+            "target_field_id": "btn_horn"
+        },
+        {
+            "button_index": 0,
+            "device_guid": "050057564c050000e60c000000006800",
+            "mode": "momentary",
+            "target_field_id": "btn_weapon_main"
+        },
+        {
+            "button_index": 1,
+            "device_guid": "050057564c050000e60c000000006800",
+            "mode": "momentary",
+            "target_field_id": "btn_weapon_sec"
+        },
+        {
+            "device_guid": "050057564c050000e60c000000006800",
+            "hat_index": 0,
+            "hat_mask": 4,
+            "mode": "toggle",
+            "target_field_id": "btn_landing_gear"
+        },
+        {
+            "device_guid": "050057564c050000e60c000000006800",
+            "hat_index": 0,
+            "hat_mask": 1,
+            "mode": "toggle",
+            "target_field_id": "btn_engine"
+        },
+        {
+            "button_index": 2,
+            "device_guid": "050057564c050000e60c000000006800",
+            "mode": "momentary",
+            "target_field_id": "btn_jump"
+        },
+        {
+            "device_guid": "050057564c050000e60c000000006800",
+            "hat_index": 0,
+            "hat_mask": 8,
+            "mode": "toggle",
+            "target_field_id": "btn_lights"
+        }
+    ],
+    "digital_toggle_states": {},
+    "haptic_targets": [
+        {
+            "device_guid": "050057564c050000e60c000000006800",
+            "enable_condition": false,
+            "enable_constant": false,
+            "enable_periodic": false,
+            "enable_rumble": true,
+            "name": "Target 0",
+            "virtual_id": 0
+        }
+    ],
+    "mappings": {
+        "Brake": {
+            "axis": 4,
+            "deadzone": 0.0,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 1
+        },
+        "Pitch": {
+            "axis": 3,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 0
+        },
+        "Roll": {
+            "axis": 3,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 0
+        },
+        "Steering": {
+            "axis": 0,
+            "deadzone": 0.0,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 0
+        },
+        "Throttle": {
+            "axis": 5,
+            "deadzone": 0.0,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 1
+        },
+        "axis_brake": {
+            "axis": 4,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 1
+        },
+        "axis_collective": {
+            "axis": 4,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 1
+        },
+        "axis_pitch": {
+            "axis": 3,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": true,
+            "range": 0
+        },
+        "axis_roll": {
+            "axis": 2,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 0
+        },
+        "axis_steering": {
+            "axis": 0,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 0
+        },
+        "axis_throttle": {
+            "axis": 5,
+            "deadzone": 0.05000000074505806,
+            "device_guid": "050057564c050000e60c000000006800",
+            "invert": false,
+            "range": 1
+        }
+    },
+    "name": "Dualsense Helicopter"
+}

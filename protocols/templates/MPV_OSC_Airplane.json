@@ -12,6 +12,11 @@
             "wsKey": "yaw"
         },
         {
+            "fieldId": "axis_throttle",
+            "oscPath": "/input/throttle",
+            "wsKey": "throttle"
+        },
+        {
             "fieldId": "axis_pitch",
             "oscPath": "/input/pitch",
             "wsKey": "pitch"
@@ -22,11 +27,6 @@
             "wsKey": "roll"
         },
         {
-            "fieldId": "axis_collective",
-            "oscPath": "/input/collective",
-            "wsKey": "collective"
-        },
-        {
             "fieldId": "btn_weapon_main",
             "oscPath": "/input/weapon_main",
             "wsKey": "weapon_main"
@@ -35,6 +35,11 @@
             "fieldId": "btn_weapon_sec",
             "oscPath": "/input/weapon_sec",
             "wsKey": "weapon_sec"
+        },
+        {
+            "fieldId": "btn_flare",
+            "oscPath": "/input/flare",
+            "wsKey": "flare"
         },
         {
             "fieldId": "btn_landing_gear",
@@ -65,16 +70,11 @@
             "fieldId": "btn_beam",
             "oscPath": "/input/beam",
             "wsKey": "beam"
-        },
-        {
-            "fieldId": "btn_jump",
-            "oscPath": "/input/jump",
-            "wsKey": "jump"
         }
     ],
     "protocol_id": "5e3c0ad01916a500",
-    "protocol_name": "MPV OSC Helicopter",
-    "template_desc": "Exmaple template for the MPV helicopter, using the OSC protocol.",
-    "template_name": "MPV OSC Helicopter",
+    "protocol_name": "MPV OSC Airplane",
+    "template_desc": "Exmaple template for the MPV Airplane, using the OSC protocol.",
+    "template_name": "MPV OSC Airplane",
     "transport": "OSC"
 }

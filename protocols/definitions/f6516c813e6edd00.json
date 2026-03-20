@@ -1,0 +1,59 @@
+{
+    "active": false,
+    "direction": "input",
+    "fields": [
+        {
+            "enabled": true,
+            "fieldId": "haptic_rumble",
+            "oscPath": "/haptic/rumble",
+            "wsKey": "rumble"
+        },
+        {
+            "enabled": true,
+            "fieldId": "haptic_constant",
+            "oscPath": "/haptic/constant",
+            "wsKey": "constant"
+        },
+        {
+            "enabled": true,
+            "fieldId": "haptic_periodic",
+            "oscPath": "/haptic/periodic",
+            "wsKey": "periodic"
+        },
+        {
+            "enabled": true,
+            "fieldId": "haptic_condition",
+            "oscPath": "/haptic/condition",
+            "wsKey": "condition"
+        },
+        {
+            "enabled": true,
+            "fieldId": "rumble_left",
+            "oscPath": "/rumble/left",
+            "wsKey": "rumble_left"
+        },
+        {
+            "enabled": true,
+            "fieldId": "rumble_right",
+            "oscPath": "/rumble/right",
+            "wsKey": "rumble_right"
+        },
+        {
+            "enabled": true,
+            "fieldId": "haptic_gain",
+            "oscPath": "/haptic/gain",
+            "wsKey": "gain"
+        }
+    ],
+    "id": "f6516c813e6edd00",
+    "name": "MPV OSC Car FFB",
+    "osc": {
+        "host": "127.0.0.1",
+        "recvPort": 9068,
+        "sendPort": 9066
+    },
+    "transport": "osc",
+    "ws": {
+        "port": 4269
+    }
+}

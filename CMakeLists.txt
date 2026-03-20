@@ -450,6 +450,35 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
     FILES_MATCHING PATTERN "*.ttf" PATTERN "*.otf"
 )
 
+# Copy the protocols/ folder next to the executable at build time so the
+# program can find its presets and templates in the development build layout.
+add_custom_command(TARGET InputBridge POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
+    "$<TARGET_FILE_DIR:InputBridge>/protocols"
+    COMMENT "Copying protocols/ to build output directory"
+)
+
+# Install the protocols/ folder alongside the binary.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
+    DESTINATION bin
+    FILES_MATCHING PATTERN "*.json"
+)
+
+# Copy the mappings/ folder next to the executable at build time.
+add_custom_command(TARGET InputBridge POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
+    "$<TARGET_FILE_DIR:InputBridge>/mappings"
+    COMMENT "Copying mappings/ to build output directory"
+)
+
+# Install the mappings/ folder alongside the binary.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
+    DESTINATION bin
+    FILES_MATCHING PATTERN "*.json"
+)
+
 if(UNIX AND NOT APPLE)
     # Generate basic desktop file and icon for packaging (Required for AppImage/Flatpak)
     file(WRITE ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.desktop
