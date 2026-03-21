@@ -601,6 +601,33 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
 // Main Entry Point
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Wrapping button helper: places buttons on the same line as the previous item
+// when there is enough room, and falls to the next line when there isn't.
+//
+//   if (WrapButton("Label")) { /* clicked */ }
+//
+static bool WrapButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+    float buttonW = size.x > 0 ? size.x
+                                : ImGui::CalcTextSize(label).x
+                                  + ImGui::GetStyle().FramePadding.x * 2.0f;
+
+    // When the cursor is at the start of a new line, GetCursorScreenPos().x +
+    // GetContentRegionAvail().x gives the screen-space right edge of the content
+    // area. GetContentRegionAvail() is the recommended modern API and accounts
+    // for scrollbars and child window sizing correctly.
+    float regionRightX = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+
+    // Screen-space X where the next button would end if placed on the same line.
+    float nextEndX = ImGui::GetItemRectMax().x
+                     + ImGui::GetStyle().ItemSpacing.x
+                     + buttonW;
+
+    if (nextEndX <= regionRightX)
+        ImGui::SameLine();
+
+    return ImGui::Button(label, size);
+}
+
 void ProtocolEditorWindow::DrawContent() {
     if (!s_settingsLoaded) {
         LoadSettings();
@@ -617,52 +644,42 @@ void ProtocolEditorWindow::DrawContent() {
     }
 
     // ── Toolbar ──────────────────────────────────────────────────────────────
-    if (ImGui::Button("+ New Protocol")) {
+    if (WrapButton("+ New Protocol")) {
         s_showNewModal = true;
         std::strncpy(s_newName, "New Protocol", sizeof(s_newName));
         s_newTransport = 0;
         s_newDirection = 0;
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Save All")) {
+    if (WrapButton("Save All")) {
         ProtocolRegistry::GetInstance().SaveAll();
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Reload Fields")) {
+    if (WrapButton("Reload Fields")) {
         ProtocolRegistry::GetInstance().ReloadFieldCatalog();
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Import...")) {
+    if (WrapButton("Import...")) {
         ShowImportDialog();
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Export...")) {
+    if (WrapButton("Export...")) {
         ShowExportDialog();
     }
-    ImGui::SameLine();
-
-    ImGui::Separator();
-    ImGui::SameLine();
 
     if (!s_undoManager.CanUndo()) ImGui::BeginDisabled();
-    if (ImGui::Button("Undo")) s_undoManager.Undo();
+    if (WrapButton("Undo")) s_undoManager.Undo();
     if (!s_undoManager.CanUndo()) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && s_undoManager.CanUndo())
         ImGui::SetTooltip("Undo: %s", s_undoManager.GetUndoDescription().c_str());
-    ImGui::SameLine();
 
     if (!s_undoManager.CanRedo()) ImGui::BeginDisabled();
-    if (ImGui::Button("Redo")) s_undoManager.Redo();
+    if (WrapButton("Redo")) s_undoManager.Redo();
     if (!s_undoManager.CanRedo()) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && s_undoManager.CanRedo())
         ImGui::SetTooltip("Redo: %s", s_undoManager.GetRedoDescription().c_str());
-    ImGui::SameLine();
 
-    if (ImGui::Button("Backups...")) s_showBackupModal = true;
+    if (WrapButton("Backups...")) s_showBackupModal = true;
 
     ImGui::Separator();
 
@@ -914,7 +931,7 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
     ImGui::SeparatorText("Output Fields");
 
     // Field management buttons
-    if (ImGui::Button("+ Create Field")) {
+    if (WrapButton("+ Create Field")) {
         s_showCreateFieldModal = true;
         s_cfId[0] = '\0';
         s_cfLabel[0] = '\0';
@@ -923,34 +940,30 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
         std::strncpy(s_cfOsc, "/custom/", sizeof(s_cfOsc));
         std::strncpy(s_cfWs, "custom_", sizeof(s_cfWs));
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Save as Preset")) {
+    if (WrapButton("Save as Preset")) {
         s_showSavePresetModal = true;
         std::strncpy(s_presetName, "New Preset", sizeof(s_presetName));
     }
 
-    if (ImGui::Button("Rename Category")) {
+    if (WrapButton("Rename Category")) {
         s_showRenameCatModal = true;
         s_renCatOldName[0] = '\0';
         s_renCatNewName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Delete Category")) {
+    if (WrapButton("Delete Category")) {
         s_showDeleteCatModal = true;
         s_delCatName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Merge Categories")) {
+    if (WrapButton("Merge Categories")) {
         s_showMergeCatModal = true;
         s_mergeSrcCat[0] = '\0';
         s_mergeTgtCat[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Save as Template")) {
+    if (WrapButton("Save as Template")) {
         s_showSaveTemplateModal = true;
         std::strncpy(s_templateName, "New Template", sizeof(s_templateName));
         s_templateDesc[0] = '\0';
@@ -974,20 +987,18 @@ void ProtocolEditorWindow::DrawInputFieldPicker() {
     ImGui::SeparatorText("Input Fields");
 
     // Category management for input fields
-    if (ImGui::Button("Rename Category")) {
+    if (WrapButton("Rename Category")) {
         s_showRenameCatModal = true;
         s_renCatOldName[0] = '\0';
         s_renCatNewName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Delete Category")) {
+    if (WrapButton("Delete Category")) {
         s_showDeleteCatModal = true;
         s_delCatName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Merge Categories")) {
+    if (WrapButton("Merge Categories")) {
         s_showMergeCatModal = true;
         s_mergeSrcCat[0] = '\0';
         s_mergeTgtCat[0] = '\0';
@@ -2280,6 +2291,9 @@ void ProtocolEditorWindow::DrawValidationResultModal() {
     }
 
     bool open = true;
+    // SetNextWindowSizeConstraints enforces a minimum width while still
+    // allowing AlwaysAutoResize to size the height to the wrapped text.
+    ImGui::SetNextWindowSizeConstraints(ImVec2(480, 0), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::BeginPopupModal("Validation Result##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (s_validationIsError)
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Validation Failed");
