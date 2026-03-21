@@ -571,7 +571,7 @@ void InputMapper::DrawMappingContent() {
         bool hasSrc = src.axisIndex != -1;
         if (hasSrc) {
             dw = 80.f;
-            rw = 60.f;
+            rw = 80.f;
         }
 
         ImGui::SetNextItemWidth(std::max(1.0f, colW - sp - bindW));
