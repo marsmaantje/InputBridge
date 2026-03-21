@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge)
+project(InputBridge VERSION 0.8.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -321,6 +321,10 @@ if(ENABLE_EXCLUSIVE_INPUT)
 endif()
 
 # Add compile definitions to InputBridge
+target_compile_definitions(InputBridge PRIVATE
+    INPUTBRIDGE_VERSION="${PROJECT_VERSION}"
+)
+
 if(WIN32)
     target_compile_definitions(InputBridge PRIVATE
         WIN32_LEAN_AND_MEAN

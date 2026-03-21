@@ -8,6 +8,8 @@ void AboutWindow::DrawContent() {
     ImGui::Text("InputBridge");
     ImGui::SetWindowFontScale(1.0f);
     ImGui::PopStyleColor();
+    // Get version number from top of CMakeLists
+    ImGui::TextDisabled("v" INPUTBRIDGE_VERSION);
 
     ImGui::Spacing();
 

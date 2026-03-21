@@ -61,7 +61,8 @@ bool Application::CreateAppWindow()
     }
 
     const Uint32 window_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    m_window = SDL_CreateWindow("InputBridge",
+    // Get version number from top of CMakeLists
+    m_window = SDL_CreateWindow("InputBridge v" INPUTBRIDGE_VERSION,
                                 k_InitialWidth, k_InitialHeight, window_flags);
     if (!m_window) {
         std::printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
