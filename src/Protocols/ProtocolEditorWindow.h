@@ -17,8 +17,6 @@
  */
 #include <string>
 #include <vector>
-#include <thread>
-#include <atomic>
 #include "../Core/UndoRedo.h"
 #include "../Core/BackupManager.h"
 #include "ProtocolDefinition.h"
@@ -91,7 +89,6 @@ private:
     static void LoadSettings();
     static void SaveSettings();
     static bool DrawFileBrowser(std::string& currentDir, char* pathBuf, size_t pathBufSize);
-    static bool TryNativeFileDialog(bool isSave, std::string& path);
     static std::vector<std::string> GetAllCategories();
     static void CreateBackupBeforeOperation(const std::string& operationName);
     static bool ValidateAndImportProtocol(const std::string& filePath);
@@ -187,14 +184,6 @@ private:
 
     // Export protocol modal state (also used by async native dialog)
     // Native dialog async state — the Win32 dialog runs on a worker thread so
-    // it never blocks the ImGui render loop.
-    static inline std::thread       s_nativeDialogThread;
-    static inline std::atomic<bool> s_nativeDialogRunning{false};
-    static inline std::atomic<bool> s_nativeDialogSucceeded{false};
-    static inline std::string       s_nativeDialogResultPath;
-    // true = import pending, false = export pending
-    static inline bool              s_nativeDialogIsImport = false;
-
     // Filter / search state
     static inline char  s_fieldFilter[128] = {};
 

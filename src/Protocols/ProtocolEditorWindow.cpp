@@ -1,7 +1,6 @@
 #include "ProtocolEditorWindow.h"
 #include "ProtocolRegistry.h"
 #include "ProtocolDefinition.h"
-#include "../Utils/FileDialog.h"
 #include "../Core/UndoRedo.h"
 #include "../Core/BackupManager.h"
 #include "../Core/ProtocolValidator.h"
@@ -598,22 +597,6 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
  * @param path Input/output path
  * @return true if native dialog was shown and user selected a file
  */
-bool ProtocolEditorWindow::TryNativeFileDialog(bool isSave, std::string& path) {
-    if (!FileDialog::IsNativeDialogAvailable()) {
-        return false;
-    }
-
-    std::vector<std::pair<std::string, std::string>> filters = {
-        {"JSON Files", "*.json"},
-        {"All Files", "*.*"}
-    };
-
-    FileDialog::Type dialogType = isSave ? FileDialog::Type::Save : FileDialog::Type::Open;
-    std::string title = isSave ? "Export Protocol" : "Import Protocol";
-
-    return FileDialog::Show(dialogType, title, path, filters, path);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Main Entry Point
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1630,43 +1613,8 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 }
 
 void ProtocolEditorWindow::DrawExportProtocolModal() {
-    // ── Collect native dialog result (runs every frame, harmless when idle) ──
-    // The native Win32 dialog is launched on a worker thread. Once the thread
-    // finishes (running flag cleared) we join it and handle the result here,
-    // safely back on the render thread.
-    if (!s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
-        s_nativeDialogThread.join();
-        if (s_nativeDialogSucceeded.load()) {
-            std::strncpy(s_exportPath, s_nativeDialogResultPath.c_str(), sizeof(s_exportPath));
-            ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
-        }
-        // Whether the user picked a file or cancelled, we are done.
-        // Do NOT open the ImGui browser on cancel — just return silently.
-        return;
-    }
-
     if (s_showExportModal) {
         s_showExportModal = false;
-
-        if (FileDialog::IsNativeDialogAvailable()) {
-            // Spawn worker thread so the render loop never blocks.
-            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
-            s_nativeDialogIsImport  = false;
-            s_nativeDialogSucceeded = false;
-            s_nativeDialogRunning   = true;
-            s_nativeDialogResultPath = s_exportCurrentDir;
-            std::string capturedId  = s_exportId;
-            s_nativeDialogThread = std::thread([]() {
-                std::string path = s_nativeDialogResultPath;
-                bool ok = TryNativeFileDialog(true, path);
-                s_nativeDialogResultPath = path;
-                s_nativeDialogSucceeded  = ok;
-                s_nativeDialogRunning    = false;
-            });
-            return; // result collected next frame(s) above
-        }
-
-        // No native dialog available — open the ImGui browser.
         ImGui::OpenPopup("Export Protocol##modal");
     }
 
@@ -1707,42 +1655,8 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
 }
 
 void ProtocolEditorWindow::DrawImportProtocolModal() {
-    // ── Collect native dialog result (runs every frame, harmless when idle) ──
-    if (s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
-        s_nativeDialogThread.join();
-        if (s_nativeDialogSucceeded.load()) {
-            std::string id = ProtocolRegistry::GetInstance().ImportDefinition(s_nativeDialogResultPath);
-            auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
-            for (int i = 0; i < (int)defs.size(); ++i) {
-                if (defs[i].id == id) { s_selectedIndex = i; break; }
-            }
-        }
-        // Whether the user picked a file or cancelled, do NOT open the ImGui
-        // browser — just return silently.
-        return;
-    }
-
     if (s_showImportModal) {
         s_showImportModal = false;
-
-        if (FileDialog::IsNativeDialogAvailable()) {
-            // Spawn worker thread so the render loop never blocks.
-            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
-            s_nativeDialogIsImport  = true;
-            s_nativeDialogSucceeded = false;
-            s_nativeDialogRunning   = true;
-            s_nativeDialogResultPath = s_importCurrentDir;
-            s_nativeDialogThread = std::thread([]() {
-                std::string path = s_nativeDialogResultPath;
-                bool ok = TryNativeFileDialog(false, path);
-                s_nativeDialogResultPath = path;
-                s_nativeDialogSucceeded  = ok;
-                s_nativeDialogRunning    = false;
-            });
-            return; // result collected next frame(s) above
-        }
-
-        // No native dialog available — open the ImGui browser.
         ImGui::OpenPopup("Import Protocol##modal");
     }
 
