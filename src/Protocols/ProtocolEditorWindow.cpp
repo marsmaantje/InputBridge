@@ -739,7 +739,13 @@ void ProtocolEditorWindow::ShowExportDialog() {
     if (s_selectedIndex >= 0 && s_selectedIndex < (int)defs.size()) {
         s_showExportModal = true;
         s_exportId = defs[s_selectedIndex].id;
-        s_exportPath[0] = '\0';
+        // Pre-fill with the protocol name so the user only needs to pick a folder.
+        // Sanitise to a safe filename (replace spaces and path separators).
+        std::string name = defs[s_selectedIndex].name;
+        for (char& c : name)
+            if (c == ' ' || c == '/' || c == '\\' || c == ':') c = '_';
+        std::strncpy(s_exportPath, name.c_str(), sizeof(s_exportPath) - 1);
+        s_exportPath[sizeof(s_exportPath) - 1] = '\0';
     }
 }
 
@@ -1642,7 +1648,21 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
         float btnW = 110.0f;
         ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - btnW * 2 + ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Button("Export", ImVec2(btnW, 0))) {
-            ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
+            // s_exportPath may be just a filename typed by the user (no directory),
+            // a full path from clicking an existing file, or empty.
+            // Compose the final path: if it has no directory component, prepend
+            // the current browser directory.  Append .json if there's no extension.
+            std::string finalPath = s_exportPath;
+            if (!finalPath.empty()) {
+                fs::path p(finalPath);
+                if (p.parent_path().empty() || p.parent_path() == fs::path(".")) {
+                    finalPath = (fs::path(s_exportCurrentDir) / p).string();
+                }
+                if (fs::path(finalPath).extension().empty()) {
+                    finalPath += ".json";
+                }
+                ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, finalPath);
+            }
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
