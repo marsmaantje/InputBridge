@@ -8,6 +8,8 @@ void AboutWindow::DrawContent() {
     ImGui::Text("InputBridge");
     ImGui::SetWindowFontScale(1.0f);
     ImGui::PopStyleColor();
+    // Get version number from top of CMakeLists
+    ImGui::TextDisabled("v" INPUTBRIDGE_VERSION);
 
     ImGui::Spacing();
 
@@ -28,7 +30,7 @@ void AboutWindow::DrawContent() {
 
         ImGui::Spacing();
         ImGui::TextWrapped(
-            "At some point the feature creep started taking over and it may has gone a bit out of control ever since."
+            "At some point the feature creep started taking over and it may have gone a bit out of control ever since."
             "Hope you enjoy the tool."
         );
 
@@ -54,7 +56,7 @@ void AboutWindow::DrawContent() {
     struct Member { const char* name; const char* role; };
     constexpr Member members[] = {
         { "Elektrospy",  "Developer" },
-        { "marsmaantja", "Developer" },
+        { "marsmaantje", "Developer" },
     };
     ImGui::Indent(8.0f);
     for (const auto& m : members) {

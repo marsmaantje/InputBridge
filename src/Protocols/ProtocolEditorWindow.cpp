@@ -1,7 +1,6 @@
 #include "ProtocolEditorWindow.h"
 #include "ProtocolRegistry.h"
 #include "ProtocolDefinition.h"
-#include "../Utils/FileDialog.h"
 #include "../Core/UndoRedo.h"
 #include "../Core/BackupManager.h"
 #include "../Core/ProtocolValidator.h"
@@ -598,25 +597,36 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
  * @param path Input/output path
  * @return true if native dialog was shown and user selected a file
  */
-bool ProtocolEditorWindow::TryNativeFileDialog(bool isSave, std::string& path) {
-    if (!FileDialog::IsNativeDialogAvailable()) {
-        return false;
-    }
-
-    std::vector<std::pair<std::string, std::string>> filters = {
-        {"JSON Files", "*.json"},
-        {"All Files", "*.*"}
-    };
-
-    FileDialog::Type dialogType = isSave ? FileDialog::Type::Save : FileDialog::Type::Open;
-    std::string title = isSave ? "Export Protocol" : "Import Protocol";
-
-    return FileDialog::Show(dialogType, title, path, filters, path);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Main Entry Point
 // ═══════════════════════════════════════════════════════════════════════════
+
+// Wrapping button helper: places buttons on the same line as the previous item
+// when there is enough room, and falls to the next line when there isn't.
+//
+//   if (WrapButton("Label")) { /* clicked */ }
+//
+static bool WrapButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+    float buttonW = size.x > 0 ? size.x
+                                : ImGui::CalcTextSize(label).x
+                                  + ImGui::GetStyle().FramePadding.x * 2.0f;
+
+    // When the cursor is at the start of a new line, GetCursorScreenPos().x +
+    // GetContentRegionAvail().x gives the screen-space right edge of the content
+    // area. GetContentRegionAvail() is the recommended modern API and accounts
+    // for scrollbars and child window sizing correctly.
+    float regionRightX = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+
+    // Screen-space X where the next button would end if placed on the same line.
+    float nextEndX = ImGui::GetItemRectMax().x
+                     + ImGui::GetStyle().ItemSpacing.x
+                     + buttonW;
+
+    if (nextEndX <= regionRightX)
+        ImGui::SameLine();
+
+    return ImGui::Button(label, size);
+}
 
 void ProtocolEditorWindow::DrawContent() {
     if (!s_settingsLoaded) {
@@ -634,52 +644,42 @@ void ProtocolEditorWindow::DrawContent() {
     }
 
     // ── Toolbar ──────────────────────────────────────────────────────────────
-    if (ImGui::Button("+ New Protocol")) {
+    if (WrapButton("+ New Protocol")) {
         s_showNewModal = true;
         std::strncpy(s_newName, "New Protocol", sizeof(s_newName));
         s_newTransport = 0;
         s_newDirection = 0;
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Save All")) {
+    if (WrapButton("Save All")) {
         ProtocolRegistry::GetInstance().SaveAll();
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Reload Fields")) {
+    if (WrapButton("Reload Fields")) {
         ProtocolRegistry::GetInstance().ReloadFieldCatalog();
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Import...")) {
+    if (WrapButton("Import...")) {
         ShowImportDialog();
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Export...")) {
+    if (WrapButton("Export...")) {
         ShowExportDialog();
     }
-    ImGui::SameLine();
-
-    ImGui::Separator();
-    ImGui::SameLine();
 
     if (!s_undoManager.CanUndo()) ImGui::BeginDisabled();
-    if (ImGui::Button("Undo")) s_undoManager.Undo();
+    if (WrapButton("Undo")) s_undoManager.Undo();
     if (!s_undoManager.CanUndo()) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && s_undoManager.CanUndo())
         ImGui::SetTooltip("Undo: %s", s_undoManager.GetUndoDescription().c_str());
-    ImGui::SameLine();
 
     if (!s_undoManager.CanRedo()) ImGui::BeginDisabled();
-    if (ImGui::Button("Redo")) s_undoManager.Redo();
+    if (WrapButton("Redo")) s_undoManager.Redo();
     if (!s_undoManager.CanRedo()) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && s_undoManager.CanRedo())
         ImGui::SetTooltip("Redo: %s", s_undoManager.GetRedoDescription().c_str());
-    ImGui::SameLine();
 
-    if (ImGui::Button("Backups...")) s_showBackupModal = true;
+    if (WrapButton("Backups...")) s_showBackupModal = true;
 
     ImGui::Separator();
 
@@ -756,7 +756,13 @@ void ProtocolEditorWindow::ShowExportDialog() {
     if (s_selectedIndex >= 0 && s_selectedIndex < (int)defs.size()) {
         s_showExportModal = true;
         s_exportId = defs[s_selectedIndex].id;
-        s_exportPath[0] = '\0';
+        // Pre-fill with the protocol name so the user only needs to pick a folder.
+        // Sanitise to a safe filename (replace spaces and path separators).
+        std::string name = defs[s_selectedIndex].name;
+        for (char& c : name)
+            if (c == ' ' || c == '/' || c == '\\' || c == ':') c = '_';
+        std::strncpy(s_exportPath, name.c_str(), sizeof(s_exportPath) - 1);
+        s_exportPath[sizeof(s_exportPath) - 1] = '\0';
     }
 }
 
@@ -925,7 +931,7 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
     ImGui::SeparatorText("Output Fields");
 
     // Field management buttons
-    if (ImGui::Button("+ Create Field")) {
+    if (WrapButton("+ Create Field")) {
         s_showCreateFieldModal = true;
         s_cfId[0] = '\0';
         s_cfLabel[0] = '\0';
@@ -934,34 +940,30 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
         std::strncpy(s_cfOsc, "/custom/", sizeof(s_cfOsc));
         std::strncpy(s_cfWs, "custom_", sizeof(s_cfWs));
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Save as Preset")) {
+    if (WrapButton("Save as Preset")) {
         s_showSavePresetModal = true;
         std::strncpy(s_presetName, "New Preset", sizeof(s_presetName));
     }
 
-    if (ImGui::Button("Rename Category")) {
+    if (WrapButton("Rename Category")) {
         s_showRenameCatModal = true;
         s_renCatOldName[0] = '\0';
         s_renCatNewName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Delete Category")) {
+    if (WrapButton("Delete Category")) {
         s_showDeleteCatModal = true;
         s_delCatName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Merge Categories")) {
+    if (WrapButton("Merge Categories")) {
         s_showMergeCatModal = true;
         s_mergeSrcCat[0] = '\0';
         s_mergeTgtCat[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Save as Template")) {
+    if (WrapButton("Save as Template")) {
         s_showSaveTemplateModal = true;
         std::strncpy(s_templateName, "New Template", sizeof(s_templateName));
         s_templateDesc[0] = '\0';
@@ -985,20 +987,18 @@ void ProtocolEditorWindow::DrawInputFieldPicker() {
     ImGui::SeparatorText("Input Fields");
 
     // Category management for input fields
-    if (ImGui::Button("Rename Category")) {
+    if (WrapButton("Rename Category")) {
         s_showRenameCatModal = true;
         s_renCatOldName[0] = '\0';
         s_renCatNewName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Delete Category")) {
+    if (WrapButton("Delete Category")) {
         s_showDeleteCatModal = true;
         s_delCatName[0] = '\0';
     }
-    ImGui::SameLine();
 
-    if (ImGui::Button("Merge Categories")) {
+    if (WrapButton("Merge Categories")) {
         s_showMergeCatModal = true;
         s_mergeSrcCat[0] = '\0';
         s_mergeTgtCat[0] = '\0';
@@ -1630,43 +1630,8 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 }
 
 void ProtocolEditorWindow::DrawExportProtocolModal() {
-    // ── Collect native dialog result (runs every frame, harmless when idle) ──
-    // The native Win32 dialog is launched on a worker thread. Once the thread
-    // finishes (running flag cleared) we join it and handle the result here,
-    // safely back on the render thread.
-    if (!s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
-        s_nativeDialogThread.join();
-        if (s_nativeDialogSucceeded.load()) {
-            std::strncpy(s_exportPath, s_nativeDialogResultPath.c_str(), sizeof(s_exportPath));
-            ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
-        }
-        // Whether the user picked a file or cancelled, we are done.
-        // Do NOT open the ImGui browser on cancel — just return silently.
-        return;
-    }
-
     if (s_showExportModal) {
         s_showExportModal = false;
-
-        if (FileDialog::IsNativeDialogAvailable()) {
-            // Spawn worker thread so the render loop never blocks.
-            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
-            s_nativeDialogIsImport  = false;
-            s_nativeDialogSucceeded = false;
-            s_nativeDialogRunning   = true;
-            s_nativeDialogResultPath = s_exportCurrentDir;
-            std::string capturedId  = s_exportId;
-            s_nativeDialogThread = std::thread([]() {
-                std::string path = s_nativeDialogResultPath;
-                bool ok = TryNativeFileDialog(true, path);
-                s_nativeDialogResultPath = path;
-                s_nativeDialogSucceeded  = ok;
-                s_nativeDialogRunning    = false;
-            });
-            return; // result collected next frame(s) above
-        }
-
-        // No native dialog available — open the ImGui browser.
         ImGui::OpenPopup("Export Protocol##modal");
     }
 
@@ -1694,7 +1659,21 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
         float btnW = 110.0f;
         ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - btnW * 2 + ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Button("Export", ImVec2(btnW, 0))) {
-            ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, s_exportPath);
+            // s_exportPath may be just a filename typed by the user (no directory),
+            // a full path from clicking an existing file, or empty.
+            // Compose the final path: if it has no directory component, prepend
+            // the current browser directory.  Append .json if there's no extension.
+            std::string finalPath = s_exportPath;
+            if (!finalPath.empty()) {
+                fs::path p(finalPath);
+                if (p.parent_path().empty() || p.parent_path() == fs::path(".")) {
+                    finalPath = (fs::path(s_exportCurrentDir) / p).string();
+                }
+                if (fs::path(finalPath).extension().empty()) {
+                    finalPath += ".json";
+                }
+                ProtocolRegistry::GetInstance().ExportDefinition(s_exportId, finalPath);
+            }
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
@@ -1707,42 +1686,8 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
 }
 
 void ProtocolEditorWindow::DrawImportProtocolModal() {
-    // ── Collect native dialog result (runs every frame, harmless when idle) ──
-    if (s_nativeDialogIsImport && !s_nativeDialogRunning.load() && s_nativeDialogThread.joinable()) {
-        s_nativeDialogThread.join();
-        if (s_nativeDialogSucceeded.load()) {
-            std::string id = ProtocolRegistry::GetInstance().ImportDefinition(s_nativeDialogResultPath);
-            auto& defs = ProtocolRegistry::GetInstance().GetDefinitions();
-            for (int i = 0; i < (int)defs.size(); ++i) {
-                if (defs[i].id == id) { s_selectedIndex = i; break; }
-            }
-        }
-        // Whether the user picked a file or cancelled, do NOT open the ImGui
-        // browser — just return silently.
-        return;
-    }
-
     if (s_showImportModal) {
         s_showImportModal = false;
-
-        if (FileDialog::IsNativeDialogAvailable()) {
-            // Spawn worker thread so the render loop never blocks.
-            if (s_nativeDialogThread.joinable()) s_nativeDialogThread.join();
-            s_nativeDialogIsImport  = true;
-            s_nativeDialogSucceeded = false;
-            s_nativeDialogRunning   = true;
-            s_nativeDialogResultPath = s_importCurrentDir;
-            s_nativeDialogThread = std::thread([]() {
-                std::string path = s_nativeDialogResultPath;
-                bool ok = TryNativeFileDialog(false, path);
-                s_nativeDialogResultPath = path;
-                s_nativeDialogSucceeded  = ok;
-                s_nativeDialogRunning    = false;
-            });
-            return; // result collected next frame(s) above
-        }
-
-        // No native dialog available — open the ImGui browser.
         ImGui::OpenPopup("Import Protocol##modal");
     }
 
@@ -2346,6 +2291,9 @@ void ProtocolEditorWindow::DrawValidationResultModal() {
     }
 
     bool open = true;
+    // SetNextWindowSizeConstraints enforces a minimum width while still
+    // allowing AlwaysAutoResize to size the height to the wrapped text.
+    ImGui::SetNextWindowSizeConstraints(ImVec2(480, 0), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::BeginPopupModal("Validation Result##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (s_validationIsError)
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Validation Failed");
