@@ -30,7 +30,7 @@ void AboutWindow::DrawContent() {
 
         ImGui::Spacing();
         ImGui::TextWrapped(
-            "At some point the feature creep started taking over and it may has gone a bit out of control ever since."
+            "At some point the feature creep started taking over and it may have gone a bit out of control ever since."
             "Hope you enjoy the tool."
         );
 
