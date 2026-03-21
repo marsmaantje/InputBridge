@@ -54,7 +54,7 @@ void AboutWindow::DrawContent() {
     struct Member { const char* name; const char* role; };
     constexpr Member members[] = {
         { "Elektrospy",  "Developer" },
-        { "marsmaantja", "Developer" },
+        { "marsmaantje", "Developer" },
     };
     ImGui::Indent(8.0f);
     for (const auto& m : members) {
