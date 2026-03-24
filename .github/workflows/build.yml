@@ -174,6 +174,8 @@ jobs:
             - name: Package
               run: |
                   cmake --install build --config Release --prefix package
+                  # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
+                  if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Ubuntu.tar.gz -C package/bin .
 
@@ -203,6 +205,8 @@ jobs:
             - name: Package
               run: |
                   cmake --install build --config Release --prefix package
+                  # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
+                  if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Fedora.tar.gz -C package/bin .
 
@@ -232,6 +236,8 @@ jobs:
             - name: Package
               run: |
                   cmake --install build --config Release --prefix package
+                  # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
+                  if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Arch.tar.gz -C package/bin .
 

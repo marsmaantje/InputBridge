@@ -36,7 +36,8 @@ set(WITH_TOOLS OFF CACHE BOOL "Disable liblo tools" FORCE)
 set(WITH_TESTS OFF CACHE BOOL "Disable liblo tests" FORCE)
 set(WITH_EXAMPLES OFF CACHE BOOL "Disable liblo examples" FORCE)
 set(WITH_CPP_TESTS OFF CACHE BOOL "Disable liblo C++ tests" FORCE)
-set(WITH_STATIC ON CACHE BOOL "Enable liblo static lib" FORCE)
+set(WITH_STATIC OFF CACHE BOOL "Disable liblo static lib" FORCE)
+set(WITH_SHARED ON CACHE BOOL "Enable liblo shared lib" FORCE)
 
 # liblo's CMakeLists.txt is located in the 'cmake' subdirectory
 if(DEFINED CMAKE_WARN_DEPRECATED)
@@ -52,9 +53,9 @@ else()
     unset(CMAKE_WARN_DEPRECATED)
 endif()
 
-# Create an alias 'lo' to the static library target 'liblo_static'
+# Create an alias 'lo' to the shared library target 'liblo'
 # This ensures compatibility with the rest of the project that links against 'lo'
-add_library(lo ALIAS liblo_static)
+add_library(lo ALIAS liblo)
 
 # Add ImGui
 # ImGui does not have a root CMakeLists.txt, so we define the library here.
@@ -371,6 +372,9 @@ if(TARGET lo)
     target_link_libraries(InputBridge PRIVATE lo)
     # Explicitly add liblo include directories
     target_include_directories(InputBridge PRIVATE lib/liblo ${CMAKE_BINARY_DIR}/lib/liblo)
+    if(WIN32)
+        target_compile_definitions(InputBridge PRIVATE LIBLO_DLL)
+    endif()
 endif()
 
 if(WIN32)
