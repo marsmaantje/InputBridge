@@ -28,12 +28,16 @@ int FlightStickHaptics::PlayConstant(int slot, float strength, uint32_t duration
         auto it = m_constantEffects.find(slot);
         if (it != m_constantEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_constantEffects[slot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("FlightStickHaptics::PlayConstant - Run failed: %s", SDL_GetError());
-            } else {
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("FlightStickHaptics::PlayConstant - Run failed: %s", SDL_GetError());
+                }
+            }
+            {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 auto& info        = m_activeConstants[slot];
                 info.strength     = clamped;
@@ -117,12 +121,16 @@ int FlightStickHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, flo
         auto it = m_periodicEffects.find(slot);
         if (it != m_periodicEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_periodicEffects[slot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("FlightStickHaptics::PlayPeriodic - Run failed: %s", SDL_GetError());
-            } else {
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("FlightStickHaptics::PlayPeriodic - Run failed: %s", SDL_GetError());
+                }
+            }
+            {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 auto& info        = m_activePeriodicEffects[slot];
                 info.wave_type    = wave_type;
@@ -219,10 +227,20 @@ int FlightStickHaptics::PlayCondition(int slot, HapticConditionType type,
         auto it = m_conditionEffects.find(slot);
         if (it != m_conditionEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_conditionEffects[slot] = newId;
-            if (SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("FlightStickHaptics::PlayCondition - Run failed for type %s: %s",
+                            ConditionTypeName(type), SDL_GetError());
+                    std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+                    m_activeConditions.erase(slot);
+                    return;
+                }
+            }
+            {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 auto& info        = m_activeConditions[slot];
                 info.type         = type;
@@ -234,11 +252,6 @@ int FlightStickHaptics::PlayCondition(int slot, HapticConditionType type,
                 info.center       = center;
                 info.duration_ms  = duration_ms;
                 info.last_updated = SDL_GetTicks();
-            } else {
-                SDL_Log("FlightStickHaptics::PlayCondition - Run failed for type %s: %s",
-                        ConditionTypeName(type), SDL_GetError());
-                std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
-                m_activeConditions.erase(slot);
             }
         }
     });

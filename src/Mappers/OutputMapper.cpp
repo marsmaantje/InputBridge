@@ -583,7 +583,7 @@ void OutputMapper::TriggerConstantForce(int virtual_id, int slot, float strength
         }
 
         if (target->constant_effect_id != -1) {
-            bool needsRun = created || duration_ms > 0;
+            bool needsRun = created;
             if (!needsRun) {
                 int status = SDL_GetHapticEffectStatus(target->haptic_device, target->constant_effect_id);
                 needsRun = (status != 1);
@@ -634,7 +634,7 @@ void OutputMapper::TriggerPeriodic(int virtual_id, int slot, HapticPeriodicType 
         }
 
         if (target->periodic_effect_id != -1) {
-            bool needsRun = created || duration_ms > 0;
+            bool needsRun = created;
             if (!needsRun) {
                 int status = SDL_GetHapticEffectStatus(target->haptic_device, target->periodic_effect_id);
                 needsRun = (status != 1);
@@ -688,7 +688,7 @@ void OutputMapper::TriggerCondition(int virtual_id, int slot, HapticConditionTyp
         }
 
         if (target->condition_effect_id != -1) {
-            bool needsRun = created || duration_ms >= 0;
+            bool needsRun = created;
             if (!needsRun) {
                 int status = SDL_GetHapticEffectStatus(target->haptic_device, target->condition_effect_id);
                 needsRun = (status != 1);

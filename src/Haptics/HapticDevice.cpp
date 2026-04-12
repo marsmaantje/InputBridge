@@ -100,11 +100,13 @@ void HapticDevice::ThreadLoop() {
     }
 }
 
-SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId) {
+SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId, bool* outCreated) {
     if (!m_haptic) return -1;
 
     if (existingId != -1) {
         if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
+            // Updated in-place — effect is already running, no restart needed.
+            if (outCreated) *outCreated = false;
             return existingId;
         } else {
             SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
@@ -116,6 +118,7 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
     if (newId == -1) {
         SDL_Log("HapticDevice::UploadEffect - Create failed: %s", SDL_GetError());
     }
+    if (outCreated) *outCreated = (newId != -1);
     return newId;
 }
 
@@ -183,11 +186,14 @@ void HapticDevice::SetConstantForce(float level, float direction) {
         auto it = m_constantEffects.find(kInternalSlot);
         if (it != m_constantEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_constantEffects[kInternalSlot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetConstantForce - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetConstantForce - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });
@@ -233,11 +239,14 @@ void HapticDevice::SetPeriodic(HapticPeriodicType type, float magnitude, int per
         auto it = m_periodicEffects.find(kInternalSlot);
         if (it != m_periodicEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_periodicEffects[kInternalSlot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetPeriodic - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetPeriodic - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });
@@ -272,11 +281,14 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
         auto it = m_conditionEffects.find(internalKey);
         if (it != m_conditionEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_conditionEffects[internalKey] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });
@@ -297,11 +309,14 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
         auto it = m_rumbleEffects.find(kInternalSlot);
         if (it != m_rumbleEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_rumbleEffects[kInternalSlot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetRumble - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetRumble - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });
