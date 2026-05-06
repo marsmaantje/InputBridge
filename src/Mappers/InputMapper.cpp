@@ -662,6 +662,53 @@ void InputMapper::DrawMappingContent() {
         }
     };
 
+    // Button/Hat combo helper
+    auto drawButtonInputCombo = [&](const char* comboId, SDL_JoystickID instance_id, int& button_index, int* hat_index = nullptr, int* hat_mask = nullptr) {
+        std::string preview = "None";
+        if (instance_id != 0) {
+            if (button_index != -1) {
+                preview = "Button " + std::to_string(button_index);
+            } else if (hat_index && *hat_index != -1 && hat_mask) {
+                preview = "Hat " + std::to_string(*hat_index);
+                if (*hat_mask & SDL_HAT_UP)    preview += " Up";
+                if (*hat_mask & SDL_HAT_DOWN)  preview += " Down";
+                if (*hat_mask & SDL_HAT_LEFT)  preview += " Left";
+                if (*hat_mask & SDL_HAT_RIGHT) preview += " Right";
+                if (*hat_mask == SDL_HAT_CENTERED) preview += " Centered";
+            }
+        }
+
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo(comboId, preview.c_str())) {
+            if (ImGui::Selectable("None", button_index == -1 && (!hat_index || *hat_index == -1))) {
+                button_index = -1;
+                if (hat_index) *hat_index = -1;
+                if (hat_mask) *hat_mask = 0;
+                changed = true;
+            }
+            if (instance_id != 0) {
+                const DeviceState* dev = nullptr;
+                for (const auto& d : m_DeviceManager.GetDevices()) if (d.instance_id == instance_id) { dev = &d; break; }
+                if (dev && dev->joystick) {
+                    for (int i = 0; i < dev->num_buttons; ++i) {
+                        bool sel = (button_index == i);
+                        if (ImGui::Selectable(("Button " + std::to_string(i)).c_str(), sel)) { button_index = i; if (hat_index) *hat_index = -1; if (hat_mask) *hat_mask = 0; changed = true; }
+                    }
+                    if (hat_index && hat_mask) {
+                        for (int i = 0; i < dev->num_hats; ++i) {
+                            struct { int mask; const char* name; } dirs[] = {{SDL_HAT_UP, "Up"}, {SDL_HAT_DOWN, "Down"}, {SDL_HAT_LEFT, "Left"}, {SDL_HAT_RIGHT, "Right"}};
+                            for (auto& d : dirs) {
+                                bool sel = (*hat_index == i && *hat_mask == d.mask);
+                                if (ImGui::Selectable(("Hat " + std::to_string(i) + " " + d.name).c_str(), sel)) { button_index = -1; *hat_index = i; *hat_mask = d.mask; changed = true; }
+                            }
+                        }
+                    }
+                }
+            } else { ImGui::TextDisabled("Select a device first"); }
+            ImGui::EndCombo();
+        }
+    };
+
     // ── Analog output channels ────────────────────────────────────────────────
     ImGui::Spacing();
     if (outDef) {
@@ -743,17 +790,7 @@ void InputMapper::DrawMappingContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(1);
-
-                    std::string btnLabel = "None";
-                    if (dm.button_index != -1) btnLabel = "Button " + std::to_string(dm.button_index);
-                    else if (dm.hat_index != -1) {
-                        btnLabel = "Hat " + std::to_string(dm.hat_index);
-                        if (dm.hat_mask & SDL_HAT_UP) btnLabel += " Up";
-                        if (dm.hat_mask & SDL_HAT_DOWN) btnLabel += " Down";
-                        if (dm.hat_mask & SDL_HAT_LEFT) btnLabel += " Left";
-                        if (dm.hat_mask & SDL_HAT_RIGHT) btnLabel += " Right";
-                    }
-                    ImGui::Text("%s", btnLabel.c_str());
+                    drawButtonInputCombo("##db", dm.instance_id, dm.button_index, &dm.hat_index, &dm.hat_mask);
 
                     ImGui::TableSetColumnIndex(2);
                     std::string flabel = dm.target_field_id.empty() ? "None" : dm.target_field_id;
@@ -832,8 +869,7 @@ void InputMapper::DrawMappingContent() {
             }
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::InputInt("##bb", &bm.button_index)) rc=true;
+            drawButtonInputCombo("##bb", bm.instance_id, bm.button_index);
 
             ImGui::TableSetColumnIndex(2);
             std::string tlabel = bm.target_output_name.empty() ? "None" : bm.target_output_name;
