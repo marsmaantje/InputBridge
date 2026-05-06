@@ -1,4 +1,5 @@
 #include "HapticDevice.h"
+#include "SDL3/SDL_haptic.h"
 #include <algorithm>
 
 HapticDevice::HapticDevice(SDL_Joystick* joystick) : m_joystick(joystick) {}
@@ -104,14 +105,16 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
     if (!m_haptic) return -1;
 
     if (existingId != -1) {
-        if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
-            // Updated in-place — effect is already running, no restart needed.
-            if (outCreated) *outCreated = false;
-            return existingId;
-        } else {
-            SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
-            SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
+        if (SDL_GetHapticEffectStatus(m_haptic.Get(), existingId)) {
+            if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
+                // Updated in-place — effect is already running, no restart needed.
+                if (outCreated) *outCreated = false;
+                return existingId;
+            } else {
+                SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
+            }
         }
+        SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
     }
 
     SDL_HapticEffectID newId = SDL_CreateHapticEffect(m_haptic.Get(), &effect);
