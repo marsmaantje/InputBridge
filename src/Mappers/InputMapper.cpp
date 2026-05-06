@@ -274,8 +274,8 @@ void InputMapper::UpdateListening() {
                 Uint8 currentHatState = SDL_GetJoystickHat(dev.joystick, i);
                 Uint8 initialHatState = hatBaseline && hatBaseline->size() > i ? (*hatBaseline)[i] : SDL_HAT_CENTERED;
 
-                // Detect a change from centered or a different initial state
-                if (currentHatState != SDL_HAT_CENTERED && currentHatState != initialHatState) {
+                // Detect any change from the initial state
+                if (currentHatState != initialHatState) {
                     bool updated = false;
                     if (m_ListeningState.targetName == "digital") {
                         if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
@@ -284,7 +284,8 @@ void InputMapper::UpdateListening() {
                             dm.instance_id = dev.instance_id;
                             dm.button_index = -1; // Indicate hat binding
                             dm.hat_index = i;
-                            dm.hat_mask = currentHatState;
+                            // Bind the active direction (if centered, bind the direction it just left)
+                            dm.hat_mask = (currentHatState != SDL_HAT_CENTERED) ? currentHatState : initialHatState;
                             updated = true;
                         }
                     }
@@ -292,12 +293,6 @@ void InputMapper::UpdateListening() {
                     if (updated) SaveCurrentProfile();
                     CancelListening();
                     return;
-                }
-                // If a hat was pressed at start and is now centered, update its baseline
-                if (currentHatState == SDL_HAT_CENTERED && initialHatState != SDL_HAT_CENTERED) {
-                    if (hatBaseline && hatBaseline->size() > i) {
-                        (*hatBaseline)[i] = SDL_HAT_CENTERED;
-                    }
                 }
             }
         }

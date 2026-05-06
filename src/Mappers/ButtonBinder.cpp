@@ -51,12 +51,11 @@ std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<struct Dev
             bool currentState = SDL_GetJoystickButton(dev.joystick, i);
             bool wasActiveAtStart = joystickBaseline[i];
 
-            if (currentState && !wasActiveAtStart) {
+            if (currentState != wasActiveAtStart) {
                 m_isBinding = false;
-                SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "ButtonBinder: Button %d detected on joystick '%s' (ID: %u).", i, SDL_GetJoystickName(dev.joystick), id);
+                SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "ButtonBinder: Button %d change detected on joystick '%s' (ID: %u).", i, SDL_GetJoystickName(dev.joystick), id);
                 return BoundButtonInfo{id, i};
             }
-            if (!currentState && wasActiveAtStart) joystickBaseline[i] = false; // Reset baseline if a "stuck" button is released
         }
     }
     return std::nullopt;
