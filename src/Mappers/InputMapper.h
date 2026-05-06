@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <optional> // For ButtonBinder
 #include <memory>
 
 class DeviceManager;
