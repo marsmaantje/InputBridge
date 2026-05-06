@@ -6,6 +6,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <chrono>
 #include <functional>
 #include "Utils/SDLHandles.h"
 #include "Core/Result.h"
@@ -273,4 +274,5 @@ private:
     std::queue<std::function<void()>> m_tasks;
     bool m_running = false;
     void ThreadLoop();
+    void PruneFinishedEffects();
 };

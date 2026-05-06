@@ -91,13 +91,75 @@ void HapticDevice::ThreadLoop() {
         std::function<void()> task;
         {
             std::unique_lock<std::mutex> lock(m_mutex);
-            m_cv.wait(lock, [this] { return !m_running || !m_tasks.empty(); });
+            // Use wait_for to wake up periodically and check if any effects have finished playing
+            m_cv.wait_for(lock, std::chrono::milliseconds(100), [this] { 
+                return !m_running || !m_tasks.empty(); 
+            });
+
             if (!m_running && m_tasks.empty()) break;
-            task = std::move(m_tasks.front());
-            m_tasks.pop();
+
+            if (!m_tasks.empty()) {
+                task = std::move(m_tasks.front());
+                m_tasks.pop();
+            }
         }
-        if (task) task();
+
+        if (task) {
+            task();
+        }
+
+        // Check for finished effects (handles hardware status and software timeout fallback)
+        PruneFinishedEffects();
     }
+}
+
+void HapticDevice::PruneFinishedEffects() {
+    uint64_t now = SDL_GetTicks();
+    bool hasStatusSupport = m_haptic && (SDL_GetHapticFeatures(m_haptic.Get()) & SDL_HAPTIC_STATUS);
+
+    auto pruneMap = [this, now, hasStatusSupport](auto& activeMap, std::map<int, SDL_HapticEffectID>& ids) {
+        std::vector<int> slotsToPrune;
+        {
+            std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+            for (auto const& [slot, info] : activeMap) {
+                bool shouldPrune = false;
+
+                // 1. Software timeout check (fallback for all devices, including gamepads)
+                if (info.duration_ms != SDL_HAPTIC_INFINITY && info.duration_ms > 0) {
+                    if (now > info.last_updated + info.duration_ms + 100) { // 100ms grace period
+                        shouldPrune = true;
+                    }
+                }
+
+                // 2. Hardware status check (if supported and we have a valid hardware effect ID)
+                if (!shouldPrune && hasStatusSupport) {
+                    auto idIt = ids.find(slot);
+                    if (idIt != ids.end() && idIt->second != -1) {
+                        if (!SDL_GetHapticEffectStatus(m_haptic.Get(), idIt->second)) {
+                            shouldPrune = true;
+                        }
+                    }
+                }
+
+                if (shouldPrune) slotsToPrune.push_back(slot);
+            }
+        }
+
+        for (int slot : slotsToPrune) {
+            auto idIt = ids.find(slot);
+            if (idIt != ids.end()) {
+                if (idIt->second != -1 && m_haptic) SDL_DestroyHapticEffect(m_haptic.Get(), idIt->second);
+                ids.erase(idIt);
+            }
+            std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+            activeMap.erase(slot);
+        }
+    };
+
+    pruneMap(m_activeConstants,        m_constantEffects);
+    pruneMap(m_activePeriodicEffects,  m_periodicEffects);
+    pruneMap(m_activeRumbles,          m_rumbleEffects);
+    pruneMap(m_activeConditions,       m_conditionEffects);
 }
 
 SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId, bool* outCreated) {
