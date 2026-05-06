@@ -1,10 +1,12 @@
 #pragma once
 
 // InputExclusiveMode / device-hide is managed by DeviceManager, not InputMapper.
+#include "ButtonBinder.h"
 #include <SDL3/SDL.h>
 #include <string>
 #include <vector>
 #include <map>
+#include <optional> // For ButtonBinder
 #include <memory>
 
 class DeviceManager;
@@ -154,12 +156,16 @@ class InputMapper {
             Sint16 value;
         };
         std::vector<AxisState> initialAxes;
+        std::map<SDL_JoystickID, std::vector<Uint8>> initialHatStates;
     };
     ListeningState m_ListeningState;
 
     // Legacy fallback outputs when no definition is selected
     const std::vector<std::string> m_GenericOutputs = {
         "Steering", "Throttle", "Brake", "Clutch", "Handbrake", "Pitch", "Roll"};
+
+    // Helper for button binding
+    class ButtonBinder m_buttonBinder;
 
     const ProtocolDefinition* GetActiveOutputDefinition();
     float ProcessAxis(const InputSource &config);

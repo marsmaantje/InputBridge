@@ -251,6 +251,7 @@ add_executable(InputBridge
     # Networking
     src/Network/NetworkStatusWindow.cpp
     # Device input and protocol output mappings
+    src/Mappers/ButtonBinder.cpp
     src/Mappers/InputMapper.cpp
     src/Mappers/OutputMapper.cpp
     # WebSocket and OSC protocols
