@@ -1,4 +1,5 @@
 #include "HapticDevice.h"
+#include "SDL3/SDL_haptic.h"
 #include <algorithm>
 
 HapticDevice::HapticDevice(SDL_Joystick* joystick) : m_joystick(joystick) {}
@@ -91,31 +92,98 @@ void HapticDevice::ThreadLoop() {
         std::function<void()> task;
         {
             std::unique_lock<std::mutex> lock(m_mutex);
-            m_cv.wait(lock, [this] { return !m_running || !m_tasks.empty(); });
+            // Use wait_for to wake up periodically and check if any effects have finished playing
+            m_cv.wait_for(lock, std::chrono::milliseconds(100), [this] { 
+                return !m_running || !m_tasks.empty(); 
+            });
+
             if (!m_running && m_tasks.empty()) break;
-            task = std::move(m_tasks.front());
-            m_tasks.pop();
+
+            if (!m_tasks.empty()) {
+                task = std::move(m_tasks.front());
+                m_tasks.pop();
+            }
         }
-        if (task) task();
+
+        if (task) {
+            task();
+        }
+
+        // Check for finished effects (handles hardware status and software timeout fallback)
+        PruneFinishedEffects();
     }
 }
 
-SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId) {
+void HapticDevice::PruneFinishedEffects() {
+    uint64_t now = SDL_GetTicks();
+    bool hasStatusSupport = m_haptic && (SDL_GetHapticFeatures(m_haptic.Get()) & SDL_HAPTIC_STATUS);
+
+    auto pruneMap = [this, now, hasStatusSupport](auto& activeMap, std::map<int, SDL_HapticEffectID>& ids) {
+        std::vector<int> slotsToPrune;
+        {
+            std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+            for (auto const& [slot, info] : activeMap) {
+                bool shouldPrune = false;
+
+                // 1. Software timeout check (fallback for all devices, including gamepads)
+                if (info.duration_ms != SDL_HAPTIC_INFINITY && info.duration_ms > 0) {
+                    if (now > info.last_updated + info.duration_ms + 100) { // 100ms grace period
+                        shouldPrune = true;
+                    }
+                }
+
+                // 2. Hardware status check (if supported and we have a valid hardware effect ID)
+                if (!shouldPrune && hasStatusSupport) {
+                    auto idIt = ids.find(slot);
+                    if (idIt != ids.end() && idIt->second != -1) {
+                        if (!SDL_GetHapticEffectStatus(m_haptic.Get(), idIt->second)) {
+                            shouldPrune = true;
+                        }
+                    }
+                }
+
+                if (shouldPrune) slotsToPrune.push_back(slot);
+            }
+        }
+
+        for (int slot : slotsToPrune) {
+            auto idIt = ids.find(slot);
+            if (idIt != ids.end()) {
+                if (idIt->second != -1 && m_haptic) SDL_DestroyHapticEffect(m_haptic.Get(), idIt->second);
+                ids.erase(idIt);
+            }
+            std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+            activeMap.erase(slot);
+        }
+    };
+
+    pruneMap(m_activeConstants,        m_constantEffects);
+    pruneMap(m_activePeriodicEffects,  m_periodicEffects);
+    pruneMap(m_activeRumbles,          m_rumbleEffects);
+    pruneMap(m_activeConditions,       m_conditionEffects);
+}
+
+SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId, bool* outCreated) {
     if (!m_haptic) return -1;
 
     if (existingId != -1) {
-        if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
-            return existingId;
-        } else {
-            SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
-            SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
+        if (SDL_GetHapticEffectStatus(m_haptic.Get(), existingId)) {
+            if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
+                // Updated in-place — effect is already running, no restart needed.
+                if (outCreated) *outCreated = false;
+                return existingId;
+            } else {
+                SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
+            }
         }
+        SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
     }
 
     SDL_HapticEffectID newId = SDL_CreateHapticEffect(m_haptic.Get(), &effect);
     if (newId == -1) {
         SDL_Log("HapticDevice::UploadEffect - Create failed: %s", SDL_GetError());
     }
+    if (outCreated) *outCreated = (newId != -1);
     return newId;
 }
 
@@ -183,11 +251,14 @@ void HapticDevice::SetConstantForce(float level, float direction) {
         auto it = m_constantEffects.find(kInternalSlot);
         if (it != m_constantEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_constantEffects[kInternalSlot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetConstantForce - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetConstantForce - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });
@@ -233,11 +304,14 @@ void HapticDevice::SetPeriodic(HapticPeriodicType type, float magnitude, int per
         auto it = m_periodicEffects.find(kInternalSlot);
         if (it != m_periodicEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_periodicEffects[kInternalSlot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetPeriodic - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetPeriodic - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });
@@ -272,11 +346,14 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
         auto it = m_conditionEffects.find(internalKey);
         if (it != m_conditionEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_conditionEffects[internalKey] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });
@@ -297,11 +374,14 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
         auto it = m_rumbleEffects.find(kInternalSlot);
         if (it != m_rumbleEffects.end()) existing = it->second;
 
-        SDL_HapticEffectID newId = UploadEffect(effect, existing);
+        bool created = false;
+        SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);
         if (newId != -1) {
             m_rumbleEffects[kInternalSlot] = newId;
-            if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                SDL_Log("HapticDevice::SetRumble - Run failed: %s", SDL_GetError());
+            if (created) {
+                if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
+                    SDL_Log("HapticDevice::SetRumble - Run failed: %s", SDL_GetError());
+                }
             }
         }
     });

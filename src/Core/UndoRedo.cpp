@@ -1,5 +1,4 @@
 #include "UndoRedo.h"
-#include <algorithm>
 
 UndoRedoManager::UndoRedoManager(size_t maxHistorySize)
     : m_maxHistorySize(maxHistorySize)
