@@ -1,6 +1,7 @@
 #include "InputMapper.h"
 #include "Devices/DeviceManager.h"
 #include "Mappers/OutputMapper.h"
+#include "ButtonBinder.h" // Include the new ButtonBinder class
 #include "Network/WebSocketServer.h"
 #include "Network/OSCServer.h"
 #include "Protocols/ProtocolRegistry.h"
@@ -149,6 +150,8 @@ void InputMapper::SaveCurrentProfile() const {
 void InputMapper::CancelListening() {
     m_ListeningState.active = false;
     m_ListeningState.initialAxes.clear();
+    m_ListeningState.initialHatStates.clear(); // Clear hat baselines
+    m_buttonBinder.Cancel(); // Cancel button binding
 }
 
 void InputMapper::StartListening(ListeningState::Type type, const std::string& name, int index) {
@@ -156,6 +159,7 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
     m_ListeningState.type = type;
     m_ListeningState.targetName = name;
     m_ListeningState.listIndex = index;
+    m_ListeningState.initialHatStates.clear(); // Clear hat baselines
     m_ListeningState.initialAxes.clear();
 
     if (type == ListeningState::Axis) {
@@ -163,6 +167,17 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
             if (!dev.joystick) continue;
             for (int i = 0; i < dev.num_axes; ++i) {
                 m_ListeningState.initialAxes.push_back({dev.instance_id, i, SDL_GetJoystickAxis(dev.joystick, i)});
+            }
+        }
+    } else if (type == ListeningState::Digital) {
+        m_buttonBinder.StartBinding(m_DeviceManager.GetDevices()); // Start button binding
+        for (const auto& dev : m_DeviceManager.GetDevices()) { // Capture hat baselines
+            if (!dev.joystick) continue;
+            int numHats = SDL_GetNumJoystickHats(dev.joystick);
+            if (numHats > 0) {
+                std::vector<Uint8> states(numHats);
+                for (int i = 0; i < numHats; ++i) states[i] = SDL_GetJoystickHat(dev.joystick, i);
+                m_ListeningState.initialHatStates[dev.instance_id] = states;
             }
         }
     }
@@ -176,6 +191,51 @@ void InputMapper::UpdateListening() {
     }
     MappingProfile &profile = m_Profiles[m_SelectedProfileIndex];
     const auto& devices = m_DeviceManager.GetDevices();
+
+    // Helper to find DeviceState by ID
+    auto getDeviceState = [&](SDL_JoystickID id) -> const DeviceState* {
+        for (const auto& dev : devices) {
+            if (dev.instance_id == id) return &dev;
+        }
+        return nullptr;
+    };
+
+    // 1. Check for button presses using ButtonBinder
+    if (m_buttonBinder.IsBindingActive()) {
+        if (auto boundButton = m_buttonBinder.Update(devices)) {
+            // Button detected
+            bool updated = false;
+            const DeviceState* boundDeviceState = getDeviceState(boundButton->joystickID);
+            if (!boundDeviceState) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_INPUT, "InputMapper: Bound joystick (ID: %u) not found for button binding.", boundButton->joystickID);
+                CancelListening();
+                return;
+            }
+
+            if (m_ListeningState.targetName == "digital") {
+                if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
+                    auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
+                    dm.device_guid = DeviceManager::GetDeviceGUIDString(*boundDeviceState);
+                    dm.instance_id = boundButton->joystickID;
+                    dm.button_index = boundButton->buttonIndex;
+                    dm.hat_index = -1;
+                    dm.hat_mask = 0;
+                    updated = true;
+                }
+            } else if (m_ListeningState.targetName == "button_analog") {
+                if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.buttonMappings.size()) {
+                    auto& bm = profile.buttonMappings[m_ListeningState.listIndex];
+                    bm.device_guid = DeviceManager::GetDeviceGUIDString(*boundDeviceState);
+                    bm.instance_id = boundButton->joystickID;
+                    bm.button_index = boundButton->buttonIndex;
+                    updated = true;
+                }
+            }
+            if (updated) SaveCurrentProfile();
+            CancelListening();
+            return;
+        }
+    }
 
     if (m_ListeningState.type == ListeningState::Axis) {
         for (const auto& dev : devices) {
@@ -202,49 +262,30 @@ void InputMapper::UpdateListening() {
                 }
             }
         }
-    } else if (m_ListeningState.type == ListeningState::Digital) {
+    } else if (m_ListeningState.type == ListeningState::Digital) { // Hat detection
         for (const auto& dev : devices) {
             if (!dev.joystick) continue;
-            for (int i = 0; i < dev.num_buttons; ++i) {
-                if (SDL_GetJoystickButton(dev.joystick, i)) {
-                    bool updated = false;
-                    if (m_ListeningState.targetName == "digital") {
-                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
-                            auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
-                            dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
-                            dm.instance_id = dev.instance_id;
-                            dm.button_index = i;
-                            dm.hat_index = -1;
-                            dm.hat_mask = 0;
-                            updated = true;
-                        }
-                    } else if (m_ListeningState.targetName == "button_analog") {
-                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.buttonMappings.size()) {
-                            auto& bm = profile.buttonMappings[m_ListeningState.listIndex];
-                            bm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
-                            bm.instance_id = dev.instance_id;
-                            bm.button_index = i;
-                            updated = true;
-                        }
-                    }
-                    if (updated) SaveCurrentProfile();
-                    CancelListening();
-                    return;
-                }
-            }
-            // Check Hats
+            SDL_JoystickID id = dev.instance_id;
+
+            auto itHatBaseline = m_ListeningState.initialHatStates.find(id);
+            std::vector<Uint8>* hatBaseline = (itHatBaseline != m_ListeningState.initialHatStates.end()) ? &itHatBaseline->second : nullptr;
+
             for (int i = 0; i < dev.num_hats; ++i) {
-                Uint8 hat = SDL_GetJoystickHat(dev.joystick, i);
-                if (hat != SDL_HAT_CENTERED) {
+                Uint8 currentHatState = SDL_GetJoystickHat(dev.joystick, i);
+                Uint8 initialHatState = hatBaseline && hatBaseline->size() > i ? (*hatBaseline)[i] : SDL_HAT_CENTERED;
+
+                // Detect any change from the initial state
+                if (currentHatState != initialHatState) {
                     bool updated = false;
                     if (m_ListeningState.targetName == "digital") {
                         if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
                             auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
                             dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
                             dm.instance_id = dev.instance_id;
-                            dm.button_index = -1;
+                            dm.button_index = -1; // Indicate hat binding
                             dm.hat_index = i;
-                            dm.hat_mask = hat;
+                            // Bind the active direction (if centered, bind the direction it just left)
+                            dm.hat_mask = (currentHatState != SDL_HAT_CENTERED) ? currentHatState : initialHatState;
                             updated = true;
                         }
                     }
@@ -621,6 +662,53 @@ void InputMapper::DrawMappingContent() {
         }
     };
 
+    // Button/Hat combo helper
+    auto drawButtonInputCombo = [&](const char* comboId, SDL_JoystickID instance_id, int& button_index, int* hat_index = nullptr, int* hat_mask = nullptr) {
+        std::string preview = "None";
+        if (instance_id != 0) {
+            if (button_index != -1) {
+                preview = "Button " + std::to_string(button_index);
+            } else if (hat_index && *hat_index != -1 && hat_mask) {
+                preview = "Hat " + std::to_string(*hat_index);
+                if (*hat_mask & SDL_HAT_UP)    preview += " Up";
+                if (*hat_mask & SDL_HAT_DOWN)  preview += " Down";
+                if (*hat_mask & SDL_HAT_LEFT)  preview += " Left";
+                if (*hat_mask & SDL_HAT_RIGHT) preview += " Right";
+                if (*hat_mask == SDL_HAT_CENTERED) preview += " Centered";
+            }
+        }
+
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo(comboId, preview.c_str())) {
+            if (ImGui::Selectable("None", button_index == -1 && (!hat_index || *hat_index == -1))) {
+                button_index = -1;
+                if (hat_index) *hat_index = -1;
+                if (hat_mask) *hat_mask = 0;
+                changed = true;
+            }
+            if (instance_id != 0) {
+                const DeviceState* dev = nullptr;
+                for (const auto& d : m_DeviceManager.GetDevices()) if (d.instance_id == instance_id) { dev = &d; break; }
+                if (dev && dev->joystick) {
+                    for (int i = 0; i < dev->num_buttons; ++i) {
+                        bool sel = (button_index == i);
+                        if (ImGui::Selectable(("Button " + std::to_string(i)).c_str(), sel)) { button_index = i; if (hat_index) *hat_index = -1; if (hat_mask) *hat_mask = 0; changed = true; }
+                    }
+                    if (hat_index && hat_mask) {
+                        for (int i = 0; i < dev->num_hats; ++i) {
+                            struct { int mask; const char* name; } dirs[] = {{SDL_HAT_UP, "Up"}, {SDL_HAT_DOWN, "Down"}, {SDL_HAT_LEFT, "Left"}, {SDL_HAT_RIGHT, "Right"}};
+                            for (auto& d : dirs) {
+                                bool sel = (*hat_index == i && *hat_mask == d.mask);
+                                if (ImGui::Selectable(("Hat " + std::to_string(i) + " " + d.name).c_str(), sel)) { button_index = -1; *hat_index = i; *hat_mask = d.mask; changed = true; }
+                            }
+                        }
+                    }
+                }
+            } else { ImGui::TextDisabled("Select a device first"); }
+            ImGui::EndCombo();
+        }
+    };
+
     // ── Analog output channels ────────────────────────────────────────────────
     ImGui::Spacing();
     if (outDef) {
@@ -702,17 +790,7 @@ void InputMapper::DrawMappingContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(1);
-
-                    std::string btnLabel = "None";
-                    if (dm.button_index != -1) btnLabel = "Button " + std::to_string(dm.button_index);
-                    else if (dm.hat_index != -1) {
-                        btnLabel = "Hat " + std::to_string(dm.hat_index);
-                        if (dm.hat_mask & SDL_HAT_UP) btnLabel += " Up";
-                        if (dm.hat_mask & SDL_HAT_DOWN) btnLabel += " Down";
-                        if (dm.hat_mask & SDL_HAT_LEFT) btnLabel += " Left";
-                        if (dm.hat_mask & SDL_HAT_RIGHT) btnLabel += " Right";
-                    }
-                    ImGui::Text("%s", btnLabel.c_str());
+                    drawButtonInputCombo("##db", dm.instance_id, dm.button_index, &dm.hat_index, &dm.hat_mask);
 
                     ImGui::TableSetColumnIndex(2);
                     std::string flabel = dm.target_field_id.empty() ? "None" : dm.target_field_id;
@@ -791,8 +869,7 @@ void InputMapper::DrawMappingContent() {
             }
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::InputInt("##bb", &bm.button_index)) rc=true;
+            drawButtonInputCombo("##bb", bm.instance_id, bm.button_index);
 
             ImGui::TableSetColumnIndex(2);
             std::string tlabel = bm.target_output_name.empty() ? "None" : bm.target_output_name;

@@ -103,7 +103,7 @@ jobs:
             - name: Install Dependencies
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y build-essential pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev
+                  sudo apt-get install -y build-essential git pkg-config cmake ninja-build libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libxinerama-dev libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev
 
             - name: Configure and Build
               run: |
@@ -114,6 +114,8 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
+                  # Set LD_LIBRARY_PATH so linuxdeploy can resolve bundled libraries
+                  export LD_LIBRARY_PATH=$PWD/build/AppDir/usr/lib:$LD_LIBRARY_PATH
                   # Set STRIP to /bin/true to avoid strip failures on newer binaries
                   APPIMAGE_EXTRACT_AND_RUN=1 STRIP=/bin/true ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
                     --icon-file build/org.inputbridge.InputBridge.svg \
@@ -163,10 +165,10 @@ jobs:
             - name: Install Dependencies
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y build-essential git cmake libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev
+                  sudo apt-get install -y build-essential git pkg-config cmake ninja-build libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libxinerama-dev libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev
 
             - name: Configure CMake
-              run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
+              run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
 
             - name: Build
               run: cmake --build build --config Release
@@ -174,6 +176,8 @@ jobs:
             - name: Package
               run: |
                   cmake --install build --config Release --prefix package
+                  # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
+                  if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Ubuntu.tar.gz -C package/bin .
 
@@ -203,6 +207,8 @@ jobs:
             - name: Package
               run: |
                   cmake --install build --config Release --prefix package
+                  # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
+                  if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Fedora.tar.gz -C package/bin .
 
@@ -232,6 +238,8 @@ jobs:
             - name: Package
               run: |
                   cmake --install build --config Release --prefix package
+                  # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
+                  if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Arch.tar.gz -C package/bin .
 
@@ -267,7 +275,7 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y build-essential git cmake ninja-build libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev libpulse-dev libxss-dev libxext-dev libxfixes-dev libxinerama-dev libxxf86vm-dev libdbus-1-dev libdrm-dev libgbm-dev libusb-1.0-0-dev libsamplerate0-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev lcov
+                  sudo apt-get install -y build-essential git pkg-config cmake ninja-build libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libxinerama-dev libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev lcov
 
             - name: Add OpenSSL to PATH (Windows)
               if: runner.os == 'Windows'

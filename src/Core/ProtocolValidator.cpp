@@ -1,7 +1,6 @@
 #include "ProtocolValidator.h"
 #include <fstream>
 #include <regex>
-#include <algorithm>
 #include <cctype>
 
 namespace {

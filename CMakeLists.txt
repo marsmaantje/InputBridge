@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.8.0)
+project(InputBridge VERSION 0.8.1)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,7 @@ set(WITH_TESTS OFF CACHE BOOL "Disable liblo tests" FORCE)
 set(WITH_EXAMPLES OFF CACHE BOOL "Disable liblo examples" FORCE)
 set(WITH_CPP_TESTS OFF CACHE BOOL "Disable liblo C++ tests" FORCE)
 set(WITH_STATIC ON CACHE BOOL "Enable liblo static lib" FORCE)
+set(WITH_SHARED OFF CACHE BOOL "Disable liblo shared lib" FORCE)
 
 # liblo's CMakeLists.txt is located in the 'cmake' subdirectory
 if(DEFINED CMAKE_WARN_DEPRECATED)
@@ -45,16 +46,20 @@ else()
     unset(CMAKE_WARN_DEPRECATED_OLD)
 endif()
 set(CMAKE_WARN_DEPRECATED OFF)
-add_subdirectory(lib/liblo/cmake lib/liblo)
+add_subdirectory(lib/liblo/cmake lib/liblo EXCLUDE_FROM_ALL)
 if(DEFINED CMAKE_WARN_DEPRECATED_OLD)
     set(CMAKE_WARN_DEPRECATED ${CMAKE_WARN_DEPRECATED_OLD})
 else()
     unset(CMAKE_WARN_DEPRECATED)
 endif()
 
-# Create an alias 'lo' to the static library target 'liblo_static'
+# Create an alias 'lo' to the library target.
 # This ensures compatibility with the rest of the project that links against 'lo'
-add_library(lo ALIAS liblo_static)
+if(TARGET liblo_static)
+    add_library(lo ALIAS liblo_static)
+else()
+    add_library(lo ALIAS liblo)
+endif()
 
 # Add ImGui
 # ImGui does not have a root CMakeLists.txt, so we define the library here.
@@ -250,6 +255,7 @@ add_executable(InputBridge
     # Networking
     src/Network/NetworkStatusWindow.cpp
     # Device input and protocol output mappings
+    src/Mappers/ButtonBinder.cpp
     src/Mappers/InputMapper.cpp
     src/Mappers/OutputMapper.cpp
     # WebSocket and OSC protocols
@@ -371,6 +377,9 @@ if(TARGET lo)
     target_link_libraries(InputBridge PRIVATE lo)
     # Explicitly add liblo include directories
     target_include_directories(InputBridge PRIVATE lib/liblo ${CMAKE_BINARY_DIR}/lib/liblo)
+    if(WIN32 AND WITH_SHARED)
+        target_compile_definitions(InputBridge PRIVATE LIBLO_DLL)
+    endif()
 endif()
 
 if(WIN32)

@@ -259,7 +259,11 @@ protected:
     std::map<int, SDL_HapticEffectID> m_rumbleEffects;
     std::map<int, SDL_HapticEffectID> m_conditionEffects;
 
-    SDL_HapticEffectID UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId);
+    // Upload (create or update) a haptic effect.
+    // Returns the effect ID on success, or -1 on failure.
+    // Sets *outCreated to true when the effect was newly created (needs SDL_RunHapticEffect),
+    // or false when an existing effect was updated in-place (already running, no restart needed).
+    SDL_HapticEffectID UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId, bool* outCreated = nullptr);
     void RunAsync(std::function<void()> task);
 
 private:
@@ -269,4 +273,5 @@ private:
     std::queue<std::function<void()>> m_tasks;
     bool m_running = false;
     void ThreadLoop();
+    void PruneFinishedEffects();
 };
