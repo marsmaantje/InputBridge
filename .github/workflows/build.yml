@@ -103,7 +103,7 @@ jobs:
             - name: Install Dependencies
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y build-essential pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev
+                  sudo apt-get install -y build-essential git pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev
 
             - name: Configure and Build
               run: |
@@ -114,6 +114,8 @@ jobs:
               run: |
                   wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
                   chmod +x linuxdeploy-x86_64.AppImage
+                  # Set LD_LIBRARY_PATH so linuxdeploy can resolve bundled libraries
+                  export LD_LIBRARY_PATH=$PWD/build/AppDir/usr/lib:$LD_LIBRARY_PATH
                   # Set STRIP to /bin/true to avoid strip failures on newer binaries
                   APPIMAGE_EXTRACT_AND_RUN=1 STRIP=/bin/true ./linuxdeploy-x86_64.AppImage --appdir build/AppDir --output appimage \
                     --icon-file build/org.inputbridge.InputBridge.svg \
