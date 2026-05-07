@@ -2,7 +2,6 @@
 
 #include <string_view>
 #include <string>
-#include <cstdint>
 #include "Haptics/HapticDevice.h"
 
 class OutputMapper;

@@ -6,7 +6,6 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
-#include <chrono>
 #include <functional>
 #include "Utils/SDLHandles.h"
 #include "Core/Result.h"
