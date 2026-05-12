@@ -150,6 +150,10 @@ private:
     bool m_outputEnabled = true;  // send OSC messages to clients
     bool m_inputEnabled  = true;  // receive OSC messages from clients
 
+    // Inactivity timeout — persisted to prefs.
+    bool     m_inactivityTimeoutEnabled = true;
+    uint64_t m_inactivityTimeoutMs      = 5000;
+
     // Cleanup thread used by Stop() to run lo_server_thread_stop off the
     // main/UI thread.  Stored (not detached) so the destructor can join it
     // and guarantee the thread finishes before members are destroyed.

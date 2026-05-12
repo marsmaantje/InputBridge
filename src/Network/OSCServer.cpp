@@ -30,6 +30,8 @@ namespace {
     const char* const kOutputDefIdKey = "OutputDefinitionId";
     const char* const kInputDefIdKey = "InputDefinitionId";
     const char* const kEnabledKey = "Enabled";
+    const char* const kInactivityTimeoutEnabledKey = "InactivityTimeoutEnabled";
+    const char* const kInactivityTimeoutMsKey = "InactivityTimeoutMs";
     const char* const kOutputEnabledKey = "OutputEnabled";
     const char* const kInputEnabledKey  = "InputEnabled";
 
@@ -68,6 +70,8 @@ OSCServer::OSCServer() {
     SetProtocol(kDefaultProtocol);
     strncpy(m_send_host, kDefaultHost, sizeof(m_send_host) - 1);
     m_send_host[sizeof(m_send_host) - 1] = '\0';
+    m_inactivityTimeoutEnabled = true;
+    m_inactivityTimeoutMs = 5000;
 }
 
 OSCServer::~OSCServer() {
@@ -453,18 +457,19 @@ bool OSCServer::HasClients() const {
 }
 
 void OSCServer::CheckInactivity() {
-    const uint64_t OSC_INACTIVITY_TIMEOUT_MS = 5000;
     bool timed_out = false;
     OutputMapper* mapper = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_inactivityTimeoutEnabled) return;
+
         if (m_running && !m_clients.empty()) {
             if (m_lastMessageTime == 0) {
                 // Timeout already fired; re-arm so we keep checking on future
                 // frames.  If the client sends again, the handler will write a
                 // fresh tick and normal detection resumes.
                 m_lastMessageTime = SDL_GetTicks();
-            } else if (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS) {
+            } else if (SDL_GetTicks() - m_lastMessageTime > m_inactivityTimeoutMs) {
                 timed_out = true;
                 m_clients.clear();
                 m_lastMessageTime = 0;
@@ -744,6 +749,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     bool enabled = prefs.GetBool(kOSCSection, kEnabledKey, false);
     bool outputEnabled = prefs.GetBool(kOSCSection, kOutputEnabledKey, true);
     bool inputEnabled  = prefs.GetBool(kOSCSection, kInputEnabledKey,  true);
+    bool timeoutEnabled = prefs.GetBool(kOSCSection, kInactivityTimeoutEnabledKey, true);
+    int timeoutMs       = prefs.GetInt (kOSCSection, kInactivityTimeoutMsKey, 5000);
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -753,6 +760,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
         m_recv_port = recv_port;
         m_outputEnabled = outputEnabled;
         m_inputEnabled  = inputEnabled;
+        m_inactivityTimeoutEnabled = timeoutEnabled;
+        m_inactivityTimeoutMs      = static_cast<uint64_t>(timeoutMs);
     }
 
     SetProtocol(protocol);
@@ -780,6 +789,8 @@ void OSCServer::SaveConfig(PreferencesManager& prefs) {
     prefs.SetBool  (kOSCSection, kEnabledKey,             m_running);
     prefs.SetBool  (kOSCSection, kOutputEnabledKey,       m_outputEnabled);
     prefs.SetBool  (kOSCSection, kInputEnabledKey,        m_inputEnabled);
+    prefs.SetBool  (kOSCSection, kInactivityTimeoutEnabledKey, m_inactivityTimeoutEnabled);
+    prefs.SetInt   (kOSCSection, kInactivityTimeoutMsKey,      static_cast<int>(m_inactivityTimeoutMs));
 }
 
 void OSCServer::SetSelectedDevice(int id) {
@@ -924,6 +935,22 @@ void OSCServer::DrawContent() {
         if (!inDefId.empty() && ProtocolRegistry::GetInstance().FindById(inDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(recv port synced)"); }
         if (!inputEnabled) ImGui::EndDisabled();
+    }
+
+    // ── Inactivity Timeout ────────────────────────────────────────────────────
+    {
+        ImGui::Separator();
+        if (ImGui::Checkbox("Inactivity Timeout", &m_inactivityTimeoutEnabled)) {
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        if (!m_inactivityTimeoutEnabled) ImGui::BeginDisabled();
+        int timeout = static_cast<int>(m_inactivityTimeoutMs);
+        if (ImGui::InputInt("Limit (ms)##osc_timeout", &timeout)) {
+            if (timeout < 100) timeout = 100; // Sensible minimum
+            m_inactivityTimeoutMs = static_cast<uint64_t>(timeout);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        if (!m_inactivityTimeoutEnabled) ImGui::EndDisabled();
     }
 
     // ── Start / stop ──────────────────────────────────────────────────────────
