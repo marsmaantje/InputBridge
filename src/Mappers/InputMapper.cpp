@@ -117,16 +117,13 @@ void InputMapper::LoadConfig(PreferencesManager &prefs) {
     OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
     LoadProfiles();
     std::string last = prefs.GetString("InputMapper", "LastProfile", "");
+    int restoredIdx = -1;
     for (int i = 0; i < (int)m_Profiles.size(); ++i)
-        if (m_Profiles[i].name == last) { m_SelectedProfileIndex = i; break; }
-    if (m_SelectedProfileIndex != -1) {
-        OutputMapper::GetInstance().SetActiveHapticTargets(&m_Profiles[m_SelectedProfileIndex].hapticTargets);
-        const auto& p = m_Profiles[m_SelectedProfileIndex];
-        m_SelectedProtocolView = p.selectedProtocolView;
-    } else {
+        if (m_Profiles[i].name == last) { restoredIdx = i; break; }
+    if (restoredIdx == -1) {
         m_SelectedProtocolView = prefs.GetInt("InputMapper", "SelectedProtocolView", 0);
     }
-    UpdateActiveProtocols();
+    ActivateProfile(restoredIdx);
     HandleDeviceConnectionChange();
 }
 
@@ -317,23 +314,20 @@ void InputMapper::DrawProfileSelector() {
     int old_idx = m_SelectedProfileIndex;
     const char *cur = m_SelectedProfileIndex != -1 ? m_Profiles[m_SelectedProfileIndex].name.c_str() : "None";
     if (ImGui::BeginCombo("Active Profile", cur)) {
-        if (ImGui::Selectable("None", m_SelectedProfileIndex == -1)) m_SelectedProfileIndex = -1;
+        if (ImGui::Selectable("None", m_SelectedProfileIndex == -1)) old_idx = -2; // sentinel to trigger swap
         for (int i = 0; i < (int)m_Profiles.size(); ++i) {
             if (ImGui::Selectable(m_Profiles[i].name.c_str(), m_SelectedProfileIndex == i))
-                m_SelectedProfileIndex = i;
+                old_idx = i; // record selection without writing m_SelectedProfileIndex directly
             if (m_SelectedProfileIndex == i) ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
     }
-    if (old_idx != m_SelectedProfileIndex) {
-        OutputMapper::GetInstance().SetActiveHapticTargets(
-            m_SelectedProfileIndex != -1 ? &m_Profiles[m_SelectedProfileIndex].hapticTargets : nullptr);
-        if (m_SelectedProfileIndex != -1) {
-            const auto& p = m_Profiles[m_SelectedProfileIndex];
-            m_SelectedProtocolView = p.selectedProtocolView;
-        } else {
-        }
-        UpdateActiveProtocols();
+    // Route all activation through ActivateProfile() so the swap is always atomic:
+    // haptic targets, protocol IDs, and server settings all change together.
+    if (old_idx == -2) {
+        ActivateProfile(-1);
+    } else if (old_idx != m_SelectedProfileIndex && old_idx >= 0) {
+        ActivateProfile(old_idx);
     }
 
     {
@@ -354,10 +348,10 @@ void InputMapper::DrawProfileSelector() {
             // the old (now freed) memory when closing the previous targets.
             OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
             m_Profiles.push_back(p);
-            m_SelectedProfileIndex = (int)m_Profiles.size() - 1;
+            int newIdx = (int)m_Profiles.size() - 1;
             SaveProfile(p);
-            OutputMapper::GetInstance().SetActiveHapticTargets(&m_Profiles.back().hapticTargets);
             m_NewProfileName[0] = '\0';
+            ActivateProfile(newIdx);
         }
         if (m_SelectedProfileIndex != -1) {
             ImGui::SameLine();
@@ -405,7 +399,7 @@ void InputMapper::DrawProfileSelector() {
                     // pointer when closing haptic devices on the deleted profile.
                     OutputMapper::GetInstance().SetActiveHapticTargets(nullptr);
                     m_Profiles.erase(m_Profiles.begin() + m_SelectedProfileIndex);
-                    m_SelectedProfileIndex = -1;
+                    ActivateProfile(-1);
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::SetItemDefaultFocus();
@@ -1495,6 +1489,32 @@ void InputMapper::HandleDeviceConnectionChange() {
         for (auto& bm : p.buttonMappings)      { if(bm.device_guid.empty())continue; auto it=guidMap.find(bm.device_guid); bm.instance_id=it!=guidMap.end()?it->second:0; }
         for (auto& dm : p.digitalMappings)     { if(dm.device_guid.empty())continue; auto it=guidMap.find(dm.device_guid); dm.instance_id=it!=guidMap.end()?it->second:0; }
     }
+}
+
+void InputMapper::ActivateProfile(int index) {
+    // Guard against out-of-range indices.
+    if (index != -1 && (index < 0 || index >= (int)m_Profiles.size()))
+        return;
+
+    m_SelectedProfileIndex = index;
+
+    // --- Atomic profile swap ------------------------------------------------
+    // All subsystems are updated together so no frame can observe a mixed state
+    // (e.g. haptic targets from profile A with axis mappings from profile B).
+    //
+    // 1. Hand the new haptic targets to OutputMapper immediately — it may be
+    //    playing effects from the old profile and must stop them before the
+    //    pointer changes.
+    OutputMapper::GetInstance().SetActiveHapticTargets(
+        index != -1 ? &m_Profiles[index].hapticTargets : nullptr);
+
+    // 2. Restore per-profile UI state.
+    if (index != -1) {
+        m_SelectedProtocolView = m_Profiles[index].selectedProtocolView;
+    }
+
+    // 3. Push the new protocol IDs and server settings to both servers.
+    UpdateActiveProtocols();
 }
 
 void InputMapper::UpdateActiveProtocols() {
