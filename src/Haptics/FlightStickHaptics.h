@@ -23,6 +23,14 @@ class FlightStickHaptics : public HapticDevice {
 public:
     using HapticDevice::HapticDevice;
 
+    /** Flight sticks with FF hardware support force-feedback and gain control. */
+    HapticCapabilities caps() const override {
+        HapticCapabilities c;
+        c.forceFeedback = true;
+        c.gainControl   = true;
+        return c;
+    }
+
     // --- Effect controls --------------------------------------------------
 
     /**

@@ -131,6 +131,24 @@ inline const char* PeriodicTypeName(HapticPeriodicType t) {
     }
 }
 
+// ─── Device Capability Flags ─────────────────────────────────────────────────
+//
+// A bitmask describing which haptic effect families a device supports.
+// Callers query caps() and gate UI and network dispatch on it instead of
+// performing type-checks or switch statements on concrete subclasses.
+//
+// Usage example:
+//   if (device->caps().rumble)          { /* show rumble controls */ }
+//   if (device->caps().forceFeedback)   { /* show FF controls     */ }
+//   if (device->caps().adaptiveTriggers){ /* show trigger controls */ }
+//
+struct HapticCapabilities {
+    bool rumble          = false;  ///< Dual-motor gamepad rumble
+    bool forceFeedback   = false;  ///< Constant / periodic / condition FF (wheel, flight stick)
+    bool adaptiveTriggers= false;  ///< DualSense adaptive trigger effects
+    bool gainControl     = false;  ///< Per-device haptic gain (steering wheel, flight stick)
+};
+
 // ─── Active Effect Info Structs ───────────────────────────────────────────────
 struct ActiveConstantInfo {
     bool active = false;
@@ -189,6 +207,22 @@ public:
     InputBridge::Result<bool, InputBridge::HapticError> Init();
     void Close();
     virtual bool IsReady() const;
+
+    /**
+     * @brief Return the set of haptic effect families this device supports.
+     *
+     * Prefer querying caps() over dynamic_cast or type-string comparisons.
+     * The base implementation returns all-false; each subclass overrides to
+     * advertise its real capabilities.
+     *
+     * Example:
+     * @code
+     *   auto c = device->caps();
+     *   if (c.forceFeedback)    showFFControls();
+     *   if (c.adaptiveTriggers) showTriggerPanel();
+     * @endcode
+     */
+    virtual HapticCapabilities caps() const { return {}; }
     SDL_Haptic* GetHandle() const { return m_haptic.Get(); }
 
     // --- Play Methods ---

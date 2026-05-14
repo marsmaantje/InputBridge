@@ -8,6 +8,19 @@
 #endif
 
 class IProtocol;
+
+/**
+ * @brief WebSocket transport: sends input data as JSON and receives haptic commands.
+ *
+ * WebSocketServer satisfies the ITransport contract (see Network/ITransport.h).
+ * Incoming haptic JSON messages are forwarded to HapticParser::Parse(), which
+ * then calls OutputMapper::Queue*() — no parsing logic lives here.
+ *
+ * @see ITransport       Abstract transport interface documenting the full contract.
+ * @see OSCServer        Parallel implementation for OSC/UDP.
+ * @see HapticParser     JSON haptic message parser used by this server.
+ * @see HapticDispatcher OSC argument parser (used by OSCServer, not this class).
+ */
 class PreferencesManager;
 class OutputMapper;
 

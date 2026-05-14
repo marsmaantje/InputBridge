@@ -63,6 +63,17 @@ public:
      */
     bool IsReady() const override;
 
+    /**
+     * @brief Advertise gamepad capabilities: rumble always; adaptive triggers
+     *        only when a DualSense is connected.
+     */
+    HapticCapabilities caps() const override {
+        HapticCapabilities c;
+        c.rumble           = true;
+        c.adaptiveTriggers = IsDualSense();
+        return c;
+    }
+
     // ==================== Universal Rumble ====================
 
     /**

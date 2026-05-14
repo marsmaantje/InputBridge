@@ -1,5 +1,6 @@
 #include "Network/OSCServer.h"
 #include "Network/OSCSubchannel.h"
+#include "Network/HapticDispatcher.h"
 #include "Mappers/OutputMapper.h"
 #include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
@@ -93,14 +94,7 @@ int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 5) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            float low = argv[2]->f;
-            float high = argv[3]->f;
-            int duration = argv[4]->i;
-            server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
-        }
+        HapticDispatcher::DispatchRumble(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -110,13 +104,7 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 4) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            float strength = argv[2]->f;
-            int duration = argv[3]->i;
-            server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
-        }
+        HapticDispatcher::DispatchConstant(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -126,30 +114,7 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 9) {
-            // New format: i i i f i f f i i  (id, slot, wave_type, strength, period, magnitude, offset, phase, duration)
-            int id       = argv[0]->i;
-            int slot     = argv[1]->i;
-            HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
-            float strength  = argv[3]->f;
-            int period      = argv[4]->i;
-            float magnitude = argv[5]->f;
-            float offset    = argv[6]->f;
-            int phase       = argv[7]->i;
-            int duration    = argv[8]->i;
-            server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
-        } else if (argc >= 8) {
-            // Legacy format: i i f i f f i i  (id, slot, strength, period, magnitude, offset, phase, duration) — defaults to Sine
-            int id       = argv[0]->i;
-            int slot     = argv[1]->i;
-            float strength  = argv[2]->f;
-            int period      = argv[3]->i;
-            float magnitude = argv[4]->f;
-            float offset    = argv[5]->f;
-            int phase       = argv[6]->i;
-            int duration    = argv[7]->i;
-            server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
-        }
+        HapticDispatcher::DispatchPeriodic(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -159,19 +124,7 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 10) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
-            float rsat = argv[3]->f;
-            float lsat = argv[4]->f;
-            float rcoeff = argv[5]->f;
-            float lcoeff = argv[6]->f;
-            float db = argv[7]->f;
-            float center = argv[8]->f;
-            int duration = argv[9]->i;
-            server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
-        }
+        HapticDispatcher::DispatchCondition(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -182,11 +135,7 @@ int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg *
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 2) {
-            int id = argv[0]->i;
-            int gain = argv[1]->i;
-            server->m_OutputMapper->QueueSetGain(id, gain);
-        }
+        HapticDispatcher::DispatchGain(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -219,73 +168,20 @@ int OSCServer::haptic_subchannel_handler(const char *path, const char *types, lo
         // frame.  The argument slot is always authoritative.
 
         switch (sub.effect) {
-        // /haptic/rumble/<N>  iiffi  (id, slot, low_freq, high_freq, duration_ms)
         case SubchannelPath::Effect::Rumble:
-            if (std::strcmp(types, "iiffi") == 0 && argc == 5) {
-                const int   id       = argv[0]->i;
-                const int   slot     = argv[1]->i;
-                const float low      = argv[2]->f;
-                const float high     = argv[3]->f;
-                const int   duration = argv[4]->i;
-                server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
-            }
+            HapticDispatcher::DispatchRumble(argv, argc, server->m_OutputMapper);
             break;
 
-        // /haptic/constant/<N>  iifi  (id, slot, strength, duration_ms)
         case SubchannelPath::Effect::Constant:
-            if (std::strcmp(types, "iifi") == 0 && argc == 4) {
-                const int   id       = argv[0]->i;
-                const int   slot     = argv[1]->i;
-                const float strength = argv[2]->f;
-                const int   duration = argv[3]->i;
-                server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
-            }
+            HapticDispatcher::DispatchConstant(argv, argc, server->m_OutputMapper);
             break;
 
-        // /haptic/periodic/<N>
-        //   iiififfii — id, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms
-        //   iififfii  — legacy (no wave_type); defaults to Sine
         case SubchannelPath::Effect::Periodic:
-            if (std::strcmp(types, "iiififfii") == 0 && argc == 9) {
-                const int   id        = argv[0]->i;
-                const int   slot      = argv[1]->i;
-                const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
-                const float strength  = argv[3]->f;
-                const int   period    = argv[4]->i;
-                const float magnitude = argv[5]->f;
-                const float offset    = argv[6]->f;
-                const int   phase     = argv[7]->i;
-                const int   duration  = argv[8]->i;
-                server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
-            } else if (std::strcmp(types, "iififfii") == 0 && argc == 8) {
-                const int   id        = argv[0]->i;
-                const int   slot      = argv[1]->i;
-                const float strength  = argv[2]->f;
-                const int   period    = argv[3]->i;
-                const float magnitude = argv[4]->f;
-                const float offset    = argv[5]->f;
-                const int   phase     = argv[6]->i;
-                const int   duration  = argv[7]->i;
-                server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
-            }
+            HapticDispatcher::DispatchPeriodic(argv, argc, server->m_OutputMapper);
             break;
 
-        // /haptic/condition/<N>  iiiffffffi
-        //   id, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms
         case SubchannelPath::Effect::Condition:
-            if (std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
-                const int   id       = argv[0]->i;
-                const int   slot     = argv[1]->i;
-                const HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
-                const float rsat     = argv[3]->f;
-                const float lsat     = argv[4]->f;
-                const float rcoeff   = argv[5]->f;
-                const float lcoeff   = argv[6]->f;
-                const float db       = argv[7]->f;
-                const float center   = argv[8]->f;
-                const int   duration = argv[9]->i;
-                server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
-            }
+            HapticDispatcher::DispatchCondition(argv, argc, server->m_OutputMapper);
             break;
 
         default:
@@ -462,7 +358,6 @@ void OSCServer::CheckInactivity() {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         if (!m_inactivityTimeoutEnabled) return;
-
         if (m_running && !m_clients.empty()) {
             if (m_lastMessageTime == 0) {
                 // Timeout already fired; re-arm so we keep checking on future
