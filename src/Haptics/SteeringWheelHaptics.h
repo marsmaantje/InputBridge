@@ -5,6 +5,14 @@ class SteeringWheelHaptics : public HapticDevice {
 public:
     using HapticDevice::HapticDevice;
 
+    /** Steering wheels support full force-feedback and gain control. */
+    HapticCapabilities caps() const override {
+        HapticCapabilities c;
+        c.forceFeedback = true;
+        c.gainControl   = true;
+        return c;
+    }
+
     int SetGain(int gain);
 
     // All effects accept a slot, consistent with PlayCondition.

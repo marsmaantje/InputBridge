@@ -23,12 +23,14 @@ std::vector<RumbleArgs>    rumbleCalls;
 std::vector<ConstantArgs>  constantCalls;
 std::vector<PeriodicArgs>  periodicCalls;
 std::vector<ConditionArgs> conditionCalls;
+std::vector<DualSenseArgs> dualSenseCalls;
 
 void Reset() {
     rumbleCalls.clear();
     constantCalls.clear();
     periodicCalls.clear();
     conditionCalls.clear();
+    dualSenseCalls.clear();
 }
 
 } // namespace HapticStub
@@ -82,9 +84,14 @@ void OutputMapper::StopAllHapticEffects()                              {}
 bool OutputMapper::IsHapticsActive() const                             { return false; }
 
 void OutputMapper::QueueSetGain(int, int)                              {}
-void OutputMapper::QueueDualSenseTrigger(int, const char*, const char*,
-                                         int, int, int, int, int, int,
-                                         int, int, int, int, int)     {}
+void OutputMapper::QueueDualSenseTrigger(int device, const char* trigger, const char* type,
+                                         int p1, int p2, int p3, int p4, int p5, int p6,
+                                         int p7, int p8, int p9, int p10, int p11) {
+    HapticStub::dualSenseCalls.push_back({
+        device, trigger ? trigger : "", type ? type : "",
+        p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11
+    });
+}
 
 // Private helpers — never called from outside; stubs prevent link errors.
 void OutputMapper::QueueCommand(HapticCommand&&)                       {}
