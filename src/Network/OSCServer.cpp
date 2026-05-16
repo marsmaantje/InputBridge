@@ -672,19 +672,39 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
 }
 
 void OSCServer::SaveConfig(PreferencesManager& prefs) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    prefs.SetString(kOSCSection, kSendHostKey,           m_send_host);
-    prefs.SetInt   (kOSCSection, kSendPortKey,            m_send_port);
-    prefs.SetInt   (kOSCSection, kRecvPortKey,         m_recv_port);
-    prefs.SetString(kOSCSection, kProtocolKey,            m_protocolName);
-    prefs.SetString(kOSCSection, kInputProtocolKey,       ProtocolManager::GetInstance().GetActiveInputLegacyProtocol());
-    prefs.SetString(kOSCSection, kOutputDefIdKey,  m_outputDefinitionId);
-    prefs.SetString(kOSCSection, kInputDefIdKey,   m_inputDefinitionId);
-    prefs.SetBool  (kOSCSection, kEnabledKey,             m_running);
-    prefs.SetBool  (kOSCSection, kOutputEnabledKey,       m_outputEnabled);
-    prefs.SetBool  (kOSCSection, kInputEnabledKey,        m_inputEnabled);
-    prefs.SetBool  (kOSCSection, kInactivityTimeoutEnabledKey, m_inactivityTimeoutEnabled);
-    prefs.SetInt   (kOSCSection, kInactivityTimeoutMsKey,      static_cast<int>(m_inactivityTimeoutMs));
+    std::string inputProto = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
+
+    std::string sendHost, protocol, outDef, inDef;
+    int sendPort, recvPort;
+    bool running, outEn, inEn, timeoutEn;
+    uint64_t timeoutMs;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        sendHost = m_send_host;
+        sendPort = m_send_port;
+        recvPort = m_recv_port;
+        protocol = m_protocolName;
+        outDef   = m_outputDefinitionId;
+        inDef    = m_inputDefinitionId;
+        running  = m_running;
+        outEn    = m_outputEnabled;
+        inEn     = m_inputEnabled;
+        timeoutEn = m_inactivityTimeoutEnabled;
+        timeoutMs = m_inactivityTimeoutMs;
+    }
+
+    prefs.SetString(kOSCSection, kSendHostKey,           sendHost);
+    prefs.SetInt   (kOSCSection, kSendPortKey,            sendPort);
+    prefs.SetInt   (kOSCSection, kRecvPortKey,         recvPort);
+    prefs.SetString(kOSCSection, kProtocolKey,            protocol);
+    prefs.SetString(kOSCSection, kInputProtocolKey,       inputProto);
+    prefs.SetString(kOSCSection, kOutputDefIdKey,  outDef);
+    prefs.SetString(kOSCSection, kInputDefIdKey,   inDef);
+    prefs.SetBool  (kOSCSection, kEnabledKey,             running);
+    prefs.SetBool  (kOSCSection, kOutputEnabledKey,       outEn);
+    prefs.SetBool  (kOSCSection, kInputEnabledKey,        inEn);
+    prefs.SetBool  (kOSCSection, kInactivityTimeoutEnabledKey, timeoutEn);
+    prefs.SetInt   (kOSCSection, kInactivityTimeoutMsKey,      static_cast<int>(timeoutMs));
 }
 
 void OSCServer::SetSelectedDevice(int id) {

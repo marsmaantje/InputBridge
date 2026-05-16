@@ -524,7 +524,8 @@ void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
 void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
     int port;
     std::string protocol, outDef, inDef;
-    bool running;
+    bool running, outEn, inEn, timeoutEn;
+    uint64_t timeoutMs;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
         port     = m_Impl->port;
@@ -532,16 +533,20 @@ void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
         protocol = m_Impl->selectedProtocol;
         outDef   = m_Impl->outputDefinitionId;
         inDef    = m_Impl->inputDefinitionId;
+        outEn    = m_Impl->outputEnabled;
+        inEn     = m_Impl->inputEnabled;
+        timeoutEn = m_Impl->inactivityTimeoutEnabled;
+        timeoutMs = m_Impl->inactivityTimeoutMs;
     }
     prefs.SetInt(kWebSocketSection,    kPortKey,               port);
     prefs.SetString(kWebSocketSection, kProtocolKey,           protocol);
     prefs.SetString(kWebSocketSection, kOutputDefIdKey, outDef);
     prefs.SetString(kWebSocketSection, kInputDefIdKey,  inDef);
     prefs.SetBool(kWebSocketSection,   kEnabledKey,            running);
-    prefs.SetBool(kWebSocketSection,   kOutputEnabledKey,      m_Impl->outputEnabled);
-    prefs.SetBool(kWebSocketSection,   kInputEnabledKey,       m_Impl->inputEnabled);
-    prefs.SetBool(kWebSocketSection,   kInactivityTimeoutEnabledKey, m_Impl->inactivityTimeoutEnabled);
-    prefs.SetInt(kWebSocketSection,    kInactivityTimeoutMsKey,      static_cast<int>(m_Impl->inactivityTimeoutMs));
+    prefs.SetBool(kWebSocketSection,   kOutputEnabledKey,      outEn);
+    prefs.SetBool(kWebSocketSection,   kInputEnabledKey,       inEn);
+    prefs.SetBool(kWebSocketSection,   kInactivityTimeoutEnabledKey, timeoutEn);
+    prefs.SetInt(kWebSocketSection,    kInactivityTimeoutMsKey,      static_cast<int>(timeoutMs));
 }
 
 void WebSocketServer::DrawContent() {
