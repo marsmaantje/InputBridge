@@ -25,6 +25,8 @@ namespace {
     const char* const kEnabledKey = "Enabled";
     const char* const kOutputEnabledKey = "OutputEnabled";
     const char* const kInputEnabledKey  = "InputEnabled";
+    const char* const kInactivityTimeoutEnabledKey = "InactivityTimeoutEnabled";
+    const char* const kInactivityTimeoutMsKey = "InactivityTimeoutMs";
 
     // Default values
     const char* const kDefaultProtocol = "Marsmaantje (New)";
@@ -63,6 +65,9 @@ struct WebSocketServer::Impl {
     // Direction enable flags.
     bool outputEnabled = true;
     bool inputEnabled  = true;
+    // Inactivity timeout — persisted to prefs.
+    bool     inactivityTimeoutEnabled = true;
+    uint64_t inactivityTimeoutMs      = 5000;
 };
 
 WebSocketServer &WebSocketServer::GetInstance() {
@@ -496,6 +501,8 @@ void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
     bool enabled = prefs.GetBool(kWebSocketSection, kEnabledKey, false);
     bool outputEnabled = prefs.GetBool(kWebSocketSection, kOutputEnabledKey, true);
     bool inputEnabled  = prefs.GetBool(kWebSocketSection, kInputEnabledKey,  true);
+    bool timeoutEnabled = prefs.GetBool(kWebSocketSection, kInactivityTimeoutEnabledKey, true);
+    int timeoutMs       = prefs.GetInt (kWebSocketSection, kInactivityTimeoutMsKey, 5000);
 
     SetPort(port);
     SetProtocol(protocol);
@@ -504,6 +511,8 @@ void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
         m_Impl->outputEnabled = outputEnabled;
         m_Impl->inputEnabled  = inputEnabled;
+        m_Impl->inactivityTimeoutEnabled = timeoutEnabled;
+        m_Impl->inactivityTimeoutMs      = static_cast<uint64_t>(timeoutMs);
     }
 
     if (!outDefId.empty()) SetOutputDefinition(outDefId);
@@ -531,6 +540,8 @@ void WebSocketServer::SaveConfig(PreferencesManager& prefs) {
     prefs.SetBool(kWebSocketSection,   kEnabledKey,            running);
     prefs.SetBool(kWebSocketSection,   kOutputEnabledKey,      m_Impl->outputEnabled);
     prefs.SetBool(kWebSocketSection,   kInputEnabledKey,       m_Impl->inputEnabled);
+    prefs.SetBool(kWebSocketSection,   kInactivityTimeoutEnabledKey, m_Impl->inactivityTimeoutEnabled);
+    prefs.SetInt(kWebSocketSection,    kInactivityTimeoutMsKey,      static_cast<int>(m_Impl->inactivityTimeoutMs));
 }
 
 void WebSocketServer::DrawContent() {
@@ -549,7 +560,7 @@ void WebSocketServer::DrawContent() {
 
     // Read all state under lock first
     bool running, restartPending;
-    int  currentPort, runningPort, clientCount;
+    int  currentPort, runningPort, clientCount, timeoutMs;
     std::string outDefId, inDefId, currentProto;
     bool outputEnabled, inputEnabled;
     std::deque<Impl::LogEntry> logs;
@@ -566,6 +577,8 @@ void WebSocketServer::DrawContent() {
         currentProto   = m_Impl->selectedProtocol;
         outputEnabled  = m_Impl->outputEnabled;
         inputEnabled   = m_Impl->inputEnabled;
+        timeoutMs      = static_cast<int>(m_Impl->inactivityTimeoutMs);
+        // m_Impl->inactivityTimeoutEnabled is read directly below
         logs           = m_Impl->logs;
         clients        = m_Impl->clients;
     }
@@ -672,6 +685,23 @@ void WebSocketServer::DrawContent() {
         if (!inputEnabled) ImGui::EndDisabled();
     }
 
+    // ── Inactivity Timeout ────────────────────────────────────────────────────
+    {
+        ImGui::Separator();
+        bool timeoutEnabled = m_Impl->inactivityTimeoutEnabled; // Read directly
+        if (ImGui::Checkbox("Inactivity Timeout", &timeoutEnabled)) {
+            SetInactivityTimeoutEnabled(timeoutEnabled);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        if (!timeoutEnabled) ImGui::BeginDisabled();
+        if (ImGui::InputInt("Limit (ms)##ws_timeout", &timeoutMs)) {
+            if (timeoutMs < 100) timeoutMs = 100; // Sensible minimum
+            SetInactivityTimeoutMs(static_cast<uint64_t>(timeoutMs));
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        if (!timeoutEnabled) ImGui::EndDisabled();
+    }
+
     // ── Status / start / stop ─────────────────────────────────────────────────
     if (running) {
         ImGui::TextColored(ImVec4(0,1,0,1), "Status: Running (Port %d)", runningPort);
@@ -736,24 +766,28 @@ void WebSocketServer::SetPortFromProfile(int port) {
 }
 
 void WebSocketServer::CheckInactivity() {
-    const uint64_t WS_INACTIVITY_TIMEOUT_MS = 5000;
     bool timed_out = false;
     OutputMapper* mapper = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        if (!m_Impl->inactivityTimeoutEnabled) return;
         if (m_Impl->running && !m_Impl->clients.empty()) {
             if (m_Impl->lastMessageTime == 0) {
                 // Timeout already fired; re-arm so we keep checking on every
                 // future frame.  If the client resumes sending, the .message
                 // handler will write a fresh tick and normal detection resumes.
                 m_Impl->lastMessageTime = SDL_GetTicks();
-            } else if (SDL_GetTicks() - m_Impl->lastMessageTime > WS_INACTIVITY_TIMEOUT_MS) {
+            } else if (SDL_GetTicks() - m_Impl->lastMessageTime > m_Impl->inactivityTimeoutMs) {
                 timed_out = true;
-                // Reset to 0 so this branch doesn't fire every frame; the
-                // re-arm above will restore it on the next CheckInactivity call.
-                m_Impl->lastMessageTime = 0;
+                // Log the timeout message
                 m_Impl->logs.push_back({"WebSocket clients timed out (no data). Stopping haptics.", false});
                 if (m_Impl->logs.size() > 100) m_Impl->logs.pop_front();
+
+                m_Impl->clients.clear();
+                m_Impl->lastMessageTime = 0;
+
+                // m_OutputMapper may be null if Stop() ran during the same frame;
+                // savedOutputMapper always holds the last valid pointer.
                 mapper = m_OutputMapper ? m_OutputMapper : m_Impl->savedOutputMapper;
             }
         }
@@ -778,5 +812,15 @@ void WebSocketServer::SetOutputEnabled(bool enabled) {
 void WebSocketServer::SetInputEnabled(bool enabled) {
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     m_Impl->inputEnabled = enabled;
+}
+
+void WebSocketServer::SetInactivityTimeoutEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    m_Impl->inactivityTimeoutEnabled = enabled;
+}
+
+void WebSocketServer::SetInactivityTimeoutMs(uint64_t ms) {
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    m_Impl->inactivityTimeoutMs = ms;
 }
 #endif

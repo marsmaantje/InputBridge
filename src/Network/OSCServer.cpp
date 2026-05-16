@@ -8,7 +8,6 @@
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
-#include "Haptics/HapticDevice.h"
 #include <SDL3/SDL_timer.h>
 #include <iostream>
 #include <string>

@@ -80,6 +80,9 @@ class WebSocketServer {
     bool IsInputEnabled()  const;
     void SetOutputEnabled(bool enabled);
     void SetInputEnabled(bool enabled);
+
+    void SetInactivityTimeoutEnabled(bool enabled);
+    void SetInactivityTimeoutMs(uint64_t ms);
 #else
     static WebSocketServer &GetInstance() {
         static WebSocketServer i;
@@ -127,6 +130,8 @@ class WebSocketServer {
     bool IsInputEnabled()  const { return true; }
     void SetOutputEnabled(bool) {}
     void SetInputEnabled(bool)  {}
+    void SetInactivityTimeoutEnabled(bool) {}
+    void SetInactivityTimeoutMs(uint64_t) {}
 #endif
 
   private:
