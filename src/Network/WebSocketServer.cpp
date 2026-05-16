@@ -325,9 +325,12 @@ void WebSocketServer::SetSelectedDevice(int id) { m_selectedDeviceId = id; }
 int WebSocketServer::GetSelectedDevice() const { return m_selectedDeviceId; }
 
 void WebSocketServer::SetProtocol(const std::string& name) {
-    std::lock_guard<std::mutex> lock(m_Impl->mutex);
-    m_Impl->protocol = ProtocolManager::GetInstance().GetProtocol(name);
-    if (m_Impl->protocol) m_Impl->selectedProtocol = name;
+    auto proto = ProtocolManager::GetInstance().GetProtocol(name);
+    if (proto) {
+        std::lock_guard<std::mutex> lock(m_Impl->mutex);
+        m_Impl->protocol = proto;
+        m_Impl->selectedProtocol = name;
+    }
 }
 
 std::string WebSocketServer::GetProtocol() const {
@@ -336,15 +339,16 @@ std::string WebSocketServer::GetProtocol() const {
 }
 
 void WebSocketServer::SetDefinition(const std::string& definitionId) {
+    const ProtocolDefinition* def = nullptr;
+    if (!definitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(definitionId);
+    }
+
     std::lock_guard<std::mutex> lock(m_Impl->mutex);
     m_Impl->selectedDefinitionId = definitionId;
-
-    if (!definitionId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
-        if (def) {
-            // Sync port from the definition into the UI field
-            m_Impl->port = def->wssPort;
-        }
+    if (def) {
+        // Sync port from the definition into the UI field
+        m_Impl->port = def->wssPort;
     }
 }
 

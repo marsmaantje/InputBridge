@@ -570,9 +570,13 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
 }
 
 void OSCServer::SetProtocol(const std::string& name) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_protocol = ProtocolManager::GetInstance().GetProtocol(name);
-    if (m_protocol) m_protocolName = name;
+    // Call ProtocolManager outside the lock to avoid lock-ordering deadlocks.
+    std::shared_ptr<IProtocol> proto = ProtocolManager::GetInstance().GetProtocol(name);
+    if (proto) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_protocol = proto;
+        m_protocolName = name;
+    }
 }
 
 std::string OSCServer::GetProtocol() const {
@@ -580,18 +584,19 @@ std::string OSCServer::GetProtocol() const {
 }
 
 void OSCServer::SetDefinition(const std::string& definitionId) {
+    // Call ProtocolRegistry outside the lock to avoid lock-ordering deadlocks.
+    const ProtocolDefinition* def = nullptr;
+    if (!definitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(definitionId);
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     m_selectedDefinitionId = definitionId;
-
-    if (!definitionId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
-        if (def) {
-            // Sync host/port from the definition into the UI fields
-            strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
-            m_send_host[sizeof(m_send_host) - 1] = '\0';
-            m_send_port = def->oscSendPort;
-            m_recv_port = def->oscRecvPort;
-        }
+    if (def) {
+        // Sync host/port from the definition into the UI fields
+        strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
+        m_send_host[sizeof(m_send_host) - 1] = '\0';
+        m_send_port = def->oscSendPort;
+        m_recv_port = def->oscRecvPort;
     }
 }
 
@@ -601,25 +606,29 @@ std::string OSCServer::GetDefinitionId() const {
 }
 
 void OSCServer::SetOutputDefinition(const std::string& definitionId) {
+    // Call ProtocolRegistry outside the lock to avoid lock-ordering deadlocks.
+    const ProtocolDefinition* def = nullptr;
+    if (!definitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(definitionId);
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     m_outputDefinitionId = definitionId;
-    if (!definitionId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
-        if (def) {
-            strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
-            m_send_host[sizeof(m_send_host) - 1] = '\0';
-            m_send_port = def->oscSendPort;
-        }
+    if (def) {
+        strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
+        m_send_host[sizeof(m_send_host) - 1] = '\0';
+        m_send_port = def->oscSendPort;
     }
 }
 
 void OSCServer::SetInputDefinition(const std::string& definitionId) {
+    // Call ProtocolRegistry outside the lock to avoid lock-ordering deadlocks.
+    const ProtocolDefinition* def = nullptr;
+    if (!definitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(definitionId);
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     m_inputDefinitionId = definitionId;
-    if (!definitionId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
-        if (def) m_recv_port = def->oscRecvPort;
-    }
+    if (def) m_recv_port = def->oscRecvPort;
 }
 
 std::string OSCServer::GetOutputDefinitionId() const {
