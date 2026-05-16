@@ -506,6 +506,18 @@ TEST_F(HapticParserTest, AutoDetectDualSenseTrigger) {
     EXPECT_EQ(det.effect_type, "feedback");
 }
 
+TEST_F(HapticParserTest, TypeAutoDoesNotDispatchDualSenseTriggerYet) {
+    // This documents the current limitation in HapticParser.cpp where
+    // "auto" detection works but dispatching for DualSense is skipped.
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"right","effect_type":"feedback"}})",
+        FakeMapper());
+    
+    // No calls should happen because QueueDualSenseTrigger isn't called by dispatch()
+    // and Parse() explicitly skips it for det.kind == DualSenseTrigger.
+    EXPECT_TRUE(HapticStub::dualSenseCalls.empty());
+}
+
 // Condition must win over constant when both "strength" and sat fields co-exist.
 TEST_F(HapticParserTest, AutoDetectConditionBeatsConstantWhenSatPresent) {
     auto det = HapticParser::AutoDetect(
