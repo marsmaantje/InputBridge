@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.8.1)
+project(InputBridge VERSION 0.8.2)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -240,6 +240,7 @@ add_executable(InputBridge
     src/Haptics/DualSenseController.cpp
     src/Haptics/XboxController.cpp
     src/Network/HapticParser.cpp
+    src/Network/HapticDispatcher.cpp
     # Settings
     src/Preferences/Preferences.cpp
     # Input device visualizers

@@ -234,7 +234,7 @@ void Application::UpdateLogic(Uint64 frame_start_time)
     om.Update();
 
     // Per-server inactivity checks: fire StopAllHapticEffects once when
-    // a connected client stops sending data for 5 seconds.
+    // a connected client stops sending data for X seconds.
     OSCServer::GetInstance().CheckInactivity();
     WebSocketServer::GetInstance().CheckInactivity();
 

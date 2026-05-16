@@ -31,9 +31,6 @@ on:
                     - "yes"
                     - "only"
 
-env:
-    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 permissions:
   checks: write    # for dorny/test-reporter to publish test reports
   contents: write  # for actions/checkout to fetch code, and to create GitHub Releases
@@ -41,7 +38,7 @@ permissions:
 jobs:
     build-windows:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'windows') && github.event.inputs.run_tests != 'only' }}
-        runs-on: windows-latest
+        runs-on: windows-2025
         steps:
             - uses: actions/checkout@v6
               with:
@@ -69,7 +66,7 @@ jobs:
 
     build-macos:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'macos') && github.event.inputs.run_tests != 'only' }}
-        runs-on: macos-latest
+        runs-on: macos-15
         steps:
             - uses: actions/checkout@v6
               with:
@@ -94,7 +91,7 @@ jobs:
 
     build-ubuntu-appimage:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage') && github.event.inputs.run_tests != 'only' }}
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v6
               with:
@@ -130,7 +127,7 @@ jobs:
 
     build-ubuntu-flatpak:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-flatpak') && github.event.inputs.run_tests != 'only' }}
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v6
               with:
@@ -156,7 +153,7 @@ jobs:
 
     build-ubuntu:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu') && github.event.inputs.run_tests != 'only' }}
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v6
               with:
@@ -189,7 +186,7 @@ jobs:
 
     build-fedora:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'fedora') && github.event.inputs.run_tests != 'only' }}
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         container: fedora:latest
         steps:
             - name: Install Dependencies
@@ -220,7 +217,7 @@ jobs:
 
     build-arch:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'arch') && github.event.inputs.run_tests != 'only' }}
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         container: archlinux:latest
         steps:
             - name: Install Dependencies
@@ -262,7 +259,7 @@ jobs:
 
             - name: Cache apt packages
               if: runner.os == 'Linux'
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                 path: |
                   /var/cache/apt/archives
@@ -305,7 +302,7 @@ jobs:
                   path: build/test-results.xml
 
             - name: Publish Test Report
-              uses: dorny/test-reporter@v2.6.0
+              uses: dorny/test-reporter@v3
               if: always()
               with:
                 name: Test Results (${{ matrix.os }})
@@ -337,10 +334,10 @@ jobs:
             - build-ubuntu-flatpak
             - build-fedora
             - build-arch
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - name: Download all artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v6
               with:
                   path: artifacts
 

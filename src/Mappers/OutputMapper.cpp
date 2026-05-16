@@ -525,12 +525,9 @@ void OutputMapper::TriggerRumble(int virtual_id, int slot, float low_freq, float
                 }
 
                 if (target->rumble_effect_id != -1) {
-                    bool needsRun = created || duration_ms > 0;
-                    if (!needsRun) {
-                        int status = SDL_GetHapticEffectStatus(target->haptic_device, target->rumble_effect_id);
-                        needsRun = (status != 1);
-                    }
-                    if (needsRun) {
+                    // If newly created or a timed effect, we run it. For infinite effects,
+                    // assume they keep playing after an update if created is false.
+                    if (created || duration_ms > 0) {
                         SDL_RunHapticEffect(target->haptic_device, target->rumble_effect_id, 1);
                     }
                 }
@@ -583,12 +580,7 @@ void OutputMapper::TriggerConstantForce(int virtual_id, int slot, float strength
         }
 
         if (target->constant_effect_id != -1) {
-            bool needsRun = created;
-            if (!needsRun) {
-                int status = SDL_GetHapticEffectStatus(target->haptic_device, target->constant_effect_id);
-                needsRun = (status != 1);
-            }
-            if (needsRun) {
+            if (created || duration_ms > 0) {
                 SDL_RunHapticEffect(target->haptic_device, target->constant_effect_id, 1);
             }
         }
@@ -634,12 +626,7 @@ void OutputMapper::TriggerPeriodic(int virtual_id, int slot, HapticPeriodicType 
         }
 
         if (target->periodic_effect_id != -1) {
-            bool needsRun = created;
-            if (!needsRun) {
-                int status = SDL_GetHapticEffectStatus(target->haptic_device, target->periodic_effect_id);
-                needsRun = (status != 1);
-            }
-            if (needsRun) {
+            if (created || duration_ms > 0) {
                 SDL_RunHapticEffect(target->haptic_device, target->periodic_effect_id, 1);
             }
         }
@@ -688,12 +675,7 @@ void OutputMapper::TriggerCondition(int virtual_id, int slot, HapticConditionTyp
         }
 
         if (target->condition_effect_id != -1) {
-            bool needsRun = created;
-            if (!needsRun) {
-                int status = SDL_GetHapticEffectStatus(target->haptic_device, target->condition_effect_id);
-                needsRun = (status != 1);
-            }
-            if (needsRun) {
+            if (created || duration_ms > 0) {
                 SDL_RunHapticEffect(target->haptic_device, target->condition_effect_id, 1);
             }
         }

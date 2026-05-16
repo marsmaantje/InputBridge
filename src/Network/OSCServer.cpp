@@ -1,5 +1,6 @@
 #include "Network/OSCServer.h"
 #include "Network/OSCSubchannel.h"
+#include "Network/HapticDispatcher.h"
 #include "Mappers/OutputMapper.h"
 #include "Mappers/InputMapper.h"
 #include "Preferences/Preferences.h"
@@ -7,7 +8,6 @@
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
-#include "Haptics/HapticDevice.h"
 #include <SDL3/SDL_timer.h>
 #include <iostream>
 #include <string>
@@ -30,6 +30,8 @@ namespace {
     const char* const kOutputDefIdKey = "OutputDefinitionId";
     const char* const kInputDefIdKey = "InputDefinitionId";
     const char* const kEnabledKey = "Enabled";
+    const char* const kInactivityTimeoutEnabledKey = "InactivityTimeoutEnabled";
+    const char* const kInactivityTimeoutMsKey = "InactivityTimeoutMs";
     const char* const kOutputEnabledKey = "OutputEnabled";
     const char* const kInputEnabledKey  = "InputEnabled";
 
@@ -68,6 +70,8 @@ OSCServer::OSCServer() {
     SetProtocol(kDefaultProtocol);
     strncpy(m_send_host, kDefaultHost, sizeof(m_send_host) - 1);
     m_send_host[sizeof(m_send_host) - 1] = '\0';
+    m_inactivityTimeoutEnabled = true;
+    m_inactivityTimeoutMs = 5000;
 }
 
 OSCServer::~OSCServer() {
@@ -89,14 +93,7 @@ int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 5) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            float low = argv[2]->f;
-            float high = argv[3]->f;
-            int duration = argv[4]->i;
-            server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
-        }
+        HapticDispatcher::DispatchRumble(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -106,13 +103,7 @@ int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 4) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            float strength = argv[2]->f;
-            int duration = argv[3]->i;
-            server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
-        }
+        HapticDispatcher::DispatchConstant(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -122,30 +113,7 @@ int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_a
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 9) {
-            // New format: i i i f i f f i i  (id, slot, wave_type, strength, period, magnitude, offset, phase, duration)
-            int id       = argv[0]->i;
-            int slot     = argv[1]->i;
-            HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
-            float strength  = argv[3]->f;
-            int period      = argv[4]->i;
-            float magnitude = argv[5]->f;
-            float offset    = argv[6]->f;
-            int phase       = argv[7]->i;
-            int duration    = argv[8]->i;
-            server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
-        } else if (argc >= 8) {
-            // Legacy format: i i f i f f i i  (id, slot, strength, period, magnitude, offset, phase, duration) — defaults to Sine
-            int id       = argv[0]->i;
-            int slot     = argv[1]->i;
-            float strength  = argv[2]->f;
-            int period      = argv[3]->i;
-            float magnitude = argv[4]->f;
-            float offset    = argv[5]->f;
-            int phase       = argv[6]->i;
-            int duration    = argv[7]->i;
-            server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
-        }
+        HapticDispatcher::DispatchPeriodic(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -155,19 +123,7 @@ int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 10) {
-            int id = argv[0]->i;
-            int slot = argv[1]->i;
-            HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
-            float rsat = argv[3]->f;
-            float lsat = argv[4]->f;
-            float rcoeff = argv[5]->f;
-            float lcoeff = argv[6]->f;
-            float db = argv[7]->f;
-            float center = argv[8]->f;
-            int duration = argv[9]->i;
-            server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
-        }
+        HapticDispatcher::DispatchCondition(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -178,11 +134,7 @@ int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg *
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        if (argc >= 2) {
-            int id = argv[0]->i;
-            int gain = argv[1]->i;
-            server->m_OutputMapper->QueueSetGain(id, gain);
-        }
+        HapticDispatcher::DispatchGain(argv, argc, server->m_OutputMapper);
     } catch (...) {}
     return 0;
 }
@@ -215,73 +167,20 @@ int OSCServer::haptic_subchannel_handler(const char *path, const char *types, lo
         // frame.  The argument slot is always authoritative.
 
         switch (sub.effect) {
-        // /haptic/rumble/<N>  iiffi  (id, slot, low_freq, high_freq, duration_ms)
         case SubchannelPath::Effect::Rumble:
-            if (std::strcmp(types, "iiffi") == 0 && argc == 5) {
-                const int   id       = argv[0]->i;
-                const int   slot     = argv[1]->i;
-                const float low      = argv[2]->f;
-                const float high     = argv[3]->f;
-                const int   duration = argv[4]->i;
-                server->m_OutputMapper->QueueRumble(id, slot, low, high, duration);
-            }
+            HapticDispatcher::DispatchRumble(argv, argc, server->m_OutputMapper);
             break;
 
-        // /haptic/constant/<N>  iifi  (id, slot, strength, duration_ms)
         case SubchannelPath::Effect::Constant:
-            if (std::strcmp(types, "iifi") == 0 && argc == 4) {
-                const int   id       = argv[0]->i;
-                const int   slot     = argv[1]->i;
-                const float strength = argv[2]->f;
-                const int   duration = argv[3]->i;
-                server->m_OutputMapper->QueueConstantForce(id, slot, strength, duration);
-            }
+            HapticDispatcher::DispatchConstant(argv, argc, server->m_OutputMapper);
             break;
 
-        // /haptic/periodic/<N>
-        //   iiififfii — id, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms
-        //   iififfii  — legacy (no wave_type); defaults to Sine
         case SubchannelPath::Effect::Periodic:
-            if (std::strcmp(types, "iiififfii") == 0 && argc == 9) {
-                const int   id        = argv[0]->i;
-                const int   slot      = argv[1]->i;
-                const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
-                const float strength  = argv[3]->f;
-                const int   period    = argv[4]->i;
-                const float magnitude = argv[5]->f;
-                const float offset    = argv[6]->f;
-                const int   phase     = argv[7]->i;
-                const int   duration  = argv[8]->i;
-                server->m_OutputMapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
-            } else if (std::strcmp(types, "iififfii") == 0 && argc == 8) {
-                const int   id        = argv[0]->i;
-                const int   slot      = argv[1]->i;
-                const float strength  = argv[2]->f;
-                const int   period    = argv[3]->i;
-                const float magnitude = argv[4]->f;
-                const float offset    = argv[5]->f;
-                const int   phase     = argv[6]->i;
-                const int   duration  = argv[7]->i;
-                server->m_OutputMapper->QueuePeriodic(id, slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, duration);
-            }
+            HapticDispatcher::DispatchPeriodic(argv, argc, server->m_OutputMapper);
             break;
 
-        // /haptic/condition/<N>  iiiffffffi
-        //   id, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms
         case SubchannelPath::Effect::Condition:
-            if (std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
-                const int   id       = argv[0]->i;
-                const int   slot     = argv[1]->i;
-                const HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
-                const float rsat     = argv[3]->f;
-                const float lsat     = argv[4]->f;
-                const float rcoeff   = argv[5]->f;
-                const float lcoeff   = argv[6]->f;
-                const float db       = argv[7]->f;
-                const float center   = argv[8]->f;
-                const int   duration = argv[9]->i;
-                server->m_OutputMapper->QueueCondition(id, slot, ctype, rsat, lsat, rcoeff, lcoeff, db, center, duration);
-            }
+            HapticDispatcher::DispatchCondition(argv, argc, server->m_OutputMapper);
             break;
 
         default:
@@ -453,18 +352,18 @@ bool OSCServer::HasClients() const {
 }
 
 void OSCServer::CheckInactivity() {
-    const uint64_t OSC_INACTIVITY_TIMEOUT_MS = 5000;
     bool timed_out = false;
     OutputMapper* mapper = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_inactivityTimeoutEnabled) return;
         if (m_running && !m_clients.empty()) {
             if (m_lastMessageTime == 0) {
                 // Timeout already fired; re-arm so we keep checking on future
                 // frames.  If the client sends again, the handler will write a
                 // fresh tick and normal detection resumes.
                 m_lastMessageTime = SDL_GetTicks();
-            } else if (SDL_GetTicks() - m_lastMessageTime > OSC_INACTIVITY_TIMEOUT_MS) {
+            } else if (SDL_GetTicks() - m_lastMessageTime > m_inactivityTimeoutMs) {
                 timed_out = true;
                 m_clients.clear();
                 m_lastMessageTime = 0;
@@ -671,9 +570,13 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
 }
 
 void OSCServer::SetProtocol(const std::string& name) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_protocol = ProtocolManager::GetInstance().GetProtocol(name);
-    if (m_protocol) m_protocolName = name;
+    // Call ProtocolManager outside the lock to avoid lock-ordering deadlocks.
+    std::shared_ptr<IProtocol> proto = ProtocolManager::GetInstance().GetProtocol(name);
+    if (proto) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_protocol = proto;
+        m_protocolName = name;
+    }
 }
 
 std::string OSCServer::GetProtocol() const {
@@ -681,18 +584,19 @@ std::string OSCServer::GetProtocol() const {
 }
 
 void OSCServer::SetDefinition(const std::string& definitionId) {
+    // Call ProtocolRegistry outside the lock to avoid lock-ordering deadlocks.
+    const ProtocolDefinition* def = nullptr;
+    if (!definitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(definitionId);
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     m_selectedDefinitionId = definitionId;
-
-    if (!definitionId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
-        if (def) {
-            // Sync host/port from the definition into the UI fields
-            strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
-            m_send_host[sizeof(m_send_host) - 1] = '\0';
-            m_send_port = def->oscSendPort;
-            m_recv_port = def->oscRecvPort;
-        }
+    if (def) {
+        // Sync host/port from the definition into the UI fields
+        strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
+        m_send_host[sizeof(m_send_host) - 1] = '\0';
+        m_send_port = def->oscSendPort;
+        m_recv_port = def->oscRecvPort;
     }
 }
 
@@ -702,25 +606,29 @@ std::string OSCServer::GetDefinitionId() const {
 }
 
 void OSCServer::SetOutputDefinition(const std::string& definitionId) {
+    // Call ProtocolRegistry outside the lock to avoid lock-ordering deadlocks.
+    const ProtocolDefinition* def = nullptr;
+    if (!definitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(definitionId);
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     m_outputDefinitionId = definitionId;
-    if (!definitionId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
-        if (def) {
-            strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
-            m_send_host[sizeof(m_send_host) - 1] = '\0';
-            m_send_port = def->oscSendPort;
-        }
+    if (def) {
+        strncpy(m_send_host, def->oscHost.c_str(), sizeof(m_send_host) - 1);
+        m_send_host[sizeof(m_send_host) - 1] = '\0';
+        m_send_port = def->oscSendPort;
     }
 }
 
 void OSCServer::SetInputDefinition(const std::string& definitionId) {
+    // Call ProtocolRegistry outside the lock to avoid lock-ordering deadlocks.
+    const ProtocolDefinition* def = nullptr;
+    if (!definitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(definitionId);
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     m_inputDefinitionId = definitionId;
-    if (!definitionId.empty()) {
-        const auto* def = ProtocolRegistry::GetInstance().FindById(definitionId);
-        if (def) m_recv_port = def->oscRecvPort;
-    }
+    if (def) m_recv_port = def->oscRecvPort;
 }
 
 std::string OSCServer::GetOutputDefinitionId() const {
@@ -744,6 +652,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
     bool enabled = prefs.GetBool(kOSCSection, kEnabledKey, false);
     bool outputEnabled = prefs.GetBool(kOSCSection, kOutputEnabledKey, true);
     bool inputEnabled  = prefs.GetBool(kOSCSection, kInputEnabledKey,  true);
+    bool timeoutEnabled = prefs.GetBool(kOSCSection, kInactivityTimeoutEnabledKey, true);
+    int timeoutMs       = prefs.GetInt (kOSCSection, kInactivityTimeoutMsKey, 5000);
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -753,6 +663,8 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
         m_recv_port = recv_port;
         m_outputEnabled = outputEnabled;
         m_inputEnabled  = inputEnabled;
+        m_inactivityTimeoutEnabled = timeoutEnabled;
+        m_inactivityTimeoutMs      = static_cast<uint64_t>(timeoutMs);
     }
 
     SetProtocol(protocol);
@@ -769,17 +681,39 @@ void OSCServer::LoadConfig(const PreferencesManager& prefs) {
 }
 
 void OSCServer::SaveConfig(PreferencesManager& prefs) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    prefs.SetString(kOSCSection, kSendHostKey,           m_send_host);
-    prefs.SetInt   (kOSCSection, kSendPortKey,            m_send_port);
-    prefs.SetInt   (kOSCSection, kRecvPortKey,         m_recv_port);
-    prefs.SetString(kOSCSection, kProtocolKey,            m_protocolName);
-    prefs.SetString(kOSCSection, kInputProtocolKey,       ProtocolManager::GetInstance().GetActiveInputLegacyProtocol());
-    prefs.SetString(kOSCSection, kOutputDefIdKey,  m_outputDefinitionId);
-    prefs.SetString(kOSCSection, kInputDefIdKey,   m_inputDefinitionId);
-    prefs.SetBool  (kOSCSection, kEnabledKey,             m_running);
-    prefs.SetBool  (kOSCSection, kOutputEnabledKey,       m_outputEnabled);
-    prefs.SetBool  (kOSCSection, kInputEnabledKey,        m_inputEnabled);
+    std::string inputProto = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
+
+    std::string sendHost, protocol, outDef, inDef;
+    int sendPort, recvPort;
+    bool running, outEn, inEn, timeoutEn;
+    uint64_t timeoutMs;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        sendHost = m_send_host;
+        sendPort = m_send_port;
+        recvPort = m_recv_port;
+        protocol = m_protocolName;
+        outDef   = m_outputDefinitionId;
+        inDef    = m_inputDefinitionId;
+        running  = m_running;
+        outEn    = m_outputEnabled;
+        inEn     = m_inputEnabled;
+        timeoutEn = m_inactivityTimeoutEnabled;
+        timeoutMs = m_inactivityTimeoutMs;
+    }
+
+    prefs.SetString(kOSCSection, kSendHostKey,           sendHost);
+    prefs.SetInt   (kOSCSection, kSendPortKey,            sendPort);
+    prefs.SetInt   (kOSCSection, kRecvPortKey,         recvPort);
+    prefs.SetString(kOSCSection, kProtocolKey,            protocol);
+    prefs.SetString(kOSCSection, kInputProtocolKey,       inputProto);
+    prefs.SetString(kOSCSection, kOutputDefIdKey,  outDef);
+    prefs.SetString(kOSCSection, kInputDefIdKey,   inDef);
+    prefs.SetBool  (kOSCSection, kEnabledKey,             running);
+    prefs.SetBool  (kOSCSection, kOutputEnabledKey,       outEn);
+    prefs.SetBool  (kOSCSection, kInputEnabledKey,        inEn);
+    prefs.SetBool  (kOSCSection, kInactivityTimeoutEnabledKey, timeoutEn);
+    prefs.SetInt   (kOSCSection, kInactivityTimeoutMsKey,      static_cast<int>(timeoutMs));
 }
 
 void OSCServer::SetSelectedDevice(int id) {
@@ -924,6 +858,22 @@ void OSCServer::DrawContent() {
         if (!inDefId.empty() && ProtocolRegistry::GetInstance().FindById(inDefId))
             { ImGui::SameLine(); ImGui::TextDisabled("(recv port synced)"); }
         if (!inputEnabled) ImGui::EndDisabled();
+    }
+
+    // ── Inactivity Timeout ────────────────────────────────────────────────────
+    {
+        ImGui::Separator();
+        if (ImGui::Checkbox("Inactivity Timeout", &m_inactivityTimeoutEnabled)) {
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        if (!m_inactivityTimeoutEnabled) ImGui::BeginDisabled();
+        int timeout = static_cast<int>(m_inactivityTimeoutMs);
+        if (ImGui::InputInt("Limit (ms)##osc_timeout", &timeout)) {
+            if (timeout < 100) timeout = 100; // Sensible minimum
+            m_inactivityTimeoutMs = static_cast<uint64_t>(timeout);
+            InputMapper::GetInstance().SaveCurrentProfile();
+        }
+        if (!m_inactivityTimeoutEnabled) ImGui::EndDisabled();
     }
 
     // ── Start / stop ──────────────────────────────────────────────────────────

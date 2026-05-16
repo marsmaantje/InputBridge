@@ -126,6 +126,22 @@ class InputMapper {
     std::vector<HapticTarget>* GetCurrentHapticTargets();
     bool IsOutputAddressBound(const std::string& address) const;
 
+    /**
+     * @brief Atomically switch the active mapping profile.
+     *
+     * MappingProfile is a value type: all fields (axis mappings, haptic
+     * targets, server settings, protocol IDs) are replaced wholesale on
+     * activation.  This prevents partial-update bugs where, for example,
+     * haptic targets reflect one profile while axis mappings reflect another.
+     *
+     * Always prefer this over directly writing m_SelectedProfileIndex so the
+     * undo/redo system, the OutputMapper, and the server settings all stay in
+     * sync with a single call.
+     *
+     * @param index Index into m_Profiles, or -1 to deactivate all profiles.
+     */
+    void ActivateProfile(int index);
+
     void CancelListening();
 
   private:
