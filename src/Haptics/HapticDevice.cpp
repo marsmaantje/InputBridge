@@ -167,14 +167,12 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
     if (!m_haptic) return -1;
 
     if (existingId != -1) {
-        if (SDL_GetHapticEffectStatus(m_haptic.Get(), existingId)) {
-            if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
-                // Updated in-place — effect is already running, no restart needed.
-                if (outCreated) *outCreated = false;
-                return existingId;
-            } else {
-                SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
-            }
+        if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
+            // Updated in-place — effect is already running, no restart needed.
+            if (outCreated) *outCreated = false;
+            return existingId;
+        } else {
+            SDL_Log("HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
         }
         SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
     }
@@ -345,6 +343,12 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
         SDL_HapticEffectID existing = -1;
         auto it = m_conditionEffects.find(internalKey);
         if (it != m_conditionEffects.end()) existing = it->second;
+
+        if (existing == -1) {
+            SDL_Log("HapticDevice::SetCondition - existingID -1");
+        } else {
+            SDL_Log("HapticDevice::SetCondition - existingID %d", existing);
+        }
 
         bool created = false;
         SDL_HapticEffectID newId = UploadEffect(effect, existing, &created);

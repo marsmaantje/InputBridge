@@ -19,6 +19,20 @@ class OSCBaseProtocol;
 // Callback for incoming OSC messages
 using OSCHandler = std::function<void(const char* path, const char* types, lo_arg** argv, int argc)>;
 
+/**
+ * @brief OSC transport: sends input data over UDP and receives haptic commands.
+ *
+ * OSCServer satisfies the ITransport contract (see Network/ITransport.h).
+ * It is kept as a singleton rather than inheriting ITransport directly so that
+ * existing call-sites (which obtain it via GetInstance()) need no changes.
+ * A future refactor can make it inherit ITransport once the singleton is
+ * replaced with dependency injection at the Application level.
+ *
+ * @see ITransport      Abstract transport interface documenting the full contract.
+ * @see WebSocketServer Parallel implementation for JSON-over-WebSocket.
+ * @see HapticDispatcher Centralised argument-parsing used by all haptic handlers.
+ */
+
 class OSCServer {
 public:
     static OSCServer& GetInstance();
@@ -149,6 +163,10 @@ private:
     // Direction enable flags — persisted to prefs.
     bool m_outputEnabled = true;  // send OSC messages to clients
     bool m_inputEnabled  = true;  // receive OSC messages from clients
+
+    // Inactivity timeout — persisted to prefs.
+    bool     m_inactivityTimeoutEnabled = true;
+    uint64_t m_inactivityTimeoutMs      = 5000;
 
     // Cleanup thread used by Stop() to run lo_server_thread_stop off the
     // main/UI thread.  Stored (not detached) so the destructor can join it

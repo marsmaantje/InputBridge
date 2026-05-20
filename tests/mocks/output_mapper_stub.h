@@ -60,11 +60,19 @@ struct ConditionArgs {
     int                duration;
 };
 
+struct DualSenseArgs {
+    int         device;
+    std::string trigger;
+    std::string effect_type;
+    int         p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11;
+};
+
 // Populated by the stub implementations in output_mapper_stub.cpp.
 extern std::vector<RumbleArgs>    rumbleCalls;
 extern std::vector<ConstantArgs>  constantCalls;
 extern std::vector<PeriodicArgs>  periodicCalls;
 extern std::vector<ConditionArgs> conditionCalls;
+extern std::vector<DualSenseArgs> dualSenseCalls;
 
 /// Clear all recorded calls.  Call this in test SetUp().
 void Reset();
