@@ -52,7 +52,9 @@ class InputMapper {
     struct ButtonToAnalogMapping {
         std::string device_guid;
         SDL_JoystickID instance_id = 0;
-        int button_index = 0;
+        int button_index = -1;
+        int hat_index = -1;
+        int hat_mask = 0;
         std::string target_output_name; // field id or legacy name
         float on_value = 1.0f;
         float off_value = 0.0f;

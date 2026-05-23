@@ -225,6 +225,8 @@ void InputMapper::UpdateListening() {
                     bm.device_guid = DeviceManager::GetDeviceGUIDString(*boundDeviceState);
                     bm.instance_id = boundButton->joystickID;
                     bm.button_index = boundButton->buttonIndex;
+                    bm.hat_index = -1;
+                    bm.hat_mask = 0;
                     updated = true;
                 }
             }
@@ -286,7 +288,17 @@ void InputMapper::UpdateListening() {
                             updated = true;
                         }
                     }
-                    // Note: ButtonToAnalogMapping doesn't support hats yet in this implementation
+                    else if (m_ListeningState.targetName == "button_analog") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.buttonMappings.size()) {
+                            auto& bm = profile.buttonMappings[m_ListeningState.listIndex];
+                            bm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            bm.instance_id = dev.instance_id;
+                            bm.button_index = -1; // Indicate hat binding
+                            bm.hat_index = i;
+                            bm.hat_mask = (currentHatState != SDL_HAT_CENTERED) ? currentHatState : initialHatState;
+                            updated = true;
+                        }
+                    }
                     if (updated) SaveCurrentProfile();
                     CancelListening();
                     return;
@@ -863,7 +875,7 @@ void InputMapper::DrawMappingContent() {
             }
 
             ImGui::TableSetColumnIndex(1);
-            drawButtonInputCombo("##bb", bm.instance_id, bm.button_index);
+            drawButtonInputCombo("##bb", bm.instance_id, bm.button_index, &bm.hat_index, &bm.hat_mask);
 
             ImGui::TableSetColumnIndex(2);
             std::string tlabel = bm.target_output_name.empty() ? "None" : bm.target_output_name;
@@ -950,7 +962,10 @@ bool InputMapper::Update(bool dynamic_rate) {
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0 || bm.target_output_name.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name]=bm.on_value;
+            if (j) {
+                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            }
         }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name]=0.f;
@@ -958,7 +973,10 @@ bool InputMapper::Update(bool dynamic_rate) {
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0||bm.target_output_name.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name]=bm.on_value;
+            if (j) {
+                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (pressed) analogValues[bm.target_output_name]=bm.on_value;
+            }
         }
     }
 
@@ -1135,7 +1153,10 @@ std::string InputMapper::GetOutputPreview() {
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue; // NOLINT(readability-misleading-indentation)
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name] = bm.on_value;
+            if (j) {
+                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            }
         }
 
         // Determine final value for each field for preview
@@ -1162,7 +1183,10 @@ std::string InputMapper::GetOutputPreview() {
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j && SDL_GetJoystickButton(j, bm.button_index)) analogValues[bm.target_output_name] = bm.on_value;
+            if (j) {
+                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            }
         }
     }
 
@@ -1379,7 +1403,10 @@ void InputMapper::LoadProfiles() {
                 if (data.contains("button_mappings"))
                     for (const auto& item : data["button_mappings"]) {
                         ButtonToAnalogMapping bm;
-                        bm.device_guid=item.value("device_guid",""); bm.button_index=item.value("button_index",0);
+                        bm.device_guid=item.value("device_guid","");
+                        bm.button_index=item.value("button_index",-1);
+                        bm.hat_index=item.value("hat_index",-1);
+                        bm.hat_mask=item.value("hat_mask",0);
                         bm.target_output_name=item.value("target_output_name","");
                         bm.on_value=item.value("on_value",1.f); bm.off_value=item.value("off_value",0.f);
                         p.buttonMappings.push_back(bm);
@@ -1442,9 +1469,13 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
                 {"enable_rumble",t.enable_rumble},{"enable_constant",t.enable_constant},
                 {"enable_periodic",t.enable_periodic},{"enable_condition",t.enable_condition}});
         data["button_mappings"]=json::array();
-        for (const auto& bm : profile.buttonMappings)
-            data["button_mappings"].push_back({{"device_guid",bm.device_guid},{"button_index",bm.button_index},
-                {"target_output_name",bm.target_output_name},{"on_value",bm.on_value},{"off_value",bm.off_value}});
+        for (const auto& bm : profile.buttonMappings) {
+            json j = {{"device_guid",bm.device_guid}, {"target_output_name",bm.target_output_name},
+                      {"on_value",bm.on_value}, {"off_value",bm.off_value}};
+            if (bm.hat_index != -1) { j["hat_index"]=bm.hat_index; j["hat_mask"]=bm.hat_mask; }
+            else { j["button_index"]=bm.button_index; }
+            data["button_mappings"].push_back(j);
+        }
         data["digital_mappings"]=json::array();
         for (const auto& dm : profile.digitalMappings) {
             json j = {{"device_guid",dm.device_guid}, {"target_field_id",dm.target_field_id}, {"mode", dm.mode}};
@@ -1638,7 +1669,7 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
         return true;
     }
     for (const auto& mapping : profile.buttonMappings) {
-        if (mapping.target_output_name == fieldId && mapping.button_index != -1) return true;
+        if (mapping.target_output_name == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
     }
     for (const auto& mapping : profile.digitalMappings) {
         if (mapping.target_field_id == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
