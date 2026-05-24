@@ -1,5 +1,6 @@
 #include "InputMapper.h"
 #include "Devices/DeviceManager.h"
+#include "Devices/SensorReader.h"
 #include "Mappers/OutputMapper.h"
 #include "ButtonBinder.h" // Include the new ButtonBinder class
 #include "Network/WebSocketServer.h"
@@ -18,6 +19,7 @@
 #include <filesystem>
 #include <memory>
 #include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL.h>
 #include <sstream>
 #include <iomanip>
 
@@ -603,19 +605,50 @@ void InputMapper::DrawMappingContent() {
 
     const ProtocolDefinition* outDef = GetActiveOutputDefinition();
 
+    // ── Sensor channel name helpers ──────────────────────────────────────────
+    using SC = InputSource::SensorChannel;
+    struct SensorEntry { SC channel; const char* label; };
+    static const SensorEntry kSensorEntries[] = {
+        { SC::GyroX,         "Gyro X (pitch)"    },
+        { SC::GyroY,         "Gyro Y (yaw)"      },
+        { SC::GyroZ,         "Gyro Z (roll)"      },
+        { SC::AccelX,        "Accel X (lateral)" },
+        { SC::AccelY,        "Accel Y (vertical)"},
+        { SC::AccelZ,        "Accel Z (fore/aft)"},
+        { SC::TouchX,        "Touch X"           },
+        { SC::TouchY,        "Touch Y"           },
+        { SC::TouchPressure, "Touch Pressure"    },
+        { SC::Touch2X,       "Touch 2 X"         },
+        { SC::Touch2Y,       "Touch 2 Y"         },
+    };
+    auto sensorChannelName = [](SC ch) -> const char* {
+        for (const auto& e : kSensorEntries) if (e.channel == ch) return e.label;
+        return nullptr;
+    };
+
     // Axis combo helper
     auto drawAxisCombo = [&](const std::string& id, InputSource& src, const char* comboId, float colW) {
+        // Build preview string: sensor name takes priority over axis index.
         std::string preview = "None";
-        if (src.instance_id != 0)
+        if (src.sensorChannel != SC::None) {
+            // Sensor source: show device name + sensor channel.
+            for (const auto& d : m_DeviceManager.GetDevices())
+                if (d.instance_id == src.instance_id) {
+                    const char* sn = sensorChannelName(src.sensorChannel);
+                    preview = d.name + " - " + (sn ? sn : "Sensor");
+                    break;
+                }
+        } else if (src.instance_id != 0) {
             for (const auto& d : m_DeviceManager.GetDevices())
                 if (d.instance_id == src.instance_id) { preview = d.name + " - Axis " + std::to_string(src.axisIndex); break; }
+        }
 
         ImGuiStyle& style = ImGui::GetStyle();
         float sp = style.ItemSpacing.x;
         float bindW = ImGui::CalcTextSize("Bind").x + style.FramePadding.x * 2;
 
         float dw = 0.f, rw = 0.f;
-        bool hasSrc = src.axisIndex != -1;
+        bool hasSrc = (src.axisIndex != -1) || (src.sensorChannel != SC::None);
         if (hasSrc) {
             dw = 80.f;
             rw = 80.f;
@@ -625,17 +658,54 @@ void InputMapper::DrawMappingContent() {
 
         if (ImGui::BeginCombo(comboId, preview.c_str())) {
             if (ImGui::Selectable("None", !hasSrc)) { src = {}; changed = true; }
+
+            // ── Regular device axes ─────────────────────────────────────────
             for (const auto& dev : m_DeviceManager.GetDevices())
                 for (int i = 0; i < dev.num_axes; ++i) {
                     std::string lbl = dev.name + " - Axis " + std::to_string(i);
-                    bool sel = src.instance_id == dev.instance_id && src.axisIndex == i;
+                    bool sel = src.sensorChannel == SC::None && src.instance_id == dev.instance_id && src.axisIndex == i;
                     if (ImGui::Selectable(lbl.c_str(), sel)) {
-                        src.deviceGuid  = DeviceManager::GetDeviceGUIDString(dev);
-                        src.instance_id = dev.instance_id;
-                        src.axisIndex   = i;
+                        src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
+                        src.instance_id   = dev.instance_id;
+                        src.axisIndex     = i;
+                        src.sensorChannel = SC::None;
                         changed = true;
                     }
                 }
+
+            // ── Sensor channels (DualSense / Steam Controller) ──────────────
+            for (const auto& dev : m_DeviceManager.GetDevices()) {
+                if (!dev.gamepad) continue;
+                bool hasGyro  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO);
+                bool hasAccel = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL);
+                bool hasTouch = SDL_GetNumGamepadTouchpads(dev.gamepad) > 0;
+                if (!hasGyro && !hasAccel && !hasTouch) continue;
+
+                // Section header (not selectable)
+                ImGui::Separator();
+                ImGui::TextDisabled("%s  [Sensors]", dev.name.c_str());
+
+                for (const auto& entry : kSensorEntries) {
+                    // Skip channels the hardware doesn't have.
+                    bool isGyro  = (entry.channel >= SC::GyroX  && entry.channel <= SC::GyroZ);
+                    bool isAccel = (entry.channel >= SC::AccelX && entry.channel <= SC::AccelZ);
+                    bool isTouch = (entry.channel >= SC::TouchX);
+                    if (isGyro  && !hasGyro)  continue;
+                    if (isAccel && !hasAccel) continue;
+                    if (isTouch && !hasTouch) continue;
+
+                    std::string lbl = std::string("  ") + entry.label;
+                    bool sel = src.instance_id == dev.instance_id && src.sensorChannel == entry.channel;
+                    if (ImGui::Selectable(lbl.c_str(), sel)) {
+                        src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
+                        src.instance_id   = dev.instance_id;
+                        src.axisIndex     = -1;
+                        src.sensorChannel = entry.channel;
+                        changed = true;
+                    }
+                }
+            }
+
             ImGui::EndCombo();
         }
 
@@ -947,6 +1017,56 @@ float InputMapper::ProcessAxis(const InputSource &cfg) {
     return r;
 }
 
+
+float InputMapper::ProcessSensor(const InputSource &cfg) {
+    using SC = InputSource::SensorChannel;
+    if (cfg.sensorChannel == SC::None || cfg.instance_id == 0) return 0.f;
+
+    // Find the gamepad handle from the device manager.
+    SDL_Gamepad* gamepad = nullptr;
+    for (const auto& dev : m_DeviceManager.GetDevices()) {
+        if (dev.instance_id == cfg.instance_id) {
+            gamepad = dev.gamepad;
+            break;
+        }
+    }
+    if (!gamepad) return 0.f;
+
+    // Enable sensors each frame — SDL ignores redundant calls, cost is negligible.
+    SensorReader::Enable(gamepad);
+
+    float raw = 0.f;
+    switch (cfg.sensorChannel) {
+        case SC::GyroX:         raw = SensorReader::ReadGyro(gamepad).x;              break;
+        case SC::GyroY:         raw = SensorReader::ReadGyro(gamepad).y;              break;
+        case SC::GyroZ:         raw = SensorReader::ReadGyro(gamepad).z;              break;
+        case SC::AccelX:        raw = SensorReader::ReadAccel(gamepad).x;             break;
+        case SC::AccelY:        raw = SensorReader::ReadAccel(gamepad).y;             break;
+        case SC::AccelZ:        raw = SensorReader::ReadAccel(gamepad).z;             break;
+        case SC::TouchX:        raw = SensorReader::ReadTouch(gamepad).primaryXCentered(); break;
+        case SC::TouchY:        raw = SensorReader::ReadTouch(gamepad).primaryYCentered(); break;
+        case SC::TouchPressure: raw = SensorReader::ReadTouch(gamepad).primaryPressure();  break;
+        case SC::Touch2X: {
+            auto t = SensorReader::ReadTouch(gamepad);
+            raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f) : 0.f;
+            break;
+        }
+        case SC::Touch2Y: {
+            auto t = SensorReader::ReadTouch(gamepad);
+            raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f) : 0.f;
+            break;
+        }
+        default: break;
+    }
+
+    if (cfg.invert) raw = -raw;
+    if (std::abs(raw) < cfg.deadzone) raw = 0.f;
+    float r = std::clamp(raw, -1.f, 1.f);
+    if (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
+    else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;
+    return r;
+}
+
 bool InputMapper::Update(bool dynamic_rate) {
     if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= (int)m_Profiles.size()) return false;
     auto &profile = m_Profiles[m_SelectedProfileIndex];
@@ -957,7 +1077,10 @@ bool InputMapper::Update(bool dynamic_rate) {
     if (outDef) {
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
             auto it = profile.outputToInput.find(pf->fieldId);
-            analogValues[pf->fieldId] = it!=profile.outputToInput.end() ? ProcessAxis(it->second) : 0.f;
+            analogValues[pf->fieldId] = it!=profile.outputToInput.end()
+                ? (it->second.sensorChannel != InputSource::SensorChannel::None
+                    ? ProcessSensor(it->second) : ProcessAxis(it->second))
+                : 0.f;
         }
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0 || bm.target_output_name.empty()) continue;
@@ -969,7 +1092,9 @@ bool InputMapper::Update(bool dynamic_rate) {
         }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name]=0.f;
-        for (const auto& [k,src] : profile.outputToInput) analogValues[k]=ProcessAxis(src);
+        for (const auto& [k,src] : profile.outputToInput)
+            analogValues[k] = (src.sensorChannel != InputSource::SensorChannel::None)
+                ? ProcessSensor(src) : ProcessAxis(src);
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0||bm.target_output_name.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
@@ -1148,7 +1273,10 @@ std::string InputMapper::GetOutputPreview() {
     if (outDef) {
         for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::AnalogAxis)) {
             auto it = profile.outputToInput.find(pf->fieldId);
-            analogValues[pf->fieldId] = it != profile.outputToInput.end() ? ProcessAxis(it->second) : 0.f;
+            analogValues[pf->fieldId] = it != profile.outputToInput.end()
+                ? (it->second.sensorChannel != InputSource::SensorChannel::None
+                    ? ProcessSensor(it->second) : ProcessAxis(it->second))
+                : 0.f;
         }
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue; // NOLINT(readability-misleading-indentation)
@@ -1179,7 +1307,9 @@ std::string InputMapper::GetOutputPreview() {
         }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name] = 0.f;
-        for (const auto& [k, src] : profile.outputToInput) analogValues[k] = ProcessAxis(src);
+        for (const auto& [k, src] : profile.outputToInput)
+            analogValues[k] = (src.sensorChannel != InputSource::SensorChannel::None)
+                ? ProcessSensor(src) : ProcessAxis(src);
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
@@ -1389,6 +1519,8 @@ void InputMapper::LoadProfiles() {
                         src.deviceGuid=val.value("device_guid",""); src.axisIndex=val.value("axis",-1);
                         src.invert=val.value("invert",false); src.deadzone=val.value("deadzone",0.05f);
                         src.outputRange=val.value("range",0);
+                        src.sensorChannel = static_cast<InputSource::SensorChannel>(
+                            val.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
                         p.outputToInput[key]=src;
                     }
                 if (data.contains("haptic_targets"))
@@ -1459,10 +1591,13 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
         if (!std::filesystem::exists(dir)) std::filesystem::create_directories(dir);
         auto path=dir/(profile.name+".json");
         json data; data["name"]=profile.name; data["mappings"]=json::object();
-        for (const auto& [k,v] : profile.outputToInput)
-            if (v.axisIndex!=-1)
-                data["mappings"][k]={{"device_guid",v.deviceGuid},{"axis",v.axisIndex},
-                                     {"invert",v.invert},{"deadzone",v.deadzone},{"range",v.outputRange}};
+        for (const auto& [k,v] : profile.outputToInput) {
+            bool hasSensor = (v.sensorChannel != InputSource::SensorChannel::None);
+            if (v.axisIndex != -1 || hasSensor)
+                data["mappings"][k] = {{"device_guid",v.deviceGuid},{"axis",v.axisIndex},
+                                       {"invert",v.invert},{"deadzone",v.deadzone},{"range",v.outputRange},
+                                       {"sensor_channel", static_cast<int>(v.sensorChannel)}};
+        }
         data["haptic_targets"]=json::array();
         for (const auto& t : profile.hapticTargets)
             data["haptic_targets"].push_back({{"virtual_id",t.virtual_id},{"name",t.name},{"device_guid",t.device_guid},

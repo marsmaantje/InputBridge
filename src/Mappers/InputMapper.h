@@ -11,6 +11,7 @@
 class DeviceManager;
 class PreferencesManager;
 struct ProtocolDefinition;
+#include "Devices/SensorState.h"
 
 // Moved from OutputMapper.h
 struct HapticTarget {
@@ -46,6 +47,19 @@ class InputMapper {
         bool invert = false;
         float deadzone = 0.05f;
         int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0
+
+        // ── Sensor source ─────────────────────────────────────────────────
+        // When sensorChannel is not None, this source reads from the device
+        // sensor/touchpad instead of a regular joystick axis (axisIndex is
+        // unused in that case).
+        enum class SensorChannel {
+            None,
+            GyroX, GyroY, GyroZ,
+            AccelX, AccelY, AccelZ,
+            TouchX, TouchY, TouchPressure,
+            Touch2X, Touch2Y,
+        };
+        SensorChannel sensorChannel = SensorChannel::None;
     };
 
     // Maps a device button to an analog output channel (on/off float values)
@@ -186,6 +200,7 @@ class InputMapper {
 
     const ProtocolDefinition* GetActiveOutputDefinition();
     float ProcessAxis(const InputSource &config);
+    float ProcessSensor(const InputSource &config);
     void StartListening(ListeningState::Type type, const std::string& name, int index = -1);
     void UpdateListening();
     void UpdateActiveProtocols();

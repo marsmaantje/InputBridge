@@ -241,6 +241,7 @@ add_executable(InputBridge
     src/Haptics/XboxController.cpp
     src/Network/HapticParser.cpp
     src/Network/HapticDispatcher.cpp
+    src/Devices/SensorReader.cpp
     # Settings
     src/Preferences/Preferences.cpp
     # Input device visualizers
@@ -253,6 +254,7 @@ add_executable(InputBridge
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
     src/Visualizers/VirtualDeviceVisualizer.cpp
     src/Visualizers/WiimoteVisualizer.cpp
+    src/Visualizers/SensorVisualizer.cpp
     # Networking
     src/Network/NetworkStatusWindow.cpp
     # Device input and protocol output mappings

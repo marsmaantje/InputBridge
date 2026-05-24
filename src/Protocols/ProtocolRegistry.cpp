@@ -579,6 +579,26 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_weapon_main", "Weapon Main",     "Digital: Other",  FieldType::DigitalButton, "/input/weapon_main", "weapon_main");
     addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
     addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
+    // ── Sensors: Gyroscope ───────────────────────────────────────────────────
+    // Available on DualSense and Steam Controller.  Values normalised to [-1, 1].
+    addOut("sensor_gyro_x",   "Gyro X (pitch)",    "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/x",         "gyro_x");
+    addOut("sensor_gyro_y",   "Gyro Y (yaw)",      "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/y",         "gyro_y");
+    addOut("sensor_gyro_z",   "Gyro Z (roll)",     "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/z",         "gyro_z");
+
+    // ── Sensors: Accelerometer ───────────────────────────────────────────────
+    addOut("sensor_accel_x",  "Accel X (lateral)",  "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/x",        "accel_x");
+    addOut("sensor_accel_y",  "Accel Y (vertical)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/y",        "accel_y");
+    addOut("sensor_accel_z",  "Accel Z (fore/aft)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/z",        "accel_z");
+
+    // ── Sensors: Touchpad ────────────────────────────────────────────────────
+    // x/y centred: left/top=-1, right/bottom=+1.  Pressure: [0, 1].
+    addOut("sensor_touch_x",     "Touch X (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/x",        "touch_x");
+    addOut("sensor_touch_y",     "Touch Y (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/y",        "touch_y");
+    addOut("sensor_touch_p",     "Touch Pressure",      "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/pressure", "touch_pressure");
+    addOut("sensor_touch2_x",    "Touch 2 X (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/x",       "touch2_x");
+    addOut("sensor_touch2_y",    "Touch 2 Y (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/y",       "touch2_y");
+    addOut("sensor_touch_active","Touch Active",         "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
+
 
     j["output_fields"] = outArr;
 

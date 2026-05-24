@@ -14,6 +14,9 @@
 #include "Visualizers/SteeringWheelVisualizer.h"
 #include "Visualizers/VirtualDeviceVisualizer.h"
 #include "Visualizers/WiimoteVisualizer.h"
+#include "Visualizers/SensorVisualizer.h"
+#include "Haptics/GamepadHaptics.h"
+#include <SDL3/SDL.h>
 
 #include <string>
 
@@ -33,6 +36,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
     static GamepadHapticsVisualizer       gamepad_haptics_viz;
     static SteeringWheelHapticsVisualizer wheel_haptics_viz;
     static WiimoteVisualizer              wiimote_viz;
+    static SensorVisualizer               sensor_viz;
     static VirtualDeviceVisualizer        virtual_viz;
 
     std::string guid         = DeviceManager::GetDeviceGUIDString(dev);
@@ -85,6 +89,19 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                 gamepad_haptics_viz.Draw(dev, deviceManager);
                 ImGui::EndTabItem();
             }
+
+            // Show the Sensors tab only for controllers that have a gyro,
+            // accelerometer, or touchpad (DualSense, Steam Controller, etc.).
+            // We check via SDL rather than casting HapticDevice to GamepadHaptics
+            // so the tab still appears when the haptic system fails to initialise.
+            if (dev.gamepad) {
+                bool hasSensors = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL)
+                               || SDL_GetNumGamepadTouchpads(dev.gamepad) > 0;
+                if (hasSensors)
+                    TabItem("Sensors", sensor_viz);
+            }
+
             SimulateTab();
             ImGui::EndTabBar();
         }
