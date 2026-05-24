@@ -188,6 +188,15 @@ class InputMapper {
         };
         std::vector<AxisState> initialAxes;
         std::map<SDL_JoystickID, std::vector<Uint8>> initialHatStates;
+
+        struct SensorState {
+            SDL_JoystickID instance_id;
+            float gyro[3];
+            float accel[3];
+            float touch[3];  // x, y, pressure for primary finger
+            float touch2[2]; // x, y for secondary finger
+        };
+        std::vector<SensorState> initialSensors;
     };
     ListeningState m_ListeningState;
 

@@ -149,6 +149,7 @@ void InputMapper::SaveCurrentProfile() const {
 void InputMapper::CancelListening() {
     m_ListeningState.active = false;
     m_ListeningState.initialAxes.clear();
+    m_ListeningState.initialSensors.clear();
     m_ListeningState.initialHatStates.clear(); // Clear hat baselines
     m_buttonBinder.Cancel(); // Cancel button binding
 }
@@ -159,6 +160,7 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
     m_ListeningState.targetName = name;
     m_ListeningState.listIndex = index;
     m_ListeningState.initialHatStates.clear(); // Clear hat baselines
+    m_ListeningState.initialSensors.clear();
     m_ListeningState.initialAxes.clear();
 
     if (type == ListeningState::Axis) {
@@ -166,6 +168,21 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
             if (!dev.joystick) continue;
             for (int i = 0; i < dev.num_axes; ++i) {
                 m_ListeningState.initialAxes.push_back({dev.instance_id, i, SDL_GetJoystickAxis(dev.joystick, i)});
+            }
+
+            // Capture sensor baselines
+            if (dev.gamepad) {
+                SensorReader::Enable(dev.gamepad);
+                ListeningState::SensorState ss;
+                ss.instance_id = dev.instance_id;
+                auto g = SensorReader::ReadGyro(dev.gamepad);
+                auto a = SensorReader::ReadAccel(dev.gamepad);
+                auto t = SensorReader::ReadTouch(dev.gamepad);
+                ss.gyro[0] = g.x; ss.gyro[1] = g.y; ss.gyro[2] = g.z;
+                ss.accel[0] = a.x; ss.accel[1] = a.y; ss.accel[2] = a.z;
+                ss.touch[0] = t.fingers[0].x; ss.touch[1] = t.fingers[0].y; ss.touch[2] = t.fingers[0].pressure;
+                ss.touch2[0] = t.fingers[1].x; ss.touch2[1] = t.fingers[1].y;
+                m_ListeningState.initialSensors.push_back(ss);
             }
         }
     } else if (type == ListeningState::Digital) {
@@ -260,6 +277,59 @@ void InputMapper::UpdateListening() {
                     SaveCurrentProfile();
                     CancelListening();
                     return;
+                }
+            }
+        }
+
+        // ── Sensor check ──────────────────────────────────────────────────
+        using SC = InputSource::SensorChannel;
+        for (const auto& dev : devices) {
+            if (!dev.gamepad) continue;
+            
+            // Find baseline
+            const ListeningState::SensorState* baseline = nullptr;
+            for (const auto& s : m_ListeningState.initialSensors) {
+                if (s.instance_id == dev.instance_id) { baseline = &s; break; }
+            }
+            if (!baseline) continue;
+
+            auto g = SensorReader::ReadGyro(dev.gamepad);
+            auto a = SensorReader::ReadAccel(dev.gamepad);
+            auto t = SensorReader::ReadTouch(dev.gamepad);
+
+            auto checkSensor = [&](float cur, float base, SC ch, float threshold) -> bool {
+                if (std::abs(cur - base) > threshold) {
+                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
+                    src.instance_id   = dev.instance_id;
+                    src.axisIndex     = -1;
+                    src.sensorChannel = ch;
+                    SaveCurrentProfile();
+                    CancelListening();
+                    return true;
+                }
+                return false;
+            };
+
+            // Use a significant threshold to avoid triggering on sensor noise/jitter
+            if (checkSensor(g.x, baseline->gyro[0],  SC::GyroX,  0.4f)) return;
+            if (checkSensor(g.y, baseline->gyro[1],  SC::GyroY,  0.4f)) return;
+            if (checkSensor(g.z, baseline->gyro[2],  SC::GyroZ,  0.4f)) return;
+            if (checkSensor(a.x, baseline->accel[0], SC::AccelX, 0.4f)) return;
+            if (checkSensor(a.y, baseline->accel[1], SC::AccelY, 0.4f)) return;
+            if (checkSensor(a.z, baseline->accel[2], SC::AccelZ, 0.4f)) return;
+
+            if (t.available) {
+                // For touchpads, we look for activation (pressure) or significant movement.
+                if (t.fingers[0].active) {
+                    if (checkSensor(t.fingers[0].pressure, baseline->touch[2], SC::TouchPressure, 0.3f)) return;
+                    if (checkSensor(t.fingers[0].x, baseline->touch[0], SC::TouchX, 0.2f)) return;
+                    if (checkSensor(t.fingers[0].y, baseline->touch[1], SC::TouchY, 0.2f)) return;
+                }
+                if (t.fingers[1].active) {
+                    // Secondary finger movement detection
+                    if (checkSensor(t.fingers[1].x, baseline->touch2[0], SC::Touch2X, 0.2f)) return;
+                    if (checkSensor(t.fingers[1].y, baseline->touch2[1], SC::Touch2Y, 0.2f)) return;
                 }
             }
         }
