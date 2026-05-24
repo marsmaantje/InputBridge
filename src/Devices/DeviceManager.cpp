@@ -2,6 +2,7 @@
 #include "DeviceFactory.h"
 #include "SDL3/SDL_joystick.h"
 #include "SDL3/SDL_log.h"
+#include "SDL3/SDL_hints.h"
 #include <algorithm>
 #include <cstdlib>
 
@@ -10,7 +11,10 @@ DeviceManager &DeviceManager::GetInstance() {
     return instance;
 }
 
-DeviceManager::DeviceManager() {}
+DeviceManager::DeviceManager() {
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+}
+
 DeviceManager::~DeviceManager() { CloseAllDevices(); }
 
 const std::vector<DeviceState> &DeviceManager::GetDevices() const { return m_Devices; }
