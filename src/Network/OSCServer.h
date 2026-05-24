@@ -67,6 +67,9 @@ public:
     static bool IsDestroyed();
 
     void Send(const std::string& path, const char* types, ...);
+    void Send(const std::string& address, float value);
+    void Send(const std::string& address, int value);
+    void Send(const std::string& address, const std::string& value);
     void SendWheel(float steer, float brake, float throttle, float pitch, float roll);
     void SendButtons(const std::vector<uint32_t>& buttons);
 

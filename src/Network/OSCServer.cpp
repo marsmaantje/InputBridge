@@ -405,13 +405,23 @@ void OSCServer::SetInputEnabled(bool enabled) {
     m_inputEnabled = enabled;
 }
 
+void OSCServer::Send(const std::string& address, float value) {
+    if (!InputMapper::GetInstance().IsOutputAddressBound(address)) return;
+    Send(address, "f", value);
+}
+
+void OSCServer::Send(const std::string& address, int value) {
+    if (!InputMapper::GetInstance().IsOutputAddressBound(address)) return;
+    Send(address, "i", value);
+}
+
+void OSCServer::Send(const std::string& address, const std::string& value) {
+    if (!InputMapper::GetInstance().IsOutputAddressBound(address)) return;
+    Send(address, "s", value.c_str());
+}
+
 void OSCServer::Send(const std::string& path, const char* types, ...) {
     if (s_isDestroyed) return;
-
-    // Avoid sending updates for unbound outputs
-    if (!InputMapper::GetInstance().IsOutputAddressBound(path)) {
-        return;
-    }
 
     std::lock_guard<std::mutex> lock(m_mutex);
     if (!m_running || !m_send_address || !m_outputEnabled) return;
@@ -419,9 +429,12 @@ void OSCServer::Send(const std::string& path, const char* types, ...) {
     va_list ap;
     va_start(ap, types);
     lo_message msg = lo_message_new();
-    // Append "$$" to types to bypass liblo's LO_MARKER check, which fails when wrapping varargs
-    std::string types_str = (types ? types : "") + std::string("$$");
-    lo_message_add_varargs(msg, types_str.c_str(), ap);
+    if (types) {
+        // Append "$$" to types to bypass liblo's LO_MARKER check, which fails
+        // when wrapping varargs without passing the internal liblo markers.
+        std::string types_str = std::string(types) + "$$";
+        lo_message_add_varargs(msg, types_str.c_str(), ap);
+    }
     int result = lo_send_message(m_send_address, path.c_str(), msg);
     m_isConnected = (result != -1);
     lo_message_free(msg);
@@ -444,11 +457,12 @@ void OSCServer::SendWheel(float steer, float brake, float throttle, float pitch,
     // Ideally this would delegate to m_protocol->format_wheel, but we need to handle binary bundles.
     // For now, we keep the logic here but it applies to all selected OSC protocols.
     if (m_protocol) {
-        Send(kWheelSteerPath, "f", steer);
-        Send(kWheelBrakePath, "f", brake);
-        Send(kWheelThrottlePath, "f", throttle);
-        Send(kWheelPitchPath, "f", pitch);
-        Send(kWheelRollPath, "f", roll);
+        InputMapper& im = InputMapper::GetInstance();
+        if (im.IsOutputAddressBound("wheel"))    Send(kWheelSteerPath, "f", steer);
+        if (im.IsOutputAddressBound("brake"))    Send(kWheelBrakePath, "f", brake);
+        if (im.IsOutputAddressBound("throttle")) Send(kWheelThrottlePath, "f", throttle);
+        if (im.IsOutputAddressBound("pitch"))    Send(kWheelPitchPath, "f", pitch);
+        if (im.IsOutputAddressBound("roll"))     Send(kWheelRollPath, "f", roll);
     }
 }
 
@@ -459,10 +473,11 @@ void OSCServer::SendButtons(const std::vector<uint32_t>& buttons) {
     int b3 = buttons.size() > 3 ? static_cast<int>(buttons[3]) : 0;
 
     if (m_protocol) {
-        Send(kWheelButtons0Path, "i", b0);
-        Send(kWheelButtons1Path, "i", b1);
-        Send(kWheelButtons2Path, "i", b2);
-        Send(kWheelButtons3Path, "i", b3);
+        InputMapper& im = InputMapper::GetInstance();
+        if (im.IsOutputAddressBound("button0")) Send(kWheelButtons0Path, "i", b0);
+        if (im.IsOutputAddressBound("button1")) Send(kWheelButtons1Path, "i", b1);
+        if (im.IsOutputAddressBound("button2")) Send(kWheelButtons2Path, "i", b2);
+        if (im.IsOutputAddressBound("button3")) Send(kWheelButtons3Path, "i", b3);
     }
 }
 

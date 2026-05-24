@@ -1800,8 +1800,11 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
     }
 
     // 3. Check if fieldId is bound in the current profile
-    if (profile.outputToInput.count(fieldId) && profile.outputToInput.at(fieldId).axisIndex != -1) {
-        return true;
+    if (profile.outputToInput.count(fieldId)) {
+        const auto& src = profile.outputToInput.at(fieldId);
+        if (src.axisIndex != -1 || src.sensorChannel != InputSource::SensorChannel::None) {
+            return true;
+        }
     }
     for (const auto& mapping : profile.buttonMappings) {
         if (mapping.target_output_name == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
