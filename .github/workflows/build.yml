@@ -248,6 +248,8 @@ jobs:
 
     run-tests:
         if: ${{ github.event.inputs.run_tests == 'yes' || github.event.inputs.run_tests == 'only' }}
+        env:
+            FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         strategy:
             fail-fast: false
             matrix:
@@ -263,7 +265,6 @@ jobs:
               with:
                 path: |
                   /var/cache/apt/archives
-                  /var/lib/apt/lists
                 key: ${{ runner.os }}-apt-cache-${{ hashFiles('.github/workflows/build.yml') }}
                 restore-keys: |
                   ${{ runner.os }}-apt-cache-
