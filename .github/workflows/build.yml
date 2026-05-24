@@ -248,22 +248,23 @@ jobs:
 
     run-tests:
         if: ${{ github.event.inputs.run_tests == 'yes' || github.event.inputs.run_tests == 'only' }}
+        env:
+            FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         strategy:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest, windows-latest, macos-latest]
         runs-on: ${{ matrix.os }}
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v4
               with: { submodules: recursive }
 
             - name: Cache apt packages
               if: runner.os == 'Linux'
-              uses: actions/cache@v6
+              uses: actions/cache@v4
               with:
                 path: |
                   /var/cache/apt/archives
-                  /var/lib/apt/lists
                 key: ${{ runner.os }}-apt-cache-${{ hashFiles('.github/workflows/build.yml') }}
                 restore-keys: |
                   ${{ runner.os }}-apt-cache-
@@ -296,13 +297,13 @@ jobs:
 
             - name: Upload Test Results
               if: always()
-              uses: actions/upload-artifact@v6
+              uses: actions/upload-artifact@v4
               with:
                   name: test-results-${{ matrix.os }}
                   path: build/test-results.xml
 
             - name: Publish Test Report
-              uses: dorny/test-reporter@v3
+              uses: dorny/test-reporter@v1
               if: always()
               with:
                 name: Test Results (${{ matrix.os }})
@@ -318,7 +319,7 @@ jobs:
 
             - name: Upload Coverage Report
               if: runner.os == 'Linux'
-              uses: actions/upload-artifact@v6
+              uses: actions/upload-artifact@v4
               with:
                   name: coverage-report
                   path: coverage-report

@@ -173,10 +173,15 @@ private:
 
     // ==================== Steam Controller Constants ====================
 
-    static constexpr uint16_t VALVE_VENDOR_ID = 0x28DE;
-    static constexpr uint16_t STEAM_CONTROLLER_PRODUCT_ID = 0x1102;
-    static constexpr uint16_t STEAM_CONTROLLER_V2_PRODUCT_ID = 0x1142;
+    static constexpr uint16_t VALVE_VENDOR_ID              = 0x28DE;
+    static constexpr uint16_t STEAM_CONTROLLER_USB_PID      = 0x1102; ///< Wired USB
+    static constexpr uint16_t STEAM_CONTROLLER_WIRELESS_PID = 0x1106; ///< Wireless dongle (was wrongly 0x1142 in v3.3)
 
-    static constexpr uint8_t STEAM_CONTROLLER_REPORT_ID = 0x87;
-    static constexpr uint8_t STEAM_HAPTIC_PULSE_MSG_ID = 11;
+    static constexpr uint8_t  STEAM_CONTROLLER_REPORT_ID    = 0x87;
+    static constexpr uint8_t  STEAM_HAPTIC_PULSE_MSG_ID     = 11;
+
+    /// Each raw HID haptic-pulse report sustains vibration for this many ms.
+    /// Used by SendSteamControllerHaptic() to calculate how many writes are
+    /// needed to fill the caller's requested duration.
+    static constexpr uint32_t STEAM_HAPTIC_PULSE_DURATION_MS = 10;
 };

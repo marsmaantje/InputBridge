@@ -1,7 +1,6 @@
 #include "VirtualDeviceVisualizer.h"
 #include "imgui.h"
 #include <SDL3/SDL.h>
-#include <cmath>
 
 // Hat direction names and SDL_HAT_* constant pairs.
 static const struct { const char* label; Uint8 mask; } kHatDirs[] = {
@@ -65,6 +64,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
                                 - ImGui::GetStyle().ItemSpacing.x * 2.0f
                                 - 70.0f; // space for numeric readout
 
+        ImGui::PushID("axes");
         for (int i = 0; i < static_cast<int>(state->axes.size()); ++i) {
             ImGui::PushID(i);
 
@@ -88,6 +88,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
 
             ImGui::PopID();
         }
+        ImGui::PopID(); // "axes"
     }
 
     // ── Buttons ──────────────────────────────────────────────────────────────
@@ -101,6 +102,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
         const ImVec4 colorOn  = ImVec4(0.15f, 0.70f, 0.25f, 1.0f);
         const ImVec4 colorOff = ImGui::GetStyleColorVec4(ImGuiCol_Button);
 
+        ImGui::PushID("buttons");
         for (int i = 0; i < static_cast<int>(state->buttons.size()); ++i) {
             if (i > 0 && i % perRow != 0) ImGui::SameLine();
             ImGui::PushID(i);
@@ -121,6 +123,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
             ImGui::PopStyleColor(2);
             ImGui::PopID();
         }
+        ImGui::PopID(); // "buttons"
 
         // Quick-clear row
         ImGui::Spacing();
@@ -135,19 +138,16 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
         ImGui::Text("Hat direction:");
         ImGui::SameLine();
 
-        const char* dirNames[] = {
-            "Up-Left","Up","Up-Right",
-            "Left","Center","Right",
-            "Down-Left","Down","Down-Right"
-        };
         // Find current name
         const char* cur = "Center";
         for (auto& d : kHatDirs)
             if (d.mask == state->hat) { cur = d.label; break; }
         ImGui::TextDisabled("(%s)", cur);
 
+        ImGui::PushID("hat");
         if (DrawHatWidget(state->hat))
             dirty = true;
+        ImGui::PopID(); // "hat"
     }
 
     // ── Reset all ────────────────────────────────────────────────────────────
