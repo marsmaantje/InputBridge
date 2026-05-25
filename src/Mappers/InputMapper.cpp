@@ -1065,7 +1065,6 @@ void InputMapper::DrawMappingContent() {
     // Protocol Selection
     ImGui::Spacing(); ImGui::Separator();
 
-    if (changed) SaveProfile(profile);
     if (changed) {
         // Garbage collect unused toggle states: if a field no longer has any
         // mappings in a state-managing mode (Toggle/SetOn/SetOff), we remove 
