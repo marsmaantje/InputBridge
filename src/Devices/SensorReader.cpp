@@ -1,6 +1,5 @@
 #include "SensorReader.h"
 #include <algorithm>
-#include <cmath>
 
 bool SensorReader::Enable(SDL_Gamepad* gamepad) {
     if (!gamepad) return false;
