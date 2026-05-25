@@ -1073,7 +1073,8 @@ void InputMapper::DrawMappingContent() {
         while (it != profile.digitalToggleStates.end()) {
             bool needed = false;
             for (const auto& dm : profile.digitalMappings) {
-                if (dm.target_field_id == it->first && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+                if (!dm.target_field_id.empty() && dm.target_field_id == it->first && 
+                    dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
                     needed = true;
                     break;
                 }
