@@ -1066,6 +1066,24 @@ void InputMapper::DrawMappingContent() {
     ImGui::Spacing(); ImGui::Separator();
 
     if (changed) SaveProfile(profile);
+    if (changed) {
+        // Garbage collect unused toggle states: if a field no longer has any
+        // mappings in a state-managing mode (Toggle/SetOn/SetOff), we remove 
+        // its persistent state entry to keep the profile clean and prevent ghosting.
+        auto it = profile.digitalToggleStates.begin();
+        while (it != profile.digitalToggleStates.end()) {
+            bool needed = false;
+            for (const auto& dm : profile.digitalMappings) {
+                if (dm.target_field_id == it->first && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+                    needed = true;
+                    break;
+                }
+            }
+            if (!needed) it = profile.digitalToggleStates.erase(it);
+            else ++it;
+        }
+        SaveProfile(profile);
+    }
 
     ImGui::Separator();
     ImGui::Text("Output Preview:");
@@ -1227,8 +1245,20 @@ bool InputMapper::Update(bool dynamic_rate) {
 
         // 2. Determine final value for each field
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            auto it = profile.digitalToggleStates.find(pf->fieldId);
-            bool value = (it != profile.digitalToggleStates.end()) ? it->second : false;
+            // Check if this field has any mappings in a state-managing mode (Toggle/SetOn/SetOff)
+            bool hasStateMapping = false;
+            for (const auto& dm : profile.digitalMappings) {
+                if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+                    hasStateMapping = true;
+                    break;
+                }
+            }
+
+            bool value = false;
+            if (hasStateMapping) {
+                auto it = profile.digitalToggleStates.find(pf->fieldId);
+                if (it != profile.digitalToggleStates.end()) value = it->second;
+            }
             for (const auto& dm : profile.digitalMappings) {
                 if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
                 if (dm.last_physical_state) {
@@ -1371,8 +1401,18 @@ std::string InputMapper::GetOutputPreview() {
 
         // Determine final value for each field for preview
         for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            auto it = profile.digitalToggleStates.find(pf->fieldId);
-            bool value = (it != profile.digitalToggleStates.end()) ? it->second : false;
+            bool hasStateMapping = false;
+            for (const auto& dm : profile.digitalMappings) {
+                if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+                    hasStateMapping = true;
+                    break;
+                }
+            }
+            bool value = false;
+            if (hasStateMapping) {
+                auto it = profile.digitalToggleStates.find(pf->fieldId);
+                if (it != profile.digitalToggleStates.end()) value = it->second;
+            }
             for (const auto& dm : profile.digitalMappings) {
                 if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
                 if (dm.instance_id == 0) continue;
