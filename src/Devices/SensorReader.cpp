@@ -62,19 +62,36 @@ TouchState SensorReader::ReadTouch(SDL_Gamepad* gamepad) {
 
     state.available = true;
 
-    // Read up to 2 fingers from touchpad 0 (the main pad on DualSense / Steam).
-    int numFingers = SDL_GetNumGamepadTouchpadFingers(gamepad, 0);
-    int toRead = std::min(numFingers, static_cast<int>(state.fingers.size()));
+    // Mapping logic:
+    // Finger 0: Main pad (DualSense pad, or Steam Right pad)
+    // Finger 1: Secondary source (Steam Left pad if it exists, else DualSense second finger)
 
-    for (int i = 0; i < toRead; ++i) {
-        bool fingerState = false;
-        float x = 0.f, y = 0.f, pressure = 0.f;
-        if (SDL_GetGamepadTouchpadFinger(gamepad, 0, i, &fingerState, &x, &y, &pressure)) {
-            state.fingers[i].active   = fingerState;
-            state.fingers[i].x        = x;
-            state.fingers[i].y        = y;
-            state.fingers[i].pressure = pressure;
+    // Touchpad 0, Finger 0 (Always used for the primary UI mapping)
+    if (SDL_GetNumGamepadTouchpadFingers(gamepad, 0) > 0) {
+        SDL_GetGamepadTouchpadFinger(gamepad, 0, 0,
+            &state.fingers[0].active,
+            &state.fingers[0].x,
+            &state.fingers[0].y,
+            &state.fingers[0].pressure);
+    }
+
+    // Map the secondary UI slot (Touch 2)
+    if (numPads > 1) {
+        // Steam Controller / Steam Deck: Use the first finger of the Left Pad (Touchpad 1)
+        if (SDL_GetNumGamepadTouchpadFingers(gamepad, 1) > 0) {
+            SDL_GetGamepadTouchpadFinger(gamepad, 1, 0,
+                &state.fingers[1].active,
+                &state.fingers[1].x,
+                &state.fingers[1].y,
+                &state.fingers[1].pressure);
         }
+    } else if (SDL_GetNumGamepadTouchpadFingers(gamepad, 0) > 1) {
+        // Single Pad (DualSense): Use the second finger of the main pad
+        SDL_GetGamepadTouchpadFinger(gamepad, 0, 1,
+            &state.fingers[1].active,
+            &state.fingers[1].x,
+            &state.fingers[1].y,
+            &state.fingers[1].pressure);
     }
 
     return state;
