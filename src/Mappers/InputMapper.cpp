@@ -1113,9 +1113,21 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
         case SC::AccelX:        raw = SensorReader::ReadAccel(gamepad).x;             break;
         case SC::AccelY:        raw = SensorReader::ReadAccel(gamepad).y;             break;
         case SC::AccelZ:        raw = SensorReader::ReadAccel(gamepad).z;             break;
-        case SC::TouchX:        raw = SensorReader::ReadTouch(gamepad).primaryXCentered(); break;
-        case SC::TouchY:        raw = SensorReader::ReadTouch(gamepad).primaryYCentered(); break;
-        case SC::TouchPressure: raw = SensorReader::ReadTouch(gamepad).primaryPressure();  break;
+        case SC::TouchX: {
+            auto t = SensorReader::ReadTouch(gamepad);
+            raw = t.fingers[0].active ? t.primaryXCentered() : 0.f;
+            break;
+        }
+        case SC::TouchY: {
+            auto t = SensorReader::ReadTouch(gamepad);
+            raw = t.fingers[0].active ? t.primaryYCentered() : 0.f;
+            break;
+        }
+        case SC::TouchPressure: {
+            auto t = SensorReader::ReadTouch(gamepad);
+            raw = t.fingers[0].active ? t.primaryPressure() : 0.f;
+            break;
+        }
         case SC::Touch2X: {
             auto t = SensorReader::ReadTouch(gamepad);
             raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f) : 0.f;
