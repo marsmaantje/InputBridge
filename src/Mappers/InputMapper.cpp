@@ -22,6 +22,8 @@
 #include <SDL3/SDL.h>
 #include <sstream>
 #include <iomanip>
+#include <unordered_set>
+#include <string_view>
 
 using json = nlohmann::json;
 
@@ -1069,18 +1071,19 @@ void InputMapper::DrawMappingContent() {
         // Garbage collect unused toggle states: if a field no longer has any
         // mappings in a state-managing mode (Toggle/SetOn/SetOff), we remove 
         // its persistent state entry to keep the profile clean and prevent ghosting.
-        auto it = profile.digitalToggleStates.begin();
-        while (it != profile.digitalToggleStates.end()) {
-            bool needed = false;
-            for (const auto& dm : profile.digitalMappings) {
-                if (!dm.target_field_id.empty() && dm.target_field_id == it->first && 
-                    dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
-                    needed = true;
-                    break;
-                }
+        std::unordered_set<std::string_view> activeFields;
+        for (const auto& dm : profile.digitalMappings) {
+            if (!dm.target_field_id.empty() && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+                activeFields.insert(dm.target_field_id);
             }
-            if (!needed) it = profile.digitalToggleStates.erase(it);
-            else ++it;
+        }
+
+        for (auto it = profile.digitalToggleStates.begin(); it != profile.digitalToggleStates.end(); ) {
+            if (activeFields.find(it->first) == activeFields.end()) {
+                it = profile.digitalToggleStates.erase(it);
+            } else {
+                ++it;
+            }
         }
         SaveProfile(profile);
     }
