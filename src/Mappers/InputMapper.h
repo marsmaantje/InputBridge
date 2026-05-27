@@ -58,6 +58,8 @@ class InputMapper {
             AccelX, AccelY, AccelZ,
             TouchX, TouchY, TouchPressure,
             Touch2X, Touch2Y,
+            LeftStickTouch, RightStickTouch,
+            LeftGripTouch, RightGripTouch
         };
         SensorChannel sensorChannel = SensorChannel::None;
     };
@@ -195,6 +197,7 @@ class InputMapper {
             float accel[3];
             float touch[3];  // x, y, pressure for primary finger
             float touch2[2]; // x, y for secondary finger
+            bool capSense[4]; // LS, RS, LG, RG
         };
         std::vector<SensorState> initialSensors;
     };

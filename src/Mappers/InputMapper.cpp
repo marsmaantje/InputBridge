@@ -184,6 +184,10 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
                 ss.accel[0] = a.x; ss.accel[1] = a.y; ss.accel[2] = a.z;
                 ss.touch[0] = t.fingers[0].x; ss.touch[1] = t.fingers[0].y; ss.touch[2] = t.fingers[0].pressure;
                 ss.touch2[0] = t.fingers[1].x; ss.touch2[1] = t.fingers[1].y;
+                ss.capSense[0] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK);
+                ss.capSense[1] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK);
+                ss.capSense[2] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP);
+                ss.capSense[3] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP);
                 m_ListeningState.initialSensors.push_back(ss);
             }
         }
@@ -312,6 +316,26 @@ void InputMapper::UpdateListening() {
                 }
                 return false;
             };
+
+            auto checkCap = [&](SDL_GamepadCapSenseType ct, int idx, SC ch) -> bool {
+                bool cur = SDL_GetGamepadCapSense(dev.gamepad, ct);
+                if (cur != baseline->capSense[idx]) {
+                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
+                    src.instance_id   = dev.instance_id;
+                    src.axisIndex     = -1;
+                    src.sensorChannel = ch;
+                    SaveCurrentProfile();
+                    CancelListening();
+                    return true;
+                }
+                return false;
+            };
+
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  0, SC::LeftStickTouch)) return;
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, 1, SC::RightStickTouch)) return;
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   2, SC::LeftGripTouch)) return;
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  3, SC::RightGripTouch)) return;
 
             // Use a significant threshold to avoid triggering on sensor noise/jitter
             if (checkSensor(g.x, baseline->gyro[0],  SC::GyroX,  0.4f)) return;
@@ -692,6 +716,10 @@ void InputMapper::DrawMappingContent() {
         { SC::TouchPressure, "Touch Pressure"    },
         { SC::Touch2X,       "Touch 2 X"         },
         { SC::Touch2Y,       "Touch 2 Y"         },
+        { SC::LeftStickTouch,  "Left Stick Touch"  },
+        { SC::RightStickTouch, "Right Stick Touch" },
+        { SC::LeftGripTouch,   "Left Grip Touch"   },
+        { SC::RightGripTouch,  "Right Grip Touch"  },
     };
     auto sensorChannelName = [](SC ch) -> const char* {
         for (const auto& e : kSensorEntries) if (e.channel == ch) return e.label;
@@ -761,10 +789,20 @@ void InputMapper::DrawMappingContent() {
                     // Skip channels the hardware doesn't have.
                     bool isGyro  = (entry.channel >= SC::GyroX  && entry.channel <= SC::GyroZ);
                     bool isAccel = (entry.channel >= SC::AccelX && entry.channel <= SC::AccelZ);
-                    bool isTouch = (entry.channel >= SC::TouchX);
+                    bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Y);
+                    bool isCap   = (entry.channel >= SC::LeftStickTouch);
+
                     if (isGyro  && !hasGyro)  continue;
                     if (isAccel && !hasAccel) continue;
                     if (isTouch && !hasTouch) continue;
+
+                    if (isCap) {
+                        SDL_GamepadCapSenseType ct = SDL_GAMEPAD_CAPSENSE_LEFT_STICK;
+                        if      (entry.channel == SC::RightStickTouch) ct = SDL_GAMEPAD_CAPSENSE_RIGHT_STICK;
+                        else if (entry.channel == SC::LeftGripTouch)   ct = SDL_GAMEPAD_CAPSENSE_LEFT_GRIP;
+                        else if (entry.channel == SC::RightGripTouch)  ct = SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP;
+                        if (!SDL_GamepadHasCapSense(dev.gamepad, ct)) continue;
+                    }
 
                     std::string lbl = std::string("  ") + entry.label;
                     bool sel = src.instance_id == dev.instance_id && src.sensorChannel == entry.channel;
@@ -1159,6 +1197,10 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
             raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f) : 0.f;
             break;
         }
+        case SC::LeftStickTouch:  raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK)  ? 1.f : 0.f; break;
+        case SC::RightStickTouch: raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK) ? 1.f : 0.f; break;
+        case SC::LeftGripTouch:   raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP)   ? 1.f : 0.f; break;
+        case SC::RightGripTouch:  raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP)  ? 1.f : 0.f; break;
         default: break;
     }
 
