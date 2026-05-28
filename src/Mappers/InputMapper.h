@@ -71,6 +71,7 @@ class InputMapper {
         int button_index = -1;
         int hat_index = -1;
         int hat_mask = 0;
+        InputSource::SensorChannel sensor_channel = InputSource::SensorChannel::None;
         std::string target_output_name; // field id or legacy name
         float on_value = 1.0f;
         float off_value = 0.0f;
@@ -83,6 +84,7 @@ class InputMapper {
         int button_index = -1;
         int hat_index = -1;
         int hat_mask = 0;
+        InputSource::SensorChannel sensor_channel = InputSource::SensorChannel::None;
         std::string target_field_id; // FieldDescriptor::id
 
         enum class Mode { Momentary, Toggle, SetOn, SetOff };

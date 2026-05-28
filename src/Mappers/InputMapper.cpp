@@ -165,33 +165,37 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
     m_ListeningState.initialSensors.clear();
     m_ListeningState.initialAxes.clear();
 
-    if (type == ListeningState::Axis) {
-        for (const auto& dev : m_DeviceManager.GetDevices()) {
-            if (!dev.joystick) continue;
+    for (const auto& dev : m_DeviceManager.GetDevices()) {
+        if (!dev.joystick) continue;
+
+        // Capture initial axis states if listening for Axis
+        if (type == ListeningState::Axis) {
             for (int i = 0; i < dev.num_axes; ++i) {
                 m_ListeningState.initialAxes.push_back({dev.instance_id, i, SDL_GetJoystickAxis(dev.joystick, i)});
             }
-
-            // Capture sensor baselines
-            if (dev.gamepad) {
-                SensorReader::Enable(dev.gamepad);
-                ListeningState::SensorState ss;
-                ss.instance_id = dev.instance_id;
-                auto g = SensorReader::ReadGyro(dev.gamepad);
-                auto a = SensorReader::ReadAccel(dev.gamepad);
-                auto t = SensorReader::ReadTouch(dev.gamepad);
-                ss.gyro[0] = g.x; ss.gyro[1] = g.y; ss.gyro[2] = g.z;
-                ss.accel[0] = a.x; ss.accel[1] = a.y; ss.accel[2] = a.z;
-                ss.touch[0] = t.fingers[0].x; ss.touch[1] = t.fingers[0].y; ss.touch[2] = t.fingers[0].pressure;
-                ss.touch2[0] = t.fingers[1].x; ss.touch2[1] = t.fingers[1].y;
-                ss.capSense[0] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK);
-                ss.capSense[1] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK);
-                ss.capSense[2] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP);
-                ss.capSense[3] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP);
-                m_ListeningState.initialSensors.push_back(ss);
-            }
         }
-    } else if (type == ListeningState::Digital) {
+
+        // Capture initial sensor states for gamepads (used by both Axis and Digital listening)
+        if (dev.gamepad) {
+            SensorReader::Enable(dev.gamepad); // Ensure sensors are enabled for baseline capture
+            ListeningState::SensorState ss;
+            ss.instance_id = dev.instance_id;
+            auto g = SensorReader::ReadGyro(dev.gamepad);
+            auto a = SensorReader::ReadAccel(dev.gamepad);
+            auto t = SensorReader::ReadTouch(dev.gamepad);
+            ss.gyro[0] = g.x; ss.gyro[1] = g.y; ss.gyro[2] = g.z;
+            ss.accel[0] = a.x; ss.accel[1] = a.y; ss.accel[2] = a.z;
+            ss.touch[0] = t.fingers[0].x; ss.touch[1] = t.fingers[0].y; ss.touch[2] = t.fingers[0].pressure;
+            ss.touch2[0] = t.fingers[1].x; ss.touch2[1] = t.fingers[1].y;
+            ss.capSense[0] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK);
+            ss.capSense[1] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK);
+            ss.capSense[2] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP);
+            ss.capSense[3] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP);
+            m_ListeningState.initialSensors.push_back(ss);
+        }
+    }
+
+    if (type == ListeningState::Digital) {
         m_buttonBinder.StartBinding(m_DeviceManager.GetDevices()); // Start button binding
         for (const auto& dev : m_DeviceManager.GetDevices()) { // Capture hat baselines
             if (!dev.joystick) continue;
@@ -242,6 +246,7 @@ void InputMapper::UpdateListening() {
                     dm.button_index = boundButton->buttonIndex;
                     dm.hat_index = -1;
                     dm.hat_mask = 0;
+                    dm.sensor_channel = InputSource::SensorChannel::None;
                     updated = true;
                 }
             } else if (m_ListeningState.targetName == "button_analog") {
@@ -252,12 +257,59 @@ void InputMapper::UpdateListening() {
                     bm.button_index = boundButton->buttonIndex;
                     bm.hat_index = -1;
                     bm.hat_mask = 0;
+                    bm.sensor_channel = InputSource::SensorChannel::None;
                     updated = true;
                 }
             }
             if (updated) SaveCurrentProfile();
             CancelListening();
             return;
+        }
+    }
+
+    if (m_ListeningState.active && m_ListeningState.type == ListeningState::Digital) {
+        using SC = InputSource::SensorChannel;
+        for (const auto& dev : devices) {
+            if (!dev.gamepad) continue;
+            
+            const ListeningState::SensorState* baseline = nullptr;
+            for (const auto& s : m_ListeningState.initialSensors) {
+                if (s.instance_id == dev.instance_id) { baseline = &s; break; }
+            }
+            if (!baseline) continue;
+
+            auto checkCapDigital = [&](SDL_GamepadCapSenseType ct, int idx, SC ch) -> bool {
+                bool cur = SDL_GetGamepadCapSense(dev.gamepad, ct);
+                if (cur != baseline->capSense[idx]) {
+                    bool updated = false;
+                    if (m_ListeningState.targetName == "digital") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
+                            auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
+                            dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            dm.instance_id = dev.instance_id;
+                            dm.button_index = -1; dm.hat_index = -1; dm.hat_mask = 0; dm.sensor_channel = ch;
+                            updated = true;
+                        }
+                    } else if (m_ListeningState.targetName == "button_analog") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.buttonMappings.size()) {
+                            auto& bm = profile.buttonMappings[m_ListeningState.listIndex];
+                            bm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            bm.instance_id = dev.instance_id;
+                            bm.button_index = -1; bm.hat_index = -1; bm.hat_mask = 0; bm.sensor_channel = ch;
+                            updated = true;
+                        }
+                    }
+                    if (updated) SaveCurrentProfile();
+                    CancelListening();
+                    return true;
+                }
+                return false;
+            };
+
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  0, SC::LeftStickTouch)) return;
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, 1, SC::RightStickTouch)) return;
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   2, SC::LeftGripTouch)) return;
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  3, SC::RightGripTouch)) return;
         }
     }
 
@@ -381,6 +433,7 @@ void InputMapper::UpdateListening() {
                             dm.instance_id = dev.instance_id;
                             dm.button_index = -1; // Indicate hat binding
                             dm.hat_index = i;
+                            dm.sensor_channel = InputSource::SensorChannel::None;
                             // Bind the active direction (if centered, bind the direction it just left)
                             dm.hat_mask = (currentHatState != SDL_HAT_CENTERED) ? currentHatState : initialHatState;
                             updated = true;
@@ -393,6 +446,7 @@ void InputMapper::UpdateListening() {
                             bm.instance_id = dev.instance_id;
                             bm.button_index = -1; // Indicate hat binding
                             bm.hat_index = i;
+                            bm.sensor_channel = InputSource::SensorChannel::None;
                             bm.hat_mask = (currentHatState != SDL_HAT_CENTERED) ? currentHatState : initialHatState;
                             updated = true;
                         }
@@ -849,7 +903,7 @@ void InputMapper::DrawMappingContent() {
     };
 
     // Button/Hat combo helper
-    auto drawButtonInputCombo = [&](const char* comboId, SDL_JoystickID instance_id, int& button_index, int* hat_index = nullptr, int* hat_mask = nullptr) {
+    auto drawButtonInputCombo = [&](const char* comboId, SDL_JoystickID instance_id, int& button_index, int* hat_index = nullptr, int* hat_mask = nullptr, InputSource::SensorChannel* sensor_channel = nullptr) {
         std::string preview = "None";
         if (instance_id != 0) {
             if (button_index != -1) {
@@ -861,15 +915,19 @@ void InputMapper::DrawMappingContent() {
                 if (*hat_mask & SDL_HAT_LEFT)  preview += " Left";
                 if (*hat_mask & SDL_HAT_RIGHT) preview += " Right";
                 if (*hat_mask == SDL_HAT_CENTERED) preview += " Centered";
+            } else if (sensor_channel && *sensor_channel != InputSource::SensorChannel::None) {
+                const char* sn = sensorChannelName(*sensor_channel);
+                preview = (sn ? sn : "Sensor");
             }
         }
 
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::BeginCombo(comboId, preview.c_str())) {
-            if (ImGui::Selectable("None", button_index == -1 && (!hat_index || *hat_index == -1))) {
+            if (ImGui::Selectable("None", button_index == -1 && (!hat_index || *hat_index == -1) && (!sensor_channel || *sensor_channel == InputSource::SensorChannel::None))) {
                 button_index = -1;
                 if (hat_index) *hat_index = -1;
                 if (hat_mask) *hat_mask = 0;
+                if (sensor_channel) *sensor_channel = InputSource::SensorChannel::None;
                 changed = true;
             }
             if (instance_id != 0) {
@@ -878,14 +936,41 @@ void InputMapper::DrawMappingContent() {
                 if (dev && dev->joystick) {
                     for (int i = 0; i < dev->num_buttons; ++i) {
                         bool sel = (button_index == i);
-                        if (ImGui::Selectable(("Button " + std::to_string(i)).c_str(), sel)) { button_index = i; if (hat_index) *hat_index = -1; if (hat_mask) *hat_mask = 0; changed = true; }
+                        if (ImGui::Selectable(("Button " + std::to_string(i)).c_str(), sel)) {
+                            button_index = i; if (hat_index) *hat_index = -1; if (hat_mask) *hat_mask = 0;
+                            if (sensor_channel) *sensor_channel = InputSource::SensorChannel::None;
+                            changed = true;
+                        }
                     }
                     if (hat_index && hat_mask) {
                         for (int i = 0; i < dev->num_hats; ++i) {
                             struct { int mask; const char* name; } dirs[] = {{SDL_HAT_UP, "Up"}, {SDL_HAT_DOWN, "Down"}, {SDL_HAT_LEFT, "Left"}, {SDL_HAT_RIGHT, "Right"}};
                             for (auto& d : dirs) {
                                 bool sel = (*hat_index == i && *hat_mask == d.mask);
-                                if (ImGui::Selectable(("Hat " + std::to_string(i) + " " + d.name).c_str(), sel)) { button_index = -1; *hat_index = i; *hat_mask = d.mask; changed = true; }
+                                if (ImGui::Selectable(("Hat " + std::to_string(i) + " " + d.name).c_str(), sel)) {
+                                    button_index = -1; *hat_index = i; *hat_mask = d.mask;
+                                    if (sensor_channel) *sensor_channel = InputSource::SensorChannel::None;
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                    if (sensor_channel && dev->gamepad) {
+                        ImGui::Separator();
+                        for (const auto& entry : kSensorEntries) {
+                            if (entry.channel < SC::LeftStickTouch) continue;
+                            
+                            SDL_GamepadCapSenseType ct = SDL_GAMEPAD_CAPSENSE_LEFT_STICK;
+                            if      (entry.channel == SC::RightStickTouch) ct = SDL_GAMEPAD_CAPSENSE_RIGHT_STICK;
+                            else if (entry.channel == SC::LeftGripTouch)   ct = SDL_GAMEPAD_CAPSENSE_LEFT_GRIP;
+                            else if (entry.channel == SC::RightGripTouch)  ct = SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP;
+                            if (!SDL_GamepadHasCapSense(dev->gamepad, ct)) continue;
+
+                            bool sel = (*sensor_channel == entry.channel);
+                            if (ImGui::Selectable(entry.label, sel)) {
+                                button_index = -1; if (hat_index) *hat_index = -1; if (hat_mask) *hat_mask = 0;
+                                *sensor_channel = entry.channel;
+                                changed = true;
                             }
                         }
                     }
@@ -976,7 +1061,7 @@ void InputMapper::DrawMappingContent() {
                         ImGui::EndCombo();
                     }
                     ImGui::TableSetColumnIndex(1);
-                    drawButtonInputCombo("##db", dm.instance_id, dm.button_index, &dm.hat_index, &dm.hat_mask);
+                    drawButtonInputCombo("##db", dm.instance_id, dm.button_index, &dm.hat_index, &dm.hat_mask, &dm.sensor_channel);
 
                     ImGui::TableSetColumnIndex(2);
                     std::string flabel = dm.target_field_id.empty() ? "None" : dm.target_field_id;
@@ -1055,7 +1140,7 @@ void InputMapper::DrawMappingContent() {
             }
 
             ImGui::TableSetColumnIndex(1);
-            drawButtonInputCombo("##bb", bm.instance_id, bm.button_index, &bm.hat_index, &bm.hat_mask);
+            drawButtonInputCombo("##bb", bm.instance_id, bm.button_index, &bm.hat_index, &bm.hat_mask, &bm.sensor_channel);
 
             ImGui::TableSetColumnIndex(2);
             std::string tlabel = bm.target_output_name.empty() ? "None" : bm.target_output_name;
@@ -1232,6 +1317,12 @@ bool InputMapper::Update(bool dynamic_rate) {
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
             if (j) {
                 bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
+                    InputSource tmp;
+                    tmp.instance_id = bm.instance_id;
+                    tmp.sensorChannel = bm.sensor_channel;
+                    pressed = (ProcessSensor(tmp) > 0.5f);
+                }
                 if (pressed) analogValues[bm.target_output_name] = bm.on_value;
             }
         }
@@ -1245,6 +1336,12 @@ bool InputMapper::Update(bool dynamic_rate) {
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
             if (j) {
                 bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
+                    InputSource tmp;
+                    tmp.instance_id = bm.instance_id;
+                    tmp.sensorChannel = bm.sensor_channel;
+                    pressed = (ProcessSensor(tmp) > 0.5f);
+                }
                 if (pressed) analogValues[bm.target_output_name]=bm.on_value;
             }
         }
@@ -1265,6 +1362,12 @@ bool InputMapper::Update(bool dynamic_rate) {
             bool pressed = false;
             if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
             else if (dm.hat_index != -1) pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+            else if (dm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = dm.instance_id;
+                tmp.sensorChannel = dm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
+            }
 
             if (dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
                 if (pressed && !dm.last_physical_state) { // on rising edge
@@ -1440,6 +1543,12 @@ std::string InputMapper::GetOutputPreview() {
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
             if (j) {
                 bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
+                    InputSource tmp;
+                    tmp.instance_id = bm.instance_id;
+                    tmp.sensorChannel = bm.sensor_channel;
+                    pressed = (ProcessSensor(tmp) > 0.5f);
+                }
                 if (pressed) analogValues[bm.target_output_name] = bm.on_value;
             }
         }
@@ -1464,6 +1573,12 @@ std::string InputMapper::GetOutputPreview() {
                 SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
                 if (j) {
                     bool pressed = (dm.button_index != -1) ? SDL_GetJoystickButton(j, dm.button_index) : (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+                    if (!pressed && dm.sensor_channel != InputSource::SensorChannel::None) {
+                        InputSource tmp;
+                        tmp.instance_id = dm.instance_id;
+                        tmp.sensorChannel = dm.sensor_channel;
+                        pressed = (ProcessSensor(tmp) > 0.5f);
+                    }
                     if (pressed) {
                         value = true;
                         break;
@@ -1482,6 +1597,12 @@ std::string InputMapper::GetOutputPreview() {
             SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
             if (j) {
                 bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
+                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
+                    InputSource tmp;
+                    tmp.instance_id = bm.instance_id;
+                    tmp.sensorChannel = bm.sensor_channel;
+                    pressed = (ProcessSensor(tmp) > 0.5f);
+                }
                 if (pressed) analogValues[bm.target_output_name] = bm.on_value;
             }
         }
@@ -1707,6 +1828,8 @@ void InputMapper::LoadProfiles() {
                         bm.hat_index=item.value("hat_index",-1);
                         bm.hat_mask=item.value("hat_mask",0);
                         bm.target_output_name=item.value("target_output_name","");
+                        bm.sensor_channel = static_cast<InputSource::SensorChannel>(
+                            item.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
                         bm.on_value=item.value("on_value",1.f); bm.off_value=item.value("off_value",0.f);
                         p.buttonMappings.push_back(bm);
                     }
@@ -1716,6 +1839,8 @@ void InputMapper::LoadProfiles() {
                         dm.device_guid=item.value("device_guid",""); dm.button_index=item.value("button_index",-1);
                         dm.hat_index=item.value("hat_index",-1);
                         dm.hat_mask=item.value("hat_mask",0);
+                        dm.sensor_channel = static_cast<InputSource::SensorChannel>(
+                            item.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
                         dm.target_field_id=item.value("target_field_id","");
                         if (item.contains("mode")) {
                             dm.mode = item.value("mode", ButtonToDigitalMapping::Mode::Momentary);
@@ -1775,14 +1900,16 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
             json j = {{"device_guid",bm.device_guid}, {"target_output_name",bm.target_output_name},
                       {"on_value",bm.on_value}, {"off_value",bm.off_value}};
             if (bm.hat_index != -1) { j["hat_index"]=bm.hat_index; j["hat_mask"]=bm.hat_mask; }
-            else { j["button_index"]=bm.button_index; }
+            else if (bm.button_index != -1) { j["button_index"]=bm.button_index; }
+            if (bm.sensor_channel != InputSource::SensorChannel::None) j["sensor_channel"] = static_cast<int>(bm.sensor_channel);
             data["button_mappings"].push_back(j);
         }
         data["digital_mappings"]=json::array();
         for (const auto& dm : profile.digitalMappings) {
             json j = {{"device_guid",dm.device_guid}, {"target_field_id",dm.target_field_id}, {"mode", dm.mode}};
             if (dm.hat_index != -1) { j["hat_index"]=dm.hat_index; j["hat_mask"]=dm.hat_mask; }
-            else { j["button_index"]=dm.button_index; }
+            else if (dm.button_index != -1) { j["button_index"]=dm.button_index; }
+            if (dm.sensor_channel != InputSource::SensorChannel::None) j["sensor_channel"] = static_cast<int>(dm.sensor_channel);
             data["digital_mappings"].push_back(j);
         }
         data["digital_toggle_states"] = profile.digitalToggleStates;
