@@ -4,9 +4,9 @@
 void AboutWindow::DrawContent() {
     // ── Title ────────────────────────────────────────────────────────────────
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.2f, 1.0f));
-    ImGui::SetWindowFontScale(1.4f);
+    ImGui::PushFont(NULL, ImGui::GetFontSize() * 1.4f); // Use PushFont with NULL to scale current font
     ImGui::Text("InputBridge");
-    ImGui::SetWindowFontScale(1.0f);
+    ImGui::PopFont(); // Pop the scaled font
     ImGui::PopStyleColor();
     // Get version number from top of CMakeLists
     ImGui::TextDisabled("v" INPUTBRIDGE_VERSION);
