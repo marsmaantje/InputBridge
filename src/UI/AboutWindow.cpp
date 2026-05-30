@@ -78,11 +78,32 @@ void AboutWindow::DrawContent() {
     ImGui::PopStyleColor();
     ImGui::Spacing();
 
-    constexpr const char* testers[] = {
+    constexpr const char* testers_alpha[] = {
         "Beaned", "Dawky", "QueenHidi", "Snuhr", "Water"
     };
     ImGui::Indent(8.0f);
-    for (const char* t : testers) {
+    for (const char* t : testers_alpha) {
+        ImGui::Bullet();
+        ImGui::SameLine();
+        ImGui::Text("%s", t);
+    }
+    ImGui::Unindent(8.0f);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ── Beta Testers ────────────────────────────────────────────────────────
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
+    ImGui::Text("Beta Testers");
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+
+    constexpr const char* testers_beta[] = {
+        "esnya", "GranpaVape", "Hayden", "ShadowX", "SnubbleJr"
+    };
+    ImGui::Indent(8.0f);
+    for (const char* t : testers_beta) {
         ImGui::Bullet();
         ImGui::SameLine();
         ImGui::Text("%s", t);
