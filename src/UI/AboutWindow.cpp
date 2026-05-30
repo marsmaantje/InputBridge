@@ -100,7 +100,7 @@ void AboutWindow::DrawContent() {
     ImGui::Spacing();
 
     constexpr const char* testers_beta[] = {
-        "esnya", "GranpaVape", "Hayden", "ShadowX", "SnubbleJr"
+        "0x8081", "esnya", "GranpaVape", "Hayden", "ShadowX", "SnubbleJr", "TheMagician"
     };
     ImGui::Indent(8.0f);
     for (const char* t : testers_beta) {
