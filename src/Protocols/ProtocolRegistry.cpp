@@ -294,6 +294,18 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 std::string ProtocolRegistry::GetProtocolsDir() {
+    // SDL_GetBasePath() resolves to the read-only AppImage squashfs mount on
+    // Linux.  All writable data (user definitions, catalogs, presets) must go
+    // to the platform preference directory instead.
+    const char* pref = SDL_GetPrefPath("InputBridge", "InputBridge");
+    std::string dir = pref ? std::string(pref) : "./";
+    if (pref) SDL_free(const_cast<char*>(pref));
+    return dir + "protocols/";
+}
+
+// Returns the read-only asset directory bundled with the executable.
+// Used exclusively for seeding default files into the pref dir on first run.
+static std::string GetInstallProtocolsDir() {
     const char* base = SDL_GetBasePath();
     std::string dir = base ? std::string(base) : "./";
     return dir + "protocols/";
@@ -313,7 +325,56 @@ const char* ProtocolRegistry::DirectionLabel(ProtocolDirection d) {
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
+// Copies seed files from the read-only install directory into the writable
+// pref directory, but only when a file is absent (never overwrites).
+// This is needed for AppImage / Flatpak where SDL_GetBasePath() returns a
+// read-only squashfs mount, while GetProtocolsDir() now points to the pref dir.
+static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
+    const std::string srcDir = GetInstallProtocolsDir();
+    const std::string srcTemplates = srcDir + "templates/";
+    const std::string dstTemplates = prefProtocolsDir + "templates/";
+
+    // Ensure destination directories exist.
+    fs::create_directories(prefProtocolsDir);
+    fs::create_directories(prefProtocolsDir + "definitions/");
+    fs::create_directories(dstTemplates);
+
+    // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
+    if (fs::exists(srcDir)) {
+        for (const auto& entry : fs::directory_iterator(srcDir)) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".json") continue;
+            fs::path dst = fs::path(prefProtocolsDir) / entry.path().filename();
+            if (!fs::exists(dst)) {
+                std::error_code ec;
+                fs::copy_file(entry.path(), dst, fs::copy_options::skip_existing, ec);
+                if (ec)
+                    std::cerr << "[ProtocolRegistry] Bootstrap copy failed for "
+                              << entry.path() << ": " << ec.message() << "\n";
+            }
+        }
+    }
+
+    // Seed protocol templates.
+    if (fs::exists(srcTemplates)) {
+        for (const auto& entry : fs::directory_iterator(srcTemplates)) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".json") continue;
+            fs::path dst = fs::path(dstTemplates) / entry.path().filename();
+            if (!fs::exists(dst)) {
+                std::error_code ec;
+                fs::copy_file(entry.path(), dst, fs::copy_options::skip_existing, ec);
+                if (ec)
+                    std::cerr << "[ProtocolRegistry] Bootstrap copy failed for "
+                              << entry.path() << ": " << ec.message() << "\n";
+            }
+        }
+    }
+}
+
 void ProtocolRegistry::EnsureDirectories() {
+    const std::string protocolsDir = GetProtocolsDir();
+    BootstrapFromInstallDir(protocolsDir);
     fs::create_directories(GetDefsDir());
 }
 

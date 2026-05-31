@@ -41,10 +41,14 @@ static std::string unescape_for_toml(const std::string &s) {
 }
 
 std::string PreferencesManager::GetConfigFilePath() {
-    const char *base_path = SDL_GetBasePath();
+    // SDL_GetBasePath() points into the read-only squashfs mount when running
+    // as an AppImage, so we must use SDL_GetPrefPath() for anything that needs
+    // to be written (config, user-created profiles, protocol definitions, …).
+    const char *pref_path = SDL_GetPrefPath("InputBridge", "InputBridge");
     std::string path;
-    if (base_path) {
-        path = std::string(base_path) + CONFIG_FILENAME;
+    if (pref_path) {
+        path = std::string(pref_path) + CONFIG_FILENAME;
+        SDL_free(const_cast<char *>(pref_path));
     } else {
         path = CONFIG_FILENAME;
     }

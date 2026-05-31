@@ -54,8 +54,15 @@ SDL_Joystick *GetJoystickByID(SDL_JoystickID id, const DeviceManager &dm) {
 }
 
 std::filesystem::path GetMappingsDirectory() {
-    const char *base = SDL_GetBasePath();
-    return base ? std::filesystem::path(base) / "mappings" : std::filesystem::path("mappings");
+    // SDL_GetBasePath() is read-only inside an AppImage squashfs mount.
+    // User-created input profiles must be stored in the writable pref dir.
+    const char *pref = SDL_GetPrefPath("InputBridge", "InputBridge");
+    if (pref) {
+        auto p = std::filesystem::path(pref) / "mappings";
+        SDL_free(const_cast<char*>(pref));
+        return p;
+    }
+    return std::filesystem::path("mappings");
 }
 
 const FieldDescriptor* FindFieldDescriptor(const std::string& id) {
