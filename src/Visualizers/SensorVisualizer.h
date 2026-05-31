@@ -18,6 +18,10 @@ public:
 private:
     void DrawGyro     (SDL_Gamepad* gamepad);
     void DrawAccel    (SDL_Gamepad* gamepad);
+    void DrawGyroL    (SDL_Gamepad* gamepad);
+    void DrawAccelL   (SDL_Gamepad* gamepad);
+    void DrawGyroR    (SDL_Gamepad* gamepad);
+    void DrawAccelR   (SDL_Gamepad* gamepad);
     void DrawTouch    (SDL_Gamepad* gamepad);
     void DrawCapSense (SDL_Gamepad* gamepad);
 

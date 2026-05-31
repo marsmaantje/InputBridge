@@ -97,6 +97,10 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
             if (dev.gamepad) {
                 bool hasSensors = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO)
                                || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R)
                                || SDL_GetNumGamepadTouchpads(dev.gamepad) > 0;
                 if (hasSensors)
                     TabItem("Sensors", sensor_viz);

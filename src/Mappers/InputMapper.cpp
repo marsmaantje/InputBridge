@@ -871,7 +871,7 @@ void InputMapper::DrawMappingContent() {
                 bool hasGyroLR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L) || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R);
                 bool hasAccelLR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L) || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R);
 
-                if (!hasGyro && !hasAccel && !hasTouch) continue;
+                if (!hasGyro && !hasAccel && !hasGyroLR && !hasAccelLR && !hasTouch) continue;
 
                 // Section header (not selectable)
                 ImGui::Separator();

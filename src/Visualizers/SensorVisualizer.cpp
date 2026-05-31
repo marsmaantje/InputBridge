@@ -148,6 +148,82 @@ void SensorVisualizer::DrawAccel(SDL_Gamepad* gamepad) {
     ImGui::PopID();
 }
 
+// ── Left-side sensors (Joy-Con L / Steam Deck L half) ─────────────────────────
+
+void SensorVisualizer::DrawGyroL(SDL_Gamepad* gamepad) {
+    GyroState g = SensorReader::ReadGyroL(gamepad);
+
+    if (!g.available) {
+        ImGui::TextDisabled("Left gyroscope not available on this controller.");
+        return;
+    }
+
+    ImGui::TextDisabled("Scale: ±%.0f rad/s → [-1, 1]", GyroState::SCALE);
+    ImGui::Spacing();
+
+    ImGui::PushID("gyro_l");
+    DrawAxisBar("X (pitch)", g.x);
+    DrawAxisBar("Y (yaw)",   g.y);
+    DrawAxisBar("Z (roll)",  g.z);
+    ImGui::PopID();
+}
+
+void SensorVisualizer::DrawAccelL(SDL_Gamepad* gamepad) {
+    AccelState a = SensorReader::ReadAccelL(gamepad);
+
+    if (!a.available) {
+        ImGui::TextDisabled("Left accelerometer not available on this controller.");
+        return;
+    }
+
+    ImGui::TextDisabled("Scale: ±%.0f m/s²  (gravity ≈ ±0.49 at rest)", AccelState::SCALE);
+    ImGui::Spacing();
+
+    ImGui::PushID("accel_l");
+    DrawAxisBar("X (lateral)",  a.x);
+    DrawAxisBar("Y (vertical)", a.y);
+    DrawAxisBar("Z (fore/aft)", a.z);
+    ImGui::PopID();
+}
+
+// ── Right-side sensors (Joy-Con R / Steam Deck R half) ────────────────────────
+
+void SensorVisualizer::DrawGyroR(SDL_Gamepad* gamepad) {
+    GyroState g = SensorReader::ReadGyroR(gamepad);
+
+    if (!g.available) {
+        ImGui::TextDisabled("Right gyroscope not available on this controller.");
+        return;
+    }
+
+    ImGui::TextDisabled("Scale: ±%.0f rad/s → [-1, 1]", GyroState::SCALE);
+    ImGui::Spacing();
+
+    ImGui::PushID("gyro_r");
+    DrawAxisBar("X (pitch)", g.x);
+    DrawAxisBar("Y (yaw)",   g.y);
+    DrawAxisBar("Z (roll)",  g.z);
+    ImGui::PopID();
+}
+
+void SensorVisualizer::DrawAccelR(SDL_Gamepad* gamepad) {
+    AccelState a = SensorReader::ReadAccelR(gamepad);
+
+    if (!a.available) {
+        ImGui::TextDisabled("Right accelerometer not available on this controller.");
+        return;
+    }
+
+    ImGui::TextDisabled("Scale: ±%.0f m/s²  (gravity ≈ ±0.49 at rest)", AccelState::SCALE);
+    ImGui::Spacing();
+
+    ImGui::PushID("accel_r");
+    DrawAxisBar("X (lateral)",  a.x);
+    DrawAxisBar("Y (vertical)", a.y);
+    DrawAxisBar("Z (fore/aft)", a.z);
+    ImGui::PopID();
+}
+
 // ── Touchpad ──────────────────────────────────────────────────────────────────
 
 void SensorVisualizer::DrawTouch(SDL_Gamepad* gamepad) {
@@ -234,6 +310,45 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
         DrawAccel(dev.gamepad);
 
     ImGui::Spacing();
+
+    // ── Split sensors: Joy-Con pair / Steam Deck L+R halves ───────────────────
+    const bool hasGyroL  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L);
+    const bool hasAccelL = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L);
+    const bool hasGyroR  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R);
+    const bool hasAccelR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R);
+
+    if (hasGyroL || hasAccelL) {
+        ImGui::Separator();
+        ImGui::TextDisabled("Left Joy-Con / L half");
+        ImGui::Spacing();
+
+        if (hasGyroL && ImGui::CollapsingHeader("Gyroscope (Left)", ImGuiTreeNodeFlags_DefaultOpen))
+            DrawGyroL(dev.gamepad);
+
+        ImGui::Spacing();
+
+        if (hasAccelL && ImGui::CollapsingHeader("Accelerometer (Left)", ImGuiTreeNodeFlags_DefaultOpen))
+            DrawAccelL(dev.gamepad);
+
+        ImGui::Spacing();
+    }
+
+    if (hasGyroR || hasAccelR) {
+        ImGui::Separator();
+        ImGui::TextDisabled("Right Joy-Con / R half");
+        ImGui::Spacing();
+
+        if (hasGyroR && ImGui::CollapsingHeader("Gyroscope (Right)", ImGuiTreeNodeFlags_DefaultOpen))
+            DrawGyroR(dev.gamepad);
+
+        ImGui::Spacing();
+
+        if (hasAccelR && ImGui::CollapsingHeader("Accelerometer (Right)", ImGuiTreeNodeFlags_DefaultOpen))
+            DrawAccelR(dev.gamepad);
+
+        ImGui::Spacing();
+    }
+    // ── End split sensors ─────────────────────────────────────────────────────
 
     if (ImGui::CollapsingHeader("Touchpad", ImGuiTreeNodeFlags_DefaultOpen))
         DrawTouch(dev.gamepad);
