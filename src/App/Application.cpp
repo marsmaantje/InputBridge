@@ -19,6 +19,7 @@
 #include "UI/FontManager.h"
 #include "UI/SidebarLayout.h"
 #include "UI/ThemeManager.h"
+#include "Utils/XdgDirs.h"
 
 #if ENABLE_WEBSOCKETS
 #include "Protocols/WebSocketProtocol.h"
@@ -109,9 +110,10 @@ void Application::SetupImGui()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // Store ImGui layout in the same directory as the executable.
-    const char* base_path = SDL_GetBasePath();
-    m_iniFilename = (base_path ? std::string(base_path) : std::string(".")) + "imgui.ini";
+    // imgui.ini stores UI layout state — it is written at runtime so it must
+    // live in the writable XDG config directory, not next to the executable
+    // (which is read-only inside an AppImage squashfs mount).
+    m_iniFilename = XdgDirs::configDir() + "imgui.ini";
     io.IniFilename = m_iniFilename.c_str();
 
     ImGui::StyleColorsDark();

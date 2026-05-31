@@ -11,6 +11,7 @@
 #include "Protocols/OSCSteamLinkProtocol.h"
 #include "Protocols/OSCProjectBabbleProtocol.h"
 #include "Preferences/Preferences.h"
+#include "Utils/XdgDirs.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
@@ -54,15 +55,10 @@ SDL_Joystick *GetJoystickByID(SDL_JoystickID id, const DeviceManager &dm) {
 }
 
 std::filesystem::path GetMappingsDirectory() {
-    // SDL_GetBasePath() is read-only inside an AppImage squashfs mount.
-    // User-created input profiles must be stored in the writable pref dir.
-    const char *pref = SDL_GetPrefPath("InputBridge", "InputBridge");
-    if (pref) {
-        auto p = std::filesystem::path(pref) / "mappings";
-        SDL_free(const_cast<char*>(pref));
-        return p;
-    }
-    return std::filesystem::path("mappings");
+    // Mapping profiles are user data — they belong in
+    // $XDG_DATA_HOME/InputBridge/mappings/ per the XDG Base Directory
+    // Specification (fallback: ~/.local/share/InputBridge/mappings/).
+    return std::filesystem::path(XdgDirs::dataDir()) / "mappings";
 }
 
 const FieldDescriptor* FindFieldDescriptor(const std::string& id) {
@@ -1861,24 +1857,25 @@ void InputMapper::LoadProfiles() {
         if (!std::filesystem::exists(dir)) std::filesystem::create_directories(dir);
 
         // Seed bundled preset profiles from the read-only install directory into
-        // the writable pref dir, but only when a file with that name is absent.
-        // This is needed for AppImage / Flatpak builds where SDL_GetBasePath()
-        // points to the read-only squashfs mount while GetMappingsDirectory()
-        // now points to the user pref dir.
-        const char* base = SDL_GetBasePath();
-        if (base) {
-            auto installDir = std::filesystem::path(base) / "mappings";
-            if (std::filesystem::exists(installDir)) {
-                for (const auto& e : std::filesystem::directory_iterator(installDir)) {
-                    if (!e.is_regular_file() || e.path().extension() != ".json") continue;
-                    auto dst = dir / e.path().filename();
-                    if (!std::filesystem::exists(dst)) {
-                        std::error_code ec;
-                        std::filesystem::copy_file(e.path(), dst,
-                            std::filesystem::copy_options::skip_existing, ec);
-                        if (ec)
-                            std::cerr << "[InputMapper] Failed to seed preset profile "
-                                      << e.path().filename() << ": " << ec.message() << "\n";
+        // the writable data dir on first run, skipping files that already exist.
+        // SDL_GetBasePath() points to the read-only squashfs mount inside an
+        // AppImage, which is exactly where the installed mappings/ dir lives.
+        {
+            const char* base = SDL_GetBasePath();
+            if (base) {
+                auto installDir = std::filesystem::path(base) / "mappings";
+                if (std::filesystem::exists(installDir)) {
+                    for (const auto& e : std::filesystem::directory_iterator(installDir)) {
+                        if (!e.is_regular_file() || e.path().extension() != ".json") continue;
+                        auto dst = dir / e.path().filename();
+                        if (!std::filesystem::exists(dst)) {
+                            std::error_code ec;
+                            std::filesystem::copy_file(e.path(), dst,
+                                std::filesystem::copy_options::skip_existing, ec);
+                            if (ec)
+                                std::cerr << "[InputMapper] Failed to seed preset profile "
+                                          << e.path().filename() << ": " << ec.message() << "\n";
+                        }
                     }
                 }
             }

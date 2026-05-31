@@ -1,4 +1,5 @@
 #include "ProtocolRegistry.h"
+#include "Utils/XdgDirs.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
@@ -294,13 +295,12 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 std::string ProtocolRegistry::GetProtocolsDir() {
-    // SDL_GetBasePath() resolves to the read-only AppImage squashfs mount on
-    // Linux.  All writable data (user definitions, catalogs, presets) must go
-    // to the platform preference directory instead.
-    const char* pref = SDL_GetPrefPath("InputBridge", "InputBridge");
-    std::string dir = pref ? std::string(pref) : "./";
-    if (pref) SDL_free(const_cast<char*>(pref));
-    return dir + "protocols/";
+    // Protocol definitions, field catalogs, and templates are user data —
+    // they belong in $XDG_DATA_HOME/InputBridge/protocols/ per the XDG Base
+    // Directory Specification (fallback: ~/.local/share/InputBridge/protocols/).
+    // AppImage Portable Mode remaps $XDG_DATA_HOME automatically when the user
+    // places a .home directory next to the .AppImage file.
+    return XdgDirs::dataDir() + "protocols/";
 }
 
 // Returns the read-only asset directory bundled with the executable.

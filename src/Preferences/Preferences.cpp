@@ -1,4 +1,5 @@
 #include "Preferences.h"
+#include "Utils/XdgDirs.h"
 #include <cstdlib>
 #include <fstream>
 #include <string>
@@ -41,18 +42,12 @@ static std::string unescape_for_toml(const std::string &s) {
 }
 
 std::string PreferencesManager::GetConfigFilePath() {
-    // SDL_GetBasePath() points into the read-only squashfs mount when running
-    // as an AppImage, so we must use SDL_GetPrefPath() for anything that needs
-    // to be written (config, user-created profiles, protocol definitions, …).
-    const char *pref_path = SDL_GetPrefPath("InputBridge", "InputBridge");
-    std::string path;
-    if (pref_path) {
-        path = std::string(pref_path) + CONFIG_FILENAME;
-        SDL_free(const_cast<char *>(pref_path));
-    } else {
-        path = CONFIG_FILENAME;
-    }
-    return path;
+    // Configuration lives in $XDG_CONFIG_HOME/InputBridge/ so it follows the
+    // XDG Base Directory Specification and lands in ~/.config/InputBridge/ by
+    // default rather than the data directory.  AppImage Portable Mode remaps
+    // $XDG_CONFIG_HOME automatically when the user places a .config directory
+    // next to the .AppImage file, so no special-casing is needed here.
+    return XdgDirs::configDir() + CONFIG_FILENAME;
 }
 
 void PreferencesManager::Load() {
