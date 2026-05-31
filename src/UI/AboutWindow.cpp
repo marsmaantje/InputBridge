@@ -72,43 +72,44 @@ void AboutWindow::DrawContent() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── Alpha Testers ────────────────────────────────────────────────────────
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
-    ImGui::Text("Alpha Testers");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    if (ImGui::BeginTable("##testers", 2)) {
+        ImGui::TableNextColumn();
+        // ── Alpha Testers ────────────────────────────────────────────────────
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
+        ImGui::Text("Alpha Testers");
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
 
-    constexpr const char* testers_alpha[] = {
-        "Beaned", "Dawky", "QueenHidi", "Snuhr", "Water"
-    };
-    ImGui::Indent(8.0f);
-    for (const char* t : testers_alpha) {
-        ImGui::Bullet();
-        ImGui::SameLine();
-        ImGui::Text("%s", t);
+        constexpr const char* testers_alpha[] = {
+            "Beaned", "Dawky", "QueenHidi", "Snuhr", "Water"
+        };
+        ImGui::Indent(8.0f);
+        for (const char* t : testers_alpha) {
+            ImGui::Bullet();
+            ImGui::SameLine();
+            ImGui::Text("%s", t);
+        }
+        ImGui::Unindent(8.0f);
+
+        ImGui::TableNextColumn();
+        // ── Beta Testers ─────────────────────────────────────────────────────
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
+        ImGui::Text("Beta Testers");
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+
+        constexpr const char* testers_beta[] = {
+            "0x8081", "esnya", "GranpaVape", "Hayden", "ShadowX", "SnubbleJr", "TheMagician"
+        };
+        ImGui::Indent(8.0f);
+        for (const char* t : testers_beta) {
+            ImGui::Bullet();
+            ImGui::SameLine();
+            ImGui::Text("%s", t);
+        }
+        ImGui::Unindent(8.0f);
+        ImGui::EndTable();
     }
-    ImGui::Unindent(8.0f);
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // ── Beta Testers ────────────────────────────────────────────────────────
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
-    ImGui::Text("Beta Testers");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
-
-    constexpr const char* testers_beta[] = {
-        "0x8081", "esnya", "GranpaVape", "Hayden", "ShadowX", "SnubbleJr", "TheMagician"
-    };
-    ImGui::Indent(8.0f);
-    for (const char* t : testers_beta) {
-        ImGui::Bullet();
-        ImGui::SameLine();
-        ImGui::Text("%s", t);
-    }
-    ImGui::Unindent(8.0f);
 
     ImGui::Spacing();
     ImGui::Separator();
