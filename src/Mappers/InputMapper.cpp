@@ -869,6 +869,10 @@ void InputMapper::DrawMappingContent() {
                 bool hasGyro  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO);
                 bool hasAccel = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL);
                 bool hasTouch = SDL_GetNumGamepadTouchpads(dev.gamepad) > 0;
+
+                bool hasGyroLR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L) || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R);
+                bool hasAccelLR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L) || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R);
+
                 if (!hasGyro && !hasAccel && !hasTouch) continue;
 
                 // Section header (not selectable)
@@ -886,8 +890,9 @@ void InputMapper::DrawMappingContent() {
                     bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Y);
                     bool isCap   = (entry.channel >= SC::LeftStickTouch);
 
-                    if (isGyro  && !hasGyro)  continue;
-                    if (isAccel && !hasAccel) continue;
+                    // Hide combined sensors if split (L/R) sensors are available to avoid redundancy
+                    if (isGyro  && (hasGyroLR || !hasGyro))  continue;
+                    if (isAccel && (hasAccelLR || !hasAccel)) continue;
                     if (isGyroL && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)) continue;
                     if (isAccelL&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L))continue;
                     if (isGyroR && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R)) continue;
