@@ -12,7 +12,6 @@ class DeviceManager;
 class PreferencesManager;
 struct ProtocolDefinition;
 #include "Devices/SensorState.h"
-#include "Devices/SensorReader.h"
 
 // Moved from OutputMapper.h
 struct HapticTarget {

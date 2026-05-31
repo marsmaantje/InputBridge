@@ -1,7 +1,6 @@
 #include "AppLog.h"
 #include <SDL3/SDL_log.h>
 #include <cstdio>
-#include <cstring>
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
