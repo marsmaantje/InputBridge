@@ -38,6 +38,18 @@ public:
     /** @brief Read the accelerometer. Returns all-zero with available=false if absent. */
     static AccelState ReadAccel(SDL_Gamepad* gamepad);
 
+    /** @brief Read the left gyroscope. Returns all-zero with available=false if absent. */
+    static GyroState  ReadGyroL (SDL_Gamepad* gamepad);
+
+    /** @brief Read the left accelerometer. Returns all-zero with available=false if absent. */
+    static AccelState ReadAccelL(SDL_Gamepad* gamepad);
+
+    /** @brief Read the right gyroscope. Returns all-zero with available=false if absent. */
+    static GyroState  ReadGyroR (SDL_Gamepad* gamepad);
+
+    /** @brief Read the right accelerometer. Returns all-zero with available=false if absent. */
+    static AccelState ReadAccelR(SDL_Gamepad* gamepad);
+
     /**
      * @brief Read touchpad finger positions.
      *

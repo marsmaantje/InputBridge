@@ -14,6 +14,22 @@ bool SensorReader::Enable(SDL_Gamepad* gamepad) {
         SDL_SetGamepadSensorEnabled(gamepad, SDL_SENSOR_ACCEL, true);
         any = true;
     }
+    if (SDL_GamepadHasSensor(gamepad, SDL_SENSOR_GYRO_L)) {
+        SDL_SetGamepadSensorEnabled(gamepad, SDL_SENSOR_GYRO_L, true);
+        any = true;
+    }
+    if (SDL_GamepadHasSensor(gamepad, SDL_SENSOR_ACCEL_L)) {
+        SDL_SetGamepadSensorEnabled(gamepad, SDL_SENSOR_ACCEL_L, true);
+        any = true;
+    }
+    if (SDL_GamepadHasSensor(gamepad, SDL_SENSOR_GYRO_R)) {
+        SDL_SetGamepadSensorEnabled(gamepad, SDL_SENSOR_GYRO_R, true);
+        any = true;
+    }
+    if (SDL_GamepadHasSensor(gamepad, SDL_SENSOR_ACCEL_R)) {
+        SDL_SetGamepadSensorEnabled(gamepad, SDL_SENSOR_ACCEL_R, true);
+        any = true;
+    }
     if (SDL_GetNumGamepadTouchpads(gamepad) > 0) {
         any = true;
     }
@@ -44,6 +60,66 @@ AccelState SensorReader::ReadAccel(SDL_Gamepad* gamepad) {
 
     float data[3] = {0.f, 0.f, 0.f};
     if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_ACCEL, data, 3)) return state;
+
+    state.available = true;
+    state.x = std::clamp(data[0] / AccelState::SCALE, -1.f, 1.f);
+    state.y = std::clamp(data[1] / AccelState::SCALE, -1.f, 1.f);
+    state.z = std::clamp(data[2] / AccelState::SCALE, -1.f, 1.f);
+    return state;
+}
+
+GyroState SensorReader::ReadGyroL(SDL_Gamepad* gamepad) {
+    GyroState state;
+    if (!gamepad) return state;
+    if (!SDL_GamepadHasSensor(gamepad, SDL_SENSOR_GYRO_L)) return state;
+
+    float data[3] = {0.f, 0.f, 0.f};
+    if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_GYRO_L, data, 3)) return state;
+
+    state.available = true;
+    state.x = std::clamp(data[0] / GyroState::SCALE, -1.f, 1.f);
+    state.y = std::clamp(data[1] / GyroState::SCALE, -1.f, 1.f);
+    state.z = std::clamp(data[2] / GyroState::SCALE, -1.f, 1.f);
+    return state;
+}
+
+AccelState SensorReader::ReadAccelL(SDL_Gamepad* gamepad) {
+    AccelState state;
+    if (!gamepad) return state;
+    if (!SDL_GamepadHasSensor(gamepad, SDL_SENSOR_ACCEL_L)) return state;
+
+    float data[3] = {0.f, 0.f, 0.f};
+    if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_ACCEL_L, data, 3)) return state;
+
+    state.available = true;
+    state.x = std::clamp(data[0] / AccelState::SCALE, -1.f, 1.f);
+    state.y = std::clamp(data[1] / AccelState::SCALE, -1.f, 1.f);
+    state.z = std::clamp(data[2] / AccelState::SCALE, -1.f, 1.f);
+    return state;
+}
+
+GyroState SensorReader::ReadGyroR(SDL_Gamepad* gamepad) {
+    GyroState state;
+    if (!gamepad) return state;
+    if (!SDL_GamepadHasSensor(gamepad, SDL_SENSOR_GYRO_R)) return state;
+
+    float data[3] = {0.f, 0.f, 0.f};
+    if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_GYRO_R, data, 3)) return state;
+
+    state.available = true;
+    state.x = std::clamp(data[0] / GyroState::SCALE, -1.f, 1.f);
+    state.y = std::clamp(data[1] / GyroState::SCALE, -1.f, 1.f);
+    state.z = std::clamp(data[2] / GyroState::SCALE, -1.f, 1.f);
+    return state;
+}
+
+AccelState SensorReader::ReadAccelR(SDL_Gamepad* gamepad) {
+    AccelState state;
+    if (!gamepad) return state;
+    if (!SDL_GamepadHasSensor(gamepad, SDL_SENSOR_ACCEL_R)) return state;
+
+    float data[3] = {0.f, 0.f, 0.f};
+    if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_ACCEL_R, data, 3)) return state;
 
     state.available = true;
     state.x = std::clamp(data[0] / AccelState::SCALE, -1.f, 1.f);

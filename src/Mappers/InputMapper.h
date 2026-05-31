@@ -59,7 +59,11 @@ class InputMapper {
             TouchX, TouchY, TouchPressure,
             Touch2X, Touch2Y,
             LeftStickTouch, RightStickTouch,
-            LeftGripTouch, RightGripTouch
+            LeftGripTouch, RightGripTouch,
+            GyroLX, GyroLY, GyroLZ,
+            AccelLX, AccelLY, AccelLZ,
+            GyroRX, GyroRY, GyroRZ,
+            AccelRX, AccelRY, AccelRZ
         };
         SensorChannel sensorChannel = SensorChannel::None;
     };
@@ -197,6 +201,10 @@ class InputMapper {
             SDL_JoystickID instance_id;
             float gyro[3];
             float accel[3];
+            float gyroL[3];
+            float accelL[3];
+            float gyroR[3];
+            float accelR[3];
             float touch[3];  // x, y, pressure for primary finger
             float touch2[2]; // x, y for secondary finger
             bool capSense[4]; // LS, RS, LG, RG

@@ -183,8 +183,16 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
             auto g = SensorReader::ReadGyro(dev.gamepad);
             auto a = SensorReader::ReadAccel(dev.gamepad);
             auto t = SensorReader::ReadTouch(dev.gamepad);
+            auto gl = SensorReader::ReadGyroL(dev.gamepad);
+            auto al = SensorReader::ReadAccelL(dev.gamepad);
+            auto gr = SensorReader::ReadGyroR(dev.gamepad);
+            auto ar = SensorReader::ReadAccelR(dev.gamepad);
             ss.gyro[0] = g.x; ss.gyro[1] = g.y; ss.gyro[2] = g.z;
             ss.accel[0] = a.x; ss.accel[1] = a.y; ss.accel[2] = a.z;
+            ss.gyroL[0] = gl.x; ss.gyroL[1] = gl.y; ss.gyroL[2] = gl.z;
+            ss.accelL[0] = al.x; ss.accelL[1] = al.y; ss.accelL[2] = al.z;
+            ss.gyroR[0] = gr.x; ss.gyroR[1] = gr.y; ss.gyroR[2] = gr.z;
+            ss.accelR[0] = ar.x; ss.accelR[1] = ar.y; ss.accelR[2] = ar.z;
             ss.touch[0] = t.fingers[0].x; ss.touch[1] = t.fingers[0].y; ss.touch[2] = t.fingers[0].pressure;
             ss.touch2[0] = t.fingers[1].x; ss.touch2[1] = t.fingers[1].y;
             ss.capSense[0] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK);
@@ -354,6 +362,10 @@ void InputMapper::UpdateListening() {
             auto g = SensorReader::ReadGyro(dev.gamepad);
             auto a = SensorReader::ReadAccel(dev.gamepad);
             auto t = SensorReader::ReadTouch(dev.gamepad);
+            auto gl = SensorReader::ReadGyroL(dev.gamepad);
+            auto al = SensorReader::ReadAccelL(dev.gamepad);
+            auto gr = SensorReader::ReadGyroR(dev.gamepad);
+            auto ar = SensorReader::ReadAccelR(dev.gamepad);
 
             auto checkSensor = [&](float cur, float base, SC ch, float threshold) -> bool {
                 if (std::abs(cur - base) > threshold) {
@@ -396,6 +408,18 @@ void InputMapper::UpdateListening() {
             if (checkSensor(a.x, baseline->accel[0], SC::AccelX, 0.4f)) return;
             if (checkSensor(a.y, baseline->accel[1], SC::AccelY, 0.4f)) return;
             if (checkSensor(a.z, baseline->accel[2], SC::AccelZ, 0.4f)) return;
+            if (checkSensor(gl.x, baseline->gyroL[0], SC::GyroLX, 0.4f)) return;
+            if (checkSensor(gl.y, baseline->gyroL[1], SC::GyroLY, 0.4f)) return;
+            if (checkSensor(gl.z, baseline->gyroL[2], SC::GyroLZ, 0.4f)) return;
+            if (checkSensor(al.x, baseline->accelL[0], SC::AccelLX, 0.4f)) return;
+            if (checkSensor(al.y, baseline->accelL[1], SC::AccelLY, 0.4f)) return;
+            if (checkSensor(al.z, baseline->accelL[2], SC::AccelLZ, 0.4f)) return;
+            if (checkSensor(gr.x, baseline->gyroR[0], SC::GyroRX, 0.4f)) return;
+            if (checkSensor(gr.y, baseline->gyroR[1], SC::GyroRY, 0.4f)) return;
+            if (checkSensor(gr.z, baseline->gyroR[2], SC::GyroRZ, 0.4f)) return;
+            if (checkSensor(ar.x, baseline->accelR[0], SC::AccelRX, 0.4f)) return;
+            if (checkSensor(ar.y, baseline->accelR[1], SC::AccelRY, 0.4f)) return;
+            if (checkSensor(ar.z, baseline->accelR[2], SC::AccelRZ, 0.4f)) return;
 
             if (t.available) {
                 // For touchpads, we look for activation (pressure) or significant movement.
@@ -765,6 +789,18 @@ void InputMapper::DrawMappingContent() {
         { SC::AccelX,        "Accel X (lateral)" },
         { SC::AccelY,        "Accel Y (vertical)"},
         { SC::AccelZ,        "Accel Z (fore/aft)"},
+        { SC::GyroLX,        "Gyro L - X"        },
+        { SC::GyroLY,        "Gyro L - Y"        },
+        { SC::GyroLZ,        "Gyro L - Z"        },
+        { SC::AccelLX,       "Accel L - X"       },
+        { SC::AccelLY,       "Accel L - Y"       },
+        { SC::AccelLZ,       "Accel L - Z"       },
+        { SC::GyroRX,        "Gyro R - X"        },
+        { SC::GyroRY,        "Gyro R - Y"        },
+        { SC::GyroRZ,        "Gyro R - Z"        },
+        { SC::AccelRX,       "Accel R - X"       },
+        { SC::AccelRY,       "Accel R - Y"       },
+        { SC::AccelRZ,       "Accel R - Z"       },
         { SC::TouchX,        "Touch X"           },
         { SC::TouchY,        "Touch Y"           },
         { SC::TouchPressure, "Touch Pressure"    },
@@ -843,11 +879,19 @@ void InputMapper::DrawMappingContent() {
                     // Skip channels the hardware doesn't have.
                     bool isGyro  = (entry.channel >= SC::GyroX  && entry.channel <= SC::GyroZ);
                     bool isAccel = (entry.channel >= SC::AccelX && entry.channel <= SC::AccelZ);
+                    bool isGyroL = (entry.channel >= SC::GyroLX && entry.channel <= SC::GyroLZ);
+                    bool isAccelL= (entry.channel >= SC::AccelLX && entry.channel <= SC::AccelLZ);
+                    bool isGyroR = (entry.channel >= SC::GyroRX && entry.channel <= SC::GyroRZ);
+                    bool isAccelR= (entry.channel >= SC::AccelRX && entry.channel <= SC::AccelRZ);
                     bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Y);
                     bool isCap   = (entry.channel >= SC::LeftStickTouch);
 
                     if (isGyro  && !hasGyro)  continue;
                     if (isAccel && !hasAccel) continue;
+                    if (isGyroL && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)) continue;
+                    if (isAccelL&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L))continue;
+                    if (isGyroR && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R)) continue;
+                    if (isAccelR&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R))continue;
                     if (isTouch && !hasTouch) continue;
 
                     if (isCap) {
@@ -1257,6 +1301,18 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
         case SC::AccelX:        raw = SensorReader::ReadAccel(gamepad).x;             break;
         case SC::AccelY:        raw = SensorReader::ReadAccel(gamepad).y;             break;
         case SC::AccelZ:        raw = SensorReader::ReadAccel(gamepad).z;             break;
+        case SC::GyroLX:        raw = SensorReader::ReadGyroL(gamepad).x;             break;
+        case SC::GyroLY:        raw = SensorReader::ReadGyroL(gamepad).y;             break;
+        case SC::GyroLZ:        raw = SensorReader::ReadGyroL(gamepad).z;             break;
+        case SC::AccelLX:       raw = SensorReader::ReadAccelL(gamepad).x;            break;
+        case SC::AccelLY:       raw = SensorReader::ReadAccelL(gamepad).y;            break;
+        case SC::AccelLZ:       raw = SensorReader::ReadAccelL(gamepad).z;            break;
+        case SC::GyroRX:        raw = SensorReader::ReadGyroR(gamepad).x;             break;
+        case SC::GyroRY:        raw = SensorReader::ReadGyroR(gamepad).y;             break;
+        case SC::GyroRZ:        raw = SensorReader::ReadGyroR(gamepad).z;             break;
+        case SC::AccelRX:       raw = SensorReader::ReadAccelR(gamepad).x;            break;
+        case SC::AccelRY:       raw = SensorReader::ReadAccelR(gamepad).y;            break;
+        case SC::AccelRZ:       raw = SensorReader::ReadAccelR(gamepad).z;            break;
         case SC::TouchX: {
             auto t = SensorReader::ReadTouch(gamepad);
             raw = t.fingers[0].active ? t.primaryXCentered() : 0.f;
