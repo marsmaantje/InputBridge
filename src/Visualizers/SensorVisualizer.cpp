@@ -151,7 +151,7 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
         return;
     }
 
-    SensorReader::Enable(dev.gamepad);
+    SensorReader::EnableAll(dev.gamepad);
 
     ImGui::PushID("sensor_viz");
 

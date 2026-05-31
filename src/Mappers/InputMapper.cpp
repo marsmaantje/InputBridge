@@ -177,7 +177,7 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
 
         // Capture initial sensor states for gamepads (used by both Axis and Digital listening)
         if (dev.gamepad) {
-            SensorReader::Enable(dev.gamepad); // Ensure sensors are enabled for baseline capture
+            SensorReader::EnableAll(dev.gamepad); // Ensure sensors are enabled for baseline capture
             ListeningState::SensorState ss;
             ss.instance_id = dev.instance_id;
             ss.gyro   = SensorReader::ReadGyro (dev.gamepad);
@@ -780,18 +780,18 @@ void InputMapper::DrawMappingContent() {
         { SC::AccelX,        "Accel X (lateral)" },
         { SC::AccelY,        "Accel Y (vertical)"},
         { SC::AccelZ,        "Accel Z (fore/aft)"},
-        { SC::GyroLX,        "Gyro L - X"        },
-        { SC::GyroLY,        "Gyro L - Y"        },
-        { SC::GyroLZ,        "Gyro L - Z"        },
-        { SC::AccelLX,       "Accel L - X"       },
-        { SC::AccelLY,       "Accel L - Y"       },
-        { SC::AccelLZ,       "Accel L - Z"       },
-        { SC::GyroRX,        "Gyro R - X"        },
-        { SC::GyroRY,        "Gyro R - Y"        },
-        { SC::GyroRZ,        "Gyro R - Z"        },
-        { SC::AccelRX,       "Accel R - X"       },
-        { SC::AccelRY,       "Accel R - Y"       },
-        { SC::AccelRZ,       "Accel R - Z"       },
+        { SC::GyroLX,        "Gyro L - X  (Left Joy-Con / L half)"  },
+        { SC::GyroLY,        "Gyro L - Y  (Left Joy-Con / L half)"  },
+        { SC::GyroLZ,        "Gyro L - Z  (Left Joy-Con / L half)"  },
+        { SC::AccelLX,       "Accel L - X  (Left Joy-Con / L half)" },
+        { SC::AccelLY,       "Accel L - Y  (Left Joy-Con / L half)" },
+        { SC::AccelLZ,       "Accel L - Z  (Left Joy-Con / L half)" },
+        { SC::GyroRX,        "Gyro R - X  (Right Joy-Con / R half)" },
+        { SC::GyroRY,        "Gyro R - Y  (Right Joy-Con / R half)" },
+        { SC::GyroRZ,        "Gyro R - Z  (Right Joy-Con / R half)" },
+        { SC::AccelRX,       "Accel R - X  (Right Joy-Con / R half)"},
+        { SC::AccelRY,       "Accel R - Y  (Right Joy-Con / R half)"},
+        { SC::AccelRZ,       "Accel R - Z  (Right Joy-Con / R half)"},
         { SC::TouchX,        "Touch X"           },
         { SC::TouchY,        "Touch Y"           },
         { SC::TouchPressure, "Touch Pressure"    },
@@ -1287,7 +1287,7 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
     if (!gamepad) return 0.f;
 
     // Enable sensors each frame — SDL ignores redundant calls, cost is negligible.
-    SensorReader::Enable(gamepad);
+    SensorReader::EnableAll(gamepad);
 
     float raw = 0.f;
     switch (cfg.sensorChannel) {

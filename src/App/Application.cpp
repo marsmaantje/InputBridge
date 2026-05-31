@@ -49,6 +49,25 @@ void Application::SetSDLHints()
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM_HOME_LED,   "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI,                  "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS,        "1");
+
+    // ── Nintendo Switch / Joy-Con ────────────────────────────────────────────
+    // Enable the HIDAPI driver so gyro, accel, and rumble are accessible on
+    // Switch Pro Controllers and Joy-Cons.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
+
+    // When a Left and Right Joy-Con are both connected, merge them into a
+    // single virtual gamepad.  In merged mode SDL exposes SDL_SENSOR_GYRO_L
+    // and SDL_SENSOR_GYRO_R (one per physical controller) rather than two
+    // separate devices each with only SDL_SENSOR_GYRO.  The existing GyroL /
+    // GyroR and AccelL / AccelR sensor channels then address each Joy-Con's
+    // IMU independently.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_COMBINE_JOY_CONS, "1");
+
+    // ── PlayStation ──────────────────────────────────────────────────────────
+    // Enable HIDAPI for DualShock 4 and DualSense so touchpad, gyro, and accel
+    // are available even when connected over USB without Steam Input.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
 }
 
 // ── CreateWindow ─────────────────────────────────────────────────────────────

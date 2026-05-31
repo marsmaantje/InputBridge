@@ -12,11 +12,6 @@ DeviceManager &DeviceManager::GetInstance() {
 }
 
 DeviceManager::DeviceManager() {
-    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
-    // Enable HIDAPI drivers for advanced features (touchpad/gyro/accel) on Steam controllers and others
-    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "1");
-    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
-    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
 }
 
 DeviceManager::~DeviceManager() { CloseAllDevices(); }
