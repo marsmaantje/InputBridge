@@ -16,10 +16,14 @@ public:
     void Draw(const DeviceState& dev) override;
 
 private:
-    void DrawGyro (SDL_Gamepad* gamepad);
-    void DrawAccel(SDL_Gamepad* gamepad);
-    void DrawTouch(SDL_Gamepad* gamepad);
+    void DrawGyro     (SDL_Gamepad* gamepad);
+    void DrawAccel    (SDL_Gamepad* gamepad);
+    void DrawTouch    (SDL_Gamepad* gamepad);
+    void DrawCapSense (SDL_Gamepad* gamepad);
 
     /// Horizontal bar showing a [-1, 1] value with axis label.
     static void DrawAxisBar(const char* label, float value, float width = 220.f);
+
+    /// Lit/unlit pill-shaped indicator for a boolean capacitive-touch input.
+    static void DrawCapSenseButton(const char* label, bool active);
 };

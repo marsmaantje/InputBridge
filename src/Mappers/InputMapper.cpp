@@ -1076,7 +1076,7 @@ void InputMapper::DrawMappingContent() {
             int toDelete = -1;
             if (ImGui::BeginTable("t_digital", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
                 ImGui::TableSetupColumn("Device",        ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Button Index",  ImGuiTableColumnFlags_WidthFixed, 90.f);
+                ImGui::TableSetupColumn("Input",         ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableSetupColumn("Digital Field", ImGuiTableColumnFlags_WidthFixed, 150.f);
                 ImGui::TableSetupColumn("Mode",          ImGuiTableColumnFlags_WidthFixed, 90.f);
                 ImGui::TableSetupColumn("",              ImGuiTableColumnFlags_WidthStretch);

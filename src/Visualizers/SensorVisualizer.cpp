@@ -38,7 +38,77 @@ void SensorVisualizer::DrawAxisBar(const char* label, float value, float width) 
     ImGui::Text("%-6s %+.3f", label, value);
 }
 
-// ── Gyro ──────────────────────────────────────────────────────────────────────
+// ── CapSense helpers ──────────────────────────────────────────────────────────
+
+void SensorVisualizer::DrawCapSenseButton(const char* label, bool active) {
+    ImDrawList* dl  = ImGui::GetWindowDrawList();
+    ImVec2      pos = ImGui::GetCursorScreenPos();
+    ImGuiStyle& sty = ImGui::GetStyle();
+
+    const float pillW = 90.f;
+    const float pillH = ImGui::GetFrameHeight();
+    const float rounding = pillH * 0.4f;
+
+    // Background pill
+    ImU32 bgColor  = active
+        ? IM_COL32(255, 50, 50, 255)    // active: red, matching GamepadVisualizer
+        : IM_COL32(80,  80, 80, 220);   // inactive: muted grey
+    ImU32 outColor = active
+        ? IM_COL32(255, 120, 100, 255)
+        : IM_COL32(130, 130, 130, 200);
+
+    dl->AddRectFilled(pos, ImVec2(pos.x + pillW, pos.y + pillH), bgColor, rounding);
+    dl->AddRect      (pos, ImVec2(pos.x + pillW, pos.y + pillH), outColor, rounding, 0, 1.5f);
+
+    // Centered label text
+    ImVec2 textSz = ImGui::CalcTextSize(label);
+    ImVec2 textPos = ImVec2(pos.x + (pillW - textSz.x) * 0.5f,
+                            pos.y + (pillH - textSz.y) * 0.5f);
+    ImU32 textColor = active ? IM_COL32(255, 255, 255, 255) : IM_COL32(180, 180, 180, 255);
+    dl->AddText(textPos, textColor, label);
+
+    ImGui::Dummy(ImVec2(pillW, pillH));
+}
+
+void SensorVisualizer::DrawCapSense(SDL_Gamepad* gamepad) {
+    struct CapEntry {
+        SDL_GamepadCapSenseType type;
+        const char*             label;
+    };
+    static constexpr CapEntry kCaps[] = {
+        { SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  "L Stick"   },
+        { SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, "R Stick"   },
+        { SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   "L Grip"    },
+        { SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  "R Grip"    },
+    };
+
+    bool anyPresent = false;
+    for (const auto& e : kCaps)
+        if (SDL_GamepadHasCapSense(gamepad, e.type)) { anyPresent = true; break; }
+
+    if (!anyPresent) {
+        ImGui::TextDisabled("Capacitive-sense inputs not available on this controller.");
+        return;
+    }
+
+    ImGui::TextDisabled("Touch = 1 (pressed), No touch = 0 (released)");
+    ImGui::Spacing();
+
+    ImGui::PushID("capsense");
+    float spacing = ImGui::GetStyle().ItemSpacing.x;
+    bool firstInRow = true;
+    for (const auto& e : kCaps) {
+        if (!SDL_GamepadHasCapSense(gamepad, e.type)) continue;
+        bool active = SDL_GetGamepadCapSense(gamepad, e.type);
+
+        if (!firstInRow) ImGui::SameLine(0.f, spacing);
+        DrawCapSenseButton(e.label, active);
+        firstInRow = false;
+    }
+    ImGui::PopID();
+}
+
+
 
 void SensorVisualizer::DrawGyro(SDL_Gamepad* gamepad) {
     GyroState g = SensorReader::ReadGyro(gamepad);
@@ -168,9 +238,14 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
     if (ImGui::CollapsingHeader("Touchpad", ImGuiTreeNodeFlags_DefaultOpen))
         DrawTouch(dev.gamepad);
 
+    ImGui::Spacing();
+
+    if (ImGui::CollapsingHeader("Capacitive Sense", ImGuiTreeNodeFlags_DefaultOpen))
+        DrawCapSense(dev.gamepad);
+
     ImGui::PopID();
 
     ImGui::Spacing();
     ImGui::Separator();
-    ImGui::TextDisabled("Map sensors to analog channels in the Input Mapper.");
+    ImGui::TextDisabled("Map sensors to analog channels, and CapSense inputs to digital channels, in the Input Mapper.");
 }
