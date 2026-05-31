@@ -1,6 +1,5 @@
 #pragma once
 #include "DeviceVisualizer.h"
-#include "Devices/SensorState.h"
 
 /**
  * @file SensorVisualizer.h

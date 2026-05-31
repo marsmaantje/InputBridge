@@ -3,7 +3,6 @@
 #include "Devices/SensorReader.h"
 #include "imgui.h"
 #include <SDL3/SDL.h>
-#include <algorithm>
 #include <cmath>
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

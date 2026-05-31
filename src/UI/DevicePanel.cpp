@@ -15,7 +15,6 @@
 #include "Visualizers/VirtualDeviceVisualizer.h"
 #include "Visualizers/WiimoteVisualizer.h"
 #include "Visualizers/SensorVisualizer.h"
-#include "Haptics/GamepadHaptics.h"
 #include <SDL3/SDL.h>
 
 #include <string>
