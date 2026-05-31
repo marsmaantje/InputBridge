@@ -1,60 +1,108 @@
 #pragma once
 #include "SensorState.h"
 #include <SDL3/SDL.h>
+#include <array>
 
 /**
  * @file SensorReader.h
  * @brief Reads gyro, accelerometer, and touchpad data from SDL3 gamepad handles.
  *
+ * Only sensors actually present on the device are read; capability is gated
+ * through SensorCapabilities, which callers can query once on device connect
+ * and cache.
+ *
  * Usage per frame:
  * @code
- *   SensorReader reader;
- *   if (reader.Enable(gamepad))  {              // call once on device connect
- *       GyroState  g = reader.ReadGyro(gamepad);
- *       AccelState a = reader.ReadAccel(gamepad);
- *       TouchState t = reader.ReadTouch(gamepad);
- *   }
+ *   auto caps = SensorReader::QueryCapabilities(gamepad); // once on connect
+ *   SensorReader::Enable(gamepad, caps);                  // once on connect
+ *
+ *   if (caps.gyro)   GyroState  g = SensorReader::ReadGyro(gamepad);
+ *   if (caps.accel)  AccelState a = SensorReader::ReadAccel(gamepad);
+ *   if (caps.touch)  TouchState t = SensorReader::ReadTouch(gamepad);
  * @endcode
  *
- * Enable() calls SDL_SetGamepadSensorEnabled() for both sensor types.
- * If a sensor is absent, the corresponding State::available flag is false.
- *
- * Thread-safety: all methods must be called from the main thread (SDL
- * sensor reads are not thread-safe).
+ * Thread-safety: all methods must be called from the main thread (SDL sensor
+ * reads are not thread-safe).
  */
+
+/// Capabilities present on a specific gamepad, queried once at connect time.
+struct SensorCapabilities {
+    bool gyro   = false;  ///< Single / main gyroscope
+    bool accel  = false;  ///< Single / main accelerometer
+    bool gyroL  = false;  ///< Left-side gyroscope  (Steam Deck)
+    bool accelL = false;  ///< Left-side accelerometer
+    bool gyroR  = false;  ///< Right-side gyroscope
+    bool accelR = false;  ///< Right-side accelerometer
+    bool touch  = false;  ///< At least one touchpad
+    bool capSenseLeftStick  = false;  ///< Capacitive touch — left stick
+    bool capSenseRightStick = false;  ///< Capacitive touch — right stick
+    bool capSenseLeftGrip   = false;  ///< Capacitive touch — left grip
+    bool capSenseRightGrip  = false;  ///< Capacitive touch — right grip
+
+    /// Returns true if any sensor or touch input is available.
+    bool HasAny() const {
+        return gyro || accel || gyroL || accelL || gyroR || accelR || touch
+            || capSenseLeftStick || capSenseRightStick
+            || capSenseLeftGrip  || capSenseRightGrip;
+    }
+};
+
 class SensorReader {
 public:
     /**
-     * @brief Enable sensors on a gamepad.
+     * @brief Query which sensor capabilities a gamepad supports.
+     *
+     * Call once when a device connects and cache the result.  Passing the
+     * cached SensorCapabilities to Enable() and the Read* methods avoids
+     * redundant SDL capability queries every frame.
+     */
+    static SensorCapabilities QueryCapabilities(SDL_Gamepad* gamepad);
+
+    /**
+     * @brief Enable all sensors reported present in @p caps.
      *
      * Safe to call every frame — SDL ignores redundant enable calls.
-     * Returns true if at least one sensor or touchpad is available.
      */
-    static bool Enable(SDL_Gamepad* gamepad);
+    static void Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps);
 
-    /** @brief Read the gyroscope. Returns all-zero with available=false if absent. */
+    /**
+     * @brief Enable sensors without a pre-queried capabilities struct.
+     *
+     * Convenience overload: queries capabilities internally and enables them.
+     * Returns the discovered capabilities so callers can cache them.
+     */
+    static SensorCapabilities EnableAll(SDL_Gamepad* gamepad);
+
+    // ── Motion sensors ───────────────────────────────────────────────────────
+
+    /** @brief Read main gyroscope. Returns available=false if absent. */
     static GyroState  ReadGyro (SDL_Gamepad* gamepad);
-
-    /** @brief Read the accelerometer. Returns all-zero with available=false if absent. */
+    /** @brief Read main accelerometer. Returns available=false if absent. */
     static AccelState ReadAccel(SDL_Gamepad* gamepad);
 
-    /** @brief Read the left gyroscope. Returns all-zero with available=false if absent. */
+    /** @brief Read left-side gyroscope. Returns available=false if absent. */
     static GyroState  ReadGyroL (SDL_Gamepad* gamepad);
-
-    /** @brief Read the left accelerometer. Returns all-zero with available=false if absent. */
+    /** @brief Read left-side accelerometer. Returns available=false if absent. */
     static AccelState ReadAccelL(SDL_Gamepad* gamepad);
 
-    /** @brief Read the right gyroscope. Returns all-zero with available=false if absent. */
+    /** @brief Read right-side gyroscope. Returns available=false if absent. */
     static GyroState  ReadGyroR (SDL_Gamepad* gamepad);
-
-    /** @brief Read the right accelerometer. Returns all-zero with available=false if absent. */
+    /** @brief Read right-side accelerometer. Returns available=false if absent. */
     static AccelState ReadAccelR(SDL_Gamepad* gamepad);
+
+    // ── Touch input ──────────────────────────────────────────────────────────
 
     /**
      * @brief Read touchpad finger positions.
      *
-     * Reads pad index 0 (the main touchpad on DualSense and Steam Controller).
+     * Finger 0 → primary pad, finger 0 (DualSense pad / Steam right pad).
+     * Finger 1 → second pad finger (DualSense) or second pad (Steam left pad).
      * Returns available=false if no touchpad is present.
      */
     static TouchState ReadTouch(SDL_Gamepad* gamepad);
+
+private:
+    /// Shared implementation: read three-axis sensor data for any SDL_SensorType.
+    static GyroState  ReadGyroSensor (SDL_Gamepad* gamepad, SDL_SensorType type);
+    static AccelState ReadAccelSensor(SDL_Gamepad* gamepad, SDL_SensorType type);
 };

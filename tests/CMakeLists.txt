@@ -125,3 +125,30 @@ add_executable(test_osc_subchannel
 target_include_directories(test_osc_subchannel PRIVATE ${IB_SRC})
 target_link_libraries(test_osc_subchannel PRIVATE GTest::gtest_main)
 gtest_discover_tests(test_osc_subchannel)
+
+# 10. test_sensor_state ────────────────────────────────────────────────────────
+# Tests the GyroState, AccelState, and TouchState value-type structs defined in
+# Devices/SensorState.h.  No SDL calls are made; the file is header-only, so no
+# extra .cpp sources are needed.  Covers default construction, scale constants,
+# all TouchState helpers (primaryX/Y/Pressure, centered remapping), and second-
+# finger independence.
+add_executable(test_sensor_state
+    test_sensor_state.cpp
+)
+target_include_directories(test_sensor_state PRIVATE ${IB_SRC})
+target_link_libraries(test_sensor_state PRIVATE GTest::gtest_main SDL3::SDL3)
+gtest_discover_tests(test_sensor_state)
+
+# 11. test_input_source ────────────────────────────────────────────────────────
+# Tests InputMapper::InputSource default construction, the SensorChannel enum
+# ordering relied on by the serialisation code and the UI range-checks, and the
+# output-range / deadzone / invert post-processing pipeline shared by
+# ProcessSensor() and ProcessAxis().  The pipeline is replicated as a pure free
+# function so there is no SDL or DeviceManager dependency.  Also covers
+# ButtonToAnalogMapping and ButtonToDigitalMapping defaults.
+add_executable(test_input_source
+    test_input_source.cpp
+)
+target_include_directories(test_input_source PRIVATE ${IB_SRC} ${IB_WHEELRPM})
+target_link_libraries(test_input_source PRIVATE GTest::gtest_main SDL3::SDL3)
+gtest_discover_tests(test_input_source)

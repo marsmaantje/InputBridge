@@ -180,25 +180,17 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
             SensorReader::Enable(dev.gamepad); // Ensure sensors are enabled for baseline capture
             ListeningState::SensorState ss;
             ss.instance_id = dev.instance_id;
-            auto g = SensorReader::ReadGyro(dev.gamepad);
-            auto a = SensorReader::ReadAccel(dev.gamepad);
-            auto t = SensorReader::ReadTouch(dev.gamepad);
-            auto gl = SensorReader::ReadGyroL(dev.gamepad);
-            auto al = SensorReader::ReadAccelL(dev.gamepad);
-            auto gr = SensorReader::ReadGyroR(dev.gamepad);
-            auto ar = SensorReader::ReadAccelR(dev.gamepad);
-            ss.gyro[0] = g.x; ss.gyro[1] = g.y; ss.gyro[2] = g.z;
-            ss.accel[0] = a.x; ss.accel[1] = a.y; ss.accel[2] = a.z;
-            ss.gyroL[0] = gl.x; ss.gyroL[1] = gl.y; ss.gyroL[2] = gl.z;
-            ss.accelL[0] = al.x; ss.accelL[1] = al.y; ss.accelL[2] = al.z;
-            ss.gyroR[0] = gr.x; ss.gyroR[1] = gr.y; ss.gyroR[2] = gr.z;
-            ss.accelR[0] = ar.x; ss.accelR[1] = ar.y; ss.accelR[2] = ar.z;
-            ss.touch[0] = t.fingers[0].x; ss.touch[1] = t.fingers[0].y; ss.touch[2] = t.fingers[0].pressure;
-            ss.touch2[0] = t.fingers[1].x; ss.touch2[1] = t.fingers[1].y;
-            ss.capSense[0] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK);
-            ss.capSense[1] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK);
-            ss.capSense[2] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP);
-            ss.capSense[3] = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP);
+            ss.gyro   = SensorReader::ReadGyro (dev.gamepad);
+            ss.accel  = SensorReader::ReadAccel(dev.gamepad);
+            ss.gyroL  = SensorReader::ReadGyroL(dev.gamepad);
+            ss.accelL = SensorReader::ReadAccelL(dev.gamepad);
+            ss.gyroR  = SensorReader::ReadGyroR(dev.gamepad);
+            ss.accelR = SensorReader::ReadAccelR(dev.gamepad);
+            ss.touch  = SensorReader::ReadTouch(dev.gamepad);
+            ss.capSenseLeftStick  = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK);
+            ss.capSenseRightStick = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK);
+            ss.capSenseLeftGrip   = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP);
+            ss.capSenseRightGrip  = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP);
             m_ListeningState.initialSensors.push_back(ss);
         }
     }
@@ -286,9 +278,9 @@ void InputMapper::UpdateListening() {
             }
             if (!baseline) continue;
 
-            auto checkCapDigital = [&](SDL_GamepadCapSenseType ct, int idx, SC ch) -> bool {
+            auto checkCapDigital = [&](SDL_GamepadCapSenseType ct, bool baseline_val, SC ch) -> bool {
                 bool cur = SDL_GetGamepadCapSense(dev.gamepad, ct);
-                if (cur != baseline->capSense[idx]) {
+                if (cur != baseline_val) {
                     bool updated = false;
                     if (m_ListeningState.targetName == "digital") {
                         if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
@@ -314,10 +306,10 @@ void InputMapper::UpdateListening() {
                 return false;
             };
 
-            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  0, SC::LeftStickTouch)) return;
-            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, 1, SC::RightStickTouch)) return;
-            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   2, SC::LeftGripTouch)) return;
-            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  3, SC::RightGripTouch)) return;
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  baseline->capSenseLeftStick,  SC::LeftStickTouch))  return;
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, baseline->capSenseRightStick, SC::RightStickTouch)) return;
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   baseline->capSenseLeftGrip,   SC::LeftGripTouch))   return;
+            if (checkCapDigital(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  baseline->capSenseRightGrip,  SC::RightGripTouch))  return;
         }
     }
 
@@ -359,9 +351,9 @@ void InputMapper::UpdateListening() {
             }
             if (!baseline) continue;
 
-            auto g = SensorReader::ReadGyro(dev.gamepad);
-            auto a = SensorReader::ReadAccel(dev.gamepad);
-            auto t = SensorReader::ReadTouch(dev.gamepad);
+            auto g  = SensorReader::ReadGyro (dev.gamepad);
+            auto a  = SensorReader::ReadAccel(dev.gamepad);
+            auto t  = SensorReader::ReadTouch(dev.gamepad);
             auto gl = SensorReader::ReadGyroL(dev.gamepad);
             auto al = SensorReader::ReadAccelL(dev.gamepad);
             auto gr = SensorReader::ReadGyroR(dev.gamepad);
@@ -381,9 +373,9 @@ void InputMapper::UpdateListening() {
                 return false;
             };
 
-            auto checkCap = [&](SDL_GamepadCapSenseType ct, int idx, SC ch) -> bool {
+            auto checkCap = [&](SDL_GamepadCapSenseType ct, bool baseline_val, SC ch) -> bool {
                 bool cur = SDL_GetGamepadCapSense(dev.gamepad, ct);
-                if (cur != baseline->capSense[idx]) {
+                if (cur != baseline_val) {
                     InputSource& src = profile.outputToInput[m_ListeningState.targetName];
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
@@ -396,42 +388,41 @@ void InputMapper::UpdateListening() {
                 return false;
             };
 
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  0, SC::LeftStickTouch)) return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, 1, SC::RightStickTouch)) return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   2, SC::LeftGripTouch)) return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  3, SC::RightGripTouch)) return;
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  baseline->capSenseLeftStick,  SC::LeftStickTouch))  return;
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, baseline->capSenseRightStick, SC::RightStickTouch)) return;
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   baseline->capSenseLeftGrip,   SC::LeftGripTouch))   return;
+            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  baseline->capSenseRightGrip,  SC::RightGripTouch))  return;
 
             // Use a significant threshold to avoid triggering on sensor noise/jitter
-            if (checkSensor(g.x, baseline->gyro[0],  SC::GyroX,  0.4f)) return;
-            if (checkSensor(g.y, baseline->gyro[1],  SC::GyroY,  0.4f)) return;
-            if (checkSensor(g.z, baseline->gyro[2],  SC::GyroZ,  0.4f)) return;
-            if (checkSensor(a.x, baseline->accel[0], SC::AccelX, 0.4f)) return;
-            if (checkSensor(a.y, baseline->accel[1], SC::AccelY, 0.4f)) return;
-            if (checkSensor(a.z, baseline->accel[2], SC::AccelZ, 0.4f)) return;
-            if (checkSensor(gl.x, baseline->gyroL[0], SC::GyroLX, 0.4f)) return;
-            if (checkSensor(gl.y, baseline->gyroL[1], SC::GyroLY, 0.4f)) return;
-            if (checkSensor(gl.z, baseline->gyroL[2], SC::GyroLZ, 0.4f)) return;
-            if (checkSensor(al.x, baseline->accelL[0], SC::AccelLX, 0.4f)) return;
-            if (checkSensor(al.y, baseline->accelL[1], SC::AccelLY, 0.4f)) return;
-            if (checkSensor(al.z, baseline->accelL[2], SC::AccelLZ, 0.4f)) return;
-            if (checkSensor(gr.x, baseline->gyroR[0], SC::GyroRX, 0.4f)) return;
-            if (checkSensor(gr.y, baseline->gyroR[1], SC::GyroRY, 0.4f)) return;
-            if (checkSensor(gr.z, baseline->gyroR[2], SC::GyroRZ, 0.4f)) return;
-            if (checkSensor(ar.x, baseline->accelR[0], SC::AccelRX, 0.4f)) return;
-            if (checkSensor(ar.y, baseline->accelR[1], SC::AccelRY, 0.4f)) return;
-            if (checkSensor(ar.z, baseline->accelR[2], SC::AccelRZ, 0.4f)) return;
+            if (checkSensor(g.x, baseline->gyro.x,   SC::GyroX,  0.4f)) return;
+            if (checkSensor(g.y, baseline->gyro.y,   SC::GyroY,  0.4f)) return;
+            if (checkSensor(g.z, baseline->gyro.z,   SC::GyroZ,  0.4f)) return;
+            if (checkSensor(a.x, baseline->accel.x,  SC::AccelX, 0.4f)) return;
+            if (checkSensor(a.y, baseline->accel.y,  SC::AccelY, 0.4f)) return;
+            if (checkSensor(a.z, baseline->accel.z,  SC::AccelZ, 0.4f)) return;
+            if (checkSensor(gl.x, baseline->gyroL.x, SC::GyroLX, 0.4f)) return;
+            if (checkSensor(gl.y, baseline->gyroL.y, SC::GyroLY, 0.4f)) return;
+            if (checkSensor(gl.z, baseline->gyroL.z, SC::GyroLZ, 0.4f)) return;
+            if (checkSensor(al.x, baseline->accelL.x, SC::AccelLX, 0.4f)) return;
+            if (checkSensor(al.y, baseline->accelL.y, SC::AccelLY, 0.4f)) return;
+            if (checkSensor(al.z, baseline->accelL.z, SC::AccelLZ, 0.4f)) return;
+            if (checkSensor(gr.x, baseline->gyroR.x, SC::GyroRX, 0.4f)) return;
+            if (checkSensor(gr.y, baseline->gyroR.y, SC::GyroRY, 0.4f)) return;
+            if (checkSensor(gr.z, baseline->gyroR.z, SC::GyroRZ, 0.4f)) return;
+            if (checkSensor(ar.x, baseline->accelR.x, SC::AccelRX, 0.4f)) return;
+            if (checkSensor(ar.y, baseline->accelR.y, SC::AccelRY, 0.4f)) return;
+            if (checkSensor(ar.z, baseline->accelR.z, SC::AccelRZ, 0.4f)) return;
 
             if (t.available) {
                 // For touchpads, we look for activation (pressure) or significant movement.
                 if (t.fingers[0].active) {
-                    if (checkSensor(t.fingers[0].pressure, baseline->touch[2], SC::TouchPressure, 0.3f)) return;
-                    if (checkSensor(t.fingers[0].x, baseline->touch[0], SC::TouchX, 0.2f)) return;
-                    if (checkSensor(t.fingers[0].y, baseline->touch[1], SC::TouchY, 0.2f)) return;
+                    if (checkSensor(t.fingers[0].pressure, baseline->touch.fingers[0].pressure, SC::TouchPressure, 0.3f)) return;
+                    if (checkSensor(t.fingers[0].x, baseline->touch.fingers[0].x, SC::TouchX, 0.2f)) return;
+                    if (checkSensor(t.fingers[0].y, baseline->touch.fingers[0].y, SC::TouchY, 0.2f)) return;
                 }
                 if (t.fingers[1].active) {
-                    // Secondary finger movement detection
-                    if (checkSensor(t.fingers[1].x, baseline->touch2[0], SC::Touch2X, 0.2f)) return;
-                    if (checkSensor(t.fingers[1].y, baseline->touch2[1], SC::Touch2Y, 0.2f)) return;
+                    if (checkSensor(t.fingers[1].x, baseline->touch.fingers[1].x, SC::Touch2X, 0.2f)) return;
+                    if (checkSensor(t.fingers[1].y, baseline->touch.fingers[1].y, SC::Touch2Y, 0.2f)) return;
                 }
             }
         }
@@ -1300,47 +1291,53 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
 
     float raw = 0.f;
     switch (cfg.sensorChannel) {
-        case SC::GyroX:         raw = SensorReader::ReadGyro(gamepad).x;              break;
-        case SC::GyroY:         raw = SensorReader::ReadGyro(gamepad).y;              break;
-        case SC::GyroZ:         raw = SensorReader::ReadGyro(gamepad).z;              break;
-        case SC::AccelX:        raw = SensorReader::ReadAccel(gamepad).x;             break;
-        case SC::AccelY:        raw = SensorReader::ReadAccel(gamepad).y;             break;
-        case SC::AccelZ:        raw = SensorReader::ReadAccel(gamepad).z;             break;
-        case SC::GyroLX:        raw = SensorReader::ReadGyroL(gamepad).x;             break;
-        case SC::GyroLY:        raw = SensorReader::ReadGyroL(gamepad).y;             break;
-        case SC::GyroLZ:        raw = SensorReader::ReadGyroL(gamepad).z;             break;
-        case SC::AccelLX:       raw = SensorReader::ReadAccelL(gamepad).x;            break;
-        case SC::AccelLY:       raw = SensorReader::ReadAccelL(gamepad).y;            break;
-        case SC::AccelLZ:       raw = SensorReader::ReadAccelL(gamepad).z;            break;
-        case SC::GyroRX:        raw = SensorReader::ReadGyroR(gamepad).x;             break;
-        case SC::GyroRY:        raw = SensorReader::ReadGyroR(gamepad).y;             break;
-        case SC::GyroRZ:        raw = SensorReader::ReadGyroR(gamepad).z;             break;
-        case SC::AccelRX:       raw = SensorReader::ReadAccelR(gamepad).x;            break;
-        case SC::AccelRY:       raw = SensorReader::ReadAccelR(gamepad).y;            break;
-        case SC::AccelRZ:       raw = SensorReader::ReadAccelR(gamepad).z;            break;
-        case SC::TouchX: {
-            auto t = SensorReader::ReadTouch(gamepad);
-            raw = t.fingers[0].active ? t.primaryXCentered() : 0.f;
+        case SC::GyroX: case SC::GyroY: case SC::GyroZ: {
+            auto s = SensorReader::ReadGyro(gamepad);
+            raw = (cfg.sensorChannel == SC::GyroX) ? s.x
+                : (cfg.sensorChannel == SC::GyroY) ? s.y : s.z;
             break;
         }
-        case SC::TouchY: {
-            auto t = SensorReader::ReadTouch(gamepad);
-            raw = t.fingers[0].active ? t.primaryYCentered() : 0.f;
+        case SC::AccelX: case SC::AccelY: case SC::AccelZ: {
+            auto s = SensorReader::ReadAccel(gamepad);
+            raw = (cfg.sensorChannel == SC::AccelX) ? s.x
+                : (cfg.sensorChannel == SC::AccelY) ? s.y : s.z;
             break;
         }
-        case SC::TouchPressure: {
-            auto t = SensorReader::ReadTouch(gamepad);
-            raw = t.fingers[0].active ? t.primaryPressure() : 0.f;
+        case SC::GyroLX: case SC::GyroLY: case SC::GyroLZ: {
+            auto s = SensorReader::ReadGyroL(gamepad);
+            raw = (cfg.sensorChannel == SC::GyroLX) ? s.x
+                : (cfg.sensorChannel == SC::GyroLY) ? s.y : s.z;
             break;
         }
-        case SC::Touch2X: {
-            auto t = SensorReader::ReadTouch(gamepad);
-            raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f) : 0.f;
+        case SC::AccelLX: case SC::AccelLY: case SC::AccelLZ: {
+            auto s = SensorReader::ReadAccelL(gamepad);
+            raw = (cfg.sensorChannel == SC::AccelLX) ? s.x
+                : (cfg.sensorChannel == SC::AccelLY) ? s.y : s.z;
             break;
         }
-        case SC::Touch2Y: {
+        case SC::GyroRX: case SC::GyroRY: case SC::GyroRZ: {
+            auto s = SensorReader::ReadGyroR(gamepad);
+            raw = (cfg.sensorChannel == SC::GyroRX) ? s.x
+                : (cfg.sensorChannel == SC::GyroRY) ? s.y : s.z;
+            break;
+        }
+        case SC::AccelRX: case SC::AccelRY: case SC::AccelRZ: {
+            auto s = SensorReader::ReadAccelR(gamepad);
+            raw = (cfg.sensorChannel == SC::AccelRX) ? s.x
+                : (cfg.sensorChannel == SC::AccelRY) ? s.y : s.z;
+            break;
+        }
+        case SC::TouchX: case SC::TouchY: case SC::TouchPressure:
+        case SC::Touch2X: case SC::Touch2Y: {
             auto t = SensorReader::ReadTouch(gamepad);
-            raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f) : 0.f;
+            switch (cfg.sensorChannel) {
+                case SC::TouchX:        raw = t.fingers[0].active ? t.primaryXCentered()              : 0.f; break;
+                case SC::TouchY:        raw = t.fingers[0].active ? t.primaryYCentered()              : 0.f; break;
+                case SC::TouchPressure: raw = t.fingers[0].active ? t.primaryPressure()               : 0.f; break;
+                case SC::Touch2X:       raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f)     : 0.f; break;
+                case SC::Touch2Y:       raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f)     : 0.f; break;
+                default: break;
+            }
             break;
         }
         case SC::LeftStickTouch:  raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK)  ? 1.f : 0.f; break;

@@ -12,6 +12,7 @@ class DeviceManager;
 class PreferencesManager;
 struct ProtocolDefinition;
 #include "Devices/SensorState.h"
+#include "Devices/SensorReader.h"
 
 // Moved from OutputMapper.h
 struct HapticTarget {
@@ -198,16 +199,19 @@ class InputMapper {
         std::map<SDL_JoystickID, std::vector<Uint8>> initialHatStates;
 
         struct SensorState {
-            SDL_JoystickID instance_id;
-            float gyro[3];
-            float accel[3];
-            float gyroL[3];
-            float accelL[3];
-            float gyroR[3];
-            float accelR[3];
-            float touch[3];  // x, y, pressure for primary finger
-            float touch2[2]; // x, y for secondary finger
-            bool capSense[4]; // LS, RS, LG, RG
+            SDL_JoystickID instance_id = 0;
+            GyroState  gyro;
+            AccelState accel;
+            GyroState  gyroL;
+            AccelState accelL;
+            GyroState  gyroR;
+            AccelState accelR;
+            TouchState touch;
+            // Capacitive-touch baseline: true = was active at listen-start.
+            bool capSenseLeftStick  = false;
+            bool capSenseRightStick = false;
+            bool capSenseLeftGrip   = false;
+            bool capSenseRightGrip  = false;
         };
         std::vector<SensorState> initialSensors;
     };
