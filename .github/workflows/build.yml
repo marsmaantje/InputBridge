@@ -105,7 +105,7 @@ jobs:
             - name: Configure and Build
               run: |
                   cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSDL_SHARED=OFF -DSDL_STATIC=ON
-                  DESTDIR=AppDir cmake --build build --target install
+                  DESTDIR=build/AppDir cmake --build build --target install
 
             - name: Create AppImage
               run: |

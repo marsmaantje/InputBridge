@@ -159,11 +159,15 @@ void Application::RestorePreferences()
         RebuildFontAtlas();
 
     // Initialise mappers and network servers.
+    // ProtocolRegistry::LoadAll() MUST run before InputMapper::LoadConfig() so
+    // that the definitions list (used by GetActiveOutputDefinition()) is
+    // populated when ActivateProfile() fires inside LoadConfig.  Loading
+    // profiles first left m_definitions empty, causing FindById() to return
+    // nullptr, which hid the Digital Output Channel section on every startup.
     OutputMapper::Init(DeviceManager::GetInstance());
+    ProtocolRegistry::GetInstance().LoadAll();
     InputMapper::Init(DeviceManager::GetInstance());
     InputMapper::GetInstance().LoadConfig(m_prefs);
-
-    ProtocolRegistry::GetInstance().LoadAll();
 
     // SetOutputMapper MUST be called before LoadConfig: LoadConfig will call
     // Start() if the server was previously enabled, and any haptic messages
