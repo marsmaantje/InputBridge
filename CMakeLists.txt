@@ -223,6 +223,7 @@ add_executable(InputBridge
     src/main.cpp
     # Application lifecycle
     src/App/Application.cpp
+    src/App/AppLog.cpp
     # Core utilities
     src/Core/UndoRedo.cpp
     src/Core/BackupManager.cpp
@@ -278,6 +279,7 @@ add_executable(InputBridge
     # UI helpers
     src/UI/ThemeManager.cpp
     src/UI/AboutWindow.cpp
+    src/UI/DebugLogPanel.cpp
     src/UI/FontManager.cpp
     src/UI/DevicePanel.cpp
     src/UI/SettingsPanel.cpp

@@ -29,6 +29,7 @@
 //  U+F013  →  \xEF\x80\x93   gear
 //  U+F05A  →  \xEF\x81\x9A   info-circle
 //  U+F011  →  \xEF\x80\x91   power-off
+//  U+F188  →  \xEF\x86\x88   bug  (Debug Log)
 
 #define ICON_FA_GAMEPAD       "\xEF\x84\x9B"   // Devices
 #define ICON_FA_SLIDERS       "\xEF\x87\x9E"   // Input Mapper
@@ -38,3 +39,4 @@
 #define ICON_FA_GEAR          "\xEF\x80\x93"   // UI Settings
 #define ICON_FA_INFO_CIRCLE   "\xEF\x81\x9A"   // About
 #define ICON_FA_POWER_OFF     "\xEF\x80\x91"   // Exit
+#define ICON_FA_BUG           "\xEF\x86\x88"   // Debug Log

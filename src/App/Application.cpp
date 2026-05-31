@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "AppLog.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
@@ -180,6 +181,10 @@ void Application::RestorePreferences()
 
 bool Application::Init()
 {
+    // Install the log sink before anything else so no early SDL_Log messages
+    // are missed.
+    AppLog::Install();
+
     RegisterProtocols();
     SetSDLHints();
 

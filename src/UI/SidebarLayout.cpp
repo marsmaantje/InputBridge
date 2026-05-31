@@ -10,6 +10,7 @@
 #include "Network/NetworkStatusWindow.h"
 #include "Protocols/ProtocolEditorWindow.h"
 #include "UI/AboutWindow.h"
+#include "UI/DebugLogPanel.h"
 #include "UI/DevicePanel.h"
 #include "UI/IconsFontAwesome6.h"
 #include "UI/SettingsPanel.h"
@@ -19,7 +20,7 @@
 
 // ── Persistent sidebar state ─────────────────────────────────────────────────
 // Section IDs: 0=Devices  1=Input  2=Output  3=Network
-//              4=Protocols  5=Settings  6=About
+//              4=Protocols  5=Settings  6=About  7=DebugLog
 static int   g_ActiveSection   = 0;
 static bool  g_SidebarExpanded = true;
 static float g_SidebarW        = 0.0f; // 0 = initialise from SIDEBAR_W_FULL on first frame
@@ -184,6 +185,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
     NavItem(ICON_FA_FILE_CODE,   "Protocols", 4);
     NavItem(ICON_FA_GEAR,        "Settings",  5);
     NavItem(ICON_FA_INFO_CIRCLE, "About",     6);
+    NavItem(ICON_FA_BUG,         "Debug Log", 7);
 
     ImGui::EndChild(); // ##NavScroll
 
@@ -410,6 +412,10 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
         case 6: // ── About ────────────────────────────────────────────────
             AboutWindow::DrawContent();
+            break;
+
+        case 7: // ── Debug Log ────────────────────────────────────────────
+            DrawDebugLogContent();
             break;
     }
 
