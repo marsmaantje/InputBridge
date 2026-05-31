@@ -330,46 +330,45 @@ const char* ProtocolRegistry::DirectionLabel(ProtocolDirection d) {
 // This is needed for AppImage / Flatpak where SDL_GetBasePath() returns a
 // read-only squashfs mount, while GetProtocolsDir() now points to the pref dir.
 static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
-    const std::string srcDir = GetInstallProtocolsDir();
+    const std::string srcDir       = GetInstallProtocolsDir();
+    const std::string srcDefs      = srcDir + "definitions/";
     const std::string srcTemplates = srcDir + "templates/";
+    const std::string dstDefs      = prefProtocolsDir + "definitions/";
     const std::string dstTemplates = prefProtocolsDir + "templates/";
 
-    // Ensure destination directories exist.
+    // Ensure all destination directories exist.
     fs::create_directories(prefProtocolsDir);
-    fs::create_directories(prefProtocolsDir + "definitions/");
+    fs::create_directories(dstDefs);
     fs::create_directories(dstTemplates);
 
-    // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
-    if (fs::exists(srcDir)) {
-        for (const auto& entry : fs::directory_iterator(srcDir)) {
+    // Helper: copy every *.json from src -> dst, skipping files that already exist.
+    auto seedDir = [](const std::string& src, const std::string& dst) {
+        if (!fs::exists(src)) return;
+        for (const auto& entry : fs::directory_iterator(src)) {
             if (!entry.is_regular_file()) continue;
             if (entry.path().extension() != ".json") continue;
-            fs::path dst = fs::path(prefProtocolsDir) / entry.path().filename();
-            if (!fs::exists(dst)) {
+            fs::path dstFile = fs::path(dst) / entry.path().filename();
+            if (!fs::exists(dstFile)) {
                 std::error_code ec;
-                fs::copy_file(entry.path(), dst, fs::copy_options::skip_existing, ec);
+                fs::copy_file(entry.path(), dstFile,
+                              fs::copy_options::skip_existing, ec);
                 if (ec)
                     std::cerr << "[ProtocolRegistry] Bootstrap copy failed for "
                               << entry.path() << ": " << ec.message() << "\n";
             }
         }
-    }
+    };
 
-    // Seed protocol templates.
-    if (fs::exists(srcTemplates)) {
-        for (const auto& entry : fs::directory_iterator(srcTemplates)) {
-            if (!entry.is_regular_file()) continue;
-            if (entry.path().extension() != ".json") continue;
-            fs::path dst = fs::path(dstTemplates) / entry.path().filename();
-            if (!fs::exists(dst)) {
-                std::error_code ec;
-                fs::copy_file(entry.path(), dst, fs::copy_options::skip_existing, ec);
-                if (ec)
-                    std::cerr << "[ProtocolRegistry] Bootstrap copy failed for "
-                              << entry.path() << ": " << ec.message() << "\n";
-            }
-        }
-    }
+    // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
+    seedDir(srcDir, prefProtocolsDir);
+
+    // Seed built-in protocol definitions — these populate the OSC/WS output
+    // dropdown via LoadDefinitionFiles(). This was the missing step that caused
+    // the dropdown to appear empty on first run under AppImage.
+    seedDir(srcDefs, dstDefs);
+
+    // Seed protocol templates (used by the Protocol Editor "new from template").
+    seedDir(srcTemplates, dstTemplates);
 }
 
 void ProtocolRegistry::EnsureDirectories() {
