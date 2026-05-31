@@ -2,7 +2,6 @@
 #include "DeviceFactory.h"
 #include "SDL3/SDL_joystick.h"
 #include "SDL3/SDL_log.h"
-#include "SDL3/SDL_hints.h"
 #include <algorithm>
 #include <cstdlib>
 

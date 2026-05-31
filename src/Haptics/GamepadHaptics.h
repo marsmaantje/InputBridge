@@ -18,6 +18,7 @@
 #include "HapticDevice.h"
 #include "DualSenseController.h"
 #include "XboxController.h"
+#include <SDL3/SDL_hidapi.h>
 #include <cstdint>
 #include <string>
 #include <map>
@@ -50,6 +51,8 @@
 class GamepadHaptics : public HapticDevice {
 public:
     using HapticDevice::HapticDevice;
+
+    ~GamepadHaptics();
 
     /**
      * @brief Initialize haptic system
@@ -170,6 +173,11 @@ private:
 
     std::unique_ptr<DualSenseController> m_dualSense;
     std::unique_ptr<XboxController> m_xbox;
+
+    /// Raw HID handle for Steam Controller haptic writes.
+    /// Opened once in Init() and closed in the destructor.
+    /// Null for all non-Steam-Controller devices.
+    SDL_hid_device* m_steamHidDevice = nullptr;
 
     // ==================== Steam Controller Constants ====================
 

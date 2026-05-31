@@ -1,7 +1,6 @@
 #pragma once
 #include "SensorState.h"
 #include <SDL3/SDL.h>
-#include <array>
 
 /**
  * @file SensorReader.h
