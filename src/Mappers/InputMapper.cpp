@@ -1859,6 +1859,30 @@ void InputMapper::LoadProfiles() {
     try {
         auto dir = GetMappingsDirectory();
         if (!std::filesystem::exists(dir)) std::filesystem::create_directories(dir);
+
+        // Seed bundled preset profiles from the read-only install directory into
+        // the writable pref dir, but only when a file with that name is absent.
+        // This is needed for AppImage / Flatpak builds where SDL_GetBasePath()
+        // points to the read-only squashfs mount while GetMappingsDirectory()
+        // now points to the user pref dir.
+        const char* base = SDL_GetBasePath();
+        if (base) {
+            auto installDir = std::filesystem::path(base) / "mappings";
+            if (std::filesystem::exists(installDir)) {
+                for (const auto& e : std::filesystem::directory_iterator(installDir)) {
+                    if (!e.is_regular_file() || e.path().extension() != ".json") continue;
+                    auto dst = dir / e.path().filename();
+                    if (!std::filesystem::exists(dst)) {
+                        std::error_code ec;
+                        std::filesystem::copy_file(e.path(), dst,
+                            std::filesystem::copy_options::skip_existing, ec);
+                        if (ec)
+                            std::cerr << "[InputMapper] Failed to seed preset profile "
+                                      << e.path().filename() << ": " << ec.message() << "\n";
+                    }
+                }
+            }
+        }
         for (const auto &e : std::filesystem::directory_iterator(dir)) {
             if (!e.is_regular_file()||e.path().extension()!=".json") continue;
             std::ifstream f(e.path()); if (!f) continue;
