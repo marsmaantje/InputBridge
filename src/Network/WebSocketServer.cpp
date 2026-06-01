@@ -498,6 +498,30 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
     }
 }
 
+void WebSocketServer::BroadcastBattery(int deviceIndex, int battery_percent,
+                                        bool charging, int battery_percent_L) {
+    if (!IsRunning()) return;
+
+    // Build a compact JSON object and send it as a plain TEXT frame so any
+    // WebSocket client can parse it without knowing the active protocol.
+    // Format (single controller):
+    //   {"type":"battery","device":0,"level":85,"charging":false}
+    // Format (combined Joy-Con pair):
+    //   {"type":"battery","device":0,"level":72,"charging":false,"level_l":68,"charging_l":false}
+    std::string msg = "{\"type\":\"battery\""
+        ",\"device\":"   + std::to_string(deviceIndex)
+      + ",\"level\":"    + std::to_string(battery_percent)
+      + ",\"charging\":" + (charging ? "true" : "false");
+
+    if (battery_percent_L >= 0) {
+        msg += ",\"level_l\":"    + std::to_string(battery_percent_L)
+             + ",\"charging_l\":" + (charging ? "true" : "false");
+    }
+
+    msg += "}";
+    Broadcast(msg, uWS::OpCode::TEXT);
+}
+
 void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {
     int port = prefs.GetInt(kWebSocketSection, kPortKey, 4269);
     std::string protocol = prefs.GetString(kWebSocketSection, kProtocolKey, kDefaultProtocol);

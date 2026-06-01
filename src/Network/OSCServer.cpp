@@ -56,6 +56,15 @@ namespace {
     const char* const kWheelButtons1Path = "/wheel/buttons/1";
     const char* const kWheelButtons2Path = "/wheel/buttons/2";
     const char* const kWheelButtons3Path = "/wheel/buttons/3";
+
+    // Battery OSC paths.  The device index is appended at runtime, e.g.
+    // /device/0/battery/level, /device/0/battery/charging.
+    // For split Joy-Con pairs the left half uses /device/N/battery/level_l
+    // and /device/N/battery/charging_l.
+    const char* const kBatteryLevelSuffix    = "/battery/level";
+    const char* const kBatteryChargingSuffix = "/battery/charging";
+    const char* const kBatteryLevelLSuffix   = "/battery/level_l";
+    const char* const kBatteryChargingLSuffix= "/battery/charging_l";
 }
 
 static std::atomic<bool> s_isDestroyed{false};
@@ -478,6 +487,27 @@ void OSCServer::SendButtons(const std::vector<uint32_t>& buttons) {
         if (im.IsOutputAddressBound("button1")) Send(kWheelButtons1Path, "i", b1);
         if (im.IsOutputAddressBound("button2")) Send(kWheelButtons2Path, "i", b2);
         if (im.IsOutputAddressBound("button3")) Send(kWheelButtons3Path, "i", b3);
+    }
+}
+
+void OSCServer::SendBattery(int deviceIndex, int battery_percent, bool charging,
+                             int battery_percent_L) {
+    if (!IsRunning()) return;
+
+    // Base path: /device/<index>
+    std::string base = "/device/" + std::to_string(deviceIndex);
+
+    // Right (or only) controller
+    if (battery_percent >= 0)
+        Send(base + kBatteryLevelSuffix,    "i", battery_percent);
+    Send(base + kBatteryChargingSuffix, "i", charging ? 1 : 0);
+
+    // Left Joy-Con (split pair only)
+    if (battery_percent_L >= 0) {
+        Send(base + kBatteryLevelLSuffix,    "i", battery_percent_L);
+        // Charging state is per-device; we don't have a separate left charging
+        // flag in DeviceState, so we mirror the combined state for now.
+        Send(base + kBatteryChargingLSuffix, "i", charging ? 1 : 0);
     }
 }
 

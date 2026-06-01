@@ -1579,6 +1579,37 @@ bool InputMapper::Update(bool dynamic_rate) {
 
     m_LastOutputValues  = snapshot;
     m_LastBroadcastTime = SDL_GetTicks();
+
+    // ── Battery broadcast ─────────────────────────────────────────────────
+    // Send battery level and charging state for every connected device.
+    // We send on every output tick so clients always have fresh data;
+    // the per-device values only change slowly so the overhead is minimal.
+    {
+        const auto& devices = DeviceManager::GetInstance().GetDevices();
+        for (int i = 0; i < static_cast<int>(devices.size()); ++i) {
+            const DeviceState& dev = devices[i];
+
+            // Skip devices with no battery info at all.
+            const bool hasRight = (dev.battery_state != SDL_POWERSTATE_UNKNOWN
+                                   || dev.battery_percent >= 0)
+                                  && dev.battery_state != SDL_POWERSTATE_NO_BATTERY;
+            if (!hasRight) continue;
+
+            const bool charging = (dev.battery_state == SDL_POWERSTATE_CHARGING
+                                   || dev.battery_state == SDL_POWERSTATE_CHARGED);
+            const bool hasSplit = (dev.battery_state_L != SDL_POWERSTATE_UNKNOWN);
+            const int  levelL   = hasSplit ? dev.battery_percent_L : -1;
+
+            if (osc.IsRunning())
+                osc.SendBattery(i, dev.battery_percent, charging, levelL);
+#ifdef ENABLE_WEBSOCKETS
+            if (ws.IsRunning())
+                ws.BroadcastBattery(i, dev.battery_percent, charging, levelL);
+#endif
+        }
+    }
+    // ── End battery broadcast ─────────────────────────────────────────────
+
     return true;
 }
 
