@@ -657,6 +657,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("sensor_touch_p",     "Touch Pressure",      "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/pressure", "touch_pressure");
     addOut("sensor_touch2_x",    "Touch 2 X (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/x",       "touch2_x");
     addOut("sensor_touch2_y",    "Touch 2 Y (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/y",       "touch2_y");
+    addOut("sensor_touch2_p",    "Touch 2 Pressure",    "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/pressure","touch2_pressure");
     addOut("sensor_touch_active","Touch Active",         "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
 
 

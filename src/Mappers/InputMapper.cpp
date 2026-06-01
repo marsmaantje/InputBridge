@@ -426,6 +426,7 @@ void InputMapper::UpdateListening() {
                 if (t.fingers[1].active) {
                     if (checkSensor(t.fingers[1].x, baseline->touch.fingers[1].x, SC::Touch2X, 0.2f)) return;
                     if (checkSensor(t.fingers[1].y, baseline->touch.fingers[1].y, SC::Touch2Y, 0.2f)) return;
+                    if (checkSensor(t.fingers[1].pressure, baseline->touch.fingers[1].pressure, SC::Touch2Pressure, 0.3f)) return;
                 }
             }
         }
@@ -800,6 +801,7 @@ void InputMapper::DrawMappingContent() {
         { SC::TouchPressure, "Touch Pressure"    },
         { SC::Touch2X,       "Touch 2 X"         },
         { SC::Touch2Y,       "Touch 2 Y"         },
+        { SC::Touch2Pressure,"Touch 2 Pressure"  },
         { SC::LeftStickTouch,  "Left Stick Touch"  },
         { SC::RightStickTouch, "Right Stick Touch" },
         { SC::LeftGripTouch,   "Left Grip Touch"   },
@@ -881,7 +883,7 @@ void InputMapper::DrawMappingContent() {
                     bool isAccelL= (entry.channel >= SC::AccelLX && entry.channel <= SC::AccelLZ);
                     bool isGyroR = (entry.channel >= SC::GyroRX && entry.channel <= SC::GyroRZ);
                     bool isAccelR= (entry.channel >= SC::AccelRX && entry.channel <= SC::AccelRZ);
-                    bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Y);
+                    bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Pressure);
                     bool isCap   = (entry.channel >= SC::LeftStickTouch);
 
                     // Hide combined sensors if split (L/R) sensors are available to avoid redundancy
@@ -1331,14 +1333,15 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
             break;
         }
         case SC::TouchX: case SC::TouchY: case SC::TouchPressure:
-        case SC::Touch2X: case SC::Touch2Y: {
+        case SC::Touch2X: case SC::Touch2Y: case SC::Touch2Pressure: {
             auto t = SensorReader::ReadTouch(gamepad);
             switch (cfg.sensorChannel) {
                 case SC::TouchX:        raw = t.fingers[0].active ? t.primaryXCentered()              : 0.f; break;
                 case SC::TouchY:        raw = t.fingers[0].active ? t.primaryYCentered()              : 0.f; break;
                 case SC::TouchPressure: raw = t.fingers[0].active ? t.primaryPressure()               : 0.f; break;
-                case SC::Touch2X:       raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f)     : 0.f; break;
-                case SC::Touch2Y:       raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f)     : 0.f; break;
+                case SC::Touch2X:        raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f)     : 0.f; break;
+                case SC::Touch2Y:        raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f)     : 0.f; break;
+                case SC::Touch2Pressure: raw = t.fingers[1].active ? t.fingers[1].pressure             : 0.f; break;
                 default: break;
             }
             break;

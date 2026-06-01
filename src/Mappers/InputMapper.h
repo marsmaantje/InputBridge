@@ -57,7 +57,7 @@ class InputMapper {
             GyroX, GyroY, GyroZ,
             AccelX, AccelY, AccelZ,
             TouchX, TouchY, TouchPressure,
-            Touch2X, Touch2Y,
+            Touch2X, Touch2Y, Touch2Pressure,
             LeftStickTouch, RightStickTouch,
             LeftGripTouch, RightGripTouch,
             GyroLX, GyroLY, GyroLZ,
