@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.8.2)
+project(InputBridge VERSION 0.9.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -223,6 +223,7 @@ add_executable(InputBridge
     src/main.cpp
     # Application lifecycle
     src/App/Application.cpp
+    src/App/AppLog.cpp
     # Core utilities
     src/Core/UndoRedo.cpp
     src/Core/BackupManager.cpp
@@ -241,6 +242,7 @@ add_executable(InputBridge
     src/Haptics/XboxController.cpp
     src/Network/HapticParser.cpp
     src/Network/HapticDispatcher.cpp
+    src/Devices/SensorReader.cpp
     # Settings
     src/Preferences/Preferences.cpp
     # Input device visualizers
@@ -253,6 +255,7 @@ add_executable(InputBridge
     src/Visualizers/SteeringWheelHapticsVisualizer.cpp
     src/Visualizers/VirtualDeviceVisualizer.cpp
     src/Visualizers/WiimoteVisualizer.cpp
+    src/Visualizers/SensorVisualizer.cpp
     # Networking
     src/Network/NetworkStatusWindow.cpp
     # Device input and protocol output mappings
@@ -276,6 +279,7 @@ add_executable(InputBridge
     # UI helpers
     src/UI/ThemeManager.cpp
     src/UI/AboutWindow.cpp
+    src/UI/DebugLogPanel.cpp
     src/UI/FontManager.cpp
     src/UI/DevicePanel.cpp
     src/UI/SettingsPanel.cpp

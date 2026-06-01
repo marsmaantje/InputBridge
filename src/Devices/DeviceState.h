@@ -22,6 +22,12 @@ struct DeviceState {
     // (e.g. wired steering wheels without a battery).
     bool battery_initialized = false;
 
+    // Left Joy-Con battery (combined pair only).
+    // battery_state_L == SDL_POWERSTATE_UNKNOWN means this device is not a
+    // combined Joy-Con pair and these fields should be ignored by the UI.
+    SDL_PowerState battery_state_L   = SDL_POWERSTATE_UNKNOWN;
+    int            battery_percent_L = -1;
+
     // Device hide state ---------------------------------------------------
     // When true, the physical device is hidden from all other applications;
     // only InputBridge (and optionally Steam) can still access it.

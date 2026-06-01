@@ -21,10 +21,20 @@
 
 #include "GamepadHaptics.h"
 #include <SDL3/SDL_gamepad.h>
+#include <SDL3/SDL_hidapi.h>
 #include <algorithm>
 #include <cstring>
 #include <thread>
 #include <chrono>
+
+// ==================== Destructor ====================
+
+GamepadHaptics::~GamepadHaptics() {
+    if (m_steamHidDevice) {
+        SDL_hid_close(m_steamHidDevice);
+        m_steamHidDevice = nullptr;
+    }
+}
 
 // ==================== Initialization ====================
 
@@ -44,9 +54,19 @@ InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
         SDL_Log("GamepadHaptics: Initialized as Xbox");
     }
     else if (IsSteamController()) {
-        SDL_Log("GamepadHaptics: Initialized as Steam Controller");
-        SDL_Log("  Haptic output via raw HID trackpad pulses (report 0x87)");
-        SDL_Log("  SDL_RumbleGamepad is NOT used — no traditional motors present");
+        // SDL3 removed SDL_SendJoystickEffect.  The Steam Controller's trackpad
+        // LRA actuators are only reachable via raw HID output reports, so we
+        // open the device directly through SDL's HIDAPI layer here and hold the
+        // handle for the lifetime of this object.
+        const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
+        const Uint16 product = SDL_GetJoystickProduct(m_joystick);
+        m_steamHidDevice = SDL_hid_open(vendor, product, nullptr);
+        if (m_steamHidDevice) {
+            SDL_Log("GamepadHaptics: Initialized as Steam Controller (HID handle open)");
+        } else {
+            SDL_Log("GamepadHaptics: Initialized as Steam Controller (HID open failed: %s)", SDL_GetError());
+            SDL_Log("  Haptic output will be unavailable — check udev rules / permissions.");
+        }
     }
     else {
         SDL_Log("GamepadHaptics: Initialized as generic gamepad");
@@ -225,19 +245,13 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
  *            hidapi/SDL_hidapi_steam.c driver.
  */
 void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uint32_t durationMs) {
-    if (!m_joystick) {
-        SDL_Log("SendSteamControllerHaptic - joystick handle is null");
+    if (!m_steamHidDevice) {
+        SDL_Log("SendSteamControllerHaptic - no HID handle (device not opened or open failed)");
         return;
     }
 
     magnitude = std::clamp(magnitude, 0.0f, 1.0f);
-
-    // Map [0, 1] magnitude to a pulse duration in microseconds.
-    // At magnitude 1.0 the pulse fills its entire period (max vibration).
-    // At magnitude 0.0 we skip the write entirely.
-    if (magnitude <= 0.0f) {
-        return;
-    }
+    if (magnitude <= 0.0f) return;
 
     // Period is fixed at 5000 µs (5 ms).  Duration scales with magnitude so
     // lower values produce shorter on-time within each period (duty cycle).
@@ -256,8 +270,6 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
     report[7] = static_cast<uint8_t>((periodUs >> 8) & 0xFF);    // period hi
     report[8] = 1;                           // repeat count
 
-    // Determine how many HID writes are needed to cover the requested duration.
-    // Each write sustains haptics for STEAM_HAPTIC_PULSE_DURATION_MS ms.
     const uint32_t iterations = std::max(1u,
         (durationMs + STEAM_HAPTIC_PULSE_DURATION_MS - 1) / STEAM_HAPTIC_PULSE_DURATION_MS);
 
@@ -265,13 +277,14 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
             pad, magnitude, durationUs, periodUs, iterations);
 
     for (uint32_t i = 0; i < iterations; ++i) {
-        if (!SDL_SendJoystickEffect(m_joystick, report, static_cast<int>(sizeof(report)))) {
-            SDL_Log("SendSteamControllerHaptic - SDL_SendJoystickEffect failed (iter %u): %s",
+        // SDL3 removed SDL_SendJoystickEffect; use SDL_hid_write on the handle
+        // opened in Init().  Returns bytes written (>= 0) on success, -1 on error.
+        if (SDL_hid_write(m_steamHidDevice, report, sizeof(report)) < 0) {
+            SDL_Log("SendSteamControllerHaptic - SDL_hid_write failed (iter %u): %s",
                     i, SDL_GetError());
             break;
         }
         if (i + 1 < iterations) {
-            // Sleep for one pulse period before the next write.
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(STEAM_HAPTIC_PULSE_DURATION_MS));
         }

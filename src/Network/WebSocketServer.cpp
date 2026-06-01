@@ -130,6 +130,7 @@ void WebSocketServer::Start(int port) {
                                    std::string ip(ws->getRemoteAddressAsText());
                                    std::lock_guard<std::mutex> lock(m_Impl->mutex);
                                    m_Impl->clients[ws] = ip;
+                                   m_Impl->lastMessageTime = SDL_GetTicks();
                                    m_Impl->logs.push_back({"Client connected: " + ip, false});
                                    if (m_Impl->logs.size() > 100)
                                        m_Impl->logs.pop_front();
@@ -429,7 +430,7 @@ void WebSocketServer::Broadcast(const std::string &address, float value) {
     }
     if (protocol) {
         std::string msg = protocol->format(address, value);
-        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+        uWS::OpCode opCode = (protocol->getProtocolName().find("OSC") != std::string::npos) ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
 }
@@ -447,7 +448,7 @@ void WebSocketServer::Broadcast(const std::string &address, int value) {
     }
     if (protocol) {
         std::string msg = protocol->format(address, value);
-        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+        uWS::OpCode opCode = (protocol->getProtocolName().find("OSC") != std::string::npos) ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
 }
@@ -465,7 +466,7 @@ void WebSocketServer::Broadcast(const std::string &address, const std::string &v
     }
     if (protocol) {
         std::string msg = protocol->format(address, value);
-        uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+        uWS::OpCode opCode = (protocol->getProtocolName().find("OSC") != std::string::npos) ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
         Broadcast(msg, opCode);
     }
 }
@@ -491,10 +492,34 @@ void WebSocketServer::Broadcast_wheel(float wheel, float brake, float throttle, 
 
         std::string msg = protocol->format_wheel(values);
         if (!msg.empty()) {
-            uWS::OpCode opCode = (protocol->getProtocolName() == "OSC") ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
+            uWS::OpCode opCode = (protocol->getProtocolName().find("OSC") != std::string::npos) ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
             Broadcast(msg, opCode);
         }
     }
+}
+
+void WebSocketServer::BroadcastBattery(int deviceIndex, int battery_percent,
+                                        bool charging, int battery_percent_L) {
+    if (!IsRunning()) return;
+
+    // Build a compact JSON object and send it as a plain TEXT frame so any
+    // WebSocket client can parse it without knowing the active protocol.
+    // Format (single controller):
+    //   {"type":"battery","device":0,"level":85,"charging":false}
+    // Format (combined Joy-Con pair):
+    //   {"type":"battery","device":0,"level":72,"charging":false,"level_l":68,"charging_l":false}
+    std::string msg = "{\"type\":\"battery\""
+        ",\"device\":"   + std::to_string(deviceIndex)
+      + ",\"level\":"    + std::to_string(battery_percent)
+      + ",\"charging\":" + (charging ? "true" : "false");
+
+    if (battery_percent_L >= 0) {
+        msg += ",\"level_l\":"    + std::to_string(battery_percent_L)
+             + ",\"charging_l\":" + (charging ? "true" : "false");
+    }
+
+    msg += "}";
+    Broadcast(msg, uWS::OpCode::TEXT);
 }
 
 void WebSocketServer::LoadConfig(const PreferencesManager& prefs) {

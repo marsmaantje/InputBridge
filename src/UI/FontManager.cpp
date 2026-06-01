@@ -40,7 +40,7 @@ void UpdateUIScale(SDL_Window*         window,
     if (style.WindowBorderHoverPadding <= 0.0f)
         style.WindowBorderHoverPadding = 1.0f;
 
-    ImGui::GetIO().FontGlobalScale = ui_scale * user_font_scale;
+    ImGui::GetStyle().FontScaleMain = ui_scale * user_font_scale;
 }
 
 void RebuildFontAtlas()
@@ -49,19 +49,20 @@ void RebuildFontAtlas()
     ThemeManager& theme = ThemeManager::GetInstance();
 
     io.Fonts->Clear();
-
+    
     const std::string& fontPath = theme.GetResolvedFontPath();
-    const float        fontSize = theme.GetFontSize();
-
-    bool loaded = false;
+    const float        themeFontSize = theme.GetFontSize(); // Renamed to avoid confusion with icon font size parameter
+    
+    ImFont* base_font = nullptr;
+    bool loaded_theme_font = false;
     if (!fontPath.empty()) {
-        ImFont* f = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), fontSize);
-        loaded = (f != nullptr);
-        if (!loaded)
+        base_font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), themeFontSize);
+        loaded_theme_font = (base_font != nullptr);
+        if (!loaded_theme_font)
             SDL_Log("[Font] Failed to load '%s' — falling back to default.",
                     fontPath.c_str());
     }
-    if (!loaded)
+    if (!loaded_theme_font)
         io.Fonts->AddFontDefault();
 
     // Merge Font Awesome 6 Free (Solid) icons.
@@ -79,12 +80,21 @@ void RebuildFontAtlas()
         ImFontConfig cfg;
         cfg.MergeMode        = true;
         cfg.PixelSnapH       = true;
-        cfg.GlyphMinAdvanceX = fontSize;
-        cfg.GlyphMaxAdvanceX = fontSize;
-        cfg.GlyphOffset      = ImVec2(0.0f, 1.0f); // nudge 1 px down to align baseline
+
+        // In ImGui 1.92, specifying custom advances/offsets requires an explicit 
+        // reference size. If the base font is implicit (scalable), we must merge 
+        // with 0.0f and cannot use these fields.
+        float merge_size = 0.0f;
+        if (loaded_theme_font) {
+            merge_size = themeFontSize;
+            cfg.GlyphMinAdvanceX = merge_size;
+            cfg.GlyphMaxAdvanceX = merge_size;
+            cfg.GlyphOffset      = ImVec2(0.0f, 1.0f); // nudge 1 px down to align baseline
+        }
 
         ImFont* icons = io.Fonts->AddFontFromFileTTF(
-            iconFontPath.c_str(), fontSize, &cfg, icon_ranges);
+            iconFontPath.c_str(), merge_size, &cfg, icon_ranges);
+
         if (!icons)
             SDL_Log("[Font] FA6 not found at '%s' — icon glyphs will be missing.",
                     iconFontPath.c_str());

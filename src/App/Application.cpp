@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "AppLog.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
@@ -18,6 +19,7 @@
 #include "UI/FontManager.h"
 #include "UI/SidebarLayout.h"
 #include "UI/ThemeManager.h"
+#include "Utils/XdgDirs.h"
 
 #if ENABLE_WEBSOCKETS
 #include "Protocols/WebSocketProtocol.h"
@@ -26,6 +28,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_filesystem.h>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <string>
 
 // ── RegisterProtocols ─────────────────────────────────────────────────────────
@@ -49,6 +53,25 @@ void Application::SetSDLHints()
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM_HOME_LED,   "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI,                  "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS,        "1");
+
+    // ── Nintendo Switch / Joy-Con ────────────────────────────────────────────
+    // Enable the HIDAPI driver so gyro, accel, and rumble are accessible on
+    // Switch Pro Controllers and Joy-Cons.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
+
+    // When a Left and Right Joy-Con are both connected, merge them into a
+    // single virtual gamepad.  In merged mode SDL exposes SDL_SENSOR_GYRO_L
+    // and SDL_SENSOR_GYRO_R (one per physical controller) rather than two
+    // separate devices each with only SDL_SENSOR_GYRO.  The existing GyroL /
+    // GyroR and AccelL / AccelR sensor channels then address each Joy-Con's
+    // IMU independently.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_COMBINE_JOY_CONS, "1");
+
+    // ── PlayStation ──────────────────────────────────────────────────────────
+    // Enable HIDAPI for DualShock 4 and DualSense so touchpad, gyro, and accel
+    // are available even when connected over USB without Steam Input.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
 }
 
 // ── CreateWindow ─────────────────────────────────────────────────────────────
@@ -87,11 +110,13 @@ void Application::SetupImGui()
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // Store ImGui layout in the same directory as the executable.
-    const char* base_path = SDL_GetBasePath();
-    m_iniFilename = (base_path ? std::string(base_path) : std::string(".")) + "imgui.ini";
+    // imgui.ini stores UI layout state — it is written at runtime so it must
+    // live in the writable XDG config directory, not next to the executable
+    // (which is read-only inside an AppImage squashfs mount).
+    m_iniFilename = XdgDirs::configDir() + "imgui.ini";
     io.IniFilename = m_iniFilename.c_str();
 
     ImGui::StyleColorsDark();
@@ -111,6 +136,101 @@ void Application::InitialDeviceScan()
             dm.HandleDeviceAdded(joysticks[i]);
         SDL_free(joysticks);
     }
+}
+
+// ── MigrateUserData ───────────────────────────────────────────────────────────
+//
+// Versions of InputBridge prior to the XDG path migration stored all user data
+// under the SDL pref path, which on Linux resolves to the double-nested:
+//
+//   ~/.local/share/InputBridge/InputBridge/
+//
+// After the XDG migration the layout is:
+//
+//   Config  →  ~/.config/InputBridge/        (visualizer_prefs.toml, imgui.ini)
+//   Data    →  ~/.local/share/InputBridge/   (mappings/, protocols/)
+//
+// This method runs once on startup before any subsystem reads a file.  It
+// copies files from the old location to the new one, skipping files that
+// already exist at the destination so a partial or repeated migration is safe.
+// The old directory is intentionally left intact so a downgrade still works.
+//
+// Only runs on Linux/FreeBSD — on Windows and macOS SDL_GetPrefPath was never
+// changed, so there is nothing to migrate on those platforms.
+
+void Application::MigrateUserData()
+{
+#if !defined(__linux__) && !defined(__FreeBSD__)
+    return;
+#else
+    namespace fs = std::filesystem;
+
+    // Reconstruct the old SDL pref path from $HOME rather than calling
+    // SDL_GetPrefPath, which would create the directory if it is absent.
+    const char* home = std::getenv("HOME");
+    if (!home || home[0] == '\0') return;
+
+    const fs::path oldRoot = fs::path(home) / ".local/share/InputBridge/InputBridge";
+    if (!fs::exists(oldRoot)) return; // Fresh install — nothing to do.
+
+    const fs::path newConfig = XdgDirs::configDir(); // ~/.config/InputBridge/
+    const fs::path newData   = XdgDirs::dataDir();   // ~/.local/share/InputBridge/
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // Copy a single file src → dst.  A missing source or pre-existing
+    // destination are both silent no-ops (returns false, not an error).
+    auto migrateFile = [](const fs::path& src, const fs::path& dst) -> bool {
+        if (!fs::exists(src) || fs::exists(dst)) return false;
+        std::error_code ec;
+        fs::create_directories(dst.parent_path(), ec);
+        if (ec) {
+            SDL_Log("[Migration] Could not create directory %s: %s",
+                    dst.parent_path().string().c_str(), ec.message().c_str());
+            return false;
+        }
+        fs::copy_file(src, dst, fs::copy_options::skip_existing, ec);
+        if (ec) {
+            SDL_Log("[Migration] Could not copy %s → %s: %s",
+                    src.string().c_str(), dst.string().c_str(), ec.message().c_str());
+            return false;
+        }
+        SDL_Log("[Migration] %s → %s", src.string().c_str(), dst.string().c_str());
+        return true;
+    };
+
+    // Recursively mirror srcDir → dstDir, skipping pre-existing files.
+    // Returns the count of files actually copied.
+    auto migrateDir = [&migrateFile](const fs::path& srcDir,
+                                     const fs::path& dstDir) -> int {
+        if (!fs::exists(srcDir)) return 0;
+        int count = 0;
+        std::error_code ec;
+        for (const auto& entry : fs::recursive_directory_iterator(srcDir, ec)) {
+            if (ec) break;
+            if (!entry.is_regular_file()) continue;
+            if (migrateFile(entry.path(), dstDir / fs::relative(entry.path(), srcDir)))
+                ++count;
+        }
+        return count;
+    };
+
+    // ── Config files (root of old SDL pref dir) ───────────────────────────────
+    int total = 0;
+    total += migrateFile(oldRoot / "visualizer_prefs.toml", newConfig / "visualizer_prefs.toml") ? 1 : 0;
+    total += migrateFile(oldRoot / "imgui.ini",             newConfig / "imgui.ini")             ? 1 : 0;
+
+    // ── Data directories ──────────────────────────────────────────────────────
+    total += migrateDir(oldRoot / "mappings",  newData / "mappings");
+    total += migrateDir(oldRoot / "protocols", newData / "protocols");
+
+    if (total > 0)
+        SDL_Log("[Migration] Migrated %d file(s) from legacy path %s",
+                total, oldRoot.string().c_str());
+    else
+        SDL_Log("[Migration] Legacy path %s exists but all files already migrated.",
+                oldRoot.string().c_str());
+#endif
 }
 
 // ── RestorePreferences ────────────────────────────────────────────────────────
@@ -139,11 +259,15 @@ void Application::RestorePreferences()
         RebuildFontAtlas();
 
     // Initialise mappers and network servers.
+    // ProtocolRegistry::LoadAll() MUST run before InputMapper::LoadConfig() so
+    // that the definitions list (used by GetActiveOutputDefinition()) is
+    // populated when ActivateProfile() fires inside LoadConfig.  Loading
+    // profiles first left m_definitions empty, causing FindById() to return
+    // nullptr, which hid the Digital Output Channel section on every startup.
     OutputMapper::Init(DeviceManager::GetInstance());
+    ProtocolRegistry::GetInstance().LoadAll();
     InputMapper::Init(DeviceManager::GetInstance());
     InputMapper::GetInstance().LoadConfig(m_prefs);
-
-    ProtocolRegistry::GetInstance().LoadAll();
 
     // SetOutputMapper MUST be called before LoadConfig: LoadConfig will call
     // Start() if the server was previously enabled, and any haptic messages
@@ -161,6 +285,10 @@ void Application::RestorePreferences()
 
 bool Application::Init()
 {
+    // Install the log sink before anything else so no early SDL_Log messages
+    // are missed.
+    AppLog::Install();
+
     RegisterProtocols();
     SetSDLHints();
 
@@ -169,6 +297,7 @@ bool Application::Init()
 
     SetupImGui();
     InitialDeviceScan();
+    MigrateUserData();
     RestorePreferences();
 
     SDL_SetRenderVSync(m_renderer, 1);

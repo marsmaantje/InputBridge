@@ -45,6 +45,7 @@ private:
     [[nodiscard]] bool CreateAppWindow();
     void SetupImGui();
     void InitialDeviceScan();
+    void MigrateUserData();   // one-time migration from pre-XDG SDL pref paths
     void RestorePreferences();
 
     // ── Per-frame helpers (called from Run) ───────────────────────────────

@@ -21,4 +21,6 @@ void DrawSettingsContent(float&              user_ui_scale,
                          int&                framerate_limit,
                          SDL_Renderer*       renderer,
                          const ImGuiIO&      io,
-                         bool&               enable_battery_led);
+                         bool&               enable_battery_led,
+                         bool&               disable_gamepad_nav,
+                         bool&               disable_keyboard_nav);
