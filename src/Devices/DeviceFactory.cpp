@@ -16,16 +16,8 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateDevice(SDL_JoystickID i
         case SDL_JOYSTICK_TYPE_GAMEPAD:
             return CreateGamepadDevice(instance_id);
             
-        case SDL_JOYSTICK_TYPE_FLIGHT_STICK:
-        case SDL_JOYSTICK_TYPE_THROTTLE:
-        case SDL_JOYSTICK_TYPE_ARCADE_STICK:
-        case SDL_JOYSTICK_TYPE_UNKNOWN:
-            return CreateGenericDevice(instance_id);
-            
         default:
-            SDL_Log("Unsupported device type: %d, create generic fallback!", static_cast<int>(type));
             return CreateGenericDevice(instance_id);
-            //return std::nullopt;
     }
 }
 
