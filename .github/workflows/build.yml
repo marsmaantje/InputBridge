@@ -90,46 +90,79 @@ jobs:
                   path: build/*.zip
 
     build-ubuntu-appimage:
-        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage') && github.event.inputs.run_tests != 'only' }}
-        runs-on: ubuntu-24.04
-        steps:
-            - uses: actions/checkout@v6
-              with:
-                  submodules: recursive
+      if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage') && github.event.inputs.run_tests != 'only' }}
+      runs-on: ubuntu-24.04
 
-            - name: Install Dependencies
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y build-essential git pkg-config cmake ninja-build libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libxinerama-dev libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev
+      steps:
+          - uses: actions/checkout@v6
+            with:
+                submodules: recursive
 
-            - name: Configure and Build
-              run: |
-                  cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSDL_SHARED=OFF -DSDL_STATIC=ON
-                  cmake --build build
-                  cmake --install build --destdir build/AppDir
+          - name: Install Dependencies
+            run: |
+                sudo apt-get update
+                sudo apt-get install -y \
+                  build-essential git pkg-config cmake ninja-build \
+                  libasound2-dev libpulse-dev libaudio-dev libjack-dev \
+                  libsndio-dev libsamplerate0-dev libx11-dev libxext-dev \
+                  libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
+                  libxss-dev libxkbcommon-dev libxinerama-dev \
+                  libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
+                  libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev \
+                  libibus-1.0-dev libudev-dev fcitx-libs-dev \
+                  libpipewire-0.3-dev libwayland-dev libdecor-0-dev \
+                  libxtst-dev libssl-dev zlib1g-dev libuv1-dev \
+                  libusb-1.0-0-dev
 
-            - name: Verify AppDir Contents
-              run: find build/AppDir
+          - name: Configure
+            run: |
+                cmake -B build \
+                  -G Ninja \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_INSTALL_PREFIX=/usr \
+                  -DSDL_SHARED=OFF \
+                  -DSDL_STATIC=ON
 
-            - name: Create AppImage
-              run: |
-                  wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-                  chmod +x linuxdeploy-x86_64.AppImage
-                  # Set LD_LIBRARY_PATH so linuxdeploy can resolve bundled libraries
-                  export LD_LIBRARY_PATH=$PWD/build/AppDir/usr/lib:$LD_LIBRARY_PATH
-                  # Set STRIP to /bin/true to avoid strip failures on newer binaries
-                  APPIMAGE_EXTRACT_AND_RUN=1 STRIP=/bin/true ./linuxdeploy-x86_64.AppImage --appdir build/AppDir \
-                    --executable build/AppDir/usr/bin/InputBridge \
-                    --icon-file build/org.inputbridge.InputBridge.svg \
-                    --desktop-file build/org.inputbridge.InputBridge.desktop \
-                    --output appimage
-                  mv InputBridge*.AppImage InputBridge-Ubuntu.AppImage
+          - name: Build
+            run: cmake --build build
 
-            - name: Upload Artifact
-              uses: actions/upload-artifact@v6
-              with:
-                  name: InputBridge-Ubuntu-AppImage
-                  path: InputBridge-Ubuntu.AppImage
+          - name: Install into AppDir
+            run: |
+                rm -rf build/AppDir
+                mkdir -p build/AppDir
+
+                DESTDIR=$PWD/build/AppDir cmake --install build
+
+          - name: Verify AppDir Contents
+            run: |
+                find build/AppDir
+
+                test -f build/AppDir/usr/bin/InputBridge
+
+          - name: Create AppImage
+            run: |
+                wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+
+                chmod +x linuxdeploy-x86_64.AppImage
+
+                export LD_LIBRARY_PATH=$PWD/build/AppDir/usr/lib:$LD_LIBRARY_PATH
+
+                APPIMAGE_EXTRACT_AND_RUN=1 \
+                STRIP=/bin/true \
+                ./linuxdeploy-x86_64.AppImage \
+                  --appdir build/AppDir \
+                  --executable build/AppDir/usr/bin/InputBridge \
+                  --icon-file build/org.inputbridge.InputBridge.svg \
+                  --desktop-file build/org.inputbridge.InputBridge.desktop \
+                  --output appimage
+
+                mv InputBridge*.AppImage InputBridge-Ubuntu.AppImage
+
+          - name: Upload Artifact
+            uses: actions/upload-artifact@v6
+            with:
+                name: InputBridge-Ubuntu-AppImage
+                path: InputBridge-Ubuntu.AppImage
 
     build-ubuntu-flatpak:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-flatpak') && github.event.inputs.run_tests != 'only' }}
