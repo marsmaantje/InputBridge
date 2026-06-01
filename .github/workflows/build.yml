@@ -105,7 +105,8 @@ jobs:
             - name: Configure and Build
               run: |
                   cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DSDL_SHARED=OFF -DSDL_STATIC=ON
-                  DESTDIR=build/AppDir cmake --build build --target install
+                  cmake --build build
+                  cmake --install build --destdir build/AppDir
 
             - name: Verify AppDir Contents
               run: find build/AppDir
