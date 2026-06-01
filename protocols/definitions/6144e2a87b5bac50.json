@@ -1,0 +1,287 @@
+{
+    "active": false,
+    "direction": "output",
+    "fields": [
+        {
+            "enabled": true,
+            "fieldId": "sensor_accel_x",
+            "oscPath": "/sensor/accel/x",
+            "wsKey": "accel_x"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_accel_y",
+            "oscPath": "/sensor/accel/y",
+            "wsKey": "accel_y"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_accel_z",
+            "oscPath": "/sensor/accel/z",
+            "wsKey": "accel_z"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_gyro_x",
+            "oscPath": "/sensor/gyro/x",
+            "wsKey": "gyro_x"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_gyro_y",
+            "oscPath": "/sensor/gyro/y",
+            "wsKey": "gyro_y"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_gyro_z",
+            "oscPath": "/sensor/gyro/z",
+            "wsKey": "gyro_z"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_touch_active",
+            "oscPath": "/sensor/touch/active",
+            "wsKey": "touch_active"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_touch_x",
+            "oscPath": "/sensor/touch/x",
+            "wsKey": "touch_x"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_touch_y",
+            "oscPath": "/sensor/touch/y",
+            "wsKey": "touch_y"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_touch_p",
+            "oscPath": "/sensor/touch/pressure",
+            "wsKey": "touch_pressure"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_touch2_x",
+            "oscPath": "/sensor/touch2/x",
+            "wsKey": "touch2_x"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_touch2_y",
+            "oscPath": "/sensor/touch2/y",
+            "wsKey": "touch2_y"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_0",
+            "oscPath": "/gamepad/button/a",
+            "wsKey": "/gamepad/button/a"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_1",
+            "oscPath": "/gamepad/button/b",
+            "wsKey": "/gamepad/button/b"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_2",
+            "oscPath": "/gamepad/button/x",
+            "wsKey": "/gamepad/button/x"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_3",
+            "oscPath": "/gamepad/button/y",
+            "wsKey": "/gamepad/button/y"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_4",
+            "oscPath": "/gamepad/button/back",
+            "wsKey": "/gamepad/button/back"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_5",
+            "oscPath": "/gamepad/button/guide",
+            "wsKey": "/gamepad/button/guide"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_6",
+            "oscPath": "/gamepad/button/start",
+            "wsKey": "/gamepad/button/start"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_11",
+            "oscPath": "/gamepad/button/quickAct",
+            "wsKey": "/gamepad/button/quickAct"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_9",
+            "oscPath": "/gamepad/button/l1",
+            "wsKey": "/gamepad/button/l1"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_10",
+            "oscPath": "/gamepad/button/r1",
+            "wsKey": "/gamepad/button/r1"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_7",
+            "oscPath": "/gamepad/button/l3",
+            "wsKey": "/gamepad/button/l3"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_8",
+            "oscPath": "/gamepad/button/r3",
+            "wsKey": "/gamepad/button/r3"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_13",
+            "oscPath": "/gamepad/button/l4",
+            "wsKey": "/gamepad/button/l4"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_12",
+            "oscPath": "/gamepad/button/r4",
+            "wsKey": "/gamepad/button/r4"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_15",
+            "oscPath": "/gamepad/button/l5",
+            "wsKey": "/gamepad/button/l5"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_14",
+            "oscPath": "/gamepad/button/r5",
+            "wsKey": "/gamepad/button/r5"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_17",
+            "oscPath": "/gamepad/button/touchl",
+            "wsKey": "/gamepad/button/dpadl"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_16",
+            "oscPath": "/gamepad/button/touchr",
+            "wsKey": "/gamepad/button/dpadd"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_18",
+            "oscPath": "/gamepad/button/dpadd",
+            "wsKey": "/gamepad/button/dpadu"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_19",
+            "oscPath": "/gamepad/button/dpadl",
+            "wsKey": "/gamepad/button/dpadr"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_20",
+            "oscPath": "/gamepad/button/dpadu",
+            "wsKey": "/gamepad/button/dpadu"
+        },
+        {
+            "enabled": true,
+            "fieldId": "button_21",
+            "oscPath": "/gamepad/button/dpadr",
+            "wsKey": "/gamepad/button/dpadr"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_0",
+            "oscPath": "/gamepad/axis/stick/l/x",
+            "wsKey": "/gamepad/axis/stick/l/x"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_1",
+            "oscPath": "/gamepad/axis/stick/l/y",
+            "wsKey": "/gamepad/axis/stick/l/y"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_2",
+            "oscPath": "/gamepad/axis/stick/l/touch",
+            "wsKey": "/gamepad/axis/stick/l/touch"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_3",
+            "oscPath": "/gamepad/axis/stick/r/x",
+            "wsKey": "/gamepad/axis/stick/r/x"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_4",
+            "oscPath": "/gamepad/axis/stick/r/y",
+            "wsKey": "/gamepad/axis/stick/r/y"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_5",
+            "oscPath": "/gamepad/axis/stick/r/touch",
+            "wsKey": "/gamepad/axis/stick/r/touch"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_6",
+            "oscPath": "/gamepad/axis/trigger/l",
+            "wsKey": "/gamepad/axis/trigger/l"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_7",
+            "oscPath": "/gamepad/axis/trigger/r",
+            "wsKey": "/gamepad/axis/trigger/r"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_8",
+            "oscPath": "/gamepad/axis/grip/l",
+            "wsKey": "/gamepad/axis/grip/l"
+        },
+        {
+            "enabled": true,
+            "fieldId": "axis_9",
+            "oscPath": "/gamepad/axis/grip/r",
+            "wsKey": "/gamepad/axis/grip/r"
+        },
+        {
+            "enabled": true,
+            "fieldId": "sensor_touch2_p",
+            "oscPath": "/sensor/touch2/pressure",
+            "wsKey": "touch2_pressure"
+        }
+    ],
+    "id": "6144e2a87b5bac50",
+    "name": "Resonite OSC Gamepad",
+    "osc": {
+        "host": "127.0.0.1",
+        "recvPort": 9068,
+        "sendPort": 9066
+    },
+    "transport": "osc",
+    "ws": {
+        "port": 4269
+    }
+}
