@@ -28,6 +28,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_filesystem.h>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <string>
 
 // ── RegisterProtocols ─────────────────────────────────────────────────────────
@@ -135,6 +137,101 @@ void Application::InitialDeviceScan()
     }
 }
 
+// ── MigrateUserData ───────────────────────────────────────────────────────────
+//
+// Versions of InputBridge prior to the XDG path migration stored all user data
+// under the SDL pref path, which on Linux resolves to the double-nested:
+//
+//   ~/.local/share/InputBridge/InputBridge/
+//
+// After the XDG migration the layout is:
+//
+//   Config  →  ~/.config/InputBridge/        (visualizer_prefs.toml, imgui.ini)
+//   Data    →  ~/.local/share/InputBridge/   (mappings/, protocols/)
+//
+// This method runs once on startup before any subsystem reads a file.  It
+// copies files from the old location to the new one, skipping files that
+// already exist at the destination so a partial or repeated migration is safe.
+// The old directory is intentionally left intact so a downgrade still works.
+//
+// Only runs on Linux/FreeBSD — on Windows and macOS SDL_GetPrefPath was never
+// changed, so there is nothing to migrate on those platforms.
+
+void Application::MigrateUserData()
+{
+#if !defined(__linux__) && !defined(__FreeBSD__)
+    return;
+#else
+    namespace fs = std::filesystem;
+
+    // Reconstruct the old SDL pref path from $HOME rather than calling
+    // SDL_GetPrefPath, which would create the directory if it is absent.
+    const char* home = std::getenv("HOME");
+    if (!home || home[0] == '\0') return;
+
+    const fs::path oldRoot = fs::path(home) / ".local/share/InputBridge/InputBridge";
+    if (!fs::exists(oldRoot)) return; // Fresh install — nothing to do.
+
+    const fs::path newConfig = XdgDirs::configDir(); // ~/.config/InputBridge/
+    const fs::path newData   = XdgDirs::dataDir();   // ~/.local/share/InputBridge/
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // Copy a single file src → dst.  A missing source or pre-existing
+    // destination are both silent no-ops (returns false, not an error).
+    auto migrateFile = [](const fs::path& src, const fs::path& dst) -> bool {
+        if (!fs::exists(src) || fs::exists(dst)) return false;
+        std::error_code ec;
+        fs::create_directories(dst.parent_path(), ec);
+        if (ec) {
+            SDL_Log("[Migration] Could not create directory %s: %s",
+                    dst.parent_path().string().c_str(), ec.message().c_str());
+            return false;
+        }
+        fs::copy_file(src, dst, fs::copy_options::skip_existing, ec);
+        if (ec) {
+            SDL_Log("[Migration] Could not copy %s → %s: %s",
+                    src.string().c_str(), dst.string().c_str(), ec.message().c_str());
+            return false;
+        }
+        SDL_Log("[Migration] %s → %s", src.string().c_str(), dst.string().c_str());
+        return true;
+    };
+
+    // Recursively mirror srcDir → dstDir, skipping pre-existing files.
+    // Returns the count of files actually copied.
+    auto migrateDir = [&migrateFile](const fs::path& srcDir,
+                                     const fs::path& dstDir) -> int {
+        if (!fs::exists(srcDir)) return 0;
+        int count = 0;
+        std::error_code ec;
+        for (const auto& entry : fs::recursive_directory_iterator(srcDir, ec)) {
+            if (ec) break;
+            if (!entry.is_regular_file()) continue;
+            if (migrateFile(entry.path(), dstDir / fs::relative(entry.path(), srcDir)))
+                ++count;
+        }
+        return count;
+    };
+
+    // ── Config files (root of old SDL pref dir) ───────────────────────────────
+    int total = 0;
+    total += migrateFile(oldRoot / "visualizer_prefs.toml", newConfig / "visualizer_prefs.toml") ? 1 : 0;
+    total += migrateFile(oldRoot / "imgui.ini",             newConfig / "imgui.ini")             ? 1 : 0;
+
+    // ── Data directories ──────────────────────────────────────────────────────
+    total += migrateDir(oldRoot / "mappings",  newData / "mappings");
+    total += migrateDir(oldRoot / "protocols", newData / "protocols");
+
+    if (total > 0)
+        SDL_Log("[Migration] Migrated %d file(s) from legacy path %s",
+                total, oldRoot.string().c_str());
+    else
+        SDL_Log("[Migration] Legacy path %s exists but all files already migrated.",
+                oldRoot.string().c_str());
+#endif
+}
+
 // ── RestorePreferences ────────────────────────────────────────────────────────
 
 void Application::RestorePreferences()
@@ -199,6 +296,7 @@ bool Application::Init()
 
     SetupImGui();
     InitialDeviceScan();
+    MigrateUserData();
     RestorePreferences();
 
     SDL_SetRenderVSync(m_renderer, 1);
