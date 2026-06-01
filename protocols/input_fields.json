@@ -3,6 +3,262 @@
     "_note": "Built-in fields (analog axes, vehicle/lights/other buttons, haptic feedback) are always available regardless of this file.",
     "output_fields": [
         {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_0",
+            "label": "Face Button Down",
+            "oscPath": "/gamepad/button/a",
+            "type": "analog",
+            "wsKey": "/gamepad/button/a"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_1",
+            "label": "Face Button Right",
+            "oscPath": "/gamepad/button/b",
+            "type": "analog",
+            "wsKey": "/gamepad/button/b"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_2",
+            "label": "Face Button Left",
+            "oscPath": "/gamepad/button/x",
+            "type": "analog",
+            "wsKey": "/gamepad/button/x"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_3",
+            "label": "Face Button Up",
+            "oscPath": "/gamepad/button/y",
+            "type": "analog",
+            "wsKey": "/gamepad/button/y"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_4",
+            "label": "Meta Button Select/View",
+            "oscPath": "/gamepad/button/back",
+            "type": "analog",
+            "wsKey": "/gamepad/button/back"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_5",
+            "label": "Meta Button Guide",
+            "oscPath": "/gamepad/button/guide",
+            "type": "analog",
+            "wsKey": "/gamepad/button/guide"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_6",
+            "label": "Meta Button Start/Menu",
+            "oscPath": "/gamepad/button/start",
+            "type": "analog",
+            "wsKey": "/gamepad/button/start"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_11",
+            "label": "Meta Button Quick Actions",
+            "oscPath": "/gamepad/button/quickAct",
+            "type": "analog",
+            "wsKey": "/gamepad/button/quickAct"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_9",
+            "label": "Left Shoulder",
+            "oscPath": "/gamepad/button/l1",
+            "type": "analog",
+            "wsKey": "/gamepad/button/l1"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_10",
+            "label": "Right Shoulder",
+            "oscPath": "/gamepad/button/r1",
+            "type": "analog",
+            "wsKey": "/gamepad/button/r1"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_7",
+            "label": "Left Stick Click",
+            "oscPath": "/gamepad/button/l3",
+            "type": "analog",
+            "wsKey": "/gamepad/button/l3"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_8",
+            "label": "Right Stick Click",
+            "oscPath": "/gamepad/button/r3",
+            "type": "analog",
+            "wsKey": "/gamepad/button/r3"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_13",
+            "label": "Left Upper Paddle",
+            "oscPath": "/gamepad/button/l4",
+            "type": "analog",
+            "wsKey": "/gamepad/button/l4"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_12",
+            "label": "Right Upper Paddle",
+            "oscPath": "/gamepad/button/r4",
+            "type": "analog",
+            "wsKey": "/gamepad/button/r4"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_15",
+            "label": "Left Lower Paddle",
+            "oscPath": "/gamepad/button/l5",
+            "type": "analog",
+            "wsKey": "/gamepad/button/l5"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_14",
+            "label": "Right Lower Paddle",
+            "oscPath": "/gamepad/button/r5",
+            "type": "analog",
+            "wsKey": "/gamepad/button/r5"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_16",
+            "label": "Right Track Pad",
+            "oscPath": "/gamepad/button/touchr",
+            "type": "analog",
+            "wsKey": "/gamepad/button/touchr"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_17",
+            "label": "Left Track Pad",
+            "oscPath": "/gamepad/button/touchl",
+            "type": "analog",
+            "wsKey": "/gamepad/button/touchl"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_18",
+            "label": "Dpad Down",
+            "oscPath": "/gamepad/button/dpadd",
+            "type": "analog",
+            "wsKey": "/gamepad/button/dpadd"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_19",
+            "label": "Dpad Left",
+            "oscPath": "/gamepad/button/dpadl",
+            "type": "analog",
+            "wsKey": "/gamepad/button/dpadl"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_20",
+            "label": "Dpad Up",
+            "oscPath": "/gamepad/button/dpadu",
+            "type": "analog",
+            "wsKey": "/gamepad/button/dpadu"
+        },
+        {
+            "category": "Generic Gamepad: Buttons",
+            "id": "button_21",
+            "label": "Dpad Right",
+            "oscPath": "/gamepad/button/dpadr",
+            "type": "analog",
+            "wsKey": "/gamepad/button/dpadr"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_0",
+            "label": "Left Stick X",
+            "oscPath": "/gamepad/axis/stick/l/x",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/stick/l/x"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_1",
+            "label": "Left Stick Y",
+            "oscPath": "/gamepad/axis/stick/l/y",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/stick/l/y"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_2",
+            "label": "Left Stick Touch",
+            "oscPath": "/gamepad/axis/stick/l/touch",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/stick/l/touch"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_3",
+            "label": "Right Stick X",
+            "oscPath": "/gamepad/axis/stick/r/x",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/stick/r/x"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_4",
+            "label": "Right Stick Y",
+            "oscPath": "/gamepad/axis/stick/r/y",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/stick/r/y"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_5",
+            "label": "Right Stick Touch",
+            "oscPath": "/gamepad/axis/stick/r/touch",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/stick/r/touch"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_6",
+            "label": "Left Trigger",
+            "oscPath": "/gamepad/axis/trigger/l",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/trigger/l"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_7",
+            "label": "Right Trigger",
+            "oscPath": "/gamepad/axis/trigger/r",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/trigger/r"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_8",
+            "label": "Left Grip",
+            "oscPath": "/gamepad/axis/grip/l",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/grip/l"
+        },
+        {
+            "category": "Generic Gamepad: Axes",
+            "id": "axis_9",
+            "label": "Right Grip",
+            "oscPath": "/gamepad/axis/grip/r",
+            "type": "analog",
+            "wsKey": "/gamepad/axis/grip/r"
+        },
+        {
             "_comment_template": "Copy and modify this block to add a custom field.",
             "id":       "custom_axis_1",
             "label":    "Custom Axis 1",
