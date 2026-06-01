@@ -29,6 +29,10 @@ static float g_SidebarW        = 0.0f; // 0 = initialise from SIDEBAR_W_FULL on 
 // the Settings panel (hosts the checkbox), so it lives at file scope.
 static bool  s_EnableBatteryLED  = true;
 static bool  s_BatteryLEDLoaded  = false;
+static bool  s_DisableGamepadNav = false;
+static bool  s_GamepadNavLoaded  = false;
+static bool  s_DisableKeyboardNav = false;
+static bool  s_KeyboardNavLoaded  = false;
 
 // ---------------------------------------------------------------------------
 
@@ -276,6 +280,28 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 s_BatteryLEDLoaded = true;
             }
 
+            // Load gamepad navigation preference once on first entry and apply it.
+            if (!s_GamepadNavLoaded) {
+                s_DisableGamepadNav = ctx.prefs.GetBool("DisableGamepadNavigation", false);
+                s_GamepadNavLoaded  = true;
+                ImGuiIO& io = ImGui::GetIO();
+                if (s_DisableGamepadNav)
+                    io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
+                else
+                    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+            }
+
+            // Load keyboard navigation preference once on first entry and apply it.
+            if (!s_KeyboardNavLoaded) {
+                s_DisableKeyboardNav = ctx.prefs.GetBool("DisableKeyboardNavigation", false);
+                s_KeyboardNavLoaded  = true;
+                ImGuiIO& io = ImGui::GetIO();
+                if (s_DisableKeyboardNav)
+                    io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+                else
+                    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+            }
+
             auto& devices = ctx.deviceManager.GetDevices();
             ImGui::Text("Connected Devices: %d", static_cast<int>(devices.size()));
 
@@ -407,7 +433,9 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 ctx.window, ctx.initial_width, ctx.initial_height, ctx.prefs,
                 ctx.vsync, ctx.framerate_limit, ctx.renderer,
                 ImGui::GetIO(),
-                s_EnableBatteryLED);
+                s_EnableBatteryLED,
+                s_DisableGamepadNav,
+                s_DisableKeyboardNav);
             break;
 
         case 6: // ── About ────────────────────────────────────────────────
