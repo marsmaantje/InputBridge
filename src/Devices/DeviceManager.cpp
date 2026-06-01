@@ -1,5 +1,6 @@
 #include "DeviceManager.h"
 #include "DeviceFactory.h"
+#include "SensorReader.h"
 #include "SDL3/SDL_joystick.h"
 #include "SDL3/SDL_log.h"
 #include <algorithm>
@@ -10,7 +11,9 @@ DeviceManager &DeviceManager::GetInstance() {
     return instance;
 }
 
-DeviceManager::DeviceManager() {}
+DeviceManager::DeviceManager() {
+}
+
 DeviceManager::~DeviceManager() { CloseAllDevices(); }
 
 const std::vector<DeviceState> &DeviceManager::GetDevices() const { return m_Devices; }
@@ -39,6 +42,16 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     // Initialize battery info for the new device
     UpdateBatteryInfo(m_Devices.back());
     
+    // ── Enable all IMU sensors at connect-time ──────────────────────────────
+    // SDL3 requires sensors to be enabled before the first read. For a combined
+    // Joy-Con pair, SDL_SENSOR_GYRO_L and SDL_SENSOR_ACCEL_L (left Joy-Con)
+    // are separate streams from SDL_SENSOR_GYRO_R / SDL_SENSOR_ACCEL_R (right).
+    // Without an explicit enable here, ReadGyroL / ReadAccelL always return
+    // available=false because SDL never starts the left-side sensor pipeline.
+    if (m_Devices.back().gamepad)
+        SensorReader::EnableAll(m_Devices.back().gamepad);
+    // ── End sensor enable ─────────────────────────────────────────────────── 
+
     if (result->haptic) {
         m_HapticDevices[instance_id] = std::move(result->haptic);
     }
@@ -173,6 +186,52 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
                         dev.name.c_str(), state_str, percent);
             }
         }
+
+        // ── Left Joy-Con battery (combined pair only) ─────────────────────
+        // When two Joy-Cons are merged into one virtual gamepad, SDL exposes
+        // SDL_SENSOR_GYRO_L on the combined handle.  In that case we find the
+        // left Joy-Con's physical joystick by scanning all connected joystick
+        // IDs for the sibling that SDL merged into this gamepad.
+        // SDL_GetGamepadID() returns the instance_id of the *right* Joy-Con
+        // (the primary half); the left half is the other HIDAPI joystick whose
+        // type is GAMEPAD and whose instance_id differs from dev.instance_id.
+        if (SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)) {
+            dev.battery_state_L   = SDL_POWERSTATE_UNKNOWN;
+            dev.battery_percent_L = -1;
+
+            int joystick_count = 0;
+            SDL_JoystickID* joystick_ids = SDL_GetJoysticks(&joystick_count);
+            if (joystick_ids) {
+                for (int i = 0; i < joystick_count; ++i) {
+                    SDL_JoystickID jid = joystick_ids[i];
+                    if (jid == dev.instance_id) continue;
+                    if (SDL_GetJoystickTypeForID(jid) != SDL_JOYSTICK_TYPE_GAMEPAD) continue;
+
+                    // Open transiently just to read battery; SDL ref-counts opens.
+                    SDL_Joystick* joy = SDL_OpenJoystick(jid);
+                    if (!joy) continue;
+
+                    int leftPercent = 0;
+                    SDL_PowerState leftState = SDL_GetJoystickPowerInfo(joy, &leftPercent);
+
+                    if (leftState != SDL_POWERSTATE_NO_BATTERY) {
+                        dev.battery_state_L   = leftState;
+                        dev.battery_percent_L = leftPercent;
+                        SDL_Log("Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
+                        SDL_CloseJoystick(joy);
+                        break;
+                    }
+
+                    SDL_CloseJoystick(joy);
+                }
+                SDL_free(joystick_ids);
+            }
+        } else {
+            // Not a combined pair — clear the left-side fields.
+            dev.battery_state_L   = SDL_POWERSTATE_UNKNOWN;
+            dev.battery_percent_L = -1;
+        }
+        // ── End Left Joy-Con battery ──────────────────────────────────────
     } else if (dev.joystick) {
         int percent = 0;
         dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
