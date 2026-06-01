@@ -23,8 +23,9 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateDevice(SDL_JoystickID i
             return CreateGenericDevice(instance_id);
             
         default:
-            SDL_Log("Unsupported device type: %d", static_cast<int>(type));
-            return std::nullopt;
+            SDL_Log("Unsupported device type: %d, create generic fallback!", static_cast<int>(type));
+            return CreateGenericDevice(instance_id);
+            //return std::nullopt;
     }
 }
 
