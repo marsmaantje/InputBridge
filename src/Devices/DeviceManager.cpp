@@ -1,5 +1,6 @@
 #include "DeviceManager.h"
 #include "DeviceFactory.h"
+#include "SensorReader.h"
 #include "SDL3/SDL_joystick.h"
 #include "SDL3/SDL_log.h"
 #include <algorithm>
@@ -41,6 +42,16 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     // Initialize battery info for the new device
     UpdateBatteryInfo(m_Devices.back());
     
+    // ── Enable all IMU sensors at connect-time ──────────────────────────────
+    // SDL3 requires sensors to be enabled before the first read. For a combined
+    // Joy-Con pair, SDL_SENSOR_GYRO_L and SDL_SENSOR_ACCEL_L (left Joy-Con)
+    // are separate streams from SDL_SENSOR_GYRO_R / SDL_SENSOR_ACCEL_R (right).
+    // Without an explicit enable here, ReadGyroL / ReadAccelL always return
+    // available=false because SDL never starts the left-side sensor pipeline.
+    if (m_Devices.back().gamepad)
+        SensorReader::EnableAll(m_Devices.back().gamepad);
+    // ── End sensor enable ─────────────────────────────────────────────────── 
+
     if (result->haptic) {
         m_HapticDevices[instance_id] = std::move(result->haptic);
     }
