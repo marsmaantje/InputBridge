@@ -3,6 +3,32 @@
  * @brief Unified haptic interface for game controllers
  *
  * Fix history:
+ *   v3.6 (2026-06-02)
+ *     - SDL 3.4.10 fixed SDL_RumbleGamepad on the Steam Controller V2 (HEADCRAB,
+ *       PIDs 0x1201 / 0x1202).  The V2 now uses the standard SDL rumble path,
+ *       exactly like any other gamepad.  Only V1 (0x1102, 0x1106) continues to
+ *       use the vendor HID trackpad-pulse path via SDL_SendGamepadEffect, because
+ *       V1 hardware has no conventional rumble motors and SDL never supported it
+ *       through SDL_RumbleGamepad.
+ *     - Added IsSteamControllerV1() and IsSteamControllerV2() helpers so call
+ *       sites can distinguish the two generations without repeating PID lists.
+ *     - PlayRumble() now branches on IsSteamControllerV1() instead of the
+ *       broader IsSteamController(), so V2 controllers fall through to the
+ *       standard SDL_RumbleGamepad path.
+ *     - GetControllerTypeName() reports "Steam Controller V1" / "Steam Controller V2".
+ *
+ *   v3.5 (2026-06-02)
+ *     - Added Steam Controller V2 (HEADCRAB) PIDs 0x1201 and 0x1202 to
+ *       IsSteamController(), fixing the missing rumble on the new hardware.
+ *     - Replaced raw SDL_hid_open / SDL_hid_write approach in
+ *       SendSteamControllerHaptic() with SDL_SendGamepadEffect, using a
+ *       properly-formed 65-byte FeatureReportMsg with ID_TRIGGER_HAPTIC_PULSE
+ *       (0x8F).  The old code used report ID 0x87 (ID_SET_SETTINGS_VALUES),
+ *       which the firmware silently ignored — this was the root cause of
+ *       trackpad rumble not working on V1 hardware.  The SDL_SendGamepadEffect
+ *       path also removes the need for a separate HID handle (m_steamHidDevice)
+ *       and the associated open/close lifecycle in Init() / ~GamepadHaptics().
+ *
  *   v3.4 (2026-05-07)
  *     - Corrected Steam Controller wireless PID: 0x1142 → 0x1106.
  *       0x1106 is what SDL sees when the controller connects via its USB dongle;
@@ -15,25 +41,18 @@
  *       Controllers so both wired and wireless variants now produce haptic output.
  *
  * @author InputBridge Team
- * @version 3.4
- * @date 2026-05-07
+ * @version 3.6
+ * @date 2026-06-02
  */
 
 #include "GamepadHaptics.h"
 #include <SDL3/SDL_gamepad.h>
-#include <SDL3/SDL_hidapi.h>
 #include <algorithm>
 #include <cstring>
-#include <thread>
-#include <chrono>
 
 // ==================== Destructor ====================
 
 GamepadHaptics::~GamepadHaptics() {
-    if (m_steamHidDevice) {
-        SDL_hid_close(m_steamHidDevice);
-        m_steamHidDevice = nullptr;
-    }
 }
 
 // ==================== Initialization ====================
@@ -53,20 +72,15 @@ InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
         m_xbox->Init();
         SDL_Log("GamepadHaptics: Initialized as Xbox");
     }
-    else if (IsSteamController()) {
-        // SDL3 removed SDL_SendJoystickEffect.  The Steam Controller's trackpad
-        // LRA actuators are only reachable via raw HID output reports, so we
-        // open the device directly through SDL's HIDAPI layer here and hold the
-        // handle for the lifetime of this object.
-        const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
-        const Uint16 product = SDL_GetJoystickProduct(m_joystick);
-        m_steamHidDevice = SDL_hid_open(vendor, product, nullptr);
-        if (m_steamHidDevice) {
-            SDL_Log("GamepadHaptics: Initialized as Steam Controller (HID handle open)");
-        } else {
-            SDL_Log("GamepadHaptics: Initialized as Steam Controller (HID open failed: %s)", SDL_GetError());
-            SDL_Log("  Haptic output will be unavailable — check udev rules / permissions.");
-        }
+    else if (IsSteamControllerV1()) {
+        // V1 haptic pulses are sent via SDL_SendGamepadEffect in SendSteamControllerHaptic(),
+        // which routes through SDL's already-open HIDAPI handle.  No separate HID open needed.
+        SDL_Log("GamepadHaptics: Initialized as Steam Controller V1 (trackpad HID haptics)");
+    }
+    else if (IsSteamControllerV2()) {
+        // V2 supports SDL_RumbleGamepad natively since SDL 3.4.10.
+        // No special initialization required — the standard rumble path is used.
+        SDL_Log("GamepadHaptics: Initialized as Steam Controller V2 (SDL_RumbleGamepad)");
     }
     else {
         SDL_Log("GamepadHaptics: Initialized as generic gamepad");
@@ -128,18 +142,40 @@ bool GamepadHaptics::IsXboxController() const {
 }
 
 bool GamepadHaptics::IsSteamController() const {
+    return IsSteamControllerV1() || IsSteamControllerV2();
+}
+
+bool GamepadHaptics::IsSteamControllerV1() const {
     const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
     const Uint16 product = SDL_GetJoystickProduct(m_joystick);
 
+    // V1 (D0G): wired USB and wireless dongle PIDs.
+    // These controllers have no traditional rumble motors; haptic feedback
+    // requires the vendor HID trackpad-pulse path via SDL_SendGamepadEffect.
+    return (vendor == VALVE_VENDOR_ID &&
+            (product == STEAM_CONTROLLER_USB_PID ||       // 0x1102 V1 wired
+             product == STEAM_CONTROLLER_WIRELESS_PID));  // 0x1106 V1 wireless dongle
+}
+
+bool GamepadHaptics::IsSteamControllerV2() const {
+    const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
+    const Uint16 product = SDL_GetJoystickProduct(m_joystick);
+
+    // V2 (HEADCRAB, 2026): wired USB and Bluetooth PIDs.
+    // SDL 3.4.10 fixed SDL_RumbleGamepad for these, so the standard rumble
+    // path works — no need for the custom HID haptic-pulse approach.
     if (vendor == VALVE_VENDOR_ID &&
-        (product == STEAM_CONTROLLER_USB_PID ||       // wired USB
-         product == STEAM_CONTROLLER_WIRELESS_PID)) { // wireless via dongle (was wrongly 0x1142)
+        (product == STEAM_CONTROLLER_V2_USB_PID ||  // 0x1201 V2 wired
+         product == STEAM_CONTROLLER_V2_BT_PID)) {  // 0x1202 V2 Bluetooth
         return true;
     }
 
-    // Name-based fallback for any Valve variant not covered by the PIDs above.
+    // Name-based fallback for any Valve V2 variant not covered by the PIDs above.
+    // IsSteamControllerV1() already matched 0x1102/0x1106, so anything that
+    // still reaches here and carries "Steam Controller" in its name is treated
+    // as V2 (i.e. uses the SDL_RumbleGamepad path).
     const char* name = SDL_GetJoystickName(m_joystick);
-    if (name && std::strstr(name, "Steam Controller")) {
+    if (name && std::strstr(name, "Steam Controller") && !IsSteamControllerV1()) {
         return true;
     }
 
@@ -147,9 +183,10 @@ bool GamepadHaptics::IsSteamController() const {
 }
 
 const char* GamepadHaptics::GetControllerTypeName() const {
-    if (IsDualSense())        return "DualSense";
-    if (IsXboxController())   return "Xbox";
-    if (IsSteamController())  return "Steam Controller";
+    if (IsDualSense())          return "DualSense";
+    if (IsXboxController())     return "Xbox";
+    if (IsSteamControllerV1())  return "Steam Controller V1";
+    if (IsSteamControllerV2())  return "Steam Controller V2";
     return "Generic Gamepad";
 }
 
@@ -161,17 +198,21 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
 
     RunAsync([this, slot, largeMagnitude, smallMagnitude, durationMs]() {
 
-        // ── Steam Controller path ─────────────────────────────────────────────
-        // The Steam Controller has no traditional eccentric-mass or LRA rumble
-        // motors.  SDL_RumbleGamepad does nothing on it.  The only way to
-        // produce haptic feedback is to write vendor HID reports directly to
-        // both trackpad actuators.
+        // ── Steam Controller V1 path ──────────────────────────────────────────
+        // V1 (D0G, PIDs 0x1102 / 0x1106) has no traditional eccentric-mass or
+        // LRA rumble motors.  SDL_RumbleGamepad does nothing on it.  The only
+        // way to produce haptic feedback is to write vendor HID reports directly
+        // to both trackpad actuators via SDL_SendGamepadEffect.
+        //
+        // V2 (HEADCRAB, PIDs 0x1201 / 0x1202) has real rumble motors and SDL
+        // 3.4.10 fixed SDL_RumbleGamepad support for it, so it falls through to
+        // the standard path below.
         //
         // We use the average of the two magnitudes as the pulse strength, then
-        // fire both pads simultaneously to approximate symmetric "rumble" feel.
-        if (IsSteamController()) {
+        // fire both pads simultaneously to approximate a symmetric "rumble" feel.
+        if (IsSteamControllerV1()) {
             const float magnitude = (largeMagnitude + smallMagnitude) * 0.5f;
-            SDL_Log("GamepadHaptics::PlayRumble - Steam Controller: raw HID haptic (magnitude=%.2f, duration=%ums)",
+            SDL_Log("GamepadHaptics::PlayRumble - Steam Controller V1: HID trackpad haptic (magnitude=%.2f, duration=%ums)",
                     magnitude, durationMs);
 
             SendSteamControllerHaptic(0, magnitude, durationMs); // left  trackpad
@@ -223,71 +264,80 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
 // ==================== Steam Controller HID Haptics ====================
 
 /**
- * Valve Steam Controller vendor HID haptic-pulse report layout (report 0x87):
+ * Sends a haptic pulse to one Steam Controller trackpad via SDL_SendGamepadEffect.
  *
- *   Byte  0   : Report ID  = 0x87
- *   Byte  1   : Message length (number of payload bytes that follow) = 7
- *   Byte  2   : Message type = 11  (STEAM_HAPTIC_PULSE_MSG_ID)
- *   Byte  3   : Pad select: 0 = left trackpad, 1 = right trackpad
- *   Bytes 4–5 : Pulse duration in microseconds (little-endian Uint16)
- *               How long the actuator is driven per cycle.
- *   Bytes 6–7 : Pulse period in microseconds (little-endian Uint16)
- *               Time between the start of consecutive pulses (must be ≥ duration).
- *               A period equal to the duration gives maximum continuous vibration.
- *   Byte  8   : Repeat count (0 = play once, use 1 for a single timed burst)
+ * SDL's HIDAPI Steam driver (SDL_hidapi_steam.c) implements SendJoystickEffect for
+ * exactly 65-byte payloads — it calls SDL_hid_send_feature_report on its
+ * already-open device handle.  We build a FeatureReportMsg (from Valve's
+ * controller_structs.h) with command ID_TRIGGER_HAPTIC_PULSE (0x8F):
  *
- * The hardware sustains one report's worth of pulses for approximately
- * STEAM_HAPTIC_PULSE_DURATION_MS milliseconds.  To fill a longer requested
- * duration we re-send the report in a blocking loop with a short sleep between
- * writes so we do not flood the USB HID endpoint.
+ *   Byte  0   : reserved / report ID (0x00 — SDL prepends this)
+ *   Byte  1   : command = ID_TRIGGER_HAPTIC_PULSE (0x8F)
+ *   Byte  2   : payload length = sizeof(MsgFireHapticPulse) = 9
+ *   Byte  3   : which_pad (0 = left trackpad, 1 = right trackpad)
+ *   Bytes 4–5 : pulse_duration in microseconds (little-endian Uint16)
+ *   Bytes 6–7 : pulse_interval in microseconds (little-endian Uint16)
+ *   Bytes 8–9 : pulse_count (little-endian Uint16)
+ *   Bytes 10–11: dBgain (Sint16, 0 = default)
+ *   Byte 12   : priority flags (0 = HAPTIC_PULSE_NORMAL)
+ *   Bytes 13–64: padding / unused payload bytes (zeroed)
  *
- * Reference: Valve's open-source Steam Controller firmware and SDL's
- *            hidapi/SDL_hidapi_steam.c driver.
+ * A fixed period of 5 000 µs (5 ms) is used.  Magnitude scales the on-time
+ * within each period (duty cycle): full magnitude → pulse_duration == period
+ * (maximum continuous vibration); lower values shorten the on-time.
+ * pulse_count is derived from the requested duration so the effect
+ * self-terminates on the hardware without needing repeated writes.
+ *
+ * This approach works identically on V1 (0x1102, 0x1106) and V2/HEADCRAB
+ * (0x1201, 0x1202) hardware, and requires no separate HID handle.
+ *
+ * Reference: Valve's open-source controller_structs.h / controller_constants.h
+ *            and SDL's SDL_hidapi_steam.c (HIDAPI_DriverSteam_SendJoystickEffect).
  */
 void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uint32_t durationMs) {
-    if (!m_steamHidDevice) {
-        SDL_Log("SendSteamControllerHaptic - no HID handle (device not opened or open failed)");
+    SDL_JoystickID id      = SDL_GetJoystickID(m_joystick);
+    SDL_Gamepad*   gamepad = SDL_GetGamepadFromID(id);
+    if (!gamepad) {
+        SDL_Log("SendSteamControllerHaptic - no gamepad handle available");
         return;
     }
 
     magnitude = std::clamp(magnitude, 0.0f, 1.0f);
     if (magnitude <= 0.0f) return;
 
-    // Period is fixed at 5000 µs (5 ms).  Duration scales with magnitude so
-    // lower values produce shorter on-time within each period (duty cycle).
-    const Uint16 periodUs   = 5000;
-    const Uint16 durationUs = static_cast<Uint16>(magnitude * static_cast<float>(periodUs));
+    // Period is fixed at 5 000 µs.  Duration scales with magnitude (duty cycle).
+    const uint16_t periodUs   = 5000;
+    const uint16_t durationUs = static_cast<uint16_t>(magnitude * static_cast<float>(periodUs));
 
-    // Build the 9-byte HID output report.
-    uint8_t report[9];
-    report[0] = STEAM_CONTROLLER_REPORT_ID;  // 0x87
-    report[1] = 7;                           // payload length
-    report[2] = STEAM_HAPTIC_PULSE_MSG_ID;   // 11
-    report[3] = pad;                         // 0 = left, 1 = right
-    report[4] = static_cast<uint8_t>(durationUs & 0xFF);         // duration lo
-    report[5] = static_cast<uint8_t>((durationUs >> 8) & 0xFF);  // duration hi
-    report[6] = static_cast<uint8_t>(periodUs & 0xFF);           // period lo
-    report[7] = static_cast<uint8_t>((periodUs >> 8) & 0xFF);    // period hi
-    report[8] = 1;                           // repeat count
+    // pulse_count: how many period-length pulses fill the requested wall-clock duration.
+    const uint16_t pulseCount = static_cast<uint16_t>(
+        std::max(1u, (durationMs + STEAM_HAPTIC_PULSE_DURATION_MS - 1)
+                     / STEAM_HAPTIC_PULSE_DURATION_MS));
 
-    const uint32_t iterations = std::max(1u,
-        (durationMs + STEAM_HAPTIC_PULSE_DURATION_MS - 1) / STEAM_HAPTIC_PULSE_DURATION_MS);
+    // Build the 65-byte FeatureReportMsg.
+    // Byte 0 is the HID report ID (0x00 for feature reports sent via SDL).
+    // Byte 1 is the Valve command byte.
+    // Byte 2 is the payload length (sizeof MsgFireHapticPulse = 9).
+    // Bytes 3–11 are the MsgFireHapticPulse fields.
+    // Remaining bytes are zero-padded.
+    uint8_t report[STEAM_FEATURE_REPORT_SIZE] = {};
+    report[1] = STEAM_HAPTIC_PULSE_MSG_ID;   // 0x8F — ID_TRIGGER_HAPTIC_PULSE
+    report[2] = 9;                           // payload length = sizeof(MsgFireHapticPulse)
+    report[3] = pad;                         // which_pad: 0 = left, 1 = right
+    report[4] = static_cast<uint8_t>(durationUs & 0xFF);          // pulse_duration lo
+    report[5] = static_cast<uint8_t>((durationUs >> 8) & 0xFF);   // pulse_duration hi
+    report[6] = static_cast<uint8_t>(periodUs & 0xFF);            // pulse_interval lo
+    report[7] = static_cast<uint8_t>((periodUs >> 8) & 0xFF);     // pulse_interval hi
+    report[8] = static_cast<uint8_t>(pulseCount & 0xFF);          // pulse_count lo
+    report[9] = static_cast<uint8_t>((pulseCount >> 8) & 0xFF);   // pulse_count hi
+    // report[10–11] = dBgain (Sint16) — 0 = default gain
+    // report[12]    = priority flags — 0 = HAPTIC_PULSE_NORMAL
 
-    SDL_Log("SendSteamControllerHaptic - pad=%u magnitude=%.2f durationUs=%u periodUs=%u iterations=%u",
-            pad, magnitude, durationUs, periodUs, iterations);
+    SDL_Log("SendSteamControllerHaptic - pad=%u magnitude=%.2f durationUs=%u periodUs=%u pulseCount=%u",
+            pad, magnitude, durationUs, periodUs, pulseCount);
 
-    for (uint32_t i = 0; i < iterations; ++i) {
-        // SDL3 removed SDL_SendJoystickEffect; use SDL_hid_write on the handle
-        // opened in Init().  Returns bytes written (>= 0) on success, -1 on error.
-        if (SDL_hid_write(m_steamHidDevice, report, sizeof(report)) < 0) {
-            SDL_Log("SendSteamControllerHaptic - SDL_hid_write failed (iter %u): %s",
-                    i, SDL_GetError());
-            break;
-        }
-        if (i + 1 < iterations) {
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(STEAM_HAPTIC_PULSE_DURATION_MS));
-        }
+    if (!SDL_SendGamepadEffect(gamepad, report, sizeof(report))) {
+        SDL_Log("SendSteamControllerHaptic - SDL_SendGamepadEffect failed: %s", SDL_GetError());
     }
 }
 
