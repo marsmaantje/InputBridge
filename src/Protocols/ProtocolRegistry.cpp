@@ -409,6 +409,27 @@ void ProtocolRegistry::LoadFieldCatalog() {
                     m_outputFields.push_back(fd);
             }
         }
+        // Merge extra input fields from the config file (user may add custom haptic/rumble fields)
+        if (j.contains("input_fields") && j["input_fields"].is_array()) {
+            for (const auto& item : j["input_fields"]) {
+                FieldDescriptor fd;
+                fd.id             = item.value("id",       "");
+                fd.label          = item.value("label",    fd.id);
+                fd.category       = item.value("category", "Custom Haptic");
+                std::string type  = item.value("type",     "analog"); // Input fields are currently all analog for haptics
+                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
+                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
+                fd.defaultWsKey   = item.value("wsKey",    fd.id);
+                fd.isBuiltIn      = false;
+
+                // Only add if not already present (built-ins take precedence by id)
+                bool exists = false;
+                for (const auto& existing : m_inputFields)
+                    if (existing.id == fd.id) { exists = true; break; }
+                if (!exists && !fd.id.empty())
+                    m_inputFields.push_back(fd);
+            }
+        }
     } catch (const std::exception& e) {
         std::cerr << "[ProtocolRegistry] Failed to parse input_fields.json: " << e.what() << "\n";
     }
@@ -505,25 +526,35 @@ void ProtocolRegistry::LoadDefinitionFiles() {
 void ProtocolRegistry::WriteDefaultFieldCatalog() {
     EnsureDirectories();
 
-    /*
     std::string path = GetProtocolsDir() + "input_fields.json";
     // Write a commented example so users know the format
     json j;
-    j["_comment"] = "Add custom output fields here. Built-in fields are always available.";
-    json arr = json::array();
-    json ex;
-    ex["id"]       = "custom_axis_1";
-    ex["label"]    = "Custom Axis 1";
-    ex["category"] = "Custom";
-    ex["type"]     = "analog";
-    ex["oscPath"]  = "/custom/axis1";
-    ex["wsKey"]    = "custom_axis1";
-    arr.push_back(ex);
-    j["output_fields"] = arr;
+    j["_comment"] = "Add custom output and input fields here. Built-in fields are always available.";
+
+    json outputArr = json::array();
+    json outputEx;
+    outputEx["id"]       = "custom_output_axis_1";
+    outputEx["label"]    = "Custom Output Axis 1";
+    outputEx["category"] = "Custom Output";
+    outputEx["type"]     = "analog";
+    outputEx["oscPath"]  = "/custom/output/axis1";
+    outputEx["wsKey"]    = "custom_output_axis1";
+    outputArr.push_back(outputEx);
+    j["output_fields"] = outputArr;
+
+    json inputArr = json::array();
+    json inputEx;
+    inputEx["id"]       = "custom_input_haptic_1";
+    inputEx["label"]    = "Custom Input Haptic 1";
+    inputEx["category"] = "Custom Haptic Input";
+    inputEx["type"]     = "analog"; // Input fields are currently all analog for haptics
+    inputEx["oscPath"]  = "/custom/input/haptic1";
+    inputEx["wsKey"]    = "custom_input_haptic1";
+    inputArr.push_back(inputEx);
+    j["input_fields"] = inputArr;
 
     std::ofstream ofs(path);
     if (ofs) ofs << j.dump(4);
-    */
 }
 
 // ─── Built-in field catalogs ─────────────────────────────────────────────────
@@ -639,6 +670,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_weapon_main", "Weapon Main",     "Digital: Other",  FieldType::DigitalButton, "/input/weapon_main", "weapon_main");
     addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
     addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
+    
     // ── Sensors: Gyroscope ───────────────────────────────────────────────────
     // Available on DualSense and Steam Controller.  Values normalised to [-1, 1].
     addOut("sensor_gyro_x",   "Gyro X (pitch)",    "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/x",         "gyro_x");
