@@ -362,6 +362,12 @@ void Application::UpdateLogic(Uint64 frame_start_time)
     // Haptics always run at full frame rate for minimum latency.
     om.Update();
 
+    // Refresh battery percent / charging state on a timer (every 5 s active,
+    // 30 s minimized).  Must run every frame so the timer fires on schedule;
+    // the method itself gates SDL calls to the configured interval.
+    const bool isMinimized = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED) != 0;
+    DeviceManager::GetInstance().Update(isMinimized);
+
     // Per-server inactivity checks: fire StopAllHapticEffects once when
     // a connected client stops sending data for X seconds.
     OSCServer::GetInstance().CheckInactivity();
