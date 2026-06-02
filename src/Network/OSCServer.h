@@ -73,13 +73,6 @@ public:
     void SendWheel(float steer, float brake, float throttle, float pitch, float roll);
     void SendButtons(const std::vector<uint32_t>& buttons);
 
-    // Sends battery level and charging state for one device (or a split Joy-Con
-    // pair).  `deviceIndex` is the 0-based position in DeviceManager::GetDevices().
-    // For a combined Joy-Con pair, both left and right readings are sent;
-    // battery_percent_L == -1 signals that no split data is available.
-    void SendBattery(int deviceIndex, int battery_percent, bool charging,
-                     int battery_percent_L = -1);
-
     void SetSelectedDevice(int id);
     int GetSelectedDevice() const;
 

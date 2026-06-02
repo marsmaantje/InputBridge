@@ -63,7 +63,9 @@ class InputMapper {
             GyroLX, GyroLY, GyroLZ,
             AccelLX, AccelLY, AccelLZ,
             GyroRX, GyroRY, GyroRZ,
-            AccelRX, AccelRY, AccelRZ
+            AccelRX, AccelRY, AccelRZ,
+            BatteryLevel,
+            BatteryCharging
         };
         SensorChannel sensorChannel = SensorChannel::None;
     };
@@ -211,6 +213,8 @@ class InputMapper {
             bool capSenseRightStick = false;
             bool capSenseLeftGrip   = false;
             bool capSenseRightGrip  = false;
+            int batteryLevel = -1;
+            bool charging = false;
         };
         std::vector<SensorState> initialSensors;
     };
