@@ -11,6 +11,12 @@ GyroState SensorReader::ReadGyroSensor(SDL_Gamepad* gamepad, SDL_SensorType type
     GyroState state;
     if (!gamepad) return state;
     if (!SDL_GamepadHasSensor(gamepad, type)) return state;
+    // Only read if SDL has actually activated the sensor data pipeline.
+    // SDL_GetGamepadSensorData can return stale buffered data on the first
+    // frame after a Steam Input re-presentation, before the enable has taken
+    // effect at the driver level.  Gating on SDL_GamepadSensorEnabled ensures
+    // we only report data once the pipeline is confirmed active.
+    if (!SDL_GamepadSensorEnabled(gamepad, type)) return state;
 
     float data[3] = {};
     if (!SDL_GetGamepadSensorData(gamepad, type, data, 3)) return state;
@@ -26,6 +32,8 @@ AccelState SensorReader::ReadAccelSensor(SDL_Gamepad* gamepad, SDL_SensorType ty
     AccelState state;
     if (!gamepad) return state;
     if (!SDL_GamepadHasSensor(gamepad, type)) return state;
+    // Same rationale as ReadGyroSensor above.
+    if (!SDL_GamepadSensorEnabled(gamepad, type)) return state;
 
     float data[3] = {};
     if (!SDL_GetGamepadSensorData(gamepad, type, data, 3)) return state;
@@ -64,8 +72,10 @@ SensorCapabilities SensorReader::QueryCapabilities(SDL_Gamepad* gamepad) {
 void SensorReader::Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps) {
     if (!gamepad) return;
 
-    // Only enable sensors the device actually has — SDL ignores redundant calls,
-    // but being explicit avoids noise in SDL's internal bookkeeping.
+    // Only enable sensors the device actually has.  SDL does not guarantee that
+    // sensor-enabled state survives a device re-presentation (e.g. Steam Input
+    // taking/releasing control), so this must be called again after any such
+    // event — see the SDL_EVENT_WINDOW_FOCUS_GAINED handler in Application.
     static constexpr struct { bool SensorCapabilities::*flag; SDL_SensorType type; } kMotionSensors[] = {
         { &SensorCapabilities::gyro,   SDL_SENSOR_GYRO    },
         { &SensorCapabilities::accel,  SDL_SENSOR_ACCEL   },
@@ -76,8 +86,12 @@ void SensorReader::Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps) 
     };
 
     for (const auto& entry : kMotionSensors) {
-        if (caps.*entry.flag)
-            SDL_SetGamepadSensorEnabled(gamepad, entry.type, true);
+        if (caps.*entry.flag) {
+            if (!SDL_SetGamepadSensorEnabled(gamepad, entry.type, true))
+                SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                            "SensorReader::Enable: failed to enable sensor type %d: %s",
+                            (int)entry.type, SDL_GetError());
+        }
     }
 }
 

@@ -7,6 +7,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 
 #include "Devices/DeviceManager.h"
+#include "Devices/SensorReader.h"
 #include "Devices/VirtualDeviceManager.h"
 #include "Mappers/InputMapper.h"
 #include "Mappers/OutputMapper.h"
@@ -348,6 +349,19 @@ void Application::ProcessEvents()
         if (event.type == SDL_EVENT_JOYSTICK_REMOVED) {
             dm.HandleDeviceRemoved(event.jdevice.which);
             m_prefs.ClearAppliedPreference(event.jdevice.which);
+        }
+
+        // Re-enable IMU sensors on all gamepads whenever the window regains
+        // focus.  Steam Input (and other overlays) can silently reset
+        // SDL_SetGamepadSensorEnabled to false when they take control of the
+        // device — even without triggering a remove/add cycle.  Re-enabling
+        // here ensures gyro and accel readings resume as soon as the user
+        // returns to InputBridge (e.g. after dismissing the Steam overlay).
+        if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+            for (auto& dev : dm.GetDevices()) {
+                if (dev.gamepad)
+                    SensorReader::EnableAll(dev.gamepad);
+            }
         }
     }
 }

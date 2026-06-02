@@ -296,6 +296,11 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
         return;
     }
 
+    // Re-enable sensors every frame as a last-resort fallback.  The primary
+    // recovery path for Steam overlay / focus loss is the
+    // SDL_EVENT_WINDOW_FOCUS_GAINED handler in Application::ProcessEvents,
+    // which runs before rendering.  This call catches any edge cases where
+    // sensors were disabled outside of a normal focus cycle.
     SensorReader::EnableAll(dev.gamepad);
 
     ImGui::PushID("sensor_viz");
