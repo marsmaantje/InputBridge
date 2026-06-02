@@ -62,11 +62,6 @@ class WebSocketServer {
     void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll);
     void Broadcast(const std::string &msg, uWS::OpCode opCode);
 
-    // Sends battery level and charging state for one device over WebSocket.
-    // Mirrors OSCServer::SendBattery — see that method for parameter semantics.
-    void BroadcastBattery(int deviceIndex, int battery_percent, bool charging,
-                          int battery_percent_L = -1);
-
     void DrawContent();
 
     void LoadConfig(const PreferencesManager& prefs);
@@ -119,8 +114,6 @@ class WebSocketServer {
     void Broadcast(const std::string &address, int value) {}
     void Broadcast(const std::string &address, const std::string &value) {}
     void Broadcast_wheel(float wheel, float brake, float throttle, float pitch, float roll) {}
-    void BroadcastBattery(int deviceIndex, int battery_percent, bool charging,
-                          int battery_percent_L = -1) {}
 
     void DrawContent() {}
 

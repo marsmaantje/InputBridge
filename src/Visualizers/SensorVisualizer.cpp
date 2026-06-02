@@ -296,25 +296,31 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
         return;
     }
 
-    SensorReader::EnableAll(dev.gamepad);
-
     ImGui::PushID("sensor_viz");
-
-    if (ImGui::CollapsingHeader("Gyroscope", ImGuiTreeNodeFlags_DefaultOpen))
-        DrawGyro(dev.gamepad);
-
-    ImGui::Spacing();
-
-    if (ImGui::CollapsingHeader("Accelerometer", ImGuiTreeNodeFlags_DefaultOpen))
-        DrawAccel(dev.gamepad);
-
-    ImGui::Spacing();
 
     // ── Split sensors: Joy-Con pair / Steam Deck L+R halves ───────────────────
     const bool hasGyroL  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L);
     const bool hasAccelL = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L);
     const bool hasGyroR  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R);
     const bool hasAccelR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R);
+
+    // When a Joy-Con pair is merged, SDL aliases SDL_SENSOR_GYRO / SDL_SENSOR_ACCEL
+    // to one of the halves, so HasSensor returns true for the main slot AND the L/R
+    // slots simultaneously.  Showing the unqualified sections in that case duplicates
+    // data already shown correctly under Left / Right, so suppress them.
+    const bool hasSplitSensors = hasGyroL || hasAccelL || hasGyroR || hasAccelR;
+
+    if (!hasSplitSensors) {
+        if (ImGui::CollapsingHeader("Gyroscope", ImGuiTreeNodeFlags_DefaultOpen))
+            DrawGyro(dev.gamepad);
+
+        ImGui::Spacing();
+
+        if (ImGui::CollapsingHeader("Accelerometer", ImGuiTreeNodeFlags_DefaultOpen))
+            DrawAccel(dev.gamepad);
+
+        ImGui::Spacing();
+    }
 
     if (hasGyroL || hasAccelL) {
         ImGui::Separator();

@@ -7,6 +7,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 
 #include "Devices/DeviceManager.h"
+#include "Devices/SensorReader.h"
 #include "Devices/VirtualDeviceManager.h"
 #include "Mappers/InputMapper.h"
 #include "Mappers/OutputMapper.h"
@@ -349,6 +350,19 @@ void Application::ProcessEvents()
             dm.HandleDeviceRemoved(event.jdevice.which);
             m_prefs.ClearAppliedPreference(event.jdevice.which);
         }
+
+        // Re-enable IMU sensors on all gamepads whenever the window regains
+        // focus.  Steam Input (and other overlays) can silently reset
+        // SDL_SetGamepadSensorEnabled to false when they take control of the
+        // device — even without triggering a remove/add cycle.  Re-enabling
+        // here ensures gyro and accel readings resume as soon as the user
+        // returns to InputBridge (e.g. after dismissing the Steam overlay).
+        if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+            for (auto& dev : dm.GetDevices()) {
+                if (dev.gamepad)
+                    SensorReader::EnableAll(dev.gamepad);
+            }
+        }
     }
 }
 
@@ -361,6 +375,12 @@ void Application::UpdateLogic(Uint64 frame_start_time)
 
     // Haptics always run at full frame rate for minimum latency.
     om.Update();
+
+    // Refresh battery percent / charging state on a timer (every 5 s active,
+    // 30 s minimized).  Must run every frame so the timer fires on schedule;
+    // the method itself gates SDL calls to the configured interval.
+    const bool isMinimized = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED) != 0;
+    DeviceManager::GetInstance().Update(isMinimized);
 
     // Per-server inactivity checks: fire StopAllHapticEffects once when
     // a connected client stops sending data for X seconds.

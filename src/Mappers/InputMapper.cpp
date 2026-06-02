@@ -178,11 +178,11 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
             }
         }
 
-        // Capture initial sensor states for gamepads (used by both Axis and Digital listening)
+        // Capture initial sensor/battery states (IMU for gamepads, battery for all)
+        ListeningState::SensorState ss;
+        ss.instance_id = dev.instance_id;
         if (dev.gamepad) {
             SensorReader::EnableAll(dev.gamepad); // Ensure sensors are enabled for baseline capture
-            ListeningState::SensorState ss;
-            ss.instance_id = dev.instance_id;
             ss.gyro   = SensorReader::ReadGyro (dev.gamepad);
             ss.accel  = SensorReader::ReadAccel(dev.gamepad);
             ss.gyroL  = SensorReader::ReadGyroL(dev.gamepad);
@@ -194,8 +194,16 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
             ss.capSenseRightStick = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK);
             ss.capSenseLeftGrip   = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP);
             ss.capSenseRightGrip  = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP);
-            m_ListeningState.initialSensors.push_back(ss);
         }
+
+        int pct = -1;
+        SDL_PowerState ps = SDL_POWERSTATE_UNKNOWN;
+        if      (dev.gamepad)  ps = SDL_GetGamepadPowerInfo (dev.gamepad,  &pct);
+        else if (dev.joystick) ps = SDL_GetJoystickPowerInfo(dev.joystick, &pct);
+
+        ss.batteryLevel = pct;
+        ss.charging = (ps == SDL_POWERSTATE_CHARGING || ps == SDL_POWERSTATE_CHARGED);
+        m_ListeningState.initialSensors.push_back(ss);
     }
 
     if (type == ListeningState::Digital) {
@@ -267,6 +275,77 @@ void InputMapper::UpdateListening() {
             if (updated) SaveCurrentProfile();
             CancelListening();
             return;
+        }
+    }
+
+    // 1b. Check for battery state changes
+    if (m_ListeningState.active) {
+        using SC = InputSource::SensorChannel;
+        for (const auto& dev : devices) {
+            const ListeningState::SensorState* baseline = nullptr;
+            for (const auto& s : m_ListeningState.initialSensors) {
+                if (s.instance_id == dev.instance_id) { baseline = &s; break; }
+            }
+            if (!baseline) continue;
+
+            int curPercent = -1;
+            SDL_PowerState curPower = SDL_POWERSTATE_UNKNOWN;
+            if      (dev.gamepad)  curPower = SDL_GetGamepadPowerInfo (dev.gamepad,  &curPercent);
+            else if (dev.joystick) curPower = SDL_GetJoystickPowerInfo(dev.joystick, &curPercent);
+            bool isCurrentlyCharging = (curPower == SDL_POWERSTATE_CHARGING || curPower == SDL_POWERSTATE_CHARGED);
+
+            // Check battery level (Axis mapping listening)
+            if (m_ListeningState.type == ListeningState::Axis) {
+                if (curPercent != baseline->batteryLevel && curPercent != -1) {
+                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
+                    src.instance_id   = dev.instance_id;
+                    src.axisIndex     = -1;
+                    src.sensorChannel = SC::BatteryLevel;
+                    SaveCurrentProfile();
+                    CancelListening();
+                    return;
+                }
+                if (isCurrentlyCharging != baseline->charging) {
+                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
+                    src.instance_id   = dev.instance_id;
+                    src.axisIndex     = -1;
+                    src.sensorChannel = SC::BatteryCharging;
+                    SaveCurrentProfile();
+                    CancelListening();
+                    return;
+                }
+            }
+
+            // Check charging state (Digital mapping listening)
+            if (m_ListeningState.type == ListeningState::Digital) {
+                if (isCurrentlyCharging != baseline->charging) {
+                    bool updated = false;
+                    if (m_ListeningState.targetName == "digital") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {
+                            auto& dm = profile.digitalMappings[m_ListeningState.listIndex];
+                            dm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            dm.instance_id = dev.instance_id;
+                            dm.button_index = -1; dm.hat_index = -1; dm.hat_mask = 0;
+                            dm.sensor_channel = SC::BatteryCharging;
+                            updated = true;
+                        }
+                    } else if (m_ListeningState.targetName == "button_analog") {
+                        if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.buttonMappings.size()) {
+                            auto& bm = profile.buttonMappings[m_ListeningState.listIndex];
+                            bm.device_guid = DeviceManager::GetDeviceGUIDString(dev);
+                            bm.instance_id = dev.instance_id;
+                            bm.button_index = -1; bm.hat_index = -1; bm.hat_mask = 0;
+                            bm.sensor_channel = SC::BatteryCharging;
+                            updated = true;
+                        }
+                    }
+                    if (updated) SaveCurrentProfile();
+                    CancelListening();
+                    return;
+                }
+            }
         }
     }
 
@@ -806,6 +885,8 @@ void InputMapper::DrawMappingContent() {
         { SC::RightStickTouch, "Right Stick Touch" },
         { SC::LeftGripTouch,   "Left Grip Touch"   },
         { SC::RightGripTouch,  "Right Grip Touch"  },
+        { SC::BatteryLevel,    "Battery Level"     },
+        { SC::BatteryCharging, "Battery Charging"  },
     };
     auto sensorChannelName = [](SC ch) -> const char* {
         for (const auto& e : kSensorEntries) if (e.channel == ch) return e.label;
@@ -868,12 +949,13 @@ void InputMapper::DrawMappingContent() {
 
                 bool hasGyroLR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L) || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R);
                 bool hasAccelLR = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L) || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R);
+                bool hasBattery = (dev.battery_state != SDL_POWERSTATE_UNKNOWN || dev.battery_percent >= 0);
 
-                if (!hasGyro && !hasAccel && !hasGyroLR && !hasAccelLR && !hasTouch) continue;
+                if (!hasGyro && !hasAccel && !hasGyroLR && !hasAccelLR && !hasTouch && !hasBattery) continue;
 
                 // Section header (not selectable)
                 ImGui::Separator();
-                ImGui::TextDisabled("%s  [Sensors]", dev.name.c_str());
+                ImGui::TextDisabled("%s  [Sensors/Battery]", dev.name.c_str());
 
                 for (const auto& entry : kSensorEntries) {
                     // Skip channels the hardware doesn't have.
@@ -884,7 +966,8 @@ void InputMapper::DrawMappingContent() {
                     bool isGyroR = (entry.channel >= SC::GyroRX && entry.channel <= SC::GyroRZ);
                     bool isAccelR= (entry.channel >= SC::AccelRX && entry.channel <= SC::AccelRZ);
                     bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Pressure);
-                    bool isCap   = (entry.channel >= SC::LeftStickTouch);
+                    bool isCap   = (entry.channel >= SC::LeftStickTouch && entry.channel <= SC::RightGripTouch);
+                    bool isBattery = (entry.channel == SC::BatteryLevel || entry.channel == SC::BatteryCharging);
 
                     // Hide combined sensors if split (L/R) sensors are available to avoid redundancy
                     if (isGyro  && (hasGyroLR || !hasGyro))  continue;
@@ -894,6 +977,7 @@ void InputMapper::DrawMappingContent() {
                     if (isGyroR && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R)) continue;
                     if (isAccelR&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R))continue;
                     if (isTouch && !hasTouch) continue;
+                    if (isBattery && !hasBattery) continue;
 
                     if (isCap) {
                         SDL_GamepadCapSenseType ct = SDL_GAMEPAD_CAPSENSE_LEFT_STICK;
@@ -1281,88 +1365,111 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
     using SC = InputSource::SensorChannel;
     if (cfg.sensorChannel == SC::None || cfg.instance_id == 0) return 0.f;
 
-    // Find the gamepad handle from the device manager.
-    SDL_Gamepad* gamepad = nullptr;
+    // Find the device state from the device manager.
+    const DeviceState* devState = nullptr;
     for (const auto& dev : m_DeviceManager.GetDevices()) {
         if (dev.instance_id == cfg.instance_id) {
-            gamepad = dev.gamepad;
+            devState = &dev;
             break;
         }
     }
-    if (!gamepad) return 0.f;
-
-    // Enable sensors each frame — SDL ignores redundant calls, cost is negligible.
-    SensorReader::EnableAll(gamepad);
+    if (!devState) return 0.f;
 
     float raw = 0.f;
-    switch (cfg.sensorChannel) {
-        case SC::GyroX: case SC::GyroY: case SC::GyroZ: {
-            auto s = SensorReader::ReadGyro(gamepad);
-            raw = (cfg.sensorChannel == SC::GyroX) ? s.x
-                : (cfg.sensorChannel == SC::GyroY) ? s.y : s.z;
-            break;
-        }
-        case SC::AccelX: case SC::AccelY: case SC::AccelZ: {
-            auto s = SensorReader::ReadAccel(gamepad);
-            raw = (cfg.sensorChannel == SC::AccelX) ? s.x
-                : (cfg.sensorChannel == SC::AccelY) ? s.y : s.z;
-            break;
-        }
-        case SC::GyroLX: case SC::GyroLY: case SC::GyroLZ: {
-            auto s = SensorReader::ReadGyroL(gamepad);
-            raw = (cfg.sensorChannel == SC::GyroLX) ? s.x
-                : (cfg.sensorChannel == SC::GyroLY) ? s.y : s.z;
-            break;
-        }
-        case SC::AccelLX: case SC::AccelLY: case SC::AccelLZ: {
-            auto s = SensorReader::ReadAccelL(gamepad);
-            raw = (cfg.sensorChannel == SC::AccelLX) ? s.x
-                : (cfg.sensorChannel == SC::AccelLY) ? s.y : s.z;
-            break;
-        }
-        case SC::GyroRX: case SC::GyroRY: case SC::GyroRZ: {
-            auto s = SensorReader::ReadGyroR(gamepad);
-            raw = (cfg.sensorChannel == SC::GyroRX) ? s.x
-                : (cfg.sensorChannel == SC::GyroRY) ? s.y : s.z;
-            break;
-        }
-        case SC::AccelRX: case SC::AccelRY: case SC::AccelRZ: {
-            auto s = SensorReader::ReadAccelR(gamepad);
-            raw = (cfg.sensorChannel == SC::AccelRX) ? s.x
-                : (cfg.sensorChannel == SC::AccelRY) ? s.y : s.z;
-            break;
-        }
-        case SC::TouchX: case SC::TouchY: case SC::TouchPressure:
-        case SC::Touch2X: case SC::Touch2Y: case SC::Touch2Pressure: {
-            auto t = SensorReader::ReadTouch(gamepad);
-            switch (cfg.sensorChannel) {
-                case SC::TouchX:        raw = t.fingers[0].active ? t.primaryXCentered()              : 0.f; break;
-                case SC::TouchY:        raw = t.fingers[0].active ? t.primaryYCentered()              : 0.f; break;
-                case SC::TouchPressure: raw = t.fingers[0].active ? t.primaryPressure()               : 0.f; break;
-                case SC::Touch2X:        raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f)     : 0.f; break;
-                case SC::Touch2Y:        raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f)     : 0.f; break;
-                case SC::Touch2Pressure: raw = t.fingers[1].active ? t.fingers[1].pressure             : 0.f; break;
-                default: break;
+
+    // Battery channels do not require a gamepad handle or IMU enablement.
+    if (cfg.sensorChannel == SC::BatteryLevel) {
+        raw = (devState->battery_percent >= 0) ? (float)devState->battery_percent / 100.f : 0.f;
+    } else if (cfg.sensorChannel == SC::BatteryCharging) {
+        bool charging = (devState->battery_state == SDL_POWERSTATE_CHARGING || devState->battery_state == SDL_POWERSTATE_CHARGED);
+        raw = charging ? 1.f : 0.f;
+    } else if (devState->gamepad) {
+        // Enable sensors each frame — SDL ignores redundant calls, cost is negligible.
+        SensorReader::EnableAll(devState->gamepad);
+
+        switch (cfg.sensorChannel) {
+            case SC::GyroX: case SC::GyroY: case SC::GyroZ: {
+                auto s = SensorReader::ReadGyro(devState->gamepad);
+                raw = (cfg.sensorChannel == SC::GyroX) ? s.x
+                    : (cfg.sensorChannel == SC::GyroY) ? s.y : s.z;
+                break;
             }
-            break;
+            case SC::AccelX: case SC::AccelY: case SC::AccelZ: {
+                auto s = SensorReader::ReadAccel(devState->gamepad);
+                raw = (cfg.sensorChannel == SC::AccelX) ? s.x
+                    : (cfg.sensorChannel == SC::AccelY) ? s.y : s.z;
+                break;
+            }
+            case SC::GyroLX: case SC::GyroLY: case SC::GyroLZ: {
+                auto s = SensorReader::ReadGyroL(devState->gamepad);
+                raw = (cfg.sensorChannel == SC::GyroLX) ? s.x
+                    : (cfg.sensorChannel == SC::GyroLY) ? s.y : s.z;
+                break;
+            }
+            case SC::AccelLX: case SC::AccelLY: case SC::AccelLZ: {
+                auto s = SensorReader::ReadAccelL(devState->gamepad);
+                raw = (cfg.sensorChannel == SC::AccelLX) ? s.x
+                    : (cfg.sensorChannel == SC::AccelLY) ? s.y : s.z;
+                break;
+            }
+            case SC::GyroRX: case SC::GyroRY: case SC::GyroRZ: {
+                auto s = SensorReader::ReadGyroR(devState->gamepad);
+                raw = (cfg.sensorChannel == SC::GyroRX) ? s.x
+                    : (cfg.sensorChannel == SC::GyroRY) ? s.y : s.z;
+                break;
+            }
+            case SC::AccelRX: case SC::AccelRY: case SC::AccelRZ: {
+                auto s = SensorReader::ReadAccelR(devState->gamepad);
+                raw = (cfg.sensorChannel == SC::AccelRX) ? s.x
+                    : (cfg.sensorChannel == SC::AccelRY) ? s.y : s.z;
+                break;
+            }
+            case SC::TouchX: case SC::TouchY: case SC::TouchPressure:
+            case SC::Touch2X: case SC::Touch2Y: case SC::Touch2Pressure: {
+                auto t = SensorReader::ReadTouch(devState->gamepad);
+                switch (cfg.sensorChannel) {
+                    case SC::TouchX:        raw = t.fingers[0].active ? t.primaryXCentered()              : 0.f; break;
+                    case SC::TouchY:        raw = t.fingers[0].active ? t.primaryYCentered()              : 0.f; break;
+                    case SC::TouchPressure: raw = t.fingers[0].active ? t.primaryPressure()               : 0.f; break;
+                    case SC::Touch2X:        raw = t.fingers[1].active ? (t.fingers[1].x * 2.f - 1.f)     : 0.f; break;
+                    case SC::Touch2Y:        raw = t.fingers[1].active ? (t.fingers[1].y * 2.f - 1.f)     : 0.f; break;
+                    case SC::Touch2Pressure: raw = t.fingers[1].active ? t.fingers[1].pressure             : 0.f; break;
+                    default: break;
+                }
+                break;
+            }
+            case SC::LeftStickTouch:  raw = SDL_GetGamepadCapSense(devState->gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK)  ? 1.f : 0.f; break;
+            case SC::RightStickTouch: raw = SDL_GetGamepadCapSense(devState->gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK) ? 1.f : 0.f; break;
+            case SC::LeftGripTouch:   raw = SDL_GetGamepadCapSense(devState->gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP)   ? 1.f : 0.f; break;
+            case SC::RightGripTouch:  raw = SDL_GetGamepadCapSense(devState->gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP)  ? 1.f : 0.f; break;
+            default: break;
         }
-        case SC::LeftStickTouch:  raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_STICK)  ? 1.f : 0.f; break;
-        case SC::RightStickTouch: raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_STICK) ? 1.f : 0.f; break;
-        case SC::LeftGripTouch:   raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP)   ? 1.f : 0.f; break;
-        case SC::RightGripTouch:  raw = SDL_GetGamepadCapSense(gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP)  ? 1.f : 0.f; break;
-        default: break;
     }
 
     if (cfg.invert) raw = -raw;
-    if (std::abs(raw) < cfg.deadzone) raw = 0.f;
-    float r = std::clamp(raw, -1.f, 1.f);
-    if (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
-    else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;
-    return r;
+
+    // For IMU sensors (Gyro/Accel), values are in SI units (rad/s or m/s^2).
+    // Applying the default axis deadzone (0.05) or clamping to [-1, 1] destroys the data.
+    bool isImu = (cfg.sensorChannel >= SC::GyroX && cfg.sensorChannel <= SC::AccelZ) ||
+                 (cfg.sensorChannel >= SC::GyroLX && cfg.sensorChannel <= SC::AccelRZ);
+
+    if (!isImu) {
+        if (std::abs(raw) < cfg.deadzone) raw = 0.f;
+        float r = std::clamp(raw, -1.f, 1.f);
+        if (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
+        else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;
+        return r;
+    }
+
+    return raw;
 }
 
 bool InputMapper::Update(bool dynamic_rate) {
     if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= (int)m_Profiles.size()) return false;
+
+    // Ensure mappings reflect the current hardware session instance IDs.
+    HandleDeviceConnectionChange();
+
     auto &profile = m_Profiles[m_SelectedProfileIndex];
     const ProtocolDefinition* outDef = GetActiveOutputDefinition();
 
@@ -1378,17 +1485,21 @@ bool InputMapper::Update(bool dynamic_rate) {
         }
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0 || bm.target_output_name.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name]=0.f;
@@ -1397,17 +1508,21 @@ bool InputMapper::Update(bool dynamic_rate) {
                 ? ProcessSensor(src) : ProcessAxis(src);
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0||bm.target_output_name.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name]=bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name]=bm.on_value;
         }
     }
 
@@ -1417,16 +1532,18 @@ bool InputMapper::Update(bool dynamic_rate) {
         // 1. Update states from all buttons and update last_physical_state
         for (auto& dm : profile.digitalMappings) {
             if (dm.instance_id==0||dm.target_field_id.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (!j) {
-                dm.last_physical_state = false; // Device disconnected
-                continue;
-            }
 
             bool pressed = false;
-            if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
-            else if (dm.hat_index != -1) pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-            else if (dm.sensor_channel != InputSource::SensorChannel::None) {
+            if (dm.button_index != -1 || dm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+                } else {
+                    dm.last_physical_state = false;
+                    continue;
+                }
+            } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
                 InputSource tmp;
                 tmp.instance_id = dm.instance_id;
                 tmp.sensorChannel = dm.sensor_channel;
@@ -1580,36 +1697,6 @@ bool InputMapper::Update(bool dynamic_rate) {
     m_LastOutputValues  = snapshot;
     m_LastBroadcastTime = SDL_GetTicks();
 
-    // ── Battery broadcast ─────────────────────────────────────────────────
-    // Send battery level and charging state for every connected device.
-    // We send on every output tick so clients always have fresh data;
-    // the per-device values only change slowly so the overhead is minimal.
-    {
-        const auto& devices = DeviceManager::GetInstance().GetDevices();
-        for (int i = 0; i < static_cast<int>(devices.size()); ++i) {
-            const DeviceState& dev = devices[i];
-
-            // Skip devices with no battery info at all.
-            const bool hasRight = (dev.battery_state != SDL_POWERSTATE_UNKNOWN
-                                   || dev.battery_percent >= 0)
-                                  && dev.battery_state != SDL_POWERSTATE_NO_BATTERY;
-            if (!hasRight) continue;
-
-            const bool charging = (dev.battery_state == SDL_POWERSTATE_CHARGING
-                                   || dev.battery_state == SDL_POWERSTATE_CHARGED);
-            const bool hasSplit = (dev.battery_state_L != SDL_POWERSTATE_UNKNOWN);
-            const int  levelL   = hasSplit ? dev.battery_percent_L : -1;
-
-            if (osc.IsRunning())
-                osc.SendBattery(i, dev.battery_percent, charging, levelL);
-#ifdef ENABLE_WEBSOCKETS
-            if (ws.IsRunning())
-                ws.BroadcastBattery(i, dev.battery_percent, charging, levelL);
-#endif
-        }
-    }
-    // ── End battery broadcast ─────────────────────────────────────────────
-
     return true;
 }
 
@@ -1635,17 +1722,21 @@ std::string InputMapper::GetOutputPreview() {
         }
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue; // NOLINT(readability-misleading-indentation)
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
 
         // Determine final value for each field for preview
@@ -1665,19 +1756,23 @@ std::string InputMapper::GetOutputPreview() {
             for (const auto& dm : profile.digitalMappings) {
                 if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
                 if (dm.instance_id == 0) continue;
-                SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-                if (j) {
-                    bool pressed = (dm.button_index != -1) ? SDL_GetJoystickButton(j, dm.button_index) : (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-                    if (!pressed && dm.sensor_channel != InputSource::SensorChannel::None) {
-                        InputSource tmp;
-                        tmp.instance_id = dm.instance_id;
-                        tmp.sensorChannel = dm.sensor_channel;
-                        pressed = (ProcessSensor(tmp) > 0.5f);
+
+                bool pressed = false;
+                if (dm.button_index != -1 || dm.hat_index != -1) {
+                    SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+                    if (j) {
+                        if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                        else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
                     }
-                    if (pressed) {
-                        value = true;
-                        break;
-                    }
+                } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
+                    InputSource tmp;
+                    tmp.instance_id = dm.instance_id;
+                    tmp.sensorChannel = dm.sensor_channel;
+                    pressed = (ProcessSensor(tmp) > 0.5f);
+                }
+                if (pressed) {
+                    value = true;
+                    break;
                 }
             }
             digitalValues[pf->fieldId] = value;
@@ -1689,17 +1784,21 @@ std::string InputMapper::GetOutputPreview() {
                 ? ProcessSensor(src) : ProcessAxis(src);
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
     }
 
@@ -2093,6 +2192,9 @@ void InputMapper::ActivateProfile(int index) {
         m_SelectedProtocolView = m_Profiles[index].selectedProtocolView;
     }
 
+    // Remap hardware IDs immediately on activation so the first Update() tick is valid.
+    HandleDeviceConnectionChange();
+
     // 3. Push the new protocol IDs and server settings to both servers.
     UpdateActiveProtocols();
 }
@@ -2221,10 +2323,16 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
         }
     }
     for (const auto& mapping : profile.buttonMappings) {
-        if (mapping.target_output_name == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
+        if (mapping.target_output_name == fieldId && 
+            (mapping.button_index != -1 || mapping.hat_index != -1 || 
+             mapping.sensor_channel != InputSource::SensorChannel::None)) 
+            return true;
     }
     for (const auto& mapping : profile.digitalMappings) {
-        if (mapping.target_field_id == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
+        if (mapping.target_field_id == fieldId && 
+            (mapping.button_index != -1 || mapping.hat_index != -1 || 
+             mapping.sensor_channel != InputSource::SensorChannel::None)) 
+            return true;
     }
 
     return false;
