@@ -298,6 +298,22 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
 
     ImGui::PushID("sensor_viz");
 
+    // ── Reset Sensors button ──────────────────────────────────────────────────
+    // Manually re-enables all IMU sensors on this gamepad.  Useful when Steam
+    // Input has taken control and silently reset sensor state, causing gyro and
+    // accel readings to stall even though the device is still connected.
+    if (ImGui::Button("Reset Sensors"))
+        SensorReader::EnableAll(dev.gamepad);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Re-enables gyroscope and accelerometer on this controller.\n"
+            "Use this if gyro / accel data appears frozen or stuck at zero\n"
+            "after Steam Input takes or releases control of the device.");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
     // ── Split sensors: Joy-Con pair / Steam Deck L+R halves ───────────────────
     const bool hasGyroL  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L);
     const bool hasAccelL = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L);

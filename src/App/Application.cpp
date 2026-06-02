@@ -351,6 +351,23 @@ void Application::ProcessEvents()
             m_prefs.ClearAppliedPreference(event.jdevice.which);
         }
 
+        // Re-enable IMU sensors whenever Steam Input finishes re-presenting a
+        // gamepad.  When Steam takes or releases control of a Steam Controller
+        // it performs a remove/add cycle at the SDL_Gamepad layer *after* the
+        // SDL_Joystick layer has already settled, so SDL_EVENT_GAMEPAD_ADDED
+        // fires once the fully-remapped gamepad handle is ready.  At that
+        // point sensor-enabled state has been reset to false by SDL internally,
+        // so we must re-enable it here — HandleDeviceAdded already does this
+        // for the initial connection, but not for a mid-session re-presentation.
+        if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
+            for (auto& dev : dm.GetDevices()) {
+                if (dev.instance_id == event.gdevice.which && dev.gamepad) {
+                    SensorReader::EnableAll(dev.gamepad);
+                    break;
+                }
+            }
+        }
+
         // Re-enable IMU sensors on all gamepads whenever the window regains
         // focus.  Steam Input (and other overlays) can silently reset
         // SDL_SetGamepadSensorEnabled to false when they take control of the
@@ -381,6 +398,32 @@ void Application::UpdateLogic(Uint64 frame_start_time)
     // the method itself gates SDL calls to the configured interval.
     const bool isMinimized = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED) != 0;
     DeviceManager::GetInstance().Update(isMinimized);
+
+    // Periodic sensor re-enable (every 2 s) — safety net for Steam Input
+    // silently resetting SDL_SetGamepadSensorEnabled mid-session without any
+    // device remove/add or focus event.  Only calls SDL_SetGamepadSensorEnabled
+    // when a sensor is confirmed present but currently disabled, so the cost on
+    // normal frames is just a handful of SDL_GamepadSensorEnabled queries.
+    {
+        const Uint64 now = SDL_GetTicks();
+        if (now - m_lastSensorReenable >= 2000) {
+            m_lastSensorReenable = now;
+            static constexpr SDL_SensorType kSensorTypes[] = {
+                SDL_SENSOR_GYRO,   SDL_SENSOR_ACCEL,
+                SDL_SENSOR_GYRO_L, SDL_SENSOR_ACCEL_L,
+                SDL_SENSOR_GYRO_R, SDL_SENSOR_ACCEL_R,
+            };
+            for (auto& dev : DeviceManager::GetInstance().GetDevices()) {
+                if (!dev.gamepad) continue;
+                for (SDL_SensorType type : kSensorTypes) {
+                    if (SDL_GamepadHasSensor(dev.gamepad, type) &&
+                        !SDL_GamepadSensorEnabled(dev.gamepad, type)) {
+                        SDL_SetGamepadSensorEnabled(dev.gamepad, type, true);
+                    }
+                }
+            }
+        }
+    }
 
     // Per-server inactivity checks: fire StopAllHapticEffects once when
     // a connected client stops sending data for X seconds.
