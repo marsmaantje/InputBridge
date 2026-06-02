@@ -3,6 +3,17 @@
  * @brief Unified haptic interface for game controllers
  *
  * Fix history:
+ *   v3.7 (2026-06-02)
+ *     - Fixed V1 trackpad rumble regression introduced in v3.6.  SDL 3.4.10
+ *       added a separate "triton" driver for V2 (SDL_hidapi_steam_triton.c),
+ *       which may cause SDL to no longer present the V1 as a gamepad-type
+ *       device in some configurations, making SDL_GetGamepadFromID return null
+ *       inside SendSteamControllerHaptic() and silently dropping all haptic
+ *       writes.  Fixed by falling back to SDL_SendJoystickEffect (joystick
+ *       path) when no gamepad handle is available — both paths reach the same
+ *       HIDAPI steam SendJoystickEffect handler, so the 65-byte
+ *       ID_TRIGGER_HAPTIC_PULSE report is delivered either way.
+ *
  *   v3.6 (2026-06-02)
  *     - SDL 3.4.10 fixed SDL_RumbleGamepad on the Steam Controller V2 (HEADCRAB,
  *       PIDs 0x1201 / 0x1202).  The V2 now uses the standard SDL rumble path,
@@ -41,7 +52,7 @@
  *       Controllers so both wired and wireless variants now produce haptic output.
  *
  * @author InputBridge Team
- * @version 3.6
+ * @version 3.7
  * @date 2026-06-02
  */
 
@@ -264,7 +275,8 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
 // ==================== Steam Controller HID Haptics ====================
 
 /**
- * Sends a haptic pulse to one Steam Controller trackpad via SDL_SendGamepadEffect.
+ * Sends a haptic pulse to one Steam Controller V1 trackpad via SDL_SendGamepadEffect
+ * or SDL_SendJoystickEffect (whichever handle is available).
  *
  * SDL's HIDAPI Steam driver (SDL_hidapi_steam.c) implements SendJoystickEffect for
  * exactly 65-byte payloads — it calls SDL_hid_send_feature_report on its
@@ -288,20 +300,13 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
  * pulse_count is derived from the requested duration so the effect
  * self-terminates on the hardware without needing repeated writes.
  *
- * This approach works identically on V1 (0x1102, 0x1106) and V2/HEADCRAB
- * (0x1201, 0x1202) hardware, and requires no separate HID handle.
+ * This function is V1-only (PIDs 0x1102 / 0x1106).  V2 (0x1201 / 0x1202)
+ * uses SDL_RumbleGamepad via SDL_hidapi_steam_triton.c and never calls here.
  *
  * Reference: Valve's open-source controller_structs.h / controller_constants.h
  *            and SDL's SDL_hidapi_steam.c (HIDAPI_DriverSteam_SendJoystickEffect).
  */
 void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uint32_t durationMs) {
-    SDL_JoystickID id      = SDL_GetJoystickID(m_joystick);
-    SDL_Gamepad*   gamepad = SDL_GetGamepadFromID(id);
-    if (!gamepad) {
-        SDL_Log("SendSteamControllerHaptic - no gamepad handle available");
-        return;
-    }
-
     magnitude = std::clamp(magnitude, 0.0f, 1.0f);
     if (magnitude <= 0.0f) return;
 
@@ -336,8 +341,26 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
     SDL_Log("SendSteamControllerHaptic - pad=%u magnitude=%.2f durationUs=%u periodUs=%u pulseCount=%u",
             pad, magnitude, durationUs, periodUs, pulseCount);
 
-    if (!SDL_SendGamepadEffect(gamepad, report, sizeof(report))) {
-        SDL_Log("SendSteamControllerHaptic - SDL_SendGamepadEffect failed: %s", SDL_GetError());
+    // SDL_SendGamepadEffect routes through the HIDAPI steam driver's SendJoystickEffect,
+    // which calls SDL_hid_send_feature_report on its already-open handle.
+    // This is the preferred path when the V1 is opened as a gamepad (SDL_JOYSTICK_TYPE_GAMEPAD).
+    //
+    // However, SDL 3.4.10 introduced a separate "triton" driver for V2, which may affect
+    // how SDL classifies V1 devices in some configurations. If SDL_GetGamepadFromID returns
+    // null (V1 not opened as a gamepad), we fall back to SDL_SendJoystickEffect, which
+    // calls the same underlying HIDAPI steam SendJoystickEffect handler via the joystick path.
+    SDL_JoystickID id      = SDL_GetJoystickID(m_joystick);
+    SDL_Gamepad*   gamepad = SDL_GetGamepadFromID(id);
+    if (gamepad) {
+        if (!SDL_SendGamepadEffect(gamepad, report, sizeof(report))) {
+            SDL_Log("SendSteamControllerHaptic - SDL_SendGamepadEffect failed: %s", SDL_GetError());
+        }
+    } else {
+        // Fallback: send via the joystick handle directly.
+        // SDL_SendJoystickEffect hits the same HIDAPI steam SendJoystickEffect handler.
+        if (!SDL_SendJoystickEffect(m_joystick, report, sizeof(report))) {
+            SDL_Log("SendSteamControllerHaptic - SDL_SendJoystickEffect fallback failed: %s", SDL_GetError());
+        }
     }
 }
 
