@@ -1,5 +1,6 @@
 #include "GamepadHaptics.h"
 #include <SDL3/SDL_gamepad.h>
+#include "Core/Result.h"
 #include <algorithm>
 
 // ==================== Destructor ====================
