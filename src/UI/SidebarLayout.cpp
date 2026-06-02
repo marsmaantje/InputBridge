@@ -33,6 +33,7 @@ static bool  s_DisableGamepadNav = false;
 static bool  s_GamepadNavLoaded  = false;
 static bool  s_DisableKeyboardNav = false;
 static bool  s_KeyboardNavLoaded  = false;
+static bool  s_BatteryIntervalLoaded = false;
 
 // ---------------------------------------------------------------------------
 
@@ -305,13 +306,12 @@ void DrawSidebarLayout(SidebarContext& ctx)
             auto& devices = ctx.deviceManager.GetDevices();
             ImGui::Text("Connected Devices: %d", static_cast<int>(devices.size()));
 
-            // Poll battery state and update gamepads' LED colour once per second
+            // Update gamepads' LED colour based on cached battery info once per second
             // (every ~60 frames at 60 fps).
             static int frame_ctr = 0;
             if (frame_ctr++ >= 60) {
                 frame_ctr = 0;
                 for (auto& dev : devices) {
-                    ctx.deviceManager.UpdateBatteryInfo(dev);
                     if (s_EnableBatteryLED && dev.gamepad) {
                         Uint8 r = 0, g = 0, b = 0;
                         bool  upd = false;
@@ -428,6 +428,11 @@ void DrawSidebarLayout(SidebarContext& ctx)
             break;
 
         case 5: // ── Settings ─────────────────────────────────────────────
+            if (!s_BatteryIntervalLoaded) {
+                int interval = ctx.prefs.GetInt("BatteryUpdateIntervalMs", 5000);
+                ctx.deviceManager.SetBatteryUpdateInterval(interval);
+                s_BatteryIntervalLoaded = true;
+            }
             DrawSettingsContent(
                 ctx.user_ui_scale, ctx.user_font_scale, ctx.scale_with_window,
                 ctx.window, ctx.initial_width, ctx.initial_height, ctx.prefs,
@@ -435,7 +440,8 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 ImGui::GetIO(),
                 s_EnableBatteryLED,
                 s_DisableGamepadNav,
-                s_DisableKeyboardNav);
+                s_DisableKeyboardNav,
+                ctx.deviceManager);
             break;
 
         case 6: // ── About ────────────────────────────────────────────────

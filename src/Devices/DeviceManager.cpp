@@ -127,6 +127,26 @@ void DeviceManager::CloseAllDevices() {
     m_Devices.clear();
 }
 
+void DeviceManager::Update(bool isMinimized) {
+    // Refresh battery info every 5 seconds when active,
+    // or every 30 seconds when minimized.
+    // Controller battery levels change very slowly, so high-frequency
+    // polling is unnecessary and CPU-intensive on some platforms.
+    static Uint64 lastBatteryUpdate = 0;
+    Uint64 now = SDL_GetTicks();
+
+    // If minimized, we multiply the interval by 6 (e.g. 5s -> 30s)
+    // to further reduce background overhead.
+    Uint64 interval = isMinimized ? (m_BatteryUpdateIntervalMs * 6) : m_BatteryUpdateIntervalMs;
+
+    if (now - lastBatteryUpdate > interval) {
+        for (auto &dev : m_Devices) {
+            UpdateBatteryInfo(dev);
+        }
+        lastBatteryUpdate = now;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // wheel-rpm-lib integration
 // ---------------------------------------------------------------------------

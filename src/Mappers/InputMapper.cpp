@@ -195,8 +195,14 @@ void InputMapper::StartListening(ListeningState::Type type, const std::string& n
             ss.capSenseLeftGrip   = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_LEFT_GRIP);
             ss.capSenseRightGrip  = SDL_GetGamepadCapSense(dev.gamepad, SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP);
         }
-        ss.batteryLevel = dev.battery_percent;
-        ss.charging = (dev.battery_state == SDL_POWERSTATE_CHARGING || dev.battery_state == SDL_POWERSTATE_CHARGED);
+
+        int pct = -1;
+        SDL_PowerState ps = SDL_POWERSTATE_UNKNOWN;
+        if      (dev.gamepad)  ps = SDL_GetGamepadPowerInfo (dev.gamepad,  &pct);
+        else if (dev.joystick) ps = SDL_GetJoystickPowerInfo(dev.joystick, &pct);
+
+        ss.batteryLevel = pct;
+        ss.charging = (ps == SDL_POWERSTATE_CHARGING || ps == SDL_POWERSTATE_CHARGED);
         m_ListeningState.initialSensors.push_back(ss);
     }
 
@@ -282,9 +288,15 @@ void InputMapper::UpdateListening() {
             }
             if (!baseline) continue;
 
+            int curPercent = -1;
+            SDL_PowerState curPower = SDL_POWERSTATE_UNKNOWN;
+            if      (dev.gamepad)  curPower = SDL_GetGamepadPowerInfo (dev.gamepad,  &curPercent);
+            else if (dev.joystick) curPower = SDL_GetJoystickPowerInfo(dev.joystick, &curPercent);
+            bool isCurrentlyCharging = (curPower == SDL_POWERSTATE_CHARGING || curPower == SDL_POWERSTATE_CHARGED);
+
             // Check battery level (Axis mapping listening)
             if (m_ListeningState.type == ListeningState::Axis) {
-                if (dev.battery_percent != baseline->batteryLevel && dev.battery_percent != -1) {
+                if (curPercent != baseline->batteryLevel && curPercent != -1) {
                     InputSource& src = profile.outputToInput[m_ListeningState.targetName];
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
@@ -294,8 +306,7 @@ void InputMapper::UpdateListening() {
                     CancelListening();
                     return;
                 }
-                bool isCharging = (dev.battery_state == SDL_POWERSTATE_CHARGING || dev.battery_state == SDL_POWERSTATE_CHARGED);
-                if (isCharging != baseline->charging) {
+                if (isCurrentlyCharging != baseline->charging) {
                     InputSource& src = profile.outputToInput[m_ListeningState.targetName];
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
@@ -309,8 +320,7 @@ void InputMapper::UpdateListening() {
 
             // Check charging state (Digital mapping listening)
             if (m_ListeningState.type == ListeningState::Digital) {
-                bool isCharging = (dev.battery_state == SDL_POWERSTATE_CHARGING || dev.battery_state == SDL_POWERSTATE_CHARGED);
-                if (isCharging != baseline->charging) {
+                if (isCurrentlyCharging != baseline->charging) {
                     bool updated = false;
                     if (m_ListeningState.targetName == "digital") {
                         if (m_ListeningState.listIndex >= 0 && m_ListeningState.listIndex < (int)profile.digitalMappings.size()) {

@@ -23,4 +23,5 @@ void DrawSettingsContent(float&              user_ui_scale,
                          const ImGuiIO&      io,
                          bool&               enable_battery_led,
                          bool&               disable_gamepad_nav,
-                         bool&               disable_keyboard_nav);
+                         bool&               disable_keyboard_nav,
+                         class DeviceManager& deviceManager);
