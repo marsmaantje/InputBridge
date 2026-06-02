@@ -9,7 +9,7 @@
  * - Standard rumble for everything else
  * 
  * @author InputBridge Team
- * @version 3.8
+ * @version 3.10
  * @date 2026-06-02
  */
 
@@ -197,6 +197,11 @@ private:
 
     std::unique_ptr<DualSenseController> m_dualSense;
     std::unique_ptr<XboxController> m_xbox;
+
+    /// Cached gamepad handle, resolved once in Init() from m_joystick.
+    /// Used by PlayRumble() and SendSteamControllerHaptic() so they never
+    /// need to re-resolve via SDL_GetGamepadFromID() at call time.
+    SDL_Gamepad* m_gamepad = nullptr;
 
     // ==================== Steam Controller Constants ====================
 

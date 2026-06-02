@@ -1,49 +1,3 @@
-/**
- * @file GamepadHaptics.cpp
- * @brief Unified haptic interface for game controllers
- *
- * Fix history:
- *   v3.8 (2026-06-02)
- *     - Fixed V1 detection regression from v3.6/v3.7: IsSteamControllerV1()
- *       was PID-only and had no name-based fallback, so V1 hardware with
- *       unexpected PIDs (e.g. alternate dongle IDs) missed the HID path,
- *       hit SDL_RumbleGamepad, and logged "That operation is not supported".
- *       Fix mirrors the original IsSteamController() logic: V1 = any Valve
- *       "Steam Controller" device that is NOT a known V2 PID.  V2 is now
- *       matched by PID only (no name fallback), so unknown Valve hardware
- *       defaults to the safe V1/HID-pulse path.
- *
- *   v3.7 (2026-06-02)
- *     - Fixed V1 trackpad rumble regression introduced in v3.6.  SDL 3.4.10
- *       added a separate "triton" driver for V2 (SDL_hidapi_steam_triton.c),
- *       which may cause SDL to no longer present the V1 as a gamepad-type
- *       device in some configurations, making SDL_GetGamepadFromID return null
- *       inside SendSteamControllerHaptic() and silently dropping all haptic
- *       writes.  Fixed by falling back to SDL_SendJoystickEffect (joystick
- *       path) when no gamepad handle is available — both paths reach the same
- *       HIDAPI steam SendJoystickEffect handler, so the 65-byte
- *       ID_TRIGGER_HAPTIC_PULSE report is delivered either way.
- *
- *   v3.6 (2026-06-02)
- *     - SDL 3.4.10 fixed SDL_RumbleGamepad on the Steam Controller V2 (HEADCRAB,
- *       PIDs 0x1201 / 0x1202).  The V2 now uses the standard SDL rumble path,
- *       exactly like any other gamepad.  Only V1 (0x1102, 0x1106) continues to
- *       use the vendor HID trackpad-pulse path via SDL_SendGamepadEffect, because
- *       V1 hardware has no conventional rumble motors and SDL never supported it
- *       through SDL_RumbleGamepad.
- *     - Added IsSteamControllerV1() and IsSteamControllerV2() helpers so call
- *       sites can distinguish the two generations without repeating PID lists.
- *     - PlayRumble() now branches on IsSteamControllerV1() instead of the
- *       broader IsSteamController(), so V2 controllers fall through to the
- *       standard SDL_RumbleGamepad path.
- *     - GetControllerTypeName() reports "Steam Controller V1" / "Steam Controller V2".
- *
-
- * @author InputBridge Team
- * @version 3.8
- * @date 2026-06-02
- */
-
 #include "GamepadHaptics.h"
 #include <SDL3/SDL_gamepad.h>
 #include <algorithm>
@@ -59,6 +13,14 @@ GamepadHaptics::~GamepadHaptics() {
 InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
     // Initialize base haptic device
     auto result = HapticDevice::Init();
+
+    // Resolve and cache the SDL_Gamepad* handle once.  SDL_GetGamepadFromID
+    // may return null later for some controller/driver combinations (e.g. the
+    // V2 Steam Controller via SDL_hidapi_steam_triton.c), so caching here at
+    // open time — when DeviceFactory has just called SDL_OpenGamepad — is the
+    // only reliable way to obtain it.
+    SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
+    m_gamepad = SDL_GetGamepadFromID(id);
 
     // Create specialized controllers based on hardware
     if (IsDualSense()) {
@@ -95,9 +57,7 @@ bool GamepadHaptics::IsReady() const {
     }
 
     // Check if we have a gamepad handle (covers SDL rumble path)
-    SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
-    SDL_Gamepad* gamepad = SDL_GetGamepadFromID(id);
-    if (gamepad) {
+    if (m_gamepad) {
         return true;
     }
 
@@ -145,30 +105,23 @@ bool GamepadHaptics::IsSteamController() const {
 }
 
 bool GamepadHaptics::IsSteamControllerV1() const {
-    const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
-    const Uint16 product = SDL_GetJoystickProduct(m_joystick);
+    const Uint16 vid = SDL_GetJoystickVendor(m_joystick);
+    const Uint16 pid = SDL_GetJoystickProduct(m_joystick);
 
-    if (vendor != VALVE_VENDOR_ID) {
+    if (vid != VALVE_VENDOR_ID)
         return false;
-    }
 
-    // Known V1 (D0G) PIDs: wired USB and wireless dongle.
-    if (product == STEAM_CONTROLLER_USB_PID ||       // 0x1102 V1 wired
-        product == STEAM_CONTROLLER_WIRELESS_PID) {  // 0x1106 V1 wireless dongle
-        return true;
-    }
+    switch (pid)
+    {
+        case STEAM_CONTROLLER_USB_PID: // Wired D0G
+        case 0x1105: // Bluetooth D0G
+        case STEAM_CONTROLLER_WIRELESS_PID: // Bluetooth D0G
+        case 0x1142: // Wireless dongle
+            return true;
 
-    // Exclude known V2 PIDs so they are not caught by the name fallback below.
-    if (product == STEAM_CONTROLLER_V2_USB_PID ||  // 0x1201 V2 wired
-        product == STEAM_CONTROLLER_V2_BT_PID) {   // 0x1202 V2 Bluetooth
-        return false;
+        default:
+            return false;
     }
-
-    // Name-based fallback: any Valve device with "Steam Controller" in its name
-    // that isn't a known V2 PID is treated as V1 (uses the HID trackpad-pulse path).
-    // This covers hardware variants (e.g. different dongle PIDs) not in the list above.
-    const char* name = SDL_GetJoystickName(m_joystick);
-    return (name && std::strstr(name, "Steam Controller"));
 }
 
 bool GamepadHaptics::IsSteamControllerV2() const {
@@ -177,7 +130,6 @@ bool GamepadHaptics::IsSteamControllerV2() const {
 
     // V2 (HEADCRAB / triton, 2026): matched by PID only.
     // SDL 3.4.10 fixed SDL_RumbleGamepad for these via SDL_hidapi_steam_triton.c.
-    // No name fallback — unknown Valve devices default to V1 (safer: HID pulse path).
     return (vendor == VALVE_VENDOR_ID &&
             (product == STEAM_CONTROLLER_V2_USB_PID ||  // 0x1201 V2 wired
              product == STEAM_CONTROLLER_V2_BT_PID));   // 0x1202 V2 Bluetooth
@@ -199,19 +151,14 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
 
     RunAsync([this, slot, largeMagnitude, smallMagnitude, durationMs]() {
 
-        // ── Steam Controller V1 path ──────────────────────────────────────────
-        // V1 (D0G, PIDs 0x1102 / 0x1106) has no traditional eccentric-mass or
-        // LRA rumble motors.  SDL_RumbleGamepad does nothing on it.  The only
-        // way to produce haptic feedback is to write vendor HID reports directly
-        // to both trackpad actuators via SDL_SendGamepadEffect.
+        // ── Steam Controller V1 path (D0G, PIDs 0x1102 / 0x1106) ─────────────
+        // V1 has no rumble motors; SDL_RumbleGamepad does nothing on it.
+        // Haptic feedback requires vendor HID reports to the trackpad actuators.
         //
-        // V2 (HEADCRAB, PIDs 0x1201 / 0x1202) has real rumble motors and SDL
-        // 3.4.10 fixed SDL_RumbleGamepad support for it, so it falls through to
-        // the standard path below.
-        //
-        // We use the average of the two magnitudes as the pulse strength, then
-        // fire both pads simultaneously to approximate a symmetric "rumble" feel.
-        if (IsSteamControllerV1()) {
+        // IsSteamControllerV2() is checked first to ensure V2 hardware (which
+        // shares the "Steam Controller" name string) is never caught by V1's
+        // name-based fallback and routed here by mistake.
+        if (!IsSteamControllerV2() && IsSteamControllerV1()) {
             const float magnitude = (largeMagnitude + smallMagnitude) * 0.5f;
             SDL_Log("GamepadHaptics::PlayRumble - Steam Controller V1: HID trackpad haptic (magnitude=%.2f, duration=%ums)",
                     magnitude, durationMs);
@@ -221,25 +168,22 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
 
             if (magnitude > 0.0f) {
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
-                auto& info          = m_activeRumbles[slot];
-                info.active         = true;
+                auto& info           = m_activeRumbles[slot];
+                info.active          = true;
                 info.large_magnitude = largeMagnitude;
                 info.small_magnitude = smallMagnitude;
-                info.duration_ms    = durationMs;
-                info.last_updated   = SDL_GetTicks();
+                info.duration_ms     = durationMs;
+                info.last_updated    = SDL_GetTicks();
             }
             return;
         }
 
-        // ── Standard SDL path (all other gamepads) ────────────────────────────
-        SDL_JoystickID id      = SDL_GetJoystickID(m_joystick);
-        SDL_Gamepad*   gamepad = SDL_GetGamepadFromID(id);
-
-        if (gamepad) {
+        // ── Standard SDL path (all other gamepads, including Steam Controller V2) ─
+        if (m_gamepad) {
             const Uint16 lowFreq  = static_cast<Uint16>(largeMagnitude * 0xFFFF);
             const Uint16 highFreq = static_cast<Uint16>(smallMagnitude * 0xFFFF);
 
-            if (!SDL_RumbleGamepad(gamepad, lowFreq, highFreq, durationMs)) {
+            if (!SDL_RumbleGamepad(m_gamepad, lowFreq, highFreq, durationMs)) {
                 SDL_Log("GamepadHaptics::PlayRumble - SDL_RumbleGamepad failed: %s", SDL_GetError());
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 m_activeRumbles.erase(slot);
@@ -331,23 +275,14 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
     SDL_Log("SendSteamControllerHaptic - pad=%u magnitude=%.2f durationUs=%u periodUs=%u pulseCount=%u",
             pad, magnitude, durationUs, periodUs, pulseCount);
 
-    // SDL_SendGamepadEffect routes through the HIDAPI steam driver's SendJoystickEffect,
-    // which calls SDL_hid_send_feature_report on its already-open handle.
-    // This is the preferred path when the V1 is opened as a gamepad (SDL_JOYSTICK_TYPE_GAMEPAD).
-    //
-    // However, SDL 3.4.10 introduced a separate "triton" driver for V2, which may affect
-    // how SDL classifies V1 devices in some configurations. If SDL_GetGamepadFromID returns
-    // null (V1 not opened as a gamepad), we fall back to SDL_SendJoystickEffect, which
-    // calls the same underlying HIDAPI steam SendJoystickEffect handler via the joystick path.
-    SDL_JoystickID id      = SDL_GetJoystickID(m_joystick);
-    SDL_Gamepad*   gamepad = SDL_GetGamepadFromID(id);
-    if (gamepad) {
-        if (!SDL_SendGamepadEffect(gamepad, report, sizeof(report))) {
+    // Prefer the cached gamepad handle (SDL_SendGamepadEffect); fall back to
+    // SDL_SendJoystickEffect if no gamepad handle was resolved at Init() time.
+    // Both reach the same HIDAPI steam SendJoystickEffect handler.
+    if (m_gamepad) {
+        if (!SDL_SendGamepadEffect(m_gamepad, report, sizeof(report))) {
             SDL_Log("SendSteamControllerHaptic - SDL_SendGamepadEffect failed: %s", SDL_GetError());
         }
     } else {
-        // Fallback: send via the joystick handle directly.
-        // SDL_SendJoystickEffect hits the same HIDAPI steam SendJoystickEffect handler.
         if (!SDL_SendJoystickEffect(m_joystick, report, sizeof(report))) {
             SDL_Log("SendSteamControllerHaptic - SDL_SendJoystickEffect fallback failed: %s", SDL_GetError());
         }
