@@ -9,7 +9,7 @@
  * - Standard rumble for everything else
  * 
  * @author InputBridge Team
- * @version 3.7
+ * @version 3.8
  * @date 2026-06-02
  */
 

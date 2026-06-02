@@ -3,6 +3,16 @@
  * @brief Unified haptic interface for game controllers
  *
  * Fix history:
+ *   v3.8 (2026-06-02)
+ *     - Fixed V1 detection regression from v3.6/v3.7: IsSteamControllerV1()
+ *       was PID-only and had no name-based fallback, so V1 hardware with
+ *       unexpected PIDs (e.g. alternate dongle IDs) missed the HID path,
+ *       hit SDL_RumbleGamepad, and logged "That operation is not supported".
+ *       Fix mirrors the original IsSteamController() logic: V1 = any Valve
+ *       "Steam Controller" device that is NOT a known V2 PID.  V2 is now
+ *       matched by PID only (no name fallback), so unknown Valve hardware
+ *       defaults to the safe V1/HID-pulse path.
+ *
  *   v3.7 (2026-06-02)
  *     - Fixed V1 trackpad rumble regression introduced in v3.6.  SDL 3.4.10
  *       added a separate "triton" driver for V2 (SDL_hidapi_steam_triton.c),
@@ -28,31 +38,9 @@
  *       standard SDL_RumbleGamepad path.
  *     - GetControllerTypeName() reports "Steam Controller V1" / "Steam Controller V2".
  *
- *   v3.5 (2026-06-02)
- *     - Added Steam Controller V2 (HEADCRAB) PIDs 0x1201 and 0x1202 to
- *       IsSteamController(), fixing the missing rumble on the new hardware.
- *     - Replaced raw SDL_hid_open / SDL_hid_write approach in
- *       SendSteamControllerHaptic() with SDL_SendGamepadEffect, using a
- *       properly-formed 65-byte FeatureReportMsg with ID_TRIGGER_HAPTIC_PULSE
- *       (0x8F).  The old code used report ID 0x87 (ID_SET_SETTINGS_VALUES),
- *       which the firmware silently ignored — this was the root cause of
- *       trackpad rumble not working on V1 hardware.  The SDL_SendGamepadEffect
- *       path also removes the need for a separate HID handle (m_steamHidDevice)
- *       and the associated open/close lifecycle in Init() / ~GamepadHaptics().
- *
- *   v3.4 (2026-05-07)
- *     - Corrected Steam Controller wireless PID: 0x1142 → 0x1106.
- *       0x1106 is what SDL sees when the controller connects via its USB dongle;
- *       0x1142 does not correspond to any shipping Valve hardware.
- *     - Implemented SendSteamControllerHaptic() via raw HID writes (report 0x87,
- *       msg 11).  Steam Controllers have no traditional rumble motors — their
- *       trackpad LRA actuators are only reachable through this vendor HID path,
- *       not through SDL_RumbleGamepad.
- *     - Routed PlayRumble() through SendSteamControllerHaptic() for Steam
- *       Controllers so both wired and wireless variants now produce haptic output.
- *
+
  * @author InputBridge Team
- * @version 3.7
+ * @version 3.8
  * @date 2026-06-02
  */
 
@@ -160,37 +148,39 @@ bool GamepadHaptics::IsSteamControllerV1() const {
     const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
     const Uint16 product = SDL_GetJoystickProduct(m_joystick);
 
-    // V1 (D0G): wired USB and wireless dongle PIDs.
-    // These controllers have no traditional rumble motors; haptic feedback
-    // requires the vendor HID trackpad-pulse path via SDL_SendGamepadEffect.
-    return (vendor == VALVE_VENDOR_ID &&
-            (product == STEAM_CONTROLLER_USB_PID ||       // 0x1102 V1 wired
-             product == STEAM_CONTROLLER_WIRELESS_PID));  // 0x1106 V1 wireless dongle
+    if (vendor != VALVE_VENDOR_ID) {
+        return false;
+    }
+
+    // Known V1 (D0G) PIDs: wired USB and wireless dongle.
+    if (product == STEAM_CONTROLLER_USB_PID ||       // 0x1102 V1 wired
+        product == STEAM_CONTROLLER_WIRELESS_PID) {  // 0x1106 V1 wireless dongle
+        return true;
+    }
+
+    // Exclude known V2 PIDs so they are not caught by the name fallback below.
+    if (product == STEAM_CONTROLLER_V2_USB_PID ||  // 0x1201 V2 wired
+        product == STEAM_CONTROLLER_V2_BT_PID) {   // 0x1202 V2 Bluetooth
+        return false;
+    }
+
+    // Name-based fallback: any Valve device with "Steam Controller" in its name
+    // that isn't a known V2 PID is treated as V1 (uses the HID trackpad-pulse path).
+    // This covers hardware variants (e.g. different dongle PIDs) not in the list above.
+    const char* name = SDL_GetJoystickName(m_joystick);
+    return (name && std::strstr(name, "Steam Controller"));
 }
 
 bool GamepadHaptics::IsSteamControllerV2() const {
     const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
     const Uint16 product = SDL_GetJoystickProduct(m_joystick);
 
-    // V2 (HEADCRAB, 2026): wired USB and Bluetooth PIDs.
-    // SDL 3.4.10 fixed SDL_RumbleGamepad for these, so the standard rumble
-    // path works — no need for the custom HID haptic-pulse approach.
-    if (vendor == VALVE_VENDOR_ID &&
-        (product == STEAM_CONTROLLER_V2_USB_PID ||  // 0x1201 V2 wired
-         product == STEAM_CONTROLLER_V2_BT_PID)) {  // 0x1202 V2 Bluetooth
-        return true;
-    }
-
-    // Name-based fallback for any Valve V2 variant not covered by the PIDs above.
-    // IsSteamControllerV1() already matched 0x1102/0x1106, so anything that
-    // still reaches here and carries "Steam Controller" in its name is treated
-    // as V2 (i.e. uses the SDL_RumbleGamepad path).
-    const char* name = SDL_GetJoystickName(m_joystick);
-    if (name && std::strstr(name, "Steam Controller") && !IsSteamControllerV1()) {
-        return true;
-    }
-
-    return false;
+    // V2 (HEADCRAB / triton, 2026): matched by PID only.
+    // SDL 3.4.10 fixed SDL_RumbleGamepad for these via SDL_hidapi_steam_triton.c.
+    // No name fallback — unknown Valve devices default to V1 (safer: HID pulse path).
+    return (vendor == VALVE_VENDOR_ID &&
+            (product == STEAM_CONTROLLER_V2_USB_PID ||  // 0x1201 V2 wired
+             product == STEAM_CONTROLLER_V2_BT_PID));   // 0x1202 V2 Bluetooth
 }
 
 const char* GamepadHaptics::GetControllerTypeName() const {
