@@ -1437,15 +1437,29 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
     }
 
     if (cfg.invert) raw = -raw;
-    if (std::abs(raw) < cfg.deadzone) raw = 0.f;
-    float r = std::clamp(raw, -1.f, 1.f);
-    if (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
-    else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;
-    return r;
+
+    // For IMU sensors (Gyro/Accel), values are in SI units (rad/s or m/s^2).
+    // Applying the default axis deadzone (0.05) or clamping to [-1, 1] destroys the data.
+    bool isImu = (cfg.sensorChannel >= SC::GyroX && cfg.sensorChannel <= SC::AccelZ) ||
+                 (cfg.sensorChannel >= SC::GyroLX && cfg.sensorChannel <= SC::AccelRZ);
+
+    if (!isImu) {
+        if (std::abs(raw) < cfg.deadzone) raw = 0.f;
+        float r = std::clamp(raw, -1.f, 1.f);
+        if (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
+        else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;
+        return r;
+    }
+
+    return raw;
 }
 
 bool InputMapper::Update(bool dynamic_rate) {
     if (m_SelectedProfileIndex < 0 || m_SelectedProfileIndex >= (int)m_Profiles.size()) return false;
+
+    // Ensure mappings reflect the current hardware session instance IDs.
+    HandleDeviceConnectionChange();
+
     auto &profile = m_Profiles[m_SelectedProfileIndex];
     const ProtocolDefinition* outDef = GetActiveOutputDefinition();
 
@@ -1461,17 +1475,21 @@ bool InputMapper::Update(bool dynamic_rate) {
         }
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0 || bm.target_output_name.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name]=0.f;
@@ -1480,17 +1498,21 @@ bool InputMapper::Update(bool dynamic_rate) {
                 ? ProcessSensor(src) : ProcessAxis(src);
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id==0||bm.target_output_name.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name]=bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name]=bm.on_value;
         }
     }
 
@@ -1500,16 +1522,18 @@ bool InputMapper::Update(bool dynamic_rate) {
         // 1. Update states from all buttons and update last_physical_state
         for (auto& dm : profile.digitalMappings) {
             if (dm.instance_id==0||dm.target_field_id.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-            if (!j) {
-                dm.last_physical_state = false; // Device disconnected
-                continue;
-            }
 
             bool pressed = false;
-            if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
-            else if (dm.hat_index != -1) pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-            else if (dm.sensor_channel != InputSource::SensorChannel::None) {
+            if (dm.button_index != -1 || dm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+                } else {
+                    dm.last_physical_state = false;
+                    continue;
+                }
+            } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
                 InputSource tmp;
                 tmp.instance_id = dm.instance_id;
                 tmp.sensorChannel = dm.sensor_channel;
@@ -1688,17 +1712,21 @@ std::string InputMapper::GetOutputPreview() {
         }
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue; // NOLINT(readability-misleading-indentation)
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
 
         // Determine final value for each field for preview
@@ -1718,19 +1746,23 @@ std::string InputMapper::GetOutputPreview() {
             for (const auto& dm : profile.digitalMappings) {
                 if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
                 if (dm.instance_id == 0) continue;
-                SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-                if (j) {
-                    bool pressed = (dm.button_index != -1) ? SDL_GetJoystickButton(j, dm.button_index) : (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-                    if (!pressed && dm.sensor_channel != InputSource::SensorChannel::None) {
-                        InputSource tmp;
-                        tmp.instance_id = dm.instance_id;
-                        tmp.sensorChannel = dm.sensor_channel;
-                        pressed = (ProcessSensor(tmp) > 0.5f);
+
+                bool pressed = false;
+                if (dm.button_index != -1 || dm.hat_index != -1) {
+                    SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+                    if (j) {
+                        if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                        else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
                     }
-                    if (pressed) {
-                        value = true;
-                        break;
-                    }
+                } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
+                    InputSource tmp;
+                    tmp.instance_id = dm.instance_id;
+                    tmp.sensorChannel = dm.sensor_channel;
+                    pressed = (ProcessSensor(tmp) > 0.5f);
+                }
+                if (pressed) {
+                    value = true;
+                    break;
                 }
             }
             digitalValues[pf->fieldId] = value;
@@ -1742,17 +1774,21 @@ std::string InputMapper::GetOutputPreview() {
                 ? ProcessSensor(src) : ProcessAxis(src);
         for (const auto& bm : profile.buttonMappings) {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
-            SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
-            if (j) {
-                bool pressed = (bm.button_index != -1) ? SDL_GetJoystickButton(j, bm.button_index) : (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
-                if (!pressed && bm.sensor_channel != InputSource::SensorChannel::None) {
-                    InputSource tmp;
-                    tmp.instance_id = bm.instance_id;
-                    tmp.sensorChannel = bm.sensor_channel;
-                    pressed = (ProcessSensor(tmp) > 0.5f);
+
+            bool pressed = false;
+            if (bm.button_index != -1 || bm.hat_index != -1) {
+                SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
+                if (j) {
+                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
-                if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+            } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
+                InputSource tmp;
+                tmp.instance_id = bm.instance_id;
+                tmp.sensorChannel = bm.sensor_channel;
+                pressed = (ProcessSensor(tmp) > 0.5f);
             }
+            if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
     }
 
@@ -2146,6 +2182,9 @@ void InputMapper::ActivateProfile(int index) {
         m_SelectedProtocolView = m_Profiles[index].selectedProtocolView;
     }
 
+    // Remap hardware IDs immediately on activation so the first Update() tick is valid.
+    HandleDeviceConnectionChange();
+
     // 3. Push the new protocol IDs and server settings to both servers.
     UpdateActiveProtocols();
 }
@@ -2274,10 +2313,16 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
         }
     }
     for (const auto& mapping : profile.buttonMappings) {
-        if (mapping.target_output_name == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
+        if (mapping.target_output_name == fieldId && 
+            (mapping.button_index != -1 || mapping.hat_index != -1 || 
+             mapping.sensor_channel != InputSource::SensorChannel::None)) 
+            return true;
     }
     for (const auto& mapping : profile.digitalMappings) {
-        if (mapping.target_field_id == fieldId && (mapping.button_index != -1 || mapping.hat_index != -1)) return true;
+        if (mapping.target_field_id == fieldId && 
+            (mapping.button_index != -1 || mapping.hat_index != -1 || 
+             mapping.sensor_channel != InputSource::SensorChannel::None)) 
+            return true;
     }
 
     return false;
