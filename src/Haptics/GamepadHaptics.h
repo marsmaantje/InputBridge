@@ -9,8 +9,8 @@
  * - Standard rumble for everything else
  * 
  * @author InputBridge Team
- * @version 3.0
- * @date 2026-02-14
+ * @version 3.10
+ * @date 2026-06-02
  */
 
 #pragma once
@@ -50,6 +50,8 @@
 class GamepadHaptics : public HapticDevice {
 public:
     using HapticDevice::HapticDevice;
+
+    ~GamepadHaptics();
 
     /**
      * @brief Initialize haptic system
@@ -146,10 +148,30 @@ public:
     bool IsXboxController() const;
 
     /**
-     * @brief Check if connected controller is a Steam Controller
-     * @return true if Steam Controller
+     * @brief Check if connected controller is a Steam Controller (V1 or V2)
+     * @return true if any Steam Controller
      */
     bool IsSteamController() const;
+
+    /**
+     * @brief Check if connected controller is a Steam Controller V1 (D0G)
+     *
+     * V1 has no traditional rumble motors — haptic feedback requires the
+     * vendor HID trackpad-pulse path via SDL_SendGamepadEffect.
+     *
+     * @return true if Steam Controller V1 (USB 0x1102 or wireless dongle 0x1106)
+     */
+    bool IsSteamControllerV1() const;
+
+    /**
+     * @brief Check if connected controller is a Steam Controller V2 (HEADCRAB, 2026)
+     *
+     * SDL 3.4.10 fixed rumble on the V2, so SDL_RumbleGamepad works natively.
+     * The HID trackpad-pulse path is NOT used for V2.
+     *
+     * @return true if Steam Controller V2 (USB 0x1201 or BT 0x1202)
+     */
+    bool IsSteamControllerV2() const;
 
     /**
      * @brief Get human-readable controller name
@@ -159,9 +181,14 @@ public:
 
 private:
     /**
-     * @brief Send haptic pulse to Steam Controller trackpad
-     * @param pad Trackpad index (0=left, 1=right)
-     * @param magnitude Pulse strength (0.0-1.0)
+     * @brief Send haptic pulse to a Steam Controller trackpad via SDL_SendGamepadEffect.
+     *
+     * Builds a 65-byte FeatureReportMsg (ID_TRIGGER_HAPTIC_PULSE / 0x8F) and
+     * dispatches it through SDL's already-open HIDAPI handle.  Works for both
+     * V1 (0x1102, 0x1106) and V2 / HEADCRAB (0x1201, 0x1202) hardware.
+     *
+     * @param pad       Trackpad index (0 = left, 1 = right)
+     * @param magnitude Pulse strength (0.0–1.0)
      * @param durationMs Duration in milliseconds
      */
     void SendSteamControllerHaptic(uint8_t pad, float magnitude, uint32_t durationMs);
@@ -171,17 +198,26 @@ private:
     std::unique_ptr<DualSenseController> m_dualSense;
     std::unique_ptr<XboxController> m_xbox;
 
+    /// Cached gamepad handle, resolved once in Init() from m_joystick.
+    /// Used by PlayRumble() and SendSteamControllerHaptic() so they never
+    /// need to re-resolve via SDL_GetGamepadFromID() at call time.
+    SDL_Gamepad* m_gamepad = nullptr;
+
     // ==================== Steam Controller Constants ====================
 
     static constexpr uint16_t VALVE_VENDOR_ID              = 0x28DE;
-    static constexpr uint16_t STEAM_CONTROLLER_USB_PID      = 0x1102; ///< Wired USB
-    static constexpr uint16_t STEAM_CONTROLLER_WIRELESS_PID = 0x1106; ///< Wireless dongle (was wrongly 0x1142 in v3.3)
+    static constexpr uint16_t STEAM_CONTROLLER_USB_PID      = 0x1102; ///< V1 wired USB (D0G)
+    static constexpr uint16_t STEAM_CONTROLLER_WIRELESS_PID = 0x1106; ///< V1 wireless dongle (D0G)
+    static constexpr uint16_t STEAM_CONTROLLER_V2_USB_PID   = 0x1201; ///< V2 wired USB (HEADCRAB)
+    static constexpr uint16_t STEAM_CONTROLLER_V2_BT_PID    = 0x1202; ///< V2 Bluetooth (HEADCRAB)
 
-    static constexpr uint8_t  STEAM_CONTROLLER_REPORT_ID    = 0x87;
-    static constexpr uint8_t  STEAM_HAPTIC_PULSE_MSG_ID     = 11;
+    /// ID_TRIGGER_HAPTIC_PULSE command byte, per Valve controller_constants.h
+    static constexpr uint8_t  STEAM_HAPTIC_PULSE_MSG_ID     = 0x8F;
 
-    /// Each raw HID haptic-pulse report sustains vibration for this many ms.
-    /// Used by SendSteamControllerHaptic() to calculate how many writes are
-    /// needed to fill the caller's requested duration.
+    /// SDL_SendGamepadEffect requires exactly this many bytes (FeatureReportMsg size).
+    static constexpr int      STEAM_FEATURE_REPORT_SIZE     = 65;
+
+    /// Approximate duration sustained by one haptic-pulse report, used to
+    /// calculate pulse_count from a caller-supplied duration in milliseconds.
     static constexpr uint32_t STEAM_HAPTIC_PULSE_DURATION_MS = 10;
 };

@@ -10,6 +10,7 @@
 #include "Network/NetworkStatusWindow.h"
 #include "Protocols/ProtocolEditorWindow.h"
 #include "UI/AboutWindow.h"
+#include "UI/DebugLogPanel.h"
 #include "UI/DevicePanel.h"
 #include "UI/IconsFontAwesome6.h"
 #include "UI/SettingsPanel.h"
@@ -19,7 +20,7 @@
 
 // ── Persistent sidebar state ─────────────────────────────────────────────────
 // Section IDs: 0=Devices  1=Input  2=Output  3=Network
-//              4=Protocols  5=Settings  6=About
+//              4=Protocols  5=Settings  6=About  7=DebugLog
 static int   g_ActiveSection   = 0;
 static bool  g_SidebarExpanded = true;
 static float g_SidebarW        = 0.0f; // 0 = initialise from SIDEBAR_W_FULL on first frame
@@ -28,6 +29,11 @@ static float g_SidebarW        = 0.0f; // 0 = initialise from SIDEBAR_W_FULL on 
 // the Settings panel (hosts the checkbox), so it lives at file scope.
 static bool  s_EnableBatteryLED  = true;
 static bool  s_BatteryLEDLoaded  = false;
+static bool  s_DisableGamepadNav = false;
+static bool  s_GamepadNavLoaded  = false;
+static bool  s_DisableKeyboardNav = false;
+static bool  s_KeyboardNavLoaded  = false;
+static bool  s_BatteryIntervalLoaded = false;
 
 // ---------------------------------------------------------------------------
 
@@ -184,6 +190,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
     NavItem(ICON_FA_FILE_CODE,   "Protocols", 4);
     NavItem(ICON_FA_GEAR,        "Settings",  5);
     NavItem(ICON_FA_INFO_CIRCLE, "About",     6);
+    NavItem(ICON_FA_BUG,         "Debug Log", 7);
 
     ImGui::EndChild(); // ##NavScroll
 
@@ -274,16 +281,37 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 s_BatteryLEDLoaded = true;
             }
 
+            // Load gamepad navigation preference once on first entry and apply it.
+            if (!s_GamepadNavLoaded) {
+                s_DisableGamepadNav = ctx.prefs.GetBool("DisableGamepadNavigation", false);
+                s_GamepadNavLoaded  = true;
+                ImGuiIO& io = ImGui::GetIO();
+                if (s_DisableGamepadNav)
+                    io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
+                else
+                    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+            }
+
+            // Load keyboard navigation preference once on first entry and apply it.
+            if (!s_KeyboardNavLoaded) {
+                s_DisableKeyboardNav = ctx.prefs.GetBool("DisableKeyboardNavigation", false);
+                s_KeyboardNavLoaded  = true;
+                ImGuiIO& io = ImGui::GetIO();
+                if (s_DisableKeyboardNav)
+                    io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+                else
+                    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+            }
+
             auto& devices = ctx.deviceManager.GetDevices();
             ImGui::Text("Connected Devices: %d", static_cast<int>(devices.size()));
 
-            // Poll battery state and update gamepads' LED colour once per second
+            // Update gamepads' LED colour based on cached battery info once per second
             // (every ~60 frames at 60 fps).
             static int frame_ctr = 0;
             if (frame_ctr++ >= 60) {
                 frame_ctr = 0;
                 for (auto& dev : devices) {
-                    ctx.deviceManager.UpdateBatteryInfo(dev);
                     if (s_EnableBatteryLED && dev.gamepad) {
                         Uint8 r = 0, g = 0, b = 0;
                         bool  upd = false;
@@ -400,16 +428,28 @@ void DrawSidebarLayout(SidebarContext& ctx)
             break;
 
         case 5: // ── Settings ─────────────────────────────────────────────
+            if (!s_BatteryIntervalLoaded) {
+                int interval = ctx.prefs.GetInt("BatteryUpdateIntervalMs", 5000);
+                ctx.deviceManager.SetBatteryUpdateInterval(interval);
+                s_BatteryIntervalLoaded = true;
+            }
             DrawSettingsContent(
                 ctx.user_ui_scale, ctx.user_font_scale, ctx.scale_with_window,
                 ctx.window, ctx.initial_width, ctx.initial_height, ctx.prefs,
                 ctx.vsync, ctx.framerate_limit, ctx.renderer,
                 ImGui::GetIO(),
-                s_EnableBatteryLED);
+                s_EnableBatteryLED,
+                s_DisableGamepadNav,
+                s_DisableKeyboardNav,
+                ctx.deviceManager);
             break;
 
         case 6: // ── About ────────────────────────────────────────────────
             AboutWindow::DrawContent();
+            break;
+
+        case 7: // ── Debug Log ────────────────────────────────────────────
+            DrawDebugLogContent();
             break;
     }
 

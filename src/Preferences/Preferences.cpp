@@ -1,4 +1,5 @@
 #include "Preferences.h"
+#include "Utils/XdgDirs.h"
 #include <cstdlib>
 #include <fstream>
 #include <string>
@@ -41,14 +42,12 @@ static std::string unescape_for_toml(const std::string &s) {
 }
 
 std::string PreferencesManager::GetConfigFilePath() {
-    const char *base_path = SDL_GetBasePath();
-    std::string path;
-    if (base_path) {
-        path = std::string(base_path) + CONFIG_FILENAME;
-    } else {
-        path = CONFIG_FILENAME;
-    }
-    return path;
+    // Configuration lives in $XDG_CONFIG_HOME/InputBridge/ so it follows the
+    // XDG Base Directory Specification and lands in ~/.config/InputBridge/ by
+    // default rather than the data directory.  AppImage Portable Mode remaps
+    // $XDG_CONFIG_HOME automatically when the user places a .config directory
+    // next to the .AppImage file, so no special-casing is needed here.
+    return XdgDirs::configDir() + CONFIG_FILENAME;
 }
 
 void PreferencesManager::Load() {

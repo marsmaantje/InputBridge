@@ -1,4 +1,5 @@
 #include "ProtocolRegistry.h"
+#include "Utils/XdgDirs.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
@@ -294,6 +295,17 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 std::string ProtocolRegistry::GetProtocolsDir() {
+    // Protocol definitions, field catalogs, and templates are user data —
+    // they belong in $XDG_DATA_HOME/InputBridge/protocols/ per the XDG Base
+    // Directory Specification (fallback: ~/.local/share/InputBridge/protocols/).
+    // AppImage Portable Mode remaps $XDG_DATA_HOME automatically when the user
+    // places a .home directory next to the .AppImage file.
+    return XdgDirs::dataDir() + "protocols/";
+}
+
+// Returns the read-only asset directory bundled with the executable.
+// Used exclusively for seeding default files into the pref dir on first run.
+static std::string GetInstallProtocolsDir() {
     const char* base = SDL_GetBasePath();
     std::string dir = base ? std::string(base) : "./";
     return dir + "protocols/";
@@ -313,7 +325,55 @@ const char* ProtocolRegistry::DirectionLabel(ProtocolDirection d) {
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
+// Copies seed files from the read-only install directory into the writable
+// pref directory, but only when a file is absent (never overwrites).
+// This is needed for AppImage / Flatpak where SDL_GetBasePath() returns a
+// read-only squashfs mount, while GetProtocolsDir() now points to the pref dir.
+static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
+    const std::string srcDir       = GetInstallProtocolsDir();
+    const std::string srcDefs      = srcDir + "definitions/";
+    const std::string srcTemplates = srcDir + "templates/";
+    const std::string dstDefs      = prefProtocolsDir + "definitions/";
+    const std::string dstTemplates = prefProtocolsDir + "templates/";
+
+    // Ensure all destination directories exist.
+    fs::create_directories(prefProtocolsDir);
+    fs::create_directories(dstDefs);
+    fs::create_directories(dstTemplates);
+
+    // Helper: copy every *.json from src -> dst, skipping files that already exist.
+    auto seedDir = [](const std::string& src, const std::string& dst) {
+        if (!fs::exists(src)) return;
+        for (const auto& entry : fs::directory_iterator(src)) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".json") continue;
+            fs::path dstFile = fs::path(dst) / entry.path().filename();
+            if (!fs::exists(dstFile)) {
+                std::error_code ec;
+                fs::copy_file(entry.path(), dstFile,
+                              fs::copy_options::skip_existing, ec);
+                if (ec)
+                    std::cerr << "[ProtocolRegistry] Bootstrap copy failed for "
+                              << entry.path() << ": " << ec.message() << "\n";
+            }
+        }
+    };
+
+    // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
+    seedDir(srcDir, prefProtocolsDir);
+
+    // Seed built-in protocol definitions — these populate the OSC/WS output
+    // dropdown via LoadDefinitionFiles(). This was the missing step that caused
+    // the dropdown to appear empty on first run under AppImage.
+    seedDir(srcDefs, dstDefs);
+
+    // Seed protocol templates (used by the Protocol Editor "new from template").
+    seedDir(srcTemplates, dstTemplates);
+}
+
 void ProtocolRegistry::EnsureDirectories() {
+    const std::string protocolsDir = GetProtocolsDir();
+    BootstrapFromInstallDir(protocolsDir);
     fs::create_directories(GetDefsDir());
 }
 
@@ -347,6 +407,27 @@ void ProtocolRegistry::LoadFieldCatalog() {
                     if (existing.id == fd.id) { exists = true; break; }
                 if (!exists && !fd.id.empty())
                     m_outputFields.push_back(fd);
+            }
+        }
+        // Merge extra input fields from the config file (user may add custom haptic/rumble fields)
+        if (j.contains("input_fields") && j["input_fields"].is_array()) {
+            for (const auto& item : j["input_fields"]) {
+                FieldDescriptor fd;
+                fd.id             = item.value("id",       "");
+                fd.label          = item.value("label",    fd.id);
+                fd.category       = item.value("category", "Custom Haptic");
+                std::string type  = item.value("type",     "analog"); // Input fields are currently all analog for haptics
+                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
+                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
+                fd.defaultWsKey   = item.value("wsKey",    fd.id);
+                fd.isBuiltIn      = false;
+
+                // Only add if not already present (built-ins take precedence by id)
+                bool exists = false;
+                for (const auto& existing : m_inputFields)
+                    if (existing.id == fd.id) { exists = true; break; }
+                if (!exists && !fd.id.empty())
+                    m_inputFields.push_back(fd);
             }
         }
     } catch (const std::exception& e) {
@@ -445,25 +526,35 @@ void ProtocolRegistry::LoadDefinitionFiles() {
 void ProtocolRegistry::WriteDefaultFieldCatalog() {
     EnsureDirectories();
 
-    /*
     std::string path = GetProtocolsDir() + "input_fields.json";
     // Write a commented example so users know the format
     json j;
-    j["_comment"] = "Add custom output fields here. Built-in fields are always available.";
-    json arr = json::array();
-    json ex;
-    ex["id"]       = "custom_axis_1";
-    ex["label"]    = "Custom Axis 1";
-    ex["category"] = "Custom";
-    ex["type"]     = "analog";
-    ex["oscPath"]  = "/custom/axis1";
-    ex["wsKey"]    = "custom_axis1";
-    arr.push_back(ex);
-    j["output_fields"] = arr;
+    j["_comment"] = "Add custom output and input fields here. Built-in fields are always available.";
+
+    json outputArr = json::array();
+    json outputEx;
+    outputEx["id"]       = "custom_output_axis_1";
+    outputEx["label"]    = "Custom Output Axis 1";
+    outputEx["category"] = "Custom Output";
+    outputEx["type"]     = "analog";
+    outputEx["oscPath"]  = "/custom/output/axis1";
+    outputEx["wsKey"]    = "custom_output_axis1";
+    outputArr.push_back(outputEx);
+    j["output_fields"] = outputArr;
+
+    json inputArr = json::array();
+    json inputEx;
+    inputEx["id"]       = "custom_input_haptic_1";
+    inputEx["label"]    = "Custom Input Haptic 1";
+    inputEx["category"] = "Custom Haptic Input";
+    inputEx["type"]     = "analog"; // Input fields are currently all analog for haptics
+    inputEx["oscPath"]  = "/custom/input/haptic1";
+    inputEx["wsKey"]    = "custom_input_haptic1";
+    inputArr.push_back(inputEx);
+    j["input_fields"] = inputArr;
 
     std::ofstream ofs(path);
     if (ofs) ofs << j.dump(4);
-    */
 }
 
 // ─── Built-in field catalogs ─────────────────────────────────────────────────
@@ -579,6 +670,28 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_weapon_main", "Weapon Main",     "Digital: Other",  FieldType::DigitalButton, "/input/weapon_main", "weapon_main");
     addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
     addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
+    
+    // ── Sensors: Gyroscope ───────────────────────────────────────────────────
+    // Available on DualSense and Steam Controller.  Values normalised to [-1, 1].
+    addOut("sensor_gyro_x",   "Gyro X (pitch)",    "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/x",         "gyro_x");
+    addOut("sensor_gyro_y",   "Gyro Y (yaw)",      "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/y",         "gyro_y");
+    addOut("sensor_gyro_z",   "Gyro Z (roll)",     "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/z",         "gyro_z");
+
+    // ── Sensors: Accelerometer ───────────────────────────────────────────────
+    addOut("sensor_accel_x",  "Accel X (lateral)",  "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/x",        "accel_x");
+    addOut("sensor_accel_y",  "Accel Y (vertical)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/y",        "accel_y");
+    addOut("sensor_accel_z",  "Accel Z (fore/aft)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/z",        "accel_z");
+
+    // ── Sensors: Touchpad ────────────────────────────────────────────────────
+    // x/y centred: left/top=-1, right/bottom=+1.  Pressure: [0, 1].
+    addOut("sensor_touch_x",     "Touch X (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/x",        "touch_x");
+    addOut("sensor_touch_y",     "Touch Y (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/y",        "touch_y");
+    addOut("sensor_touch_p",     "Touch Pressure",      "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/pressure", "touch_pressure");
+    addOut("sensor_touch2_x",    "Touch 2 X (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/x",       "touch2_x");
+    addOut("sensor_touch2_y",    "Touch 2 Y (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/y",       "touch2_y");
+    addOut("sensor_touch2_p",    "Touch 2 Pressure",    "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/pressure","touch2_pressure");
+    addOut("sensor_touch_active","Touch Active",         "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
+
 
     j["output_fields"] = outArr;
 

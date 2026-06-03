@@ -11,6 +11,7 @@
 class DeviceManager;
 class PreferencesManager;
 struct ProtocolDefinition;
+#include "Devices/SensorState.h"
 
 // Moved from OutputMapper.h
 struct HapticTarget {
@@ -46,6 +47,27 @@ class InputMapper {
         bool invert = false;
         float deadzone = 0.05f;
         int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0
+
+        // ── Sensor source ─────────────────────────────────────────────────
+        // When sensorChannel is not None, this source reads from the device
+        // sensor/touchpad instead of a regular joystick axis (axisIndex is
+        // unused in that case).
+        enum class SensorChannel {
+            None,
+            GyroX, GyroY, GyroZ,
+            AccelX, AccelY, AccelZ,
+            TouchX, TouchY, TouchPressure,
+            Touch2X, Touch2Y, Touch2Pressure,
+            LeftStickTouch, RightStickTouch,
+            LeftGripTouch, RightGripTouch,
+            GyroLX, GyroLY, GyroLZ,
+            AccelLX, AccelLY, AccelLZ,
+            GyroRX, GyroRY, GyroRZ,
+            AccelRX, AccelRY, AccelRZ,
+            BatteryLevel,
+            BatteryCharging
+        };
+        SensorChannel sensorChannel = SensorChannel::None;
     };
 
     // Maps a device button to an analog output channel (on/off float values)
@@ -55,6 +77,7 @@ class InputMapper {
         int button_index = -1;
         int hat_index = -1;
         int hat_mask = 0;
+        InputSource::SensorChannel sensor_channel = InputSource::SensorChannel::None;
         std::string target_output_name; // field id or legacy name
         float on_value = 1.0f;
         float off_value = 0.0f;
@@ -67,6 +90,7 @@ class InputMapper {
         int button_index = -1;
         int hat_index = -1;
         int hat_mask = 0;
+        InputSource::SensorChannel sensor_channel = InputSource::SensorChannel::None;
         std::string target_field_id; // FieldDescriptor::id
 
         enum class Mode { Momentary, Toggle, SetOn, SetOff };
@@ -174,6 +198,25 @@ class InputMapper {
         };
         std::vector<AxisState> initialAxes;
         std::map<SDL_JoystickID, std::vector<Uint8>> initialHatStates;
+
+        struct SensorState {
+            SDL_JoystickID instance_id = 0;
+            GyroState  gyro;
+            AccelState accel;
+            GyroState  gyroL;
+            AccelState accelL;
+            GyroState  gyroR;
+            AccelState accelR;
+            TouchState touch;
+            // Capacitive-touch baseline: true = was active at listen-start.
+            bool capSenseLeftStick  = false;
+            bool capSenseRightStick = false;
+            bool capSenseLeftGrip   = false;
+            bool capSenseRightGrip  = false;
+            int batteryLevel = -1;
+            bool charging = false;
+        };
+        std::vector<SensorState> initialSensors;
     };
     ListeningState m_ListeningState;
 
@@ -186,6 +229,7 @@ class InputMapper {
 
     const ProtocolDefinition* GetActiveOutputDefinition();
     float ProcessAxis(const InputSource &config);
+    float ProcessSensor(const InputSource &config);
     void StartListening(ListeningState::Type type, const std::string& name, int index = -1);
     void UpdateListening();
     void UpdateActiveProtocols();

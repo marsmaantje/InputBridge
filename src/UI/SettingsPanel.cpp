@@ -2,6 +2,7 @@
 
 #include "UI/FontManager.h"
 #include "UI/ThemeManager.h"
+#include "Devices/DeviceManager.h"
 
 void DrawSettingsContent(float&              user_ui_scale,
                          float&              user_font_scale,
@@ -14,7 +15,10 @@ void DrawSettingsContent(float&              user_ui_scale,
                          int&                framerate_limit,
                          SDL_Renderer*       renderer,
                          const ImGuiIO&      io,
-                         bool&               enable_battery_led)
+                         bool&               enable_battery_led,
+                         bool&               disable_gamepad_nav,
+                         bool&               disable_keyboard_nav,
+                         DeviceManager&      deviceManager)
 {
     // ── Performance ────────────────────────────────────────────────────────
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
@@ -41,6 +45,45 @@ void DrawSettingsContent(float&              user_ui_scale,
         prefs.SetBool("EnableBatteryLED", enable_battery_led);
         prefs.Save();
     }
+
+    int batteryInterval = deviceManager.GetBatteryUpdateInterval();
+    ImGui::SetNextItemWidth(200.0f);
+    if (ImGui::SliderInt("Battery Poll Interval (ms)", &batteryInterval, 1000, 60000)) {
+        deviceManager.SetBatteryUpdateInterval(batteryInterval);
+        prefs.SetInt("BatteryUpdateIntervalMs", batteryInterval);
+        prefs.Save();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("How often to query battery status from the OS.\nIncreasing this saves CPU but makes indicators laggier.");
+
+    if (ImGui::Checkbox("Disable Gamepad / Steering Wheel UI Navigation", &disable_gamepad_nav)) {
+        prefs.SetBool("DisableGamepadNavigation", disable_gamepad_nav);
+        prefs.Save();
+        ImGuiIO& mio = ImGui::GetIO();
+        if (disable_gamepad_nav)
+            mio.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
+        else
+            mio.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "When enabled, gamepad and steering wheel axes/buttons\n"
+            "no longer move focus or activate UI controls.\n"
+            "Device data forwarding and haptics are unaffected.");
+
+    if (ImGui::Checkbox("Disable Keyboard UI Navigation", &disable_keyboard_nav)) {
+        prefs.SetBool("DisableKeyboardNavigation", disable_keyboard_nav);
+        prefs.Save();
+        ImGuiIO& mio = ImGui::GetIO();
+        if (disable_keyboard_nav)
+            mio.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+        else
+            mio.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "When enabled, keyboard arrow keys, Tab, and Enter\n"
+            "no longer move focus or activate UI controls.\n"
+            "Text input fields are unaffected.");
     ImGui::Separator();
 
     // ── UI Scale controls ──────────────────────────────────────────────────

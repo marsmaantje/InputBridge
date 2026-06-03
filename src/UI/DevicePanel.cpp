@@ -14,6 +14,8 @@
 #include "Visualizers/SteeringWheelVisualizer.h"
 #include "Visualizers/VirtualDeviceVisualizer.h"
 #include "Visualizers/WiimoteVisualizer.h"
+#include "Visualizers/SensorVisualizer.h"
+#include <SDL3/SDL.h>
 
 #include <string>
 
@@ -33,6 +35,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
     static GamepadHapticsVisualizer       gamepad_haptics_viz;
     static SteeringWheelHapticsVisualizer wheel_haptics_viz;
     static WiimoteVisualizer              wiimote_viz;
+    static SensorVisualizer               sensor_viz;
     static VirtualDeviceVisualizer        virtual_viz;
 
     std::string guid         = DeviceManager::GetDeviceGUIDString(dev);
@@ -85,6 +88,23 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                 gamepad_haptics_viz.Draw(dev, deviceManager);
                 ImGui::EndTabItem();
             }
+
+            // Show the Sensors tab only for controllers that have a gyro,
+            // accelerometer, or touchpad (DualSense, Steam Controller, etc.).
+            // We check via SDL rather than casting HapticDevice to GamepadHaptics
+            // so the tab still appears when the haptic system fails to initialise.
+            if (dev.gamepad) {
+                bool hasSensors = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L)
+                               || SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R)
+                               || SDL_GetNumGamepadTouchpads(dev.gamepad) > 0;
+                if (hasSensors)
+                    TabItem("Sensors", sensor_viz);
+            }
+
             SimulateTab();
             ImGui::EndTabBar();
         }
@@ -221,18 +241,22 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
 // ---------------------------------------------------------------------------
 // GetBatteryColor
 // ---------------------------------------------------------------------------
-static ImU32 GetBatteryColor(const DeviceState& dev)
+// Returns a colour for a battery given its state and percentage.
+static ImU32 GetBatteryColorFor(SDL_PowerState state, int percent)
 {
-    if (dev.battery_state == SDL_POWERSTATE_CHARGING
-        || dev.battery_state == SDL_POWERSTATE_CHARGED) {
+    if (state == SDL_POWERSTATE_CHARGING || state == SDL_POWERSTATE_CHARGED)
         return IM_COL32(50, 255, 50, 255);
-    }
-    if (dev.battery_percent >= 0) {
-        if      (dev.battery_percent <= 20) return IM_COL32(255,  50,  50, 255);
-        else if (dev.battery_percent <= 50) return IM_COL32(255, 200,  50, 255);
-        else                                return IM_COL32( 50, 255,  50, 255);
+    if (percent >= 0) {
+        if      (percent <= 20) return IM_COL32(255,  50,  50, 255);
+        else if (percent <= 50) return IM_COL32(255, 200,  50, 255);
+        else                    return IM_COL32( 50, 255,  50, 255);
     }
     return ImGui::GetColorU32(ImGuiCol_Text);
+}
+
+static ImU32 GetBatteryColor(const DeviceState& dev)
+{
+    return GetBatteryColorFor(dev.battery_state, dev.battery_percent);
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +281,8 @@ void DrawDeviceItem(DeviceState&        dev,
     const bool hasBattery = (dev.battery_state != SDL_POWERSTATE_UNKNOWN
                              || dev.battery_percent >= 0)
                             && dev.battery_state != SDL_POWERSTATE_NO_BATTERY;
+    const bool hasSplitBattery = hasBattery
+                                 && dev.battery_state_L != SDL_POWERSTATE_UNKNOWN;
     if (hasBattery) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         ImVec2      rect_min  = ImGui::GetItemRectMin();
@@ -265,41 +291,55 @@ void DrawDeviceItem(DeviceState&        dev,
         const float icon_h = ImGui::GetTextLineHeight();
         const float icon_w = icon_h * 1.6f;
         const float pad    = ImGui::GetStyle().FramePadding.x;
+        const float gap    = 4.0f; // gap between L and R icons when split
+
+        // For a split pair we draw two icons; otherwise one.
+        const float total_w = hasSplitBattery ? (icon_w * 2.0f + gap) : icon_w;
 
         ImVec2 icon_pos = ImVec2(
-            rect_max.x - icon_w - pad,
+            rect_max.x - total_w - pad,
             rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
 
-        ImU32 bat_col = GetBatteryColor(dev);
+        // Helper lambda — draws one battery icon at `pos`.
+        auto DrawBatteryIcon = [&](ImVec2 pos, SDL_PowerState state, int pct) {
+            ImU32 col = GetBatteryColorFor(state, pct);
 
-        const float body_w = icon_w * 0.85f;
-        const float term_w = icon_w * 0.15f;
-        const float term_h = icon_h * 0.4f;
-        (void)term_w;
+            const float body_w = icon_w * 0.85f;
+            const float term_h = icon_h * 0.4f;
 
-        draw_list->AddRect(icon_pos, icon_pos + ImVec2(body_w, icon_h),
-                           bat_col, 0.0f, 0, 2.0f);
-        draw_list->AddRectFilled(
-            icon_pos + ImVec2(body_w, (icon_h - term_h) * 0.5f),
-            icon_pos + ImVec2(icon_w, (icon_h + term_h) * 0.5f),
-            bat_col);
+            draw_list->AddRect(pos, pos + ImVec2(body_w, icon_h), col, 0.0f, 0, 2.0f);
+            draw_list->AddRectFilled(
+                pos + ImVec2(body_w, (icon_h - term_h) * 0.5f),
+                pos + ImVec2(icon_w, (icon_h + term_h) * 0.5f),
+                col);
 
-        if (dev.battery_percent >= 0) {
-            const float fill_w = (body_w - 4.0f) * (dev.battery_percent / 100.0f);
-            if (fill_w > 0.0f) {
-                draw_list->AddRectFilled(
-                    icon_pos + ImVec2(2.0f, 2.0f),
-                    icon_pos + ImVec2(2.0f + fill_w, icon_h - 2.0f),
-                    bat_col);
+            if (pct >= 0) {
+                const float fill_w = (body_w - 4.0f) * (pct / 100.0f);
+                if (fill_w > 0.0f) {
+                    draw_list->AddRectFilled(
+                        pos + ImVec2(2.0f, 2.0f),
+                        pos + ImVec2(2.0f + fill_w, icon_h - 2.0f),
+                        col);
+                }
             }
-        }
 
-        if (dev.battery_state == SDL_POWERSTATE_CHARGING) {
-            const ImVec2 center = icon_pos + ImVec2(body_w * 0.5f, icon_h * 0.5f);
-            draw_list->AddLine(center + ImVec2(-3, 0), center + ImVec2(3, 0),
-                               IM_COL32(255, 255, 255, 255), 2.0f);
-            draw_list->AddLine(center + ImVec2(0, -3), center + ImVec2(0, 3),
-                               IM_COL32(255, 255, 255, 255), 2.0f);
+            if (state == SDL_POWERSTATE_CHARGING) {
+                const ImVec2 center = pos + ImVec2(body_w * 0.5f, icon_h * 0.5f);
+                draw_list->AddLine(center + ImVec2(-3, 0), center + ImVec2(3, 0),
+                                   IM_COL32(255, 255, 255, 255), 2.0f);
+                draw_list->AddLine(center + ImVec2(0, -3), center + ImVec2(0, 3),
+                                   IM_COL32(255, 255, 255, 255), 2.0f);
+            }
+        };
+
+        if (hasSplitBattery) {
+            // Left Joy-Con icon first (leftmost), then Right Joy-Con icon.
+            DrawBatteryIcon(icon_pos,
+                            dev.battery_state_L, dev.battery_percent_L);
+            DrawBatteryIcon(icon_pos + ImVec2(icon_w + gap, 0.0f),
+                            dev.battery_state,   dev.battery_percent);
+        } else {
+            DrawBatteryIcon(icon_pos, dev.battery_state, dev.battery_percent);
         }
     }
 
@@ -308,24 +348,32 @@ void DrawDeviceItem(DeviceState&        dev,
 
         // ── Battery detail ────────────────────────────────────────────────
         if (hasBattery) {
-            const char* state_str = "Unknown";
-            switch (dev.battery_state) {
-                case SDL_POWERSTATE_ON_BATTERY: state_str = "On Battery";    break;
-                case SDL_POWERSTATE_NO_BATTERY: state_str = "No Battery";    break;
-                case SDL_POWERSTATE_CHARGING:   state_str = "Charging";      break;
-                case SDL_POWERSTATE_CHARGED:    state_str = "Fully Charged"; break;
-                default: break;
-            }
+            auto DrawBatteryRow = [&](const char* label,
+                                      SDL_PowerState state, int pct) {
+                const char* state_str = "Unknown";
+                switch (state) {
+                    case SDL_POWERSTATE_ON_BATTERY: state_str = "On Battery";    break;
+                    case SDL_POWERSTATE_NO_BATTERY: state_str = "No Battery";    break;
+                    case SDL_POWERSTATE_CHARGING:   state_str = "Charging";      break;
+                    case SDL_POWERSTATE_CHARGED:    state_str = "Fully Charged"; break;
+                    default: break;
+                }
+                ImGui::Text("%s %s", label, state_str);
+                if (pct >= 0) {
+                    ImGui::SameLine();
+                    ImGui::Text("(%d%%)", pct);
+                    ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
+                                          GetBatteryColorFor(state, pct));
+                    ImGui::ProgressBar(pct / 100.0f, ImVec2(-1, 0), "");
+                    ImGui::PopStyleColor();
+                }
+            };
 
-            ImGui::Text("Battery: %s", state_str);
-            if (dev.battery_percent >= 0) {
-                ImGui::SameLine();
-                ImGui::Text("(%d%%)", dev.battery_percent);
-
-                const float   battery_fraction = dev.battery_percent / 100.0f;
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, GetBatteryColor(dev));
-                ImGui::ProgressBar(battery_fraction, ImVec2(-1, 0), "");
-                ImGui::PopStyleColor();
+            if (hasSplitBattery) {
+                DrawBatteryRow("Battery L:", dev.battery_state_L, dev.battery_percent_L);
+                DrawBatteryRow("Battery R:", dev.battery_state,   dev.battery_percent);
+            } else {
+                DrawBatteryRow("Battery:", dev.battery_state, dev.battery_percent);
             }
         }
 

@@ -122,7 +122,18 @@ named protocol configuration.
 `btn_horn`, `btn_cam_switch`, `btn_landing_gear`, `btn_boost`,
 `btn_jump`, `btn_weapon_main`, `btn_weapon_sec`, `btn_reload`
 
----
+### Battery Status
+These fields are automatically broadcast for all connected devices.
+
+| Path Suffix | Type | Description |
+|-------------|------|-------------|
+| `/battery/level` | `int` | Charge percentage (0-100) |
+| `/battery/charging` | `int` | 1 if charging/charged, 0 otherwise |
+| `/battery/level_l` | `int` | Charge percentage for Left Joy-Con (if split) |
+| `/battery/charging_l` | `int` | Charging state for Left Joy-Con (if split) |
+
+*Broadcast as `/device/<index>/battery/...` (e.g., `/device/0/battery/level`)*
+
 
 ## Built-in Input Fields (received client → server, haptic / rumble)
 
@@ -135,3 +146,26 @@ named protocol configuration.
 | `haptic_gain`        | Global Gain |
 | `rumble_left`        | Rumble Left Motor |
 | `rumble_right`       | Rumble Right Motor |
+
+### OSC Haptic Subchannels
+
+Standard OSC haptic messages often use a "slot" argument. For clients that can only send one message per path per frame (like Resonite), InputBridge supports encoding the slot directly into the OSC path:
+
+` /haptic/<effect>/<slot> `
+
+**Example Paths:**
+* `/haptic/rumble/0` (Addresses haptic slot 0)
+* `/haptic/constant/1` (Addresses haptic slot 1)
+
+**Argument Formats:**
+* **Rumble:** `(int virtual_id, float low_freq, float high_freq, int duration_ms)`
+* **Constant:** `(int virtual_id, float magnitude, int duration_ms)`
+* **Periodic:** `(int virtual_id, int wave_type, float magnitude, int period, float phase, int duration, int attack, int fade)`
+* **Condition:** `(int virtual_id, int type, float L_coeff, float R_coeff, float L_sat, float R_sat, float deadband, float center, int duration)`
+
+---
+
+## Legacy OSC Support
+
+If no protocol definition is selected, the server defaults to the legacy "Wheel" paths:
+`/wheel/steer`, `/wheel/throttle`, `/wheel/brake`, `/wheel/clutch`, `/wheel/handbrake`, `/wheel/pitch`, `/wheel/roll`.

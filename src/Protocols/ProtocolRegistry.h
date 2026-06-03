@@ -64,8 +64,8 @@ public:
     void SaveDefinition(const ProtocolDefinition& def);
 
     // ── Utility ──────────────────────────────────────────────────────────────
-    static std::string GetProtocolsDir();   // "protocols/" next to the exe
-    static std::string GetDefsDir();        // "protocols/definitions/"
+    static std::string GetProtocolsDir();   // writable pref dir / "protocols/"
+    static std::string GetDefsDir();        // writable pref dir / "protocols/definitions/"
 
     static const char* TransportLabel(ProtocolTransport t);
     static const char* DirectionLabel(ProtocolDirection d);
