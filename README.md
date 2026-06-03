@@ -4,17 +4,20 @@
 
 InputBridge reads joystick, gamepad, steering wheel, and flight stick input and streams it over **OSC** and **WebSocket** to any receiving application. It also accepts haptic commands back — rumble, force feedback, adaptive triggers — and dispatches them to connected devices in real time.
 
-![InputBridge screenshot](docs/0.8.0_InputBridge_device_screen.png)
+![InputBridge screenshot](docs/0.9.0_InputBridge_device_screen.png)
 
 ---
 
 ## Supported Devices
 
-| Device | Haptic Features |
-|---|---|
-| Generic Gamepad | Rumble (low / high frequency) |
-| Steering Wheel | Constant force, periodic, condition effects (Spring / Damper / Inertia / Friction) |
-| Flight Stick / Throttle | Constant force, periodic, condition on both pitch and roll axes |
+| Device | Input Features | Haptic Features |
+|---|---|---|
+| Generic Gamepad | Axes, buttons, gyro, accelerometer, touchpad | Rumble (low / high frequency) |
+| Steam Controller (V1 & V2) | Axes, buttons, dual touchpads, gyro, accelerometer, capacitive grip/stick | Touchpad haptics (raw HID), rumble |
+| Nintendo Joy-Con (L/R pair) | Axes, buttons, independent per-side gyro & accelerometer | — |
+| Sony DualSense (PS5) | Axes, buttons, touchpad (2-finger), gyro, accelerometer | rumble, LED control — USB & Bluetooth |
+| Steering Wheel | Axes, buttons | Constant force, periodic, condition effects (Spring / Damper / Inertia / Friction) |
+| Flight Stick / Throttle | Axes, buttons | Constant force, periodic, condition on both pitch and roll axes |
 
 ---
 
@@ -32,11 +35,14 @@ See the [Wiki](../../wiki) for a full step-by-step guide and reference documenta
 
 ## Features
 
+- **Gyro, Accelerometer & Touchpad Mapping** — map gyroscope rates, accelerometer axes, and touchpad position/pressure directly to output protocol fields, just like regular axes. Split L/R sensors on Joy-Con and Steam Controller are each independently mappable.
+- **Battery Level Output** — battery percentage and charging state are available as mappable analog sources for any connected device, including separate Left Joy-Con battery for split pairs.
 - **Protocol Editor** — define exactly which fields to send, with custom OSC paths and WebSocket keys. Import, export, duplicate, and version-control protocol files.
 - **Mapping Profiles** — multiple named profiles, each with independent axis mappings, button mappings, server settings, and protocol selections.
 - **Virtual Devices** — create simulated joysticks to test protocols without real hardware.
 - **Undo / Redo** — 50-step history for all protocol editing operations.
 - **Backup Manager** — automatic timestamped backups before every destructive change.
+- **Debug Log** — built-in SDL log viewer with level filtering and auto-scroll, accessible from the sidebar.
 - **Themes** — VRChat, Resonite, Cyberpunk 2077, and custom JSON themes.
 
 ---
@@ -45,7 +51,7 @@ See the [Wiki](../../wiki) for a full step-by-step guide and reference documenta
 
 ### OSC Server
 
-Sends axis and button data over UDP. Defaults: send `127.0.0.1:9066`, receive `9068`.
+Sends axis, button, and sensor data over UDP. Defaults: send `127.0.0.1:9066`, receive `9068`.
 
 Incoming haptic paths — both short and long forms are always active:
 
@@ -76,7 +82,7 @@ Supported types: `gamepad` (rumble, dualsense\_trigger), `steering_wheel` / `fli
 
 ## Protocol System
 
-Protocols are JSON files in `protocols/definitions/` next to the executable. Each one specifies a transport (`osc` / `websocket`), a direction (`output` / `input`), and a list of fields with their OSC paths or WebSocket keys.
+Protocols are JSON files in `protocols/definitions/` (on Linux, in the XDG config directory). Each one specifies a transport (`osc` / `websocket`), a direction (`output` / `input`), and a list of fields with their OSC paths or WebSocket keys.
 
 ```json
 {
@@ -87,10 +93,13 @@ Protocols are JSON files in `protocols/definitions/` next to the executable. Eac
   "fields": [
     { "fieldId": "axis_steering", "oscPath": "/input/steering", "enabled": true },
     { "fieldId": "axis_throttle", "oscPath": "/input/throttle", "enabled": true },
-    { "fieldId": "axis_brake",    "oscPath": "/input/brake",    "enabled": true }
+    { "fieldId": "axis_brake",    "oscPath": "/input/brake",    "enabled": true },
+    { "fieldId": "sensor_gyro_x","oscPath": "/sensor/gyro/x",  "enabled": true }
   ]
 }
 ```
+
+New in 0.9.0: the **Sensors** field categories expose gyroscope, accelerometer, touchpad, capacitive-touch, and battery fields for use in any protocol output.
 
 Custom fields can be added to `protocols/input_fields.json` and will appear in the Protocol Editor field picker. Reload at runtime via **Protocols → Reload Fields**.
 
