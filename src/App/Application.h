@@ -83,6 +83,12 @@ private:
     float  m_currentMPS        = 0.0f;
     Uint64 m_lastMpsUpdate     = 0;
 
+    // ── Sensor health ─────────────────────────────────────────────────────
+    // Timestamp of the last periodic sensor re-enable sweep.  Steam Input can
+    // silently reset SDL_SetGamepadSensorEnabled without triggering any event,
+    // so UpdateLogic polls this every 2 s and restores the enabled state.
+    Uint64 m_lastSensorReenable = 0;
+
     // ── Window geometry ───────────────────────────────────────────────────
     static constexpr int k_InitialWidth  = 1280;
     static constexpr int k_InitialHeight = 720;
