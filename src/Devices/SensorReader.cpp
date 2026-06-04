@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "SensorReader.h"
 #include <algorithm>
 

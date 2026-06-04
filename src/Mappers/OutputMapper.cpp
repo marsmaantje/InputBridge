@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "OutputMapper.h"
 #include "imgui.h"
 #include "InputMapper.h"
@@ -358,7 +359,7 @@ void OutputMapper::UpdateHapticDevice(HapticTarget& target) {
                 if (SDL_HapticRumbleSupported(target.haptic_device)) {
                     if (!SDL_InitHapticRumble(target.haptic_device)) {
                         target.status_message = std::string("Rumble Init Failed: ") + SDL_GetError();
-                        SDL_Log("Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+                        LOG_ERROR("OutputMapper", "Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
                     }
                 }
                 SDL_SetHapticGain(target.haptic_device, 100);

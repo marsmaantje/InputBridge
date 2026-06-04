@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "ProtocolRegistry.h"
 #include "Utils/XdgDirs.h"
 #include <nlohmann/json.hpp>
@@ -361,7 +362,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     if (ofs) {
         ofs << j.dump(4);
     } else {
-        std::cerr << "[ProtocolRegistry] Failed to write " << path << "\n";
+    LOG_ERROR("ProtocolRegistry", "Failed to write %s", path.c_str());
     }
 }
 
@@ -426,8 +427,8 @@ static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
                 fs::copy_file(entry.path(), dstFile,
                               fs::copy_options::skip_existing, ec);
                 if (ec)
-                    std::cerr << "[ProtocolRegistry] Bootstrap copy failed for "
-                              << entry.path() << ": " << ec.message() << "\n";
+                    LOG_ERROR("ProtocolRegistry", "Bootstrap copy failed for %s: %s",
+                              entry.path().string().c_str(), ec.message().c_str());
             }
         }
     };
@@ -504,7 +505,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "[ProtocolRegistry] Failed to parse input_fields.json: " << e.what() << "\n";
+    LOG_ERROR("ProtocolRegistry", "Failed to parse input_fields.json: %s", e.what());
     }
 }
 
@@ -624,8 +625,8 @@ void ProtocolRegistry::LoadDefinitionFiles() {
             }
             m_definitions.push_back(def);
         } catch (const std::exception& e) {
-            std::cerr << "[ProtocolRegistry] Failed to parse "
-                      << entry.path() << ": " << e.what() << "\n";
+            LOG_ERROR("ProtocolRegistry", "Failed to parse %s: %s",
+                      entry.path().string().c_str(), e.what());
         }
     }
 }
@@ -709,7 +710,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "[ProtocolRegistry] Failed to parse builtin_fields.json: " << e.what() << "\n";
+    LOG_ERROR("ProtocolRegistry", "Failed to parse builtin_fields.json: %s", e.what());
     }
 }
 

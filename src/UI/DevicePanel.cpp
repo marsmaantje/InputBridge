@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "DevicePanel.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -190,7 +191,7 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
 
     if (ImGui::Checkbox("Hide from other applications", &hidden)) {
         if (!deviceManager.SetDeviceHidden(dev, hidden)) {
-            SDL_Log("DevicePanel: SetDeviceHidden failed for '%s'.", dev.name.c_str());
+            LOG_INFO("DevicePanel", "DevicePanel: SetDeviceHidden failed for '%s'.", dev.name.c_str());
         }
     }
 

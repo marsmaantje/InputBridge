@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "MacOSExclusiveMode.h"
 
 #ifdef __APPLE__
@@ -58,21 +59,21 @@ bool MacOSExclusiveMode::HideDevice(SDL_Joystick* joystick) {
 
     IOHIDDeviceRef dev = FindHIDDevice(vid, pid);
     if (!dev) {
-        SDL_Log("MacOSExclusiveMode: could not find IOHIDDevice for '%s' "
+        LOG_INFO("ExclusiveMode", "MacOSExclusiveMode: could not find IOHIDDevice for '%s' "
                 "(VID=%04X PID=%04X).", SDL_GetJoystickName(joystick), vid, pid);
         return false;
     }
 
     IOReturn ret = IOHIDDeviceOpen(dev, kIOHIDOptionsTypeSeizeDevice);
     if (ret != kIOReturnSuccess) {
-        SDL_Log("MacOSExclusiveMode: IOHIDDeviceOpen(seize) failed for '%s': 0x%x.",
+        LOG_ERROR("ExclusiveMode", "MacOSExclusiveMode: IOHIDDeviceOpen(seize) failed for '%s': 0x%x.",
                 SDL_GetJoystickName(joystick), ret);
         CFRelease(dev);
         return false;
     }
 
     m_SeizedDevices[id] = dev;
-    SDL_Log("MacOSExclusiveMode: '%s' is now hidden.", SDL_GetJoystickName(joystick));
+    LOG_INFO("ExclusiveMode", "MacOSExclusiveMode: '%s' is now hidden.", SDL_GetJoystickName(joystick));
     return true;
 }
 
@@ -86,7 +87,7 @@ bool MacOSExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
     IOHIDDeviceClose(it->second, kIOHIDOptionsTypeSeizeDevice);
     CFRelease(it->second);
     m_SeizedDevices.erase(it);
-    SDL_Log("MacOSExclusiveMode: '%s' is now visible.", SDL_GetJoystickName(joystick));
+    LOG_INFO("ExclusiveMode", "MacOSExclusiveMode: '%s' is now visible.", SDL_GetJoystickName(joystick));
     return true;
 }
 
