@@ -8,10 +8,15 @@ namespace {
     const std::string KEY_NAME = "name";
     const std::string KEY_TRANSPORT = "transport";
     const std::string KEY_DIRECTION = "direction";
-    const std::string KEY_OSC_HOST = "oscHost";
-    const std::string KEY_OSC_SEND_PORT = "oscSendPort";
-    const std::string KEY_OSC_RECV_PORT = "oscRecvPort";
-    const std::string KEY_WSS_PORT = "wssPort";
+    // Nested transport blocks — the actual on-disk format uses
+    //   "osc": { "host": "...", "sendPort": N, "recvPort": N }
+    //   "ws":  { "port": N }
+    const std::string KEY_OSC_BLOCK = "osc";
+    const std::string KEY_OSC_HOST = "host";        // inside the "osc" block
+    const std::string KEY_OSC_SEND_PORT = "sendPort"; // inside the "osc" block
+    const std::string KEY_OSC_RECV_PORT = "recvPort"; // inside the "osc" block
+    const std::string KEY_WS_BLOCK  = "ws";
+    const std::string KEY_WSS_PORT  = "port";       // inside the "ws" block
     const std::string KEY_FIELDS = "fields";
     const std::string KEY_FIELD_ID = "fieldId";
     const std::string KEY_ENABLED = "enabled";
@@ -174,14 +179,16 @@ ValidationResult ProtocolValidator::ValidateProtocolJSON(const json& j) {
 
         // Validate transport-specific fields
         if (transport == VAL_TRANSPORT_OSC) {
-            if (!j.contains(KEY_OSC_HOST)) {
+            if (!j.contains(KEY_OSC_BLOCK) || !j[KEY_OSC_BLOCK].contains(KEY_OSC_HOST)) {
                 result.AddWarning(WARN_MISSING_OSC_HOST);
             }
-            if (!j.contains(KEY_OSC_SEND_PORT) && !j.contains(KEY_OSC_RECV_PORT)) {
+            if (!j.contains(KEY_OSC_BLOCK) ||
+                (!j[KEY_OSC_BLOCK].contains(KEY_OSC_SEND_PORT) &&
+                 !j[KEY_OSC_BLOCK].contains(KEY_OSC_RECV_PORT))) {
                 result.AddWarning(WARN_MISSING_OSC_PORTS);
             }
         } else if (transport == VAL_TRANSPORT_WEBSOCKET) {
-            if (!j.contains(KEY_WSS_PORT)) {
+            if (!j.contains(KEY_WS_BLOCK) || !j[KEY_WS_BLOCK].contains(KEY_WSS_PORT)) {
                 result.AddWarning(WARN_MISSING_WSS_PORT);
             }
         }

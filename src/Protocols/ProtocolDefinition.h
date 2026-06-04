@@ -26,6 +26,15 @@ struct ProtocolField {
     std::string oscPath;   // OSC: the actual address to use (may differ from default)
     std::string wsKey;     // WebSocket: JSON key to use
     bool        enabled = true;
+
+    // Optional inline field definition — present only for fields that are not
+    // in the built-in catalog.  When set, ImportDefinition auto-registers them
+    // as custom FieldDescriptors so they appear in the editor without requiring
+    // a pre-existing entry in input_fields.json.
+    std::string inlineLabel;     // human-readable label, e.g. "Left Flipper"
+    std::string inlineCategory;  // category string, e.g. "Pinball"
+    FieldType   inlineType = FieldType::DigitalButton;
+    bool        hasInlineDef = false;  // true when the above fields are populated
 };
 
 // ─── Protocol direction ─────────────────────────────────────────────────────

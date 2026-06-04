@@ -186,12 +186,27 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
     j["ws"]["port"]      = def->wssPort;
 
     json fieldsArr = json::array();
+    const auto& outFields = m_outputFields;
+    const auto& inFields  = m_inputFields;
     for (const auto& f : def->fields) {
         json fj;
         fj["fieldId"] = f.fieldId;
         fj["oscPath"] = f.oscPath;
         fj["wsKey"]   = f.wsKey;
         fj["enabled"] = f.enabled;
+
+        // Embed inline field definition for any field that is not a built-in.
+        // This makes exported files self-describing so recipients can import
+        // them without pre-populating their own input_fields.json.
+        const FieldDescriptor* desc = nullptr;
+        for (const auto& fd : outFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (!desc) for (const auto& fd : inFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (desc && !desc->isBuiltIn) {
+            fj["label"]    = desc->label;
+            fj["category"] = desc->category;
+            fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
+        }
+
         fieldsArr.push_back(fj);
     }
     j["fields"] = fieldsArr;
@@ -235,8 +250,54 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                 f.oscPath = fj.value("oscPath",  "");
                 f.wsKey   = fj.value("wsKey",    "");
                 f.enabled = fj.value("enabled",  true);
-                if (!f.fieldId.empty())
-                    def.fields.push_back(f);
+                if (f.fieldId.empty())
+                    continue;
+
+                // Read optional inline field definition.
+                // These keys are written by ExportDefinition for any field that
+                // is not a built-in, so the file is self-describing.
+                bool hasInline = fj.contains("label") || fj.contains("category") || fj.contains("type");
+                if (hasInline) {
+                    f.hasInlineDef   = true;
+                    f.inlineLabel    = fj.value("label",    f.fieldId);
+                    f.inlineCategory = fj.value("category", "Custom");
+                    std::string typeStr = fj.value("type", "digital");
+                    f.inlineType = (typeStr == "analog") ? FieldType::AnalogAxis : FieldType::DigitalButton;
+                }
+
+                def.fields.push_back(f);
+
+                // Auto-register the field in the catalog when it is unknown so
+                // that the editor can display and manipulate it without requiring
+                // a matching entry in input_fields.json.
+                auto& catalog = (def.direction == ProtocolDirection::Output)
+                                 ? m_outputFields : m_inputFields;
+
+                bool knownInCatalog = false;
+                for (const auto& desc : catalog)
+                    if (desc.id == f.fieldId) { knownInCatalog = true; break; }
+
+                if (!knownInCatalog) {
+                    FieldDescriptor fd;
+                    fd.id          = f.fieldId;
+                    fd.isBuiltIn   = false;
+                    if (f.hasInlineDef) {
+                        fd.label          = f.inlineLabel;
+                        fd.category       = f.inlineCategory;
+                        fd.type           = f.inlineType;
+                    } else {
+                        // No inline metadata — synthesise sensible defaults so
+                        // the field at least appears in the editor.
+                        fd.label    = f.fieldId;
+                        fd.category = "Custom (imported)";
+                        fd.type     = FieldType::DigitalButton;
+                    }
+                    fd.defaultOscPath = f.oscPath.empty() ? ("/" + f.fieldId) : f.oscPath;
+                    fd.defaultWsKey   = f.wsKey.empty()   ? f.fieldId         : f.wsKey;
+                    catalog.push_back(fd);
+                    // Persist so the field survives across restarts.
+                    SaveFieldCatalog();
+                }
             }
         }
         m_definitions.push_back(def);
@@ -280,6 +341,18 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
         fj["oscPath"] = f.oscPath;
         fj["wsKey"]   = f.wsKey;
         fj["enabled"] = f.enabled;
+
+        // Embed inline field definition for non-built-in fields so that the
+        // stored definition file is self-describing.
+        const FieldDescriptor* desc = nullptr;
+        for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (!desc) for (const auto& fd : m_inputFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (desc && !desc->isBuiltIn) {
+            fj["label"]    = desc->label;
+            fj["category"] = desc->category;
+            fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
+        }
+
         fieldsArr.push_back(fj);
     }
     j["fields"] = fieldsArr;
@@ -511,8 +584,42 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     f.oscPath = fj.value("oscPath",  "");
                     f.wsKey   = fj.value("wsKey",    "");
                     f.enabled = fj.value("enabled",  true);
-                    if (!f.fieldId.empty())
-                        def.fields.push_back(f);
+                    if (f.fieldId.empty())
+                        continue;
+
+                    bool hasInline = fj.contains("label") || fj.contains("category") || fj.contains("type");
+                    if (hasInline) {
+                        f.hasInlineDef   = true;
+                        f.inlineLabel    = fj.value("label",    f.fieldId);
+                        f.inlineCategory = fj.value("category", "Custom");
+                        std::string typeStr = fj.value("type", "digital");
+                        f.inlineType = (typeStr == "analog") ? FieldType::AnalogAxis : FieldType::DigitalButton;
+                    }
+
+                    def.fields.push_back(f);
+
+                    // Auto-register unknown fields so the editor shows them.
+                    auto& catalog = (def.direction == ProtocolDirection::Output)
+                                     ? m_outputFields : m_inputFields;
+                    bool known = false;
+                    for (const auto& fd : catalog) if (fd.id == f.fieldId) { known = true; break; }
+                    if (!known) {
+                        FieldDescriptor fd;
+                        fd.id        = f.fieldId;
+                        fd.isBuiltIn = false;
+                        if (f.hasInlineDef) {
+                            fd.label    = f.inlineLabel;
+                            fd.category = f.inlineCategory;
+                            fd.type     = f.inlineType;
+                        } else {
+                            fd.label    = f.fieldId;
+                            fd.category = "Custom (imported)";
+                            fd.type     = FieldType::DigitalButton;
+                        }
+                        fd.defaultOscPath = f.oscPath.empty() ? ("/" + f.fieldId) : f.oscPath;
+                        fd.defaultWsKey   = f.wsKey.empty()   ? f.fieldId         : f.wsKey;
+                        catalog.push_back(fd);
+                    }
                 }
             }
             m_definitions.push_back(def);
