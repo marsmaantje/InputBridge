@@ -445,6 +445,13 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
             bool isFile = de.is_regular_file();
             if (!isDir && !isFile) continue;
 
+            // Only show folders and compatible protocol files (.json).
+            if (isFile) {
+                std::string ext = de.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext != ".json") continue;
+            }
+
             // Apply search filter
             if (s_fbSearch[0] != '\0') {
                 std::string lname = fname, lsearch = s_fbSearch;

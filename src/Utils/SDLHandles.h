@@ -1,5 +1,4 @@
 #pragma once
-#include "App/Log.h"
 #include <SDL3/SDL.h>
 #include <memory>
 
