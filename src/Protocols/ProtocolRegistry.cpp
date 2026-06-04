@@ -274,9 +274,17 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                 auto& catalog = (def.direction == ProtocolDirection::Output)
                                  ? m_outputFields : m_inputFields;
 
+                // Check both catalogs: a field may legitimately live in the
+                // opposite catalog (e.g. a sensor/button field referenced by an
+                // output-direction definition). Registering it a second time in
+                // the wrong catalog would create a duplicate "Custom (imported)"
+                // entry and break the category grouping in the editor.
                 bool knownInCatalog = false;
-                for (const auto& desc : catalog)
+                for (const auto& desc : m_outputFields)
                     if (desc.id == f.fieldId) { knownInCatalog = true; break; }
+                if (!knownInCatalog)
+                    for (const auto& desc : m_inputFields)
+                        if (desc.id == f.fieldId) { knownInCatalog = true; break; }
 
                 if (!knownInCatalog) {
                     FieldDescriptor fd;
@@ -602,8 +610,12 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     // Auto-register unknown fields so the editor shows them.
                     auto& catalog = (def.direction == ProtocolDirection::Output)
                                      ? m_outputFields : m_inputFields;
+                    // Check both catalogs before synthesising an entry; the
+                    // field may already be registered on the opposite side.
                     bool known = false;
-                    for (const auto& fd : catalog) if (fd.id == f.fieldId) { known = true; break; }
+                    for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) { known = true; break; }
+                    if (!known)
+                        for (const auto& fd : m_inputFields) if (fd.id == f.fieldId) { known = true; break; }
                     if (!known) {
                         FieldDescriptor fd;
                         fd.id        = f.fieldId;
