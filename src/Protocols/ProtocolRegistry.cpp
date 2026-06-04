@@ -206,6 +206,13 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
             fj["label"]    = desc->label;
             fj["category"] = desc->category;
             fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
+        } else if (!desc && f.hasInlineDef) {
+            // Catalog entry absent (e.g. field not yet persisted) but the
+            // ProtocolField still carries its own inline metadata — use it so
+            // the exported file stays self-describing.
+            fj["label"]    = f.inlineLabel;
+            fj["category"] = f.inlineCategory;
+            fj["type"]     = (f.inlineType == FieldType::DigitalButton) ? "digital" : "analog";
         }
 
         fieldsArr.push_back(fj);
@@ -309,6 +316,14 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                 }
             }
         }
+        // Load per-protocol exclusion lists.
+        if (j.contains("excluded_fields") && j["excluded_fields"].is_array())
+            for (const auto& v : j["excluded_fields"])
+                if (v.is_string()) def.excludedFieldIds.push_back(v.get<std::string>());
+        if (j.contains("excluded_categories") && j["excluded_categories"].is_array())
+            for (const auto& v : j["excluded_categories"])
+                if (v.is_string()) def.excludedCategories.push_back(v.get<std::string>());
+
         m_definitions.push_back(def);
         SaveDefinition(def);
         return def.id;
@@ -365,6 +380,19 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
         fieldsArr.push_back(fj);
     }
     j["fields"] = fieldsArr;
+
+    // Per-protocol exclusions — only write the keys when non-empty so that
+    // the vast majority of definition files stay clean.
+    if (!def.excludedFieldIds.empty()) {
+        json arr = json::array();
+        for (const auto& s : def.excludedFieldIds) arr.push_back(s);
+        j["excluded_fields"] = arr;
+    }
+    if (!def.excludedCategories.empty()) {
+        json arr = json::array();
+        for (const auto& s : def.excludedCategories) arr.push_back(s);
+        j["excluded_categories"] = arr;
+    }
 
     std::ofstream ofs(path);
     if (ofs) {
@@ -635,6 +663,14 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     }
                 }
             }
+            // Load per-protocol exclusion lists.
+            if (j.contains("excluded_fields") && j["excluded_fields"].is_array())
+                for (const auto& v : j["excluded_fields"])
+                    if (v.is_string()) def.excludedFieldIds.push_back(v.get<std::string>());
+            if (j.contains("excluded_categories") && j["excluded_categories"].is_array())
+                for (const auto& v : j["excluded_categories"])
+                    if (v.is_string()) def.excludedCategories.push_back(v.get<std::string>());
+
             m_definitions.push_back(def);
         } catch (const std::exception& e) {
             LOG_ERROR("ProtocolRegistry", "Failed to parse %s: %s",

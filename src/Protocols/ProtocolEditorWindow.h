@@ -79,6 +79,7 @@ private:
     static void DrawRenameCategoryModal();
     static void DrawDeleteCategoryModal();
     static void DrawMergeCategoryModal();
+    static void DrawHideCategoryModal();
     static void DrawSaveTemplateModal();
     static void DrawLoadPresetModal();
     static void DrawLoadTemplateModal();
@@ -147,6 +148,9 @@ private:
     static inline bool  s_showMergeCatModal = false;
     static inline char  s_mergeSrcCat[64]   = "";
     static inline char  s_mergeTgtCat[64]   = "";
+
+    // Hide / show categories per-protocol modal state
+    static inline bool  s_showHideCatModal  = false;
 
     // Validation result modal state
     static inline bool        s_showValidationModal = false;

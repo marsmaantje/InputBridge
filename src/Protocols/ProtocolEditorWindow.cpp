@@ -733,6 +733,7 @@ void ProtocolEditorWindow::DrawContent() {
     DrawRenameCategoryModal();
     DrawDeleteCategoryModal();
     DrawMergeCategoryModal();
+    DrawHideCategoryModal();
     DrawSaveTemplateModal();
     DrawLoadTemplateModal();
     DrawValidationResultModal();
@@ -971,6 +972,10 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
         s_mergeTgtCat[0] = '\0';
     }
 
+    if (WrapButton("Hide / Show Categories")) {
+        s_showHideCatModal = true;
+    }
+
     if (WrapButton("Save as Template")) {
         s_showSaveTemplateModal = true;
         std::strncpy(s_templateName, "New Template", sizeof(s_templateName));
@@ -1012,6 +1017,10 @@ void ProtocolEditorWindow::DrawInputFieldPicker() {
         s_mergeTgtCat[0] = '\0';
     }
 
+    if (WrapButton("Hide / Show Categories")) {
+        s_showHideCatModal = true;
+    }
+
     // Search filter
     ImGui::InputText("Filter", s_fieldFilter, sizeof(s_fieldFilter));
 
@@ -1042,12 +1051,21 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
     bool fieldDeleted = false;
     for (const auto& category : categories) {
         if (fieldDeleted) break;
-        // Count fields in this category that match filter
+
+        // Skip entire categories hidden for this protocol.
+        bool catExcluded = std::find(def.excludedCategories.begin(),
+                                     def.excludedCategories.end(),
+                                     category) != def.excludedCategories.end();
+        if (catExcluded) continue;
+
+        // Count fields in this category that match filter (and are not individually hidden).
         int matchCount = 0;
         for (const auto& fd : catalog) {
-            if (fd.category == category && MatchesFilter(fd, filter)) {
-                matchCount++;
-            }
+            if (fd.category != category || !MatchesFilter(fd, filter)) continue;
+            bool fieldExcluded = std::find(def.excludedFieldIds.begin(),
+                                           def.excludedFieldIds.end(),
+                                           fd.id) != def.excludedFieldIds.end();
+            if (!fieldExcluded) matchCount++;
         }
 
         if (matchCount == 0) {
@@ -1057,6 +1075,12 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
         if (ImGui::TreeNode(category.c_str())) {
             for (const auto& fd : catalog) {
                 if (fd.category != category || !MatchesFilter(fd, filter)) {
+                    continue;
+                }
+                // Skip fields hidden for this specific protocol.
+                if (std::find(def.excludedFieldIds.begin(),
+                              def.excludedFieldIds.end(),
+                              fd.id) != def.excludedFieldIds.end()) {
                     continue;
                 }
 
@@ -2095,6 +2119,68 @@ void ProtocolEditorWindow::DrawMergeCategoryModal() {
         if (!canMerge) ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Modal: Hide / Show Categories (per-protocol)
+// ═══════════════════════════════════════════════════════════════════════════
+
+void ProtocolEditorWindow::DrawHideCategoryModal() {
+    if (s_showHideCatModal) {
+        ImGui::OpenPopup("Hide / Show Categories##modal");
+        s_showHideCatModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Hide / Show Categories##modal", &open,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        auto& registry   = ProtocolRegistry::GetInstance();
+        auto& definitions = registry.GetDefinitions();
+        if (s_selectedIndex < 0 || s_selectedIndex >= (int)definitions.size()) {
+            ImGui::CloseCurrentPopup();
+        } else {
+            ProtocolDefinition& def = definitions[s_selectedIndex];
+
+            ImGui::TextWrapped(
+                "Tick the categories you want to hide from this protocol's field list.\n"
+                "Hidden categories are still available to all other protocols.");
+            ImGui::Separator();
+
+            // Build the full category list for the relevant catalog.
+            bool isOutput = (def.direction == ProtocolDirection::Output);
+            const auto& catalog = isOutput ? registry.GetOutputFields()
+                                           : registry.GetInputFields();
+            std::vector<std::string> cats;
+            for (const auto& fd : catalog)
+                if (std::find(cats.begin(), cats.end(), fd.category) == cats.end())
+                    cats.push_back(fd.category);
+            std::sort(cats.begin(), cats.end());
+
+            bool changed = false;
+            for (const auto& cat : cats) {
+                bool hidden = std::find(def.excludedCategories.begin(),
+                                        def.excludedCategories.end(),
+                                        cat) != def.excludedCategories.end();
+                if (ImGui::Checkbox(cat.c_str(), &hidden)) {
+                    if (hidden) {
+                        def.excludedCategories.push_back(cat);
+                    } else {
+                        def.excludedCategories.erase(
+                            std::remove(def.excludedCategories.begin(),
+                                        def.excludedCategories.end(), cat),
+                            def.excludedCategories.end());
+                    }
+                    changed = true;
+                }
+            }
+
+            if (changed) registry.SaveDefinition(def);
+
+            ImGui::Separator();
+            if (ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        }
         ImGui::EndPopup();
     }
 }

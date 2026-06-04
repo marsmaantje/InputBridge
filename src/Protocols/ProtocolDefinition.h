@@ -70,5 +70,11 @@ struct ProtocolDefinition {
     // Enabled data fields and their address/key overrides
     std::vector<ProtocolField> fields;
 
+    // Per-protocol visibility exclusions.  Fields / categories listed here are
+    // hidden from this protocol's editor tab but remain in the global catalog
+    // and are still available to every other protocol.
+    std::vector<std::string> excludedFieldIds;
+    std::vector<std::string> excludedCategories;
+
     bool active = false; // whether the server is currently running this definition
 };
