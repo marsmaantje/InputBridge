@@ -60,7 +60,7 @@ void RebuildFontAtlas()
         base_font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), themeFontSize);
         loaded_theme_font = (base_font != nullptr);
         if (!loaded_theme_font)
-            LOG_INFO("FontManager", "[Font] Failed to load '%s' — falling back to default.",
+            LOG_INFO("FontManager", "Font: Failed to load '%s' — falling back to default.",
                     fontPath.c_str());
     }
     if (!loaded_theme_font)
@@ -97,7 +97,7 @@ void RebuildFontAtlas()
             iconFontPath.c_str(), merge_size, &cfg, icon_ranges);
 
         if (!icons)
-            LOG_INFO("FontManager", "[Font] FA6 not found at '%s' — icon glyphs will be missing.",
+            LOG_INFO("FontManager", "Font: FA6 not found at '%s' — icon glyphs will be missing.",
                     iconFontPath.c_str());
     }
 

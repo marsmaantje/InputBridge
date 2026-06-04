@@ -30,7 +30,7 @@ void ThemeManager::ScanThemesDirectory(const std::string& basePath) {
 
     fs::path themesDir = fs::path(basePath) / "themes";
     if (!fs::exists(themesDir) || !fs::is_directory(themesDir)) {
-        LOG_INFO("ThemeManager", "[ThemeManager] Themes directory not found: %s", themesDir.string().c_str());
+        LOG_INFO("ThemeManager", "Themes directory not found: %s", themesDir.string().c_str());
         return;
     }
 
@@ -48,12 +48,12 @@ void ThemeManager::ScanThemesDirectory(const std::string& basePath) {
         if (te.displayName.empty())
             te.displayName = p.stem().string();
         m_entries.push_back(std::move(te));
-        LOG_INFO("ThemeManager", "[ThemeManager] Found theme: %s (%s)",
+        LOG_INFO("ThemeManager", "Found theme: %s (%s)",
                 m_entries.back().displayName.c_str(),
                 m_entries.back().path.c_str());
     }
 
-    LOG_INFO("ThemeManager", "[ThemeManager] Scanned %d theme(s) from %s",
+    LOG_INFO("ThemeManager", "Scanned %d theme(s) from %s",
             (int)m_entries.size(), themesDir.string().c_str());
 
     // Refresh the index pointer if the active theme is still present.
@@ -89,11 +89,11 @@ void ThemeManager::ResolveFontPath(const ThemeData& data) {
     if (fs::exists(resolved) && fs::is_regular_file(resolved)) {
         m_resolvedFontPath = resolved.string();
         m_fontSize         = data.fontSize > 0.f ? data.fontSize : 16.f;
-        LOG_INFO("ThemeManager", "[ThemeManager] Font resolved: %s @ %.1fpx",
+        LOG_INFO("ThemeManager", "Font resolved: %s @ %.1fpx",
                 m_resolvedFontPath.c_str(), m_fontSize);
     } else {
         // File not found — fall back to ImGui default silently.
-        LOG_INFO("ThemeManager", "[ThemeManager] Font file not found (%s) — using default font.",
+        LOG_INFO("ThemeManager", "Font file not found (%s) — using default font.",
                 resolved.string().c_str());
         m_resolvedFontPath.clear();
         m_fontSize = 16.f;
@@ -108,7 +108,7 @@ Result<bool, std::string> ThemeManager::LoadFromFile(const std::string& path) {
     auto result = ParseFile(path);
     if (result.IsErr()) {
         m_lastError = result.Error();
-        LOG_INFO("ThemeManager", "[ThemeManager] Failed to load theme '%s': %s",
+        LOG_INFO("ThemeManager", "Failed to load theme '%s': %s",
                 path.c_str(), m_lastError.c_str());
         return Result<bool, std::string>::Err(m_lastError);
     }
@@ -131,7 +131,7 @@ Result<bool, std::string> ThemeManager::LoadFromFile(const std::string& path) {
     ResolveFontPath(m_current);
     m_pendingFontChange = true;
 
-    LOG_INFO("ThemeManager", "[ThemeManager] Applied theme '%s' from '%s'",
+    LOG_INFO("ThemeManager", "Applied theme '%s' from '%s'",
             m_themeName.c_str(), path.c_str());
     return Result<bool, std::string>::Ok(true);
 }
@@ -229,7 +229,7 @@ void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
             if (fs::exists(resonitePath)) {
                 auto result = LoadFromFile(resonitePath.string());
                 if (result.IsOk()) {
-                    LOG_INFO("ThemeManager", "[ThemeManager] No saved theme — applied Resonite as default.");
+                    LOG_INFO("ThemeManager", "No saved theme — applied Resonite as default.");
                     return;
                 }
             }
@@ -244,7 +244,7 @@ void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
 
     auto result = LoadFromFile(path);
     if (result.IsErr()) {
-        LOG_INFO("ThemeManager", "[ThemeManager] Saved theme could not be restored: %s — using default.",
+        LOG_INFO("ThemeManager", "Saved theme could not be restored: %s — using default.",
                 result.Error().c_str());
         prefs.DeleteKey("Theme", "ThemePath");
     }

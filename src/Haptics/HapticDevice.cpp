@@ -11,13 +11,13 @@ HapticDevice::~HapticDevice() {
 
 InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
     if (!m_joystick) {
-        LOG_ERROR("HapticDevice", "HapticDevice::Init - Failed: Device not found (joystick is null)");
+        LOG_ERROR("HapticDevice", "Init - Failed: Device not found (joystick is null)");
         return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::DeviceNotFound);
     }
 
     auto joystickID = SDL_GetJoystickID(m_joystick);
     bool isHaptic = SDL_IsJoystickHaptic(m_joystick);
-    LOG_INFO("HapticDevice", "HapticDevice::Init - Joystick ID %u, IsHaptic: %d", joystickID, isHaptic);
+    LOG_INFO("HapticDevice", "Init - Joystick ID %u, IsHaptic: %d", joystickID, isHaptic);
 
     if (isHaptic) {
         m_haptic.Reset(SDL_OpenHapticFromJoystick(m_joystick));
@@ -41,11 +41,11 @@ InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
     }
 
     if (m_haptic || SDL_IsGamepad(joystickID)) {
-        LOG_INFO("HapticDevice", "HapticDevice::Init - Success");
+        LOG_INFO("HapticDevice", "Init - Success");
         return InputBridge::Result<bool, InputBridge::HapticError>::Ok(true);
     }
 
-    LOG_ERROR("HapticDevice", "HapticDevice::Init - Failed: Unsupported device type");
+    LOG_ERROR("HapticDevice", "Init - Failed: Unsupported device type");
     return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::UnsupportedEffect);
 }
 
@@ -173,14 +173,14 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
             if (outCreated) *outCreated = false;
             return existingId;
         } else {
-            LOG_ERROR("HapticDevice", "HapticDevice::UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
+            LOG_ERROR("HapticDevice", "UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
         }
         SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
     }
 
     SDL_HapticEffectID newId = SDL_CreateHapticEffect(m_haptic.Get(), &effect);
     if (newId == -1) {
-        LOG_ERROR("HapticDevice", "HapticDevice::UploadEffect - Create failed: %s", SDL_GetError());
+        LOG_ERROR("HapticDevice", "UploadEffect - Create failed: %s", SDL_GetError());
     }
     if (outCreated) *outCreated = (newId != -1);
     return newId;
@@ -234,7 +234,7 @@ std::map<std::string, ActiveDualSenseTriggerInfo> HapticDevice::GetActiveDualSen
 void HapticDevice::SetConstantForce(float level, float direction) {
     RunAsync([this, level, direction]() {
         if (!m_haptic) {
-            LOG_WARN("HapticDevice", "HapticDevice::SetConstantForce - Haptic device not ready");
+            LOG_WARN("HapticDevice", "SetConstantForce - Haptic device not ready");
             return;
         }
 
@@ -256,7 +256,7 @@ void HapticDevice::SetConstantForce(float level, float direction) {
             m_constantEffects[kInternalSlot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "HapticDevice::SetConstantForce - Run failed: %s", SDL_GetError());
+                    LOG_ERROR("HapticDevice", "SetConstantForce - Run failed: %s", SDL_GetError());
                 }
             }
         }
@@ -309,7 +309,7 @@ void HapticDevice::SetPeriodic(HapticPeriodicType type, float magnitude, int per
             m_periodicEffects[kInternalSlot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "HapticDevice::SetPeriodic - Run failed: %s", SDL_GetError());
+                    LOG_ERROR("HapticDevice", "SetPeriodic - Run failed: %s", SDL_GetError());
                 }
             }
         }
@@ -346,9 +346,9 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
         if (it != m_conditionEffects.end()) existing = it->second;
 
         if (existing == -1) {
-            LOG_WARN("HapticDevice", "HapticDevice::SetCondition - existingID -1");
+            LOG_WARN("HapticDevice", "SetCondition - existingID -1");
         } else {
-            LOG_INFO("HapticDevice", "HapticDevice::SetCondition - existingID %d", existing);
+            LOG_INFO("HapticDevice", "SetCondition - existingID %d", existing);
         }
 
         bool created = false;
@@ -357,7 +357,7 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
             m_conditionEffects[internalKey] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "HapticDevice::SetCondition - Run failed: %s", SDL_GetError());
+                    LOG_ERROR("HapticDevice", "SetCondition - Run failed: %s", SDL_GetError());
                 }
             }
         }
@@ -385,7 +385,7 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
             m_rumbleEffects[kInternalSlot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "HapticDevice::SetRumble - Run failed: %s", SDL_GetError());
+                    LOG_ERROR("HapticDevice", "SetRumble - Run failed: %s", SDL_GetError());
                 }
             }
         }

@@ -302,7 +302,7 @@ bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
                          ? dev.joystick
                          : (dev.gamepad ? SDL_GetGamepadJoystick(dev.gamepad) : nullptr);
     if (!joy) {
-        LOG_INFO("DeviceManager", "DeviceManager::SetDeviceHidden: no joystick handle for '%s'.",
+        LOG_INFO("DeviceManager", "SetDeviceHidden: no joystick handle for '%s'.",
                 dev.name.c_str());
         return false;
     }
@@ -312,7 +312,7 @@ bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
     return ok;
 #else
     (void)dev; (void)hidden;
-    LOG_WARN("DeviceManager", "DeviceManager::SetDeviceHidden: exclusive input support not compiled in.");
+    LOG_WARN("DeviceManager", "SetDeviceHidden: exclusive input support not compiled in.");
     return false;
 #endif
 }

@@ -245,7 +245,7 @@ void InputMapper::UpdateListening() {
             bool updated = false;
             const DeviceState* boundDeviceState = getDeviceState(boundButton->joystickID);
             if (!boundDeviceState) {
-                LOG_WARN("InputMapper", "InputMapper: Bound joystick (ID: %u) not found for button binding.", boundButton->joystickID);
+                LOG_WARN("InputMapper", "Bound joystick (ID: %u) not found for button binding.", boundButton->joystickID);
                 CancelListening();
                 return;
             }

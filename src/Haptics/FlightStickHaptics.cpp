@@ -9,7 +9,7 @@
 int FlightStickHaptics::PlayConstant(int slot, float strength, uint32_t duration_ms) {
     RunAsync([this, slot, strength, duration_ms]() {
         if (!m_haptic) {
-            LOG_WARN("FlightStickHaptics", "FlightStickHaptics::PlayConstant - Haptic device not ready");
+            LOG_WARN("FlightStickHaptics", "PlayConstant - Haptic device not ready");
             return;
         }
 
@@ -35,7 +35,7 @@ int FlightStickHaptics::PlayConstant(int slot, float strength, uint32_t duration
             m_constantEffects[slot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("FlightStickHaptics", "FlightStickHaptics::PlayConstant - Run failed: %s", SDL_GetError());
+                    LOG_ERROR("FlightStickHaptics", "PlayConstant - Run failed: %s", SDL_GetError());
                 }
             }
             {
@@ -75,7 +75,7 @@ int FlightStickHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, flo
                                      uint32_t duration_ms) {
     RunAsync([this, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms]() {
         if (!m_haptic) {
-            LOG_WARN("FlightStickHaptics", "FlightStickHaptics::PlayPeriodic - Haptic device not ready");
+            LOG_WARN("FlightStickHaptics", "PlayPeriodic - Haptic device not ready");
             return;
         }
 
@@ -128,7 +128,7 @@ int FlightStickHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, flo
             m_periodicEffects[slot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("FlightStickHaptics", "FlightStickHaptics::PlayPeriodic - Run failed: %s", SDL_GetError());
+                    LOG_ERROR("FlightStickHaptics", "PlayPeriodic - Run failed: %s", SDL_GetError());
                 }
             }
             {
@@ -190,14 +190,14 @@ int FlightStickHaptics::PlayCondition(int slot, HapticConditionType type,
     RunAsync([this, slot, type, right_sat, left_sat,
               right_coeff, left_coeff, deadband, center, duration_ms]() {
         if (!m_haptic) {
-            LOG_WARN("FlightStickHaptics", "FlightStickHaptics::PlayCondition - Haptic device not ready");
+            LOG_WARN("FlightStickHaptics", "PlayCondition - Haptic device not ready");
             return;
         }
 
         {
             int max_effects = SDL_GetMaxHapticEffects(m_haptic.Get());
             if (slot < 0 || slot >= max_effects) {
-                LOG_WARN("FlightStickHaptics", "FlightStickHaptics::PlayCondition - Invalid slot %d (max: %d)",
+                LOG_WARN("FlightStickHaptics", "PlayCondition - Invalid slot %d (max: %d)",
                         slot, max_effects);
                 return;
             }
@@ -234,7 +234,7 @@ int FlightStickHaptics::PlayCondition(int slot, HapticConditionType type,
             m_conditionEffects[slot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("FlightStickHaptics", "FlightStickHaptics::PlayCondition - Run failed for type %s: %s",
+                    LOG_ERROR("FlightStickHaptics", "PlayCondition - Run failed for type %s: %s",
                             ConditionTypeName(type), SDL_GetError());
                     std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                     m_activeConditions.erase(slot);

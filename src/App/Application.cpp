@@ -187,17 +187,17 @@ void Application::MigrateUserData()
         std::error_code ec;
         fs::create_directories(dst.parent_path(), ec);
         if (ec) {
-            LOG_INFO("Application", "[Migration] Could not create directory %s: %s",
+            LOG_INFO("Application", "Migration: Could not create directory %s: %s",
                     dst.parent_path().string().c_str(), ec.message().c_str());
             return false;
         }
         fs::copy_file(src, dst, fs::copy_options::skip_existing, ec);
         if (ec) {
-            LOG_INFO("Application", "[Migration] Could not copy %s → %s: %s",
+            LOG_INFO("Application", "Migration: Could not copy %s → %s: %s",
                     src.string().c_str(), dst.string().c_str(), ec.message().c_str());
             return false;
         }
-        LOG_INFO("Application", "[Migration] %s → %s", src.string().c_str(), dst.string().c_str());
+        LOG_INFO("Application", "Migration: %s → %s", src.string().c_str(), dst.string().c_str());
         return true;
     };
 
@@ -227,10 +227,10 @@ void Application::MigrateUserData()
     total += migrateDir(oldRoot / "protocols", newData / "protocols");
 
     if (total > 0)
-        LOG_INFO("Application", "[Migration] Migrated %d file(s) from legacy path %s",
+        LOG_INFO("Application", "Migration: Migrated %d file(s) from legacy path %s",
                 total, oldRoot.string().c_str());
     else
-        LOG_INFO("Application", "[Migration] Legacy path %s exists but all files already migrated.",
+        LOG_INFO("Application", "Migration: Legacy path %s exists but all files already migrated.",
                 oldRoot.string().c_str());
 #endif
 }

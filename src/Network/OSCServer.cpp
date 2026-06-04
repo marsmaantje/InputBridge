@@ -10,7 +10,6 @@
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
 #include <SDL3/SDL_timer.h>
-#include <iostream>
 #include <string>
 #include <cstdarg>
 #include <algorithm>
