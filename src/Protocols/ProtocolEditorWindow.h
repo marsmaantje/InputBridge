@@ -71,6 +71,7 @@ private:
 
     // ── Modals ───────────────────────────────────────────────────────────────
     static void DrawNewProtocolModal();
+    static void DrawDeleteProtocolModal();
     static void DrawDuplicateProtocolModal();
     static void DrawCreateFieldModal();
     static void DrawSavePresetModal();
@@ -117,6 +118,11 @@ private:
     static inline int   s_newTransport     = 0; // 0=OSC, 1=WebSocket
     static inline int   s_newDirection     = 0; // 0=Output, 1=Input
     static inline int   s_newPresetIdx     = 0; // 0=None
+
+    // Delete protocol modal state
+    static inline bool        s_showDeleteProtocolModal = false;
+    static inline std::string s_deleteProtocolId;
+    static inline std::string s_deleteProtocolName;
 
     // Duplicate protocol modal state
     static inline bool  s_showDupModal     = false;

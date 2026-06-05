@@ -733,6 +733,7 @@ void ProtocolEditorWindow::DrawContent() {
 
     // ── Modals ───────────────────────────────────────────────────────────────
     DrawNewProtocolModal();
+    DrawDeleteProtocolModal();
     DrawDuplicateProtocolModal();
     DrawCreateFieldModal();
     DrawSavePresetModal();
@@ -841,12 +842,9 @@ void ProtocolEditorWindow::DrawProtocolList() {
         // Context menu for protocol actions
         if (ImGui::BeginPopupContextItem(definition.id.c_str())) {
             if (ImGui::MenuItem("Delete")) {
-                registry.DeleteDefinition(definition.id);
-                if (s_selectedIndex >= (int)registry.GetDefinitions().size()) {
-                    s_selectedIndex = (int)registry.GetDefinitions().size() - 1;
-                }
-                ImGui::EndPopup();
-                break; // List invalidated
+                s_showDeleteProtocolModal = true;
+                s_deleteProtocolId   = definition.id;
+                s_deleteProtocolName = definition.name;
             }
 
             if (ImGui::MenuItem("Duplicate")) {
@@ -1380,6 +1378,44 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
         ImGui::SameLine();
 
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
+void ProtocolEditorWindow::DrawDeleteProtocolModal() {
+    if (s_showDeleteProtocolModal) {
+        ImGui::OpenPopup("Delete Protocol##modal");
+        s_showDeleteProtocolModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Delete Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
+
+        ImGui::Text("Are you sure you want to delete this protocol?");
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", s_deleteProtocolName.c_str());
+        ImGui::Spacing();
+        ImGui::TextDisabled("This action cannot be undone.");
+        ImGui::Separator();
+
+        if (ImGui::Button("Delete", ImVec2(120, 0))) {
+            auto& registry = ProtocolRegistry::GetInstance();
+            registry.DeleteDefinition(s_deleteProtocolId);
+            if (s_selectedIndex >= (int)registry.GetDefinitions().size())
+                s_selectedIndex = (int)registry.GetDefinitions().size() - 1;
+            s_deleteProtocolId.clear();
+            s_deleteProtocolName.clear();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            s_deleteProtocolId.clear();
+            s_deleteProtocolName.clear();
             ImGui::CloseCurrentPopup();
         }
 
