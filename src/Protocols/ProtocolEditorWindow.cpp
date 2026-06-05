@@ -675,16 +675,18 @@ void ProtocolEditorWindow::DrawContent() {
         ShowExportDialog();
     }
 
-    if (!s_undoManager.CanUndo()) ImGui::BeginDisabled();
+    const bool canUndo = s_undoManager.CanUndo();
+    if (!canUndo) ImGui::BeginDisabled();
     if (WrapButton("Undo")) s_undoManager.Undo();
-    if (!s_undoManager.CanUndo()) ImGui::EndDisabled();
-    if (ImGui::IsItemHovered() && s_undoManager.CanUndo())
+    if (!canUndo) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered() && canUndo)
         ImGui::SetTooltip("Undo: %s", s_undoManager.GetUndoDescription().c_str());
 
-    if (!s_undoManager.CanRedo()) ImGui::BeginDisabled();
+    const bool canRedo = s_undoManager.CanRedo();
+    if (!canRedo) ImGui::BeginDisabled();
     if (WrapButton("Redo")) s_undoManager.Redo();
-    if (!s_undoManager.CanRedo()) ImGui::EndDisabled();
-    if (ImGui::IsItemHovered() && s_undoManager.CanRedo())
+    if (!canRedo) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered() && canRedo)
         ImGui::SetTooltip("Redo: %s", s_undoManager.GetRedoDescription().c_str());
 
     if (WrapButton("Backups...")) s_showBackupModal = true;
