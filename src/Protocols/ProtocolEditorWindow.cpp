@@ -636,6 +636,13 @@ static bool WrapButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     return ImGui::Button(label, size);
 }
 
+// Call once at the top of any BeginPopupModal block to close it with ESC.
+static void CloseModalOnEscape() {
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
+}
+
 void ProtocolEditorWindow::DrawContent() {
     if (!s_settingsLoaded) {
         LoadSettings();
@@ -1299,6 +1306,7 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("New Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::InputText("Name", s_newName, sizeof(s_newName));
 
         const char* transports[] = {"OSC", "WebSocket"};
@@ -1387,6 +1395,7 @@ void ProtocolEditorWindow::DrawDuplicateProtocolModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Duplicate Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::InputText("New Name", s_dupName, sizeof(s_dupName));
 
         const char* transports[] = {"OSC", "WebSocket"};
@@ -1430,6 +1439,7 @@ void ProtocolEditorWindow::DrawRenameCategoryModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Rename Category##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Rename a category across all fields");
 
         // Collect existing categories
@@ -1509,6 +1519,7 @@ void ProtocolEditorWindow::DrawDeleteCategoryModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Delete Category##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::TextWrapped("Delete a category and all its fields");
         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Warning: This cannot be undone!");
 
@@ -1644,6 +1655,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
     bool open = true;
     const char* title = s_cfIsEditing ? "Edit Field##modal" : "Create/Edit Field##modal";
     if (ImGui::BeginPopupModal(title, &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         auto& registry = ProtocolRegistry::GetInstance();
 
         bool idChanged       = false;
@@ -1787,6 +1799,7 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Export Protocol##modal", &open)) {
+        CloseModalOnEscape();
 
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
@@ -1843,6 +1856,7 @@ void ProtocolEditorWindow::DrawImportProtocolModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Import Protocol##modal", &open)) {
+        CloseModalOnEscape();
 
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
@@ -1885,6 +1899,7 @@ void ProtocolEditorWindow::DrawSavePresetModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Save Preset##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Save current enabled fields as a preset");
         ImGui::InputText("Preset Name", s_presetName, sizeof(s_presetName));
 
@@ -2122,6 +2137,7 @@ void ProtocolEditorWindow::DrawLoadPresetModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Load Preset##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Apply a preset to the current protocol");
         ImGui::Separator();
 
@@ -2194,6 +2210,7 @@ void ProtocolEditorWindow::DrawMergeCategoryModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Merge Categories##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::TextWrapped("Move all fields from the source category into the target category, then remove the source.");
 
         auto categories = GetAllCategories();
@@ -2251,8 +2268,22 @@ void ProtocolEditorWindow::DrawHideCategoryModal() {
     }
 
     bool open = true;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    // Size: at least 320px wide, up to 40% of the main viewport width.
+    float vpWidth   = viewport->WorkSize.x;
+    float modalW    = std::clamp(vpWidth * 0.40f, 320.0f, 600.0f);
+
+    // Auto-center when opened or when the main window is resized.
+    static ImVec2 lastVpSize = { 0.0f, 0.0f };
+    bool vpResized = (viewport->WorkSize.x != lastVpSize.x || viewport->WorkSize.y != lastVpSize.y);
+    if (vpResized) { lastVpSize = viewport->WorkSize; }
+    ImGui::SetNextWindowPos(viewport->GetCenter(), vpResized ? ImGuiCond_Always : ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    ImGui::SetNextWindowSizeConstraints(ImVec2(modalW, 0.0f), ImVec2(modalW, FLT_MAX));
     if (ImGui::BeginPopupModal("Hide / Show Categories##modal", &open,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         auto& registry   = ProtocolRegistry::GetInstance();
         auto& definitions = registry.GetDefinitions();
         if (s_selectedIndex < 0 || s_selectedIndex >= (int)definitions.size()) {
@@ -2314,6 +2345,7 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Save Template##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Save the current protocol as a reusable template.");
         ImGui::Separator();
 
@@ -2396,6 +2428,7 @@ void ProtocolEditorWindow::DrawLoadTemplateModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(500, 340), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Load Template##modal", &open)) {
+        CloseModalOnEscape();
         // Enumerate template files
         std::string templatesDir = ProtocolRegistry::GetProtocolsDir() + "/templates";
         std::vector<std::string> templatePaths;
@@ -2506,6 +2539,7 @@ void ProtocolEditorWindow::DrawValidationResultModal() {
     // allowing AlwaysAutoResize to size the height to the wrapped text.
     ImGui::SetNextWindowSizeConstraints(ImVec2(480, 0), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::BeginPopupModal("Validation Result##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         if (s_validationIsError)
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Validation Failed");
         else
@@ -2533,6 +2567,7 @@ void ProtocolEditorWindow::DrawBackupManagerModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(400, 220), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Backup Manager##modal", &open)) {
+        CloseModalOnEscape();
         ImGui::Text("Automatic Backup System");
         ImGui::Separator();
 
