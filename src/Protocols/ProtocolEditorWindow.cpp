@@ -1114,40 +1114,56 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
-                    if (ImGui::Button("X")) {
-                        bool usedElsewhere = false;
-                        for (const auto& d : registry.GetDefinitions()) {
-                            if (d.id == def.id) continue;
-                            for (const auto& f : d.fields) {
-                                if (f.fieldId == fd.id) {
-                                    usedElsewhere = true;
-                                    break;
-                                }
-                            }
-                            if (usedElsewhere) break;
+
+                    // Pre-compute before the button so the result is also
+                    // available for the tooltip rendered after the button.
+                    bool usedElsewhere = false;
+                    for (const auto& d : registry.GetDefinitions()) {
+                        if (d.id == def.id) continue;
+                        for (const auto& f : d.fields) {
+                            if (f.fieldId == fd.id) { usedElsewhere = true; break; }
                         }
+                        if (usedElsewhere) break;
+                    }
+
+                    if (ImGui::Button("X")) {
 
                         if (usedElsewhere) {
+                            // Field is still used by other protocols so we
+                            // cannot remove it from the global catalog.
+                            // Instead: remove it from this protocol's active
+                            // field list AND add it to the per-protocol
+                            // exclusion list so it is hidden from the picker.
                             if (pf) {
-                                CreateBackupBeforeOperation("remove field '" + fd.id + "' from protocol");
+                                CreateBackupBeforeOperation("hide field '" + fd.id + "' from protocol");
                                 ProtocolField fieldCopy = *pf;
                                 std::string defId = def.id;
                                 std::string fieldId = fd.id;
                                 s_undoManager.ExecuteCommand(std::make_unique<LambdaCommand>(
-                                    "Remove field '" + fd.label + "'",
+                                    "Hide field '" + fd.label + "' from protocol",
                                     [&registry, defId, fieldId]() {
                                         if (auto* d = registry.FindById(defId)) {
                                             auto it = std::remove_if(d->fields.begin(), d->fields.end(),
                                                 [&](const ProtocolField& f) { return f.fieldId == fieldId; });
                                             if (it != d->fields.end()) {
                                                 d->fields.erase(it, d->fields.end());
-                                                registry.SaveDefinition(*d);
                                             }
+                                            // Hide from this protocol's picker.
+                                            if (std::find(d->excludedFieldIds.begin(),
+                                                          d->excludedFieldIds.end(),
+                                                          fieldId) == d->excludedFieldIds.end()) {
+                                                d->excludedFieldIds.push_back(fieldId);
+                                            }
+                                            registry.SaveDefinition(*d);
                                         }
                                     },
-                                    [&registry, defId, fieldCopy]() {
+                                    [&registry, defId, fieldId, fieldCopy]() {
                                         if (auto* d = registry.FindById(defId)) {
                                             d->fields.push_back(fieldCopy);
+                                            d->excludedFieldIds.erase(
+                                                std::remove(d->excludedFieldIds.begin(),
+                                                            d->excludedFieldIds.end(), fieldId),
+                                                d->excludedFieldIds.end());
                                             registry.SaveDefinition(*d);
                                         }
                                     }
@@ -1167,7 +1183,18 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     }
                     ImGui::PopStyleColor(3);
                     if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Delete custom field '%s'.\nIf unused by other protocols, it will be removed from the catalog.\nOtherwise, it is only removed from this protocol.", fd.label.c_str());
+                        if (usedElsewhere) {
+                            ImGui::SetTooltip(
+                                "'%s' is still used by other protocols.\n"
+                                "It will be hidden from this protocol only.\n"
+                                "To delete it entirely, remove it from all other protocols first.",
+                                fd.label.c_str());
+                        } else {
+                            ImGui::SetTooltip(
+                                "Delete custom field '%s' and remove it from the catalog.\n"
+                                "This cannot be undone once saved.",
+                                fd.label.c_str());
+                        }
                     }
                 }
 
