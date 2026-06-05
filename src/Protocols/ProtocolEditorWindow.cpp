@@ -1279,16 +1279,22 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     if (isOsc) {
                         char pathBuffer[128];
                         std::strncpy(pathBuffer, pf->oscPath.c_str(), sizeof(pathBuffer));
-                        ImGui::SetNextItemWidth(200);
-                        if (ImGui::InputText("OSC Path", pathBuffer, sizeof(pathBuffer))) {
+                        ImGui::AlignTextToFramePadding();
+                        ImGui::TextUnformatted("OSC Path:");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        if (ImGui::InputText("##oscPath", pathBuffer, sizeof(pathBuffer))) {
                             pf->oscPath = pathBuffer;
                             pendingSave = true;
                         }
                     } else {
                         char keyBuffer[128];
                         std::strncpy(keyBuffer, pf->wsKey.c_str(), sizeof(keyBuffer));
-                        ImGui::SetNextItemWidth(200);
-                        if (ImGui::InputText("WS Key", keyBuffer, sizeof(keyBuffer))) {
+                        ImGui::AlignTextToFramePadding();
+                        ImGui::TextUnformatted("WS Key:");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        if (ImGui::InputText("##wsKey", keyBuffer, sizeof(keyBuffer))) {
                             pf->wsKey = keyBuffer;
                             pendingSave = true;
                         }
@@ -1777,11 +1783,19 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         ImGui::Combo("Type", &s_cfType, types, 2);
 
         // ── OSC Path ──────────────────────────────────────────────────────
-        if (ImGui::InputText("Default OSC Path", s_cfOsc, sizeof(s_cfOsc)))
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Default OSC Path:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##cfOsc", s_cfOsc, sizeof(s_cfOsc)))
             s_cfOscManuallyModified = true;
 
         // ── WS Key ────────────────────────────────────────────────────────
-        if (ImGui::InputText("Default WS Key", s_cfWs, sizeof(s_cfWs)))
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Default WS Key:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##cfWs", s_cfWs, sizeof(s_cfWs)))
             s_cfWsManuallyModified = true;
 
         ImGui::Separator();
