@@ -31,6 +31,9 @@ ProtocolRegistry::ProtocolRegistry() {
 void ProtocolRegistry::LoadAll() {
     EnsureDirectories();
     LoadFieldCatalog();
+    // Re-save immediately so any stale entries that were blocked by the
+    // updated exists-check are purged from input_fields.json on disk.
+    SaveFieldCatalog();
     LoadPresets();
     LoadDefinitionFiles();
 }
@@ -518,10 +521,16 @@ void ProtocolRegistry::LoadFieldCatalog() {
                 fd.defaultWsKey   = item.value("wsKey",    fd.id);
                 fd.isBuiltIn      = false;
 
-                // Only add if not already present (built-ins take precedence by id)
+                // Skip if already present in either catalog — a field that
+                // belongs in m_inputFields (e.g. a built-in sensor or button)
+                // must not be duplicated into m_outputFields regardless of
+                // what was written to input_fields.json by an older code path.
                 bool exists = false;
                 for (const auto& existing : m_outputFields)
                     if (existing.id == fd.id) { exists = true; break; }
+                if (!exists)
+                    for (const auto& existing : m_inputFields)
+                        if (existing.id == fd.id) { exists = true; break; }
                 if (!exists && !fd.id.empty())
                     m_outputFields.push_back(fd);
             }
