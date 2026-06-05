@@ -76,6 +76,13 @@ void ProtocolRegistry::SaveFieldCatalog() {
     json arr = json::array();
     for (const auto& fd : m_outputFields) {
         if (fd.isBuiltIn) continue;
+        // Skip entries whose ID is already registered in the input catalog —
+        // those were misplaced by an older code path and should not be
+        // persisted regardless of which category name they carry.
+        bool duplicateInOtherCatalog = false;
+        for (const auto& other : m_inputFields)
+            if (other.id == fd.id) { duplicateInOtherCatalog = true; break; }
+        if (duplicateInOtherCatalog) continue;
         json item;
         item["id"] = fd.id;
         item["label"] = fd.label;
@@ -644,6 +651,40 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) { known = true; break; }
                     if (!known)
                         for (const auto& fd : m_inputFields) if (fd.id == f.fieldId) { known = true; break; }
+
+                    // Sanitise stale entries written by older code paths. If
+                    // the field resolves to a real descriptor in either catalog,
+                    // evict every duplicate from both catalogs so the correct
+                    // category is always shown after a restart.
+                    if (known) {
+                        const FieldDescriptor* real = nullptr;
+                        for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) { real = &fd; break; }
+                        if (!real)
+                            for (const auto& fd : m_inputFields) if (fd.id == f.fieldId) { real = &fd; break; }
+
+                        // Count total occurrences across both catalogs.
+                        int count = 0;
+                        for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) count++;
+                        for (const auto& fd : m_inputFields)  if (fd.id == f.fieldId) count++;
+
+                        if (count > 1) {
+                            // More than one entry for this ID — keep only the
+                            // first real (non-stale) one and remove the rest.
+                            bool kept = false;
+                            auto dedup = [&](std::vector<FieldDescriptor>& cat) {
+                                cat.erase(std::remove_if(cat.begin(), cat.end(),
+                                    [&](const FieldDescriptor& d) {
+                                        if (d.id != f.fieldId) return false;
+                                        if (!kept) { kept = true; return false; }
+                                        return true;
+                                    }), cat.end());
+                            };
+                            dedup(m_outputFields);
+                            dedup(m_inputFields);
+                            known = false; // fall through to re-register correctly below
+                        }
+                    }
+
                     if (!known) {
                         FieldDescriptor fd;
                         fd.id        = f.fieldId;
