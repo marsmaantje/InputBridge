@@ -1653,8 +1653,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
     };
 
     bool open = true;
-    const char* title = s_cfIsEditing ? "Edit Field##modal" : "Create/Edit Field##modal";
-    if (ImGui::BeginPopupModal(title, &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("Create/Edit Field##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
         CloseModalOnEscape();
         auto& registry = ProtocolRegistry::GetInstance();
 
