@@ -650,6 +650,12 @@ void ProtocolEditorWindow::DrawContent() {
         s_settingsLoaded = true;
     }
 
+    // ── Keyboard Shortcuts ───────────────────────────────────────────────────
+    if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Z))
+        s_undoManager.Undo();
+    if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Y) || ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiMod_Shift | ImGuiKey_Z))
+        s_undoManager.Redo();
+
     // Handle drag-and-drop of .json files onto the window
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_FILE")) {
@@ -682,20 +688,22 @@ void ProtocolEditorWindow::DrawContent() {
     if (WrapButton("Export...")) {
         ShowExportDialog();
     }
+    
+    const char* modName = ImGui::GetIO().ConfigMacOSXBehaviors ? "Cmd" : "Ctrl";
 
     const bool canUndo = s_undoManager.CanUndo();
     if (!canUndo) ImGui::BeginDisabled();
     if (WrapButton("Undo")) s_undoManager.Undo();
     if (!canUndo) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && canUndo)
-        ImGui::SetTooltip("Undo: %s", s_undoManager.GetUndoDescription().c_str());
+        ImGui::SetTooltip("Undo: %s (%s+Z)", s_undoManager.GetUndoDescription().c_str(), modName);
 
     const bool canRedo = s_undoManager.CanRedo();
     if (!canRedo) ImGui::BeginDisabled();
     if (WrapButton("Redo")) s_undoManager.Redo();
     if (!canRedo) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && canRedo)
-        ImGui::SetTooltip("Redo: %s", s_undoManager.GetRedoDescription().c_str());
+        ImGui::SetTooltip("Redo: %s (%s+Y or %s+Shift+Z)", s_undoManager.GetRedoDescription().c_str(), modName, modName);
 
     if (WrapButton("Backups...")) s_showBackupModal = true;
 
