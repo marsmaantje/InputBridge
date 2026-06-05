@@ -65,6 +65,16 @@ void ProtocolRegistry::AddOutputField(const FieldDescriptor& fd) {
     SaveFieldCatalog();
 }
 
+void ProtocolRegistry::UpdateOutputField(const std::string& originalId, const FieldDescriptor& fd) {
+    for (auto& f : m_outputFields) {
+        if (f.id == originalId) {
+            f = fd;
+            SaveFieldCatalog();
+            return;
+        }
+    }
+}
+
 void ProtocolRegistry::DeleteOutputField(const std::string& id) {
     auto it = std::remove_if(m_outputFields.begin(), m_outputFields.end(),
                              [&](const FieldDescriptor& fd) { return fd.id == id && !fd.isBuiltIn; });

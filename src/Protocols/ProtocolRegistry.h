@@ -32,6 +32,7 @@ public:
     void ReloadFieldCatalog(); // re-read input_fields.json without touching definitions
 
     void AddOutputField(const FieldDescriptor& fd);
+    void UpdateOutputField(const std::string& originalId, const FieldDescriptor& fd);
     void DeleteOutputField(const std::string& id);
     void SaveFieldCatalog();
 

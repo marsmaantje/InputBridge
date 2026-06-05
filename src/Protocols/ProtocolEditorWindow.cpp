@@ -941,13 +941,19 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
 
     // Field management buttons
     if (WrapButton("+ Create Field")) {
-        s_showCreateFieldModal = true;
-        s_cfId[0] = '\0';
-        s_cfLabel[0] = '\0';
+        s_showCreateFieldModal    = true;
+        s_cfIsEditing             = false;
+        s_cfIsDuplicate           = false;
+        s_cfId[0]                 = '\0';
+        s_cfLabel[0]              = '\0';
         std::strncpy(s_cfCategory, "Custom", sizeof(s_cfCategory));
-        s_cfType = 0;
+        s_cfType                  = 0;
         std::strncpy(s_cfOsc, "/custom/", sizeof(s_cfOsc));
-        std::strncpy(s_cfWs, "custom_", sizeof(s_cfWs));
+        std::strncpy(s_cfWs,  "custom_",  sizeof(s_cfWs));
+        s_cfIdManuallyModified    = false;
+        s_cfLabelManuallyModified = false;
+        s_cfOscManuallyModified   = false;
+        s_cfWsManuallyModified    = false;
     }
 
     if (WrapButton("Save as Preset")) {
@@ -1196,6 +1202,52 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                                 fd.label.c_str());
                         }
                     }
+
+                    // Edit button
+                    ImGui::SameLine();
+                    std::string editId = "Edit##edit_" + fd.id;
+                    if (ImGui::SmallButton(editId.c_str())) {
+                        s_showCreateFieldModal = true;
+                        s_cfIsEditing         = true;
+                        s_cfIsDuplicate       = false;
+                        std::strncpy(s_cfEditingId, fd.id.c_str(),       sizeof(s_cfEditingId));
+                        std::strncpy(s_cfId,        fd.id.c_str(),       sizeof(s_cfId));
+                        std::strncpy(s_cfLabel,     fd.label.c_str(),    sizeof(s_cfLabel));
+                        std::strncpy(s_cfCategory,  fd.category.c_str(), sizeof(s_cfCategory));
+                        std::strncpy(s_cfOsc,       fd.defaultOscPath.c_str(), sizeof(s_cfOsc));
+                        std::strncpy(s_cfWs,        fd.defaultWsKey.c_str(),   sizeof(s_cfWs));
+                        s_cfType                  = (fd.type == FieldType::DigitalButton) ? 1 : 0;
+                        s_cfIdManuallyModified    = true;  // Lock ID when editing
+                        s_cfLabelManuallyModified = true;
+                        s_cfOscManuallyModified   = true;  // Preserve existing paths
+                        s_cfWsManuallyModified    = true;
+                    }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Edit field '%s'", fd.label.c_str());
+
+                    // Duplicate button
+                    ImGui::SameLine();
+                    std::string dupId = "Dup##dup_" + fd.id;
+                    if (ImGui::SmallButton(dupId.c_str())) {
+                        s_showCreateFieldModal = true;
+                        s_cfIsEditing         = false;
+                        s_cfIsDuplicate       = true;
+                        s_cfEditingId[0]      = '\0';
+                        // Pre-fill from the source field; the user must give it a new ID.
+                        std::string newId = fd.id + "_copy";
+                        std::strncpy(s_cfId,       newId.c_str(),        sizeof(s_cfId));
+                        std::strncpy(s_cfLabel,    (fd.label + " Copy").c_str(), sizeof(s_cfLabel));
+                        std::strncpy(s_cfCategory, fd.category.c_str(),  sizeof(s_cfCategory));
+                        std::strncpy(s_cfOsc,      fd.defaultOscPath.c_str(), sizeof(s_cfOsc));
+                        std::strncpy(s_cfWs,       fd.defaultWsKey.c_str(),   sizeof(s_cfWs));
+                        s_cfType                  = (fd.type == FieldType::DigitalButton) ? 1 : 0;
+                        s_cfIdManuallyModified    = true;
+                        s_cfLabelManuallyModified = true;
+                        s_cfOscManuallyModified   = true;
+                        s_cfWsManuallyModified    = true;
+                    }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Duplicate field '%s'", fd.label.c_str());
                 }
 
                 // Show override controls if enabled
@@ -1546,141 +1598,177 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
     if (s_showCreateFieldModal) {
         ImGui::OpenPopup("Create/Edit Field##modal");
         s_showCreateFieldModal = false;
-        s_cfIdManuallyModified = false;
-        s_cfLabelManuallyModified = false;
+        // New field — clear everything when not pre-filled by edit/dup buttons.
+        if (!s_cfIsEditing && !s_cfIsDuplicate) {
+            s_cfId[0] = '\0';
+            s_cfLabel[0] = '\0';
+            std::strncpy(s_cfCategory, "Custom", sizeof(s_cfCategory));
+            s_cfType = 0;
+            std::strncpy(s_cfOsc, "/custom/", sizeof(s_cfOsc));
+            std::strncpy(s_cfWs,  "custom_",  sizeof(s_cfWs));
+            s_cfIdManuallyModified    = false;
+            s_cfLabelManuallyModified = false;
+            s_cfOscManuallyModified   = false;
+            s_cfWsManuallyModified    = false;
+        }
     }
 
-    bool open = true;
-    if (ImGui::BeginPopupModal("Create/Edit Field##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        bool idChanged = false;
+    // Helper: turn a string into a safe slug (lower-case, underscores).
+    auto slugify = [](const char* src) -> std::string {
+        std::string out;
+        for (const char* p = src; *p; ++p) {
+            char c = *p;
+            if (std::isalnum((unsigned char)c))
+                out += (char)std::tolower((unsigned char)c);
+            else if ((c == ' ' || c == '-' || c == '_') && !out.empty() && out.back() != '_')
+                out += '_';
+        }
+        // Trim trailing underscore
+        while (!out.empty() && out.back() == '_') out.pop_back();
+        return out;
+    };
 
-        if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId))) {
-            s_cfIdManuallyModified = true;
-            idChanged = true;
-            if (!s_cfLabelManuallyModified) {
-                std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
+    // Derive the OSC / WS defaults from the current category slug.
+    auto updatePathDefaults = [&]() {
+        std::string slug = slugify(s_cfCategory);
+        if (slug.empty()) slug = "custom";
+        std::string idSlug = slugify(s_cfId);
+        if (!s_cfOscManuallyModified)
+            std::snprintf(s_cfOsc, sizeof(s_cfOsc), "/%s/%s", slug.c_str(), idSlug.c_str());
+        if (!s_cfWsManuallyModified)
+            std::snprintf(s_cfWs, sizeof(s_cfWs), "%s_%s", slug.c_str(), idSlug.c_str());
+    };
+
+    bool open = true;
+    const char* title = s_cfIsEditing ? "Edit Field##modal" : "Create/Edit Field##modal";
+    if (ImGui::BeginPopupModal(title, &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        auto& registry = ProtocolRegistry::GetInstance();
+
+        bool idChanged       = false;
+        bool categoryChanged = false;
+
+        // ── ID ────────────────────────────────────────────────────────────
+        if (s_cfIsEditing) {
+            // ID is immutable when editing an existing field.
+            ImGui::BeginDisabled();
+            ImGui::InputText("ID", s_cfId, sizeof(s_cfId));
+            ImGui::EndDisabled();
+        } else {
+            if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId))) {
+                s_cfIdManuallyModified = true;
+                idChanged = true;
+                if (!s_cfLabelManuallyModified)
+                    std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
             }
         }
 
+        // ── Label ─────────────────────────────────────────────────────────
         if (ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel))) {
             s_cfLabelManuallyModified = true;
-            if (!s_cfIdManuallyModified) {
+            if (!s_cfIdManuallyModified && !s_cfIsEditing) {
                 // Auto-generate ID from label
-                std::string slug;
-                for (char* p = s_cfLabel; *p; ++p) {
-                    char c = *p;
-                    if (std::isalnum((unsigned char)c)) {
-                        slug += (char)std::tolower((unsigned char)c);
-                    } else if (c == ' ' || c == '-' || c == '_') {
-                        if (!slug.empty() && slug.back() != '_') {
-                            slug += '_';
-                        }
-                    }
-                }
-                if (slug.length() >= sizeof(s_cfId)) {
-                    slug.resize(sizeof(s_cfId) - 1);
-                }
+                std::string slug = slugify(s_cfLabel);
+                if (slug.length() >= sizeof(s_cfId)) slug.resize(sizeof(s_cfId) - 1);
                 std::strncpy(s_cfId, slug.c_str(), sizeof(s_cfId));
                 idChanged = true;
             }
         }
 
-        if (idChanged) {
-            std::snprintf(s_cfOsc, sizeof(s_cfOsc), "/custom/%s", s_cfId);
-            std::snprintf(s_cfWs, sizeof(s_cfWs), "custom_%s", s_cfId);
-        }
+        if (idChanged) updatePathDefaults();
 
-        // Collect existing categories for dropdown
+        // ── Category ──────────────────────────────────────────────────────
         std::vector<std::string> categories;
-        auto& registry = ProtocolRegistry::GetInstance();
-
-        for (const auto& field : registry.GetOutputFields()) {
-            if (std::find(categories.begin(), categories.end(), field.category) == categories.end()) {
-                categories.push_back(field.category);
-            }
-        }
-        for (const auto& field : registry.GetInputFields()) {
-            if (std::find(categories.begin(), categories.end(), field.category) == categories.end()) {
-                categories.push_back(field.category);
-            }
-        }
+        for (const auto& f : registry.GetOutputFields())
+            if (std::find(categories.begin(), categories.end(), f.category) == categories.end())
+                categories.push_back(f.category);
+        for (const auto& f : registry.GetInputFields())
+            if (std::find(categories.begin(), categories.end(), f.category) == categories.end())
+                categories.push_back(f.category);
         std::sort(categories.begin(), categories.end());
 
-        // Category input with dropdown
-        float buttonSize = ImGui::GetFrameHeight();
+        float btnSize  = ImGui::GetFrameHeight();
         float itemWidth = ImGui::CalcItemWidth();
-        ImGui::SetNextItemWidth(itemWidth - buttonSize - ImGui::GetStyle().ItemInnerSpacing.x);
-        ImGui::InputText("##Category", s_cfCategory, sizeof(s_cfCategory));
+        ImGui::SetNextItemWidth(itemWidth - btnSize - ImGui::GetStyle().ItemInnerSpacing.x);
+        char prevCat[64];
+        std::strncpy(prevCat, s_cfCategory, sizeof(prevCat));
+        if (ImGui::InputText("##Category", s_cfCategory, sizeof(s_cfCategory))) {
+            categoryChanged = true;
+        }
         ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
-        ImGui::SetNextItemWidth(buttonSize);
+        ImGui::SetNextItemWidth(btnSize);
         if (ImGui::BeginCombo("Category", nullptr, ImGuiComboFlags_NoPreview)) {
-            for (const auto& category : categories) {
-                if (ImGui::Selectable(category.c_str())) {
-                    std::strncpy(s_cfCategory, category.c_str(), sizeof(s_cfCategory));
+            for (const auto& cat : categories) {
+                if (ImGui::Selectable(cat.c_str())) {
+                    std::strncpy(s_cfCategory, cat.c_str(), sizeof(s_cfCategory));
                     s_cfCategory[sizeof(s_cfCategory) - 1] = '\0';
+                    categoryChanged = true;
                 }
             }
             ImGui::EndCombo();
         }
+        if (categoryChanged) updatePathDefaults();
 
+        // ── Type ──────────────────────────────────────────────────────────
         const char* types[] = {"Analog Axis", "Digital Button"};
         ImGui::Combo("Type", &s_cfType, types, 2);
 
-        ImGui::InputText("Default OSC Path", s_cfOsc, sizeof(s_cfOsc));
-        ImGui::InputText("Default WS Key", s_cfWs, sizeof(s_cfWs));
+        // ── OSC Path ──────────────────────────────────────────────────────
+        if (ImGui::InputText("Default OSC Path", s_cfOsc, sizeof(s_cfOsc)))
+            s_cfOscManuallyModified = true;
+
+        // ── WS Key ────────────────────────────────────────────────────────
+        if (ImGui::InputText("Default WS Key", s_cfWs, sizeof(s_cfWs)))
+            s_cfWsManuallyModified = true;
 
         ImGui::Separator();
 
-        // Check if ID already exists
+        // ── Validation ────────────────────────────────────────────────────
         bool idExists = false;
-        for (const auto& field : registry.GetOutputFields()) {
-            if (field.id == s_cfId) {
-                idExists = true;
-                break;
-            }
-        }
-        if (!idExists) {
-            for (const auto& field : registry.GetInputFields()) {
-                if (field.id == s_cfId) {
-                    idExists = true;
-                    break;
-                }
-            }
-        }
-
-        if (idExists) {
-            ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ID already exists!");
+        if (!s_cfIsEditing) {
+            for (const auto& f : registry.GetOutputFields())
+                if (f.id == s_cfId) { idExists = true; break; }
+            if (!idExists)
+                for (const auto& f : registry.GetInputFields())
+                    if (f.id == s_cfId) { idExists = true; break; }
+            if (idExists)
+                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ID already exists!");
         }
 
         bool canSave = (s_cfId[0] != '\0') && !idExists;
-        if (!canSave) {
-            ImGui::BeginDisabled();
-        }
+        if (!canSave) ImGui::BeginDisabled();
 
-        if (ImGui::Button("Save Field", ImVec2(120, 0))) {
-            if (s_cfLabel[0] == '\0') {
+        const char* saveLabel = s_cfIsEditing ? "Update Field" : "Save Field";
+        if (ImGui::Button(saveLabel, ImVec2(120, 0))) {
+            if (s_cfLabel[0] == '\0')
                 std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
-            }
 
             FieldDescriptor fd;
-            fd.id = s_cfId;
-            fd.label = s_cfLabel;
-            fd.category = s_cfCategory;
-            fd.type = (s_cfType == 1) ? FieldType::DigitalButton : FieldType::AnalogAxis;
+            fd.id             = s_cfId;
+            fd.label          = s_cfLabel;
+            fd.category       = s_cfCategory;
+            fd.type           = (s_cfType == 1) ? FieldType::DigitalButton : FieldType::AnalogAxis;
             fd.defaultOscPath = s_cfOsc;
-            fd.defaultWsKey = s_cfWs;
-            fd.isBuiltIn = false;
+            fd.defaultWsKey   = s_cfWs;
+            fd.isBuiltIn      = false;
 
-            registry.AddOutputField(fd);
+            if (s_cfIsEditing) {
+                registry.UpdateOutputField(s_cfEditingId, fd);
+            } else {
+                registry.AddOutputField(fd);
+            }
+
+            // Reset mode flags
+            s_cfIsEditing   = false;
+            s_cfIsDuplicate = false;
             ImGui::CloseCurrentPopup();
         }
 
-        if (!canSave) {
-            ImGui::EndDisabled();
-        }
+        if (!canSave) ImGui::EndDisabled();
 
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            s_cfIsEditing   = false;
+            s_cfIsDuplicate = false;
             ImGui::CloseCurrentPopup();
         }
 
