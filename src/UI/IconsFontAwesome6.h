@@ -32,7 +32,8 @@
 //  U+F188  →  \xEF\x86\x88   bug  (Debug Log)
 
 #define ICON_FA_GAMEPAD       "\xEF\x84\x9B"   // Devices
-#define ICON_FA_SLIDERS       "\xEF\x87\x9E"   // Input Mapper
+#define ICON_FA_SLIDERS       "\xEF\x87\x9E"   // Input Mapper / Analog axis
+#define ICON_FA_WAVE_SQUARE   "\xEF\xA0\xBE"   // Digital button (square wave)
 #define ICON_FA_BOLT          "\xEF\x83\xA7"   // Output Mapper
 #define ICON_FA_WIFI          "\xEF\x87\xAB"   // Network
 #define ICON_FA_FILE_CODE     "\xEF\x87\x89"   // Protocol Editor

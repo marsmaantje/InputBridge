@@ -5,6 +5,7 @@
 #include "../Core/UndoRedo.h"
 #include "../Core/BackupManager.h"
 #include "../Core/ProtocolValidator.h"
+#include "UI/IconsFontAwesome6.h"
 #include "imgui.h"
 #include <algorithm>
 #include <chrono>
@@ -1119,6 +1120,12 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     pendingSave = true;
                 }
 
+                ImGui::SameLine();
+                // Field type icon: sliders = analog axis, wave-square = digital button
+                const bool isDigital = (fd.type == FieldType::DigitalButton);
+                ImGui::TextDisabled("%s", isDigital ? ICON_FA_WAVE_SQUARE : ICON_FA_SLIDERS);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", isDigital ? "Digital Button" : "Analog Axis");
                 ImGui::SameLine();
                 ImGui::TextUnformatted(fd.label.c_str());
 
