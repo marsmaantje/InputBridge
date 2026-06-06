@@ -631,7 +631,7 @@ static bool WrapButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
                      + ImGui::GetStyle().ItemSpacing.x
                      + buttonW;
 
-    if (nextEndX <= regionRightX)
+    if (nextEndX <= regionRightX - 4.0f)
         ImGui::SameLine();
 
     return ImGui::Button(label, size);
@@ -732,7 +732,9 @@ void ProtocolEditorWindow::DrawContent() {
     if (ImGui::IsItemHovered() || ImGui::IsItemActive())
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 
-    s_splitWidth = std::clamp(s_splitWidth, 100.0f, totalWidth - splitterW - 100.0f);
+    const float minSplit = 100.0f;
+    const float maxSplit = std::max(minSplit, totalWidth - splitterW - 100.0f);
+    s_splitWidth = std::clamp(s_splitWidth, minSplit, maxSplit);
 
     ImGui::SameLine(0, 0);
 
@@ -895,7 +897,11 @@ void ProtocolEditorWindow::DrawEditor() {
 
     char nameBuffer[128];
     std::strncpy(nameBuffer, definition.name.c_str(), sizeof(nameBuffer));
-    if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer))) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Name:");
+    if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (ImGui::InputText("##Name", nameBuffer, sizeof(nameBuffer))) {
         definition.name = nameBuffer;
         needsSave = true;
     }
@@ -909,22 +915,38 @@ void ProtocolEditorWindow::DrawEditor() {
     if (definition.transport == ProtocolTransport::OSC) {
         char hostBuffer[128];
         std::strncpy(hostBuffer, definition.oscHost.c_str(), sizeof(hostBuffer));
-        if (ImGui::InputText("Host", hostBuffer, sizeof(hostBuffer))) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Host:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##Host", hostBuffer, sizeof(hostBuffer))) {
             definition.oscHost = hostBuffer;
             needsSave = true;
         }
 
         if (definition.direction == ProtocolDirection::Output) {
-            if (ImGui::InputInt("Send Port", &definition.oscSendPort)) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Send Port:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::InputInt("##SendPort", &definition.oscSendPort)) {
                 needsSave = true;
             }
         } else {
-            if (ImGui::InputInt("Receive Port", &definition.oscRecvPort)) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Receive Port:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::InputInt("##RecvPort", &definition.oscRecvPort)) {
                 needsSave = true;
             }
         }
     } else { // WebSocket
-        if (ImGui::InputInt("Port", &definition.wssPort)) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Port:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputInt("##WSPort", &definition.wssPort)) {
             needsSave = true;
         }
     }
@@ -1005,7 +1027,11 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
     }
 
     // Search filter
-    ImGui::InputText("Filter", s_fieldFilter, sizeof(s_fieldFilter));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter:");
+    if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##Filter", s_fieldFilter, sizeof(s_fieldFilter));
 
     ImGui::Separator();
     DrawFieldTable(definition, catalog, isOsc, s_fieldFilter, s_pendingSave);
@@ -1044,7 +1070,11 @@ void ProtocolEditorWindow::DrawInputFieldPicker() {
     }
 
     // Search filter
-    ImGui::InputText("Filter", s_fieldFilter, sizeof(s_fieldFilter));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter:");
+    if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##Filter", s_fieldFilter, sizeof(s_fieldFilter));
 
     ImGui::Separator();
     DrawFieldTable(definition, catalog, isOsc, s_fieldFilter, s_pendingSave);
@@ -1281,7 +1311,7 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                         std::strncpy(pathBuffer, pf->oscPath.c_str(), sizeof(pathBuffer));
                         ImGui::AlignTextToFramePadding();
                         ImGui::TextUnformatted("OSC Path:");
-                        ImGui::SameLine();
+                        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
                         ImGui::SetNextItemWidth(-FLT_MIN);
                         if (ImGui::InputText("##oscPath", pathBuffer, sizeof(pathBuffer))) {
                             pf->oscPath = pathBuffer;
@@ -1292,7 +1322,7 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                         std::strncpy(keyBuffer, pf->wsKey.c_str(), sizeof(keyBuffer));
                         ImGui::AlignTextToFramePadding();
                         ImGui::TextUnformatted("WS Key:");
-                        ImGui::SameLine();
+                        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
                         ImGui::SetNextItemWidth(-FLT_MIN);
                         if (ImGui::InputText("##wsKey", keyBuffer, sizeof(keyBuffer))) {
                             pf->wsKey = keyBuffer;
@@ -1721,10 +1751,18 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         if (s_cfIsEditing) {
             // ID is immutable when editing an existing field.
             ImGui::BeginDisabled();
-            ImGui::InputText("ID", s_cfId, sizeof(s_cfId));
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("ID:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputText("##cfId", s_cfId, sizeof(s_cfId));
             ImGui::EndDisabled();
         } else {
-            if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId))) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("ID:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::InputText("##cfId", s_cfId, sizeof(s_cfId))) {
                 s_cfIdManuallyModified = true;
                 idChanged = true;
                 if (!s_cfLabelManuallyModified)
@@ -1733,7 +1771,11 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         }
 
         // ── Label ─────────────────────────────────────────────────────────
-        if (ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel))) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Label:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##cfLabel", s_cfLabel, sizeof(s_cfLabel))) {
             s_cfLabelManuallyModified = true;
             if (!s_cfIdManuallyModified && !s_cfIsEditing) {
                 // Auto-generate ID from label
@@ -1757,16 +1799,19 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         std::sort(categories.begin(), categories.end());
 
         float btnSize  = ImGui::GetFrameHeight();
-        float itemWidth = ImGui::CalcItemWidth();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Category:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        float itemWidth = ImGui::GetContentRegionAvail().x;
         ImGui::SetNextItemWidth(itemWidth - btnSize - ImGui::GetStyle().ItemInnerSpacing.x);
         char prevCat[64];
         std::strncpy(prevCat, s_cfCategory, sizeof(prevCat));
-        if (ImGui::InputText("##Category", s_cfCategory, sizeof(s_cfCategory))) {
+        if (ImGui::InputText("##cfCategory", s_cfCategory, sizeof(s_cfCategory))) {
             categoryChanged = true;
         }
         ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
         ImGui::SetNextItemWidth(btnSize);
-        if (ImGui::BeginCombo("Category", nullptr, ImGuiComboFlags_NoPreview)) {
+        if (ImGui::BeginCombo("##cfCatList", nullptr, ImGuiComboFlags_NoPreview)) {
             for (const auto& cat : categories) {
                 if (ImGui::Selectable(cat.c_str())) {
                     std::strncpy(s_cfCategory, cat.c_str(), sizeof(s_cfCategory));
@@ -1780,12 +1825,16 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 
         // ── Type ──────────────────────────────────────────────────────────
         const char* types[] = {"Analog Axis", "Digital Button"};
-        ImGui::Combo("Type", &s_cfType, types, 2);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Type:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::Combo("##cfType", &s_cfType, types, 2);
 
         // ── OSC Path ──────────────────────────────────────────────────────
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Default OSC Path:");
-        ImGui::SameLine();
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::InputText("##cfOsc", s_cfOsc, sizeof(s_cfOsc)))
             s_cfOscManuallyModified = true;
@@ -1793,7 +1842,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         // ── WS Key ────────────────────────────────────────────────────────
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Default WS Key:");
-        ImGui::SameLine();
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::InputText("##cfWs", s_cfWs, sizeof(s_cfWs)))
             s_cfWsManuallyModified = true;
