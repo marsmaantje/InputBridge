@@ -1,8 +1,8 @@
+#include "App/Log.h"
 #include "DeviceManager.h"
 #include "DeviceFactory.h"
 #include "SensorReader.h"
 #include "SDL3/SDL_joystick.h"
-#include "SDL3/SDL_log.h"
 #include <algorithm>
 #include <cstdlib>
 
@@ -33,7 +33,7 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
 void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     auto result = InputBridge::DeviceFactory::CreateDevice(instance_id);
     if (!result) {
-        SDL_Log("Failed to create device %d", instance_id);
+        LOG_ERROR("DeviceManager", "Failed to create device %d", instance_id);
         return;
     }
     
@@ -153,7 +153,7 @@ void DeviceManager::Update(bool isMinimized) {
 
 void DeviceManager::ScanWheelRPMDevices() {
     m_WheelRPMDevices = wheel::WheelManager::scan();
-    SDL_Log("WheelRPM scan complete: %zu device(s) found",
+    LOG_INFO("DeviceManager", "WheelRPM scan complete: %zu device(s) found",
             m_WheelRPMDevices.size());
 }
 
@@ -198,11 +198,11 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
 
             if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
-                SDL_Log("Battery [%s]: State=%s (battery info not available)",
+                LOG_INFO("DeviceManager", "Battery [%s]: State=%s (battery info not available)",
                         dev.name.c_str(), state_str);
-                SDL_Log("  Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
+                LOG_INFO("DeviceManager", "Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
             } else if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
-                SDL_Log("Battery [%s]: State=%s, Percent=%d%%",
+                LOG_INFO("DeviceManager", "Battery [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
         }
@@ -237,7 +237,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
                     if (leftState != SDL_POWERSTATE_NO_BATTERY) {
                         dev.battery_state_L   = leftState;
                         dev.battery_percent_L = leftPercent;
-                        SDL_Log("Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
+                        LOG_INFO("DeviceManager", "Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
                         SDL_CloseJoystick(joy);
                         break;
                     }
@@ -275,7 +275,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
 
             if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY && dev.battery_state != SDL_POWERSTATE_UNKNOWN) {
-                SDL_Log("Battery (Joystick) [%s]: State=%s, Percent=%d%%",
+                LOG_INFO("DeviceManager", "Battery (Joystick) [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
         }
@@ -302,7 +302,7 @@ bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
                          ? dev.joystick
                          : (dev.gamepad ? SDL_GetGamepadJoystick(dev.gamepad) : nullptr);
     if (!joy) {
-        SDL_Log("DeviceManager::SetDeviceHidden: no joystick handle for '%s'.",
+        LOG_INFO("DeviceManager", "SetDeviceHidden: no joystick handle for '%s'.",
                 dev.name.c_str());
         return false;
     }
@@ -312,7 +312,7 @@ bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
     return ok;
 #else
     (void)dev; (void)hidden;
-    SDL_Log("DeviceManager::SetDeviceHidden: exclusive input support not compiled in.");
+    LOG_WARN("DeviceManager", "SetDeviceHidden: exclusive input support not compiled in.");
     return false;
 #endif
 }

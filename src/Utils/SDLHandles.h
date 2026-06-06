@@ -168,7 +168,7 @@ public:
             m_haptic.Reset(SDL_OpenHapticFromJoystick(m_joystick));
             
             if (!m_haptic) {
-                SDL_Log("Failed to open haptic: %s", SDL_GetError());
+                LOG_INFO("SDLHandles", "Failed to open haptic: %s", SDL_GetError());
                 return false;
             }
             

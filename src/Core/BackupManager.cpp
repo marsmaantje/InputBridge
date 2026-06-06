@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "BackupManager.h"
 #include <filesystem>
 #include <algorithm>
@@ -35,7 +36,7 @@ std::string BackupManager::CreateBackup(const std::string& filePath) {
 
         return backupPath.string();
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to create backup: %s\n", e.what());
+        LOG_ERROR("BackupManager", "Failed to create backup: %s", e.what());
         return "";
     }
 }
@@ -58,7 +59,7 @@ std::string BackupManager::CreateDirectoryBackup(const std::string& dirPath) {
 
         return backupPath.string();
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to create directory backup: %s\n", e.what());
+        LOG_ERROR("BackupManager", "Failed to create directory backup: %s", e.what());
         return "";
     }
 }
@@ -87,7 +88,7 @@ bool BackupManager::RestoreBackup(const std::string& backupPath,
 
         return true;
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to restore backup: %s\n", e.what());
+        LOG_ERROR("BackupManager", "Failed to restore backup: %s", e.what());
         return false;
     }
 }
@@ -133,7 +134,7 @@ std::vector<std::string> BackupManager::ListBackups(const std::string& filePath)
                      return tA > tB;
                  });
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to list backups: %s\n", e.what());
+        LOG_ERROR("BackupManager", "Failed to list backups: %s", e.what());
     }
 
     return backups;
@@ -178,7 +179,7 @@ void BackupManager::CleanupOldBackups(const std::string& filePath) {
                 allBackups.erase(allBackups.begin());
             }
         } catch (const std::exception& e) {
-            fprintf(stderr, "Failed to cleanup backups: %s\n", e.what());
+            LOG_ERROR("BackupManager", "Failed to cleanup backups: %s", e.what());
         }
     } else {
         // Cleanup backups for specific file
@@ -213,7 +214,7 @@ size_t BackupManager::GetTotalBackupSize() const {
             }
         }
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to calculate backup size: %s\n", e.what());
+        LOG_ERROR("BackupManager", "Failed to calculate backup size: %s", e.what());
     }
 
     return totalSize;
@@ -228,7 +229,7 @@ void BackupManager::ClearAllBackups() {
         fs::remove_all(m_backupDir);
         EnsureBackupDirectoryExists();
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to clear backups: %s\n", e.what());
+        LOG_ERROR("BackupManager", "Failed to clear backups: %s", e.what());
     }
 }
 
@@ -266,7 +267,7 @@ bool BackupManager::EnsureBackupDirectoryExists() {
         }
         return fs::is_directory(m_backupDir);
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to create backup directory: %s\n", e.what());
+        LOG_ERROR("BackupManager", "Failed to create backup directory: %s", e.what());
         return false;
     }
 }

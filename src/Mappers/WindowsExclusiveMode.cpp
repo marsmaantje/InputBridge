@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "WindowsExclusiveMode.h"
 
 #ifdef _WIN32
@@ -100,12 +101,12 @@ bool WindowsExclusiveMode::EnsureWhitelisted(const std::wstring &own, const std:
     }
 
     if (changed && !SetAllowList(wl)) {
-        SDL_Log("HidHide: failed to add InputBridge to the allow-list.");
+        LOG_ERROR("ExclusiveMode", "HidHide: failed to add InputBridge to the allow-list.");
         return false;
     }
 
     selfWhitelistedFlag = true;
-    SDL_Log("HidHide: InputBridge added to allow-list.");
+    LOG_INFO("ExclusiveMode", "HidHide: InputBridge added to allow-list.");
     return true;
 }
 
@@ -121,7 +122,7 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick *joystick) {
 
     auto paths = GetInstancePaths(joystick);
     if (paths.empty()) {
-        SDL_Log("HidHide: could not determine instance path for '%s'.", SDL_GetJoystickName(joystick));
+        LOG_INFO("ExclusiveMode", "HidHide: could not determine instance path for '%s'.", SDL_GetJoystickName(joystick));
         return false;
     }
 
@@ -131,7 +132,7 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick *joystick) {
         if (bl.find(p) == bl.end()) {
             bl.insert(p);
             changed = true;
-            SDL_Log("HidHide: hiding device path '%ls'.", p.c_str());
+            LOG_INFO("ExclusiveMode", "HidHide: hiding device path '%ls'.", p.c_str());
         }
     }
 
@@ -139,7 +140,7 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick *joystick) {
         return true; // already hidden
 
     if (!SetBlockList(bl)) {
-        SDL_Log("HidHide: failed to write block-list.");
+        LOG_ERROR("ExclusiveMode", "HidHide: failed to write block-list.");
         return false;
     }
 
@@ -152,7 +153,7 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick *joystick) {
         CloseHandle(h);
     }
 
-    SDL_Log("HidHide: '%s' is now hidden.", SDL_GetJoystickName(joystick));
+    LOG_INFO("ExclusiveMode", "HidHide: '%s' is now hidden.", SDL_GetJoystickName(joystick));
     return true;
 }
 
@@ -173,7 +174,7 @@ bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick *joystick) {
         if (it != bl.end()) {
             bl.erase(it);
             changed = true;
-            SDL_Log("HidHide: unhiding device path '%ls'.", p.c_str());
+            LOG_INFO("ExclusiveMode", "HidHide: unhiding device path '%ls'.", p.c_str());
         }
     }
 
@@ -181,11 +182,11 @@ bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick *joystick) {
         return true;
 
     if (!SetBlockList(bl)) {
-        SDL_Log("HidHide: failed to write block-list on unhide.");
+        LOG_ERROR("ExclusiveMode", "HidHide: failed to write block-list on unhide.");
         return false;
     }
 
-    SDL_Log("HidHide: '%s' is now visible to all applications.", SDL_GetJoystickName(joystick));
+    LOG_INFO("ExclusiveMode", "HidHide: '%s' is now visible to all applications.", SDL_GetJoystickName(joystick));
     return true;
 }
 
@@ -195,7 +196,7 @@ HANDLE WindowsExclusiveMode::OpenControlDevice() const {
     HANDLE h = CreateFileW(kHidHideDevice, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) {
         // Driver not installed — this is expected on systems without HidHide.
-        SDL_Log("HidHide: control device not found (driver not installed?).");
+        LOG_WARN("ExclusiveMode", "HidHide: control device not found (driver not installed?).");
     }
     return h;
 }
@@ -327,7 +328,7 @@ std::vector<std::wstring> WindowsExclusiveMode::GetInstancePaths(SDL_Joystick *j
 
         if (ipLow.find(prefix) == 0) {
             result.push_back(ip);
-            SDL_Log("HidHide: matched instance path '%ls'.", ip.c_str());
+            LOG_INFO("ExclusiveMode", "HidHide: matched instance path '%ls'.", ip.c_str());
         }
     }
 

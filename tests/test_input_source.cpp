@@ -33,8 +33,13 @@ static float ApplyInputSourcePostProcess(float raw,
                                           int   outputRange)
 {
     if (invert) raw = -raw;
-    if (std::abs(raw) < deadzone) raw = 0.f;
-    float r = std::clamp(raw, -1.f, 1.f);
+    float norm = raw;
+    if (std::abs(norm) < deadzone) {
+        norm = 0.f;
+    } else {
+        norm = norm > 0 ? (norm - deadzone) / (1.f - deadzone) : (norm + deadzone) / (1.f - deadzone);
+    }
+    float r = std::clamp(norm, -1.f, 1.f);
     if      (outputRange == 1) r = (r + 1.f) * 0.5f;
     else if (outputRange == 2) r = (r - 1.f) * 0.5f;
     return r;
@@ -217,12 +222,14 @@ TEST(PostProcess, DeadzoneZeroesSmallNegativeValue) {
 }
 
 TEST(PostProcess, DeadzonePassesValueAtBoundary) {
-    // Exactly at deadzone: |raw| == deadzone → NOT zeroed (condition is strict <).
-    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(0.05f, false, 0.05f, 0), 0.05f);
+    // Exactly at deadzone: |raw| == deadzone.
+    // Remap logic: (0.05 - 0.05) / (1.0 - 0.05) = 0.0.
+    // This ensures a smooth transition from 0 exactly at the threshold.
+    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(0.05f, false, 0.05f, 0), 0.0f);
 }
 
 TEST(PostProcess, DeadzonePassesValueAboveBoundary) {
-    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(0.1f, false, 0.05f, 0), 0.1f);
+    EXPECT_NEAR(ApplyInputSourcePostProcess(0.1f, false, 0.05f, 0), 0.0526316f, 0.0001f);
 }
 
 TEST(PostProcess, DeadzoneZeroSuppressesNothing) {
@@ -296,9 +303,9 @@ TEST(PostProcess, InvertWithRange2) {
     EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(-0.5f, true, 0.f, 2), -0.25f);
 }
 
-TEST(PostProcess, DeadzoneWithRange1_SmallValueIsZeroThenMapped) {
-    // raw=0.03 < deadzone=0.05 → zeroed to 0 → range1: (0+1)/2 = 0.5
-    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(0.03f, false, 0.05f, 1), 0.5f);
+TEST(PostProcess, DeadzoneWithRange1_ValueAtBoundaryIsZeroThenMapped) {
+    // raw=0.05 == deadzone=0.05 → 0 → range1: (0+1)/2 = 0.5
+    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(0.05f, false, 0.05f, 1), 0.5f);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

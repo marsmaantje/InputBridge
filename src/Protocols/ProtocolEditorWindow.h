@@ -71,6 +71,7 @@ private:
 
     // ── Modals ───────────────────────────────────────────────────────────────
     static void DrawNewProtocolModal();
+    static void DrawDeleteProtocolModal();
     static void DrawDuplicateProtocolModal();
     static void DrawCreateFieldModal();
     static void DrawSavePresetModal();
@@ -79,6 +80,7 @@ private:
     static void DrawRenameCategoryModal();
     static void DrawDeleteCategoryModal();
     static void DrawMergeCategoryModal();
+    static void DrawHideCategoryModal();
     static void DrawSaveTemplateModal();
     static void DrawLoadPresetModal();
     static void DrawLoadTemplateModal();
@@ -117,6 +119,11 @@ private:
     static inline int   s_newDirection     = 0; // 0=Output, 1=Input
     static inline int   s_newPresetIdx     = 0; // 0=None
 
+    // Delete protocol modal state
+    static inline bool        s_showDeleteProtocolModal = false;
+    static inline std::string s_deleteProtocolId;
+    static inline std::string s_deleteProtocolName;
+
     // Duplicate protocol modal state
     static inline bool  s_showDupModal     = false;
     static inline char  s_dupName[128]     = "";
@@ -133,6 +140,15 @@ private:
     static inline char  s_cfWs[128] = "custom_";
     static inline bool  s_cfIdManuallyModified = false;
     static inline bool  s_cfLabelManuallyModified = false;
+    // Editing vs creating
+    static inline bool  s_cfIsEditing = false;       // true when opened from an existing field
+    static inline char  s_cfEditingId[64] = "";      // original ID so we can look up & update
+    // OSC/WS override tracking — if the user has typed a custom value,
+    // label/category changes should not overwrite it.
+    static inline bool  s_cfOscManuallyModified = false;
+    static inline bool  s_cfWsManuallyModified  = false;
+    // Duplicate — set before opening the modal to pre-fill from an existing field
+    static inline bool  s_cfIsDuplicate = false;
 
     // Rename category modal state
     static inline bool  s_showRenameCatModal = false;
@@ -147,6 +163,9 @@ private:
     static inline bool  s_showMergeCatModal = false;
     static inline char  s_mergeSrcCat[64]   = "";
     static inline char  s_mergeTgtCat[64]   = "";
+
+    // Hide / show categories per-protocol modal state
+    static inline bool  s_showHideCatModal  = false;
 
     // Validation result modal state
     static inline bool        s_showValidationModal = false;

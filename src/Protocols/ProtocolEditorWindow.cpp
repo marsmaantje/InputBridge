@@ -1,9 +1,11 @@
+#include "App/Log.h"
 #include "ProtocolEditorWindow.h"
 #include "ProtocolRegistry.h"
 #include "ProtocolDefinition.h"
 #include "../Core/UndoRedo.h"
 #include "../Core/BackupManager.h"
 #include "../Core/ProtocolValidator.h"
+#include "UI/IconsFontAwesome6.h"
 #include "imgui.h"
 #include <algorithm>
 #include <chrono>
@@ -97,7 +99,7 @@ void ProtocolEditorWindow::LoadSettings() {
         }
     } catch (const std::exception& e) {
         // Silently ignore settings load errors
-        fprintf(stderr, "Failed to load protocol editor settings: %s\n", e.what());
+        LOG_ERROR("ProtocolEditor", "Failed to load protocol editor settings: %s", e.what());
     }
 }
 
@@ -110,7 +112,7 @@ void ProtocolEditorWindow::SaveSettings() {
         std::ofstream outputFile(SETTINGS_FILE);
         outputFile << settingsJson.dump(4);
     } catch (const std::exception& e) {
-        fprintf(stderr, "Failed to save protocol editor settings: %s\n", e.what());
+        LOG_ERROR("ProtocolEditor", "Failed to save protocol editor settings: %s", e.what());
     }
 }
 
@@ -444,6 +446,13 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
             bool isFile = de.is_regular_file();
             if (!isDir && !isFile) continue;
 
+            // Only show folders and compatible protocol files (.json).
+            if (isFile) {
+                std::string ext = de.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext != ".json") continue;
+            }
+
             // Apply search filter
             if (s_fbSearch[0] != '\0') {
                 std::string lname = fname, lsearch = s_fbSearch;
@@ -622,10 +631,17 @@ static bool WrapButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
                      + ImGui::GetStyle().ItemSpacing.x
                      + buttonW;
 
-    if (nextEndX <= regionRightX)
+    if (nextEndX <= regionRightX - 4.0f)
         ImGui::SameLine();
 
     return ImGui::Button(label, size);
+}
+
+// Call once at the top of any BeginPopupModal block to close it with ESC.
+static void CloseModalOnEscape() {
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
 }
 
 void ProtocolEditorWindow::DrawContent() {
@@ -633,6 +649,12 @@ void ProtocolEditorWindow::DrawContent() {
         LoadSettings();
         s_settingsLoaded = true;
     }
+
+    // ── Keyboard Shortcuts ───────────────────────────────────────────────────
+    if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Z))
+        s_undoManager.Undo();
+    if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Y) || ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiMod_Shift | ImGuiKey_Z))
+        s_undoManager.Redo();
 
     // Handle drag-and-drop of .json files onto the window
     if (ImGui::BeginDragDropTarget()) {
@@ -666,18 +688,22 @@ void ProtocolEditorWindow::DrawContent() {
     if (WrapButton("Export...")) {
         ShowExportDialog();
     }
+    
+    const char* modName = ImGui::GetIO().ConfigMacOSXBehaviors ? "Cmd" : "Ctrl";
 
-    if (!s_undoManager.CanUndo()) ImGui::BeginDisabled();
+    const bool canUndo = s_undoManager.CanUndo();
+    if (!canUndo) ImGui::BeginDisabled();
     if (WrapButton("Undo")) s_undoManager.Undo();
-    if (!s_undoManager.CanUndo()) ImGui::EndDisabled();
-    if (ImGui::IsItemHovered() && s_undoManager.CanUndo())
-        ImGui::SetTooltip("Undo: %s", s_undoManager.GetUndoDescription().c_str());
+    if (!canUndo) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered() && canUndo)
+        ImGui::SetTooltip("Undo: %s (%s+Z)", s_undoManager.GetUndoDescription().c_str(), modName);
 
-    if (!s_undoManager.CanRedo()) ImGui::BeginDisabled();
+    const bool canRedo = s_undoManager.CanRedo();
+    if (!canRedo) ImGui::BeginDisabled();
     if (WrapButton("Redo")) s_undoManager.Redo();
-    if (!s_undoManager.CanRedo()) ImGui::EndDisabled();
-    if (ImGui::IsItemHovered() && s_undoManager.CanRedo())
-        ImGui::SetTooltip("Redo: %s", s_undoManager.GetRedoDescription().c_str());
+    if (!canRedo) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered() && canRedo)
+        ImGui::SetTooltip("Redo: %s (%s+Y or %s+Shift+Z)", s_undoManager.GetRedoDescription().c_str(), modName, modName);
 
     if (WrapButton("Backups...")) s_showBackupModal = true;
 
@@ -706,7 +732,9 @@ void ProtocolEditorWindow::DrawContent() {
     if (ImGui::IsItemHovered() || ImGui::IsItemActive())
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 
-    s_splitWidth = std::clamp(s_splitWidth, 100.0f, totalWidth - splitterW - 100.0f);
+    const float minSplit = 100.0f;
+    const float maxSplit = std::max(minSplit, totalWidth - splitterW - 100.0f);
+    s_splitWidth = std::clamp(s_splitWidth, minSplit, maxSplit);
 
     ImGui::SameLine(0, 0);
 
@@ -716,6 +744,7 @@ void ProtocolEditorWindow::DrawContent() {
 
     // ── Modals ───────────────────────────────────────────────────────────────
     DrawNewProtocolModal();
+    DrawDeleteProtocolModal();
     DrawDuplicateProtocolModal();
     DrawCreateFieldModal();
     DrawSavePresetModal();
@@ -725,6 +754,7 @@ void ProtocolEditorWindow::DrawContent() {
     DrawRenameCategoryModal();
     DrawDeleteCategoryModal();
     DrawMergeCategoryModal();
+    DrawHideCategoryModal();
     DrawSaveTemplateModal();
     DrawLoadTemplateModal();
     DrawValidationResultModal();
@@ -777,7 +807,7 @@ void ProtocolEditorWindow::HandleDroppedFile(const std::string& filePath) {
     }
 
     if (ValidateAndImportProtocol(filePath)) {
-        printf("Successfully imported protocol via drag-and-drop: %s\n", filePath.c_str());
+        LOG_INFO("ProtocolEditor", "Successfully imported protocol via drag-and-drop: %s", filePath.c_str());
     }
 }
 
@@ -823,12 +853,9 @@ void ProtocolEditorWindow::DrawProtocolList() {
         // Context menu for protocol actions
         if (ImGui::BeginPopupContextItem(definition.id.c_str())) {
             if (ImGui::MenuItem("Delete")) {
-                registry.DeleteDefinition(definition.id);
-                if (s_selectedIndex >= (int)registry.GetDefinitions().size()) {
-                    s_selectedIndex = (int)registry.GetDefinitions().size() - 1;
-                }
-                ImGui::EndPopup();
-                break; // List invalidated
+                s_showDeleteProtocolModal = true;
+                s_deleteProtocolId   = definition.id;
+                s_deleteProtocolName = definition.name;
             }
 
             if (ImGui::MenuItem("Duplicate")) {
@@ -870,7 +897,11 @@ void ProtocolEditorWindow::DrawEditor() {
 
     char nameBuffer[128];
     std::strncpy(nameBuffer, definition.name.c_str(), sizeof(nameBuffer));
-    if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer))) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Name:");
+    if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (ImGui::InputText("##Name", nameBuffer, sizeof(nameBuffer))) {
         definition.name = nameBuffer;
         needsSave = true;
     }
@@ -884,22 +915,38 @@ void ProtocolEditorWindow::DrawEditor() {
     if (definition.transport == ProtocolTransport::OSC) {
         char hostBuffer[128];
         std::strncpy(hostBuffer, definition.oscHost.c_str(), sizeof(hostBuffer));
-        if (ImGui::InputText("Host", hostBuffer, sizeof(hostBuffer))) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Host:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##Host", hostBuffer, sizeof(hostBuffer))) {
             definition.oscHost = hostBuffer;
             needsSave = true;
         }
 
         if (definition.direction == ProtocolDirection::Output) {
-            if (ImGui::InputInt("Send Port", &definition.oscSendPort)) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Send Port:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::InputInt("##SendPort", &definition.oscSendPort)) {
                 needsSave = true;
             }
         } else {
-            if (ImGui::InputInt("Receive Port", &definition.oscRecvPort)) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Receive Port:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::InputInt("##RecvPort", &definition.oscRecvPort)) {
                 needsSave = true;
             }
         }
     } else { // WebSocket
-        if (ImGui::InputInt("Port", &definition.wssPort)) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Port:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputInt("##WSPort", &definition.wssPort)) {
             needsSave = true;
         }
     }
@@ -932,13 +979,19 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
 
     // Field management buttons
     if (WrapButton("+ Create Field")) {
-        s_showCreateFieldModal = true;
-        s_cfId[0] = '\0';
-        s_cfLabel[0] = '\0';
+        s_showCreateFieldModal    = true;
+        s_cfIsEditing             = false;
+        s_cfIsDuplicate           = false;
+        s_cfId[0]                 = '\0';
+        s_cfLabel[0]              = '\0';
         std::strncpy(s_cfCategory, "Custom", sizeof(s_cfCategory));
-        s_cfType = 0;
+        s_cfType                  = 0;
         std::strncpy(s_cfOsc, "/custom/", sizeof(s_cfOsc));
-        std::strncpy(s_cfWs, "custom_", sizeof(s_cfWs));
+        std::strncpy(s_cfWs,  "custom_",  sizeof(s_cfWs));
+        s_cfIdManuallyModified    = false;
+        s_cfLabelManuallyModified = false;
+        s_cfOscManuallyModified   = false;
+        s_cfWsManuallyModified    = false;
     }
 
     if (WrapButton("Save as Preset")) {
@@ -963,6 +1016,10 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
         s_mergeTgtCat[0] = '\0';
     }
 
+    if (WrapButton("Hide / Show Categories")) {
+        s_showHideCatModal = true;
+    }
+
     if (WrapButton("Save as Template")) {
         s_showSaveTemplateModal = true;
         std::strncpy(s_templateName, "New Template", sizeof(s_templateName));
@@ -970,7 +1027,11 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
     }
 
     // Search filter
-    ImGui::InputText("Filter", s_fieldFilter, sizeof(s_fieldFilter));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter:");
+    if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##Filter", s_fieldFilter, sizeof(s_fieldFilter));
 
     ImGui::Separator();
     DrawFieldTable(definition, catalog, isOsc, s_fieldFilter, s_pendingSave);
@@ -1004,8 +1065,16 @@ void ProtocolEditorWindow::DrawInputFieldPicker() {
         s_mergeTgtCat[0] = '\0';
     }
 
+    if (WrapButton("Hide / Show Categories")) {
+        s_showHideCatModal = true;
+    }
+
     // Search filter
-    ImGui::InputText("Filter", s_fieldFilter, sizeof(s_fieldFilter));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter:");
+    if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##Filter", s_fieldFilter, sizeof(s_fieldFilter));
 
     ImGui::Separator();
     DrawFieldTable(definition, catalog, isOsc, s_fieldFilter, s_pendingSave);
@@ -1034,12 +1103,21 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
     bool fieldDeleted = false;
     for (const auto& category : categories) {
         if (fieldDeleted) break;
-        // Count fields in this category that match filter
+
+        // Skip entire categories hidden for this protocol.
+        bool catExcluded = std::find(def.excludedCategories.begin(),
+                                     def.excludedCategories.end(),
+                                     category) != def.excludedCategories.end();
+        if (catExcluded) continue;
+
+        // Count fields in this category that match filter (and are not individually hidden).
         int matchCount = 0;
         for (const auto& fd : catalog) {
-            if (fd.category == category && MatchesFilter(fd, filter)) {
-                matchCount++;
-            }
+            if (fd.category != category || !MatchesFilter(fd, filter)) continue;
+            bool fieldExcluded = std::find(def.excludedFieldIds.begin(),
+                                           def.excludedFieldIds.end(),
+                                           fd.id) != def.excludedFieldIds.end();
+            if (!fieldExcluded) matchCount++;
         }
 
         if (matchCount == 0) {
@@ -1049,6 +1127,12 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
         if (ImGui::TreeNode(category.c_str())) {
             for (const auto& fd : catalog) {
                 if (fd.category != category || !MatchesFilter(fd, filter)) {
+                    continue;
+                }
+                // Skip fields hidden for this specific protocol.
+                if (std::find(def.excludedFieldIds.begin(),
+                              def.excludedFieldIds.end(),
+                              fd.id) != def.excludedFieldIds.end()) {
                     continue;
                 }
 
@@ -1075,6 +1159,12 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                 }
 
                 ImGui::SameLine();
+                // Field type icon: sliders = analog axis, wave-square = digital button
+                const bool isDigital = (fd.type == FieldType::DigitalButton);
+                ImGui::TextDisabled("%s", isDigital ? ICON_FA_WAVE_SQUARE : ICON_FA_SLIDERS);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", isDigital ? "Digital Button" : "Analog Axis");
+                ImGui::SameLine();
                 ImGui::TextUnformatted(fd.label.c_str());
 
                 if (!fd.isBuiltIn) {
@@ -1082,40 +1172,56 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
-                    if (ImGui::Button("X")) {
-                        bool usedElsewhere = false;
-                        for (const auto& d : registry.GetDefinitions()) {
-                            if (d.id == def.id) continue;
-                            for (const auto& f : d.fields) {
-                                if (f.fieldId == fd.id) {
-                                    usedElsewhere = true;
-                                    break;
-                                }
-                            }
-                            if (usedElsewhere) break;
+
+                    // Pre-compute before the button so the result is also
+                    // available for the tooltip rendered after the button.
+                    bool usedElsewhere = false;
+                    for (const auto& d : registry.GetDefinitions()) {
+                        if (d.id == def.id) continue;
+                        for (const auto& f : d.fields) {
+                            if (f.fieldId == fd.id) { usedElsewhere = true; break; }
                         }
+                        if (usedElsewhere) break;
+                    }
+
+                    if (ImGui::Button("X")) {
 
                         if (usedElsewhere) {
+                            // Field is still used by other protocols so we
+                            // cannot remove it from the global catalog.
+                            // Instead: remove it from this protocol's active
+                            // field list AND add it to the per-protocol
+                            // exclusion list so it is hidden from the picker.
                             if (pf) {
-                                CreateBackupBeforeOperation("remove field '" + fd.id + "' from protocol");
+                                CreateBackupBeforeOperation("hide field '" + fd.id + "' from protocol");
                                 ProtocolField fieldCopy = *pf;
                                 std::string defId = def.id;
                                 std::string fieldId = fd.id;
                                 s_undoManager.ExecuteCommand(std::make_unique<LambdaCommand>(
-                                    "Remove field '" + fd.label + "'",
+                                    "Hide field '" + fd.label + "' from protocol",
                                     [&registry, defId, fieldId]() {
                                         if (auto* d = registry.FindById(defId)) {
                                             auto it = std::remove_if(d->fields.begin(), d->fields.end(),
                                                 [&](const ProtocolField& f) { return f.fieldId == fieldId; });
                                             if (it != d->fields.end()) {
                                                 d->fields.erase(it, d->fields.end());
-                                                registry.SaveDefinition(*d);
                                             }
+                                            // Hide from this protocol's picker.
+                                            if (std::find(d->excludedFieldIds.begin(),
+                                                          d->excludedFieldIds.end(),
+                                                          fieldId) == d->excludedFieldIds.end()) {
+                                                d->excludedFieldIds.push_back(fieldId);
+                                            }
+                                            registry.SaveDefinition(*d);
                                         }
                                     },
-                                    [&registry, defId, fieldCopy]() {
+                                    [&registry, defId, fieldId, fieldCopy]() {
                                         if (auto* d = registry.FindById(defId)) {
                                             d->fields.push_back(fieldCopy);
+                                            d->excludedFieldIds.erase(
+                                                std::remove(d->excludedFieldIds.begin(),
+                                                            d->excludedFieldIds.end(), fieldId),
+                                                d->excludedFieldIds.end());
                                             registry.SaveDefinition(*d);
                                         }
                                     }
@@ -1135,8 +1241,65 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     }
                     ImGui::PopStyleColor(3);
                     if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Delete custom field '%s'.\nIf unused by other protocols, it will be removed from the catalog.\nOtherwise, it is only removed from this protocol.", fd.label.c_str());
+                        if (usedElsewhere) {
+                            ImGui::SetTooltip(
+                                "'%s' is still used by other protocols.\n"
+                                "It will be hidden from this protocol only.\n"
+                                "To delete it entirely, remove it from all other protocols first.",
+                                fd.label.c_str());
+                        } else {
+                            ImGui::SetTooltip(
+                                "Delete custom field '%s' and remove it from the catalog.\n"
+                                "This cannot be undone once saved.",
+                                fd.label.c_str());
+                        }
                     }
+
+                    // Edit button
+                    ImGui::SameLine();
+                    std::string editId = "Edit##edit_" + fd.id;
+                    if (ImGui::SmallButton(editId.c_str())) {
+                        s_showCreateFieldModal = true;
+                        s_cfIsEditing         = true;
+                        s_cfIsDuplicate       = false;
+                        std::strncpy(s_cfEditingId, fd.id.c_str(),       sizeof(s_cfEditingId));
+                        std::strncpy(s_cfId,        fd.id.c_str(),       sizeof(s_cfId));
+                        std::strncpy(s_cfLabel,     fd.label.c_str(),    sizeof(s_cfLabel));
+                        std::strncpy(s_cfCategory,  fd.category.c_str(), sizeof(s_cfCategory));
+                        std::strncpy(s_cfOsc,       fd.defaultOscPath.c_str(), sizeof(s_cfOsc));
+                        std::strncpy(s_cfWs,        fd.defaultWsKey.c_str(),   sizeof(s_cfWs));
+                        s_cfType                  = (fd.type == FieldType::DigitalButton) ? 1 : 0;
+                        s_cfIdManuallyModified    = true;  // Lock ID when editing
+                        s_cfLabelManuallyModified = true;
+                        s_cfOscManuallyModified   = true;  // Preserve existing paths
+                        s_cfWsManuallyModified    = true;
+                    }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Edit field '%s'", fd.label.c_str());
+
+                    // Duplicate button
+                    ImGui::SameLine();
+                    std::string dupId = "Dup##dup_" + fd.id;
+                    if (ImGui::SmallButton(dupId.c_str())) {
+                        s_showCreateFieldModal = true;
+                        s_cfIsEditing         = false;
+                        s_cfIsDuplicate       = true;
+                        s_cfEditingId[0]      = '\0';
+                        // Pre-fill from the source field; the user must give it a new ID.
+                        std::string newId = fd.id + "_copy";
+                        std::strncpy(s_cfId,       newId.c_str(),        sizeof(s_cfId));
+                        std::strncpy(s_cfLabel,    (fd.label + " Copy").c_str(), sizeof(s_cfLabel));
+                        std::strncpy(s_cfCategory, fd.category.c_str(),  sizeof(s_cfCategory));
+                        std::strncpy(s_cfOsc,      fd.defaultOscPath.c_str(), sizeof(s_cfOsc));
+                        std::strncpy(s_cfWs,       fd.defaultWsKey.c_str(),   sizeof(s_cfWs));
+                        s_cfType                  = (fd.type == FieldType::DigitalButton) ? 1 : 0;
+                        s_cfIdManuallyModified    = true;
+                        s_cfLabelManuallyModified = true;
+                        s_cfOscManuallyModified   = true;
+                        s_cfWsManuallyModified    = true;
+                    }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Duplicate field '%s'", fd.label.c_str());
                 }
 
                 // Show override controls if enabled
@@ -1146,16 +1309,22 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                     if (isOsc) {
                         char pathBuffer[128];
                         std::strncpy(pathBuffer, pf->oscPath.c_str(), sizeof(pathBuffer));
-                        ImGui::SetNextItemWidth(200);
-                        if (ImGui::InputText("OSC Path", pathBuffer, sizeof(pathBuffer))) {
+                        ImGui::AlignTextToFramePadding();
+                        ImGui::TextUnformatted("OSC Path:");
+                        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        if (ImGui::InputText("##oscPath", pathBuffer, sizeof(pathBuffer))) {
                             pf->oscPath = pathBuffer;
                             pendingSave = true;
                         }
                     } else {
                         char keyBuffer[128];
                         std::strncpy(keyBuffer, pf->wsKey.c_str(), sizeof(keyBuffer));
-                        ImGui::SetNextItemWidth(200);
-                        if (ImGui::InputText("WS Key", keyBuffer, sizeof(keyBuffer))) {
+                        ImGui::AlignTextToFramePadding();
+                        ImGui::TextUnformatted("WS Key:");
+                        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        if (ImGui::InputText("##wsKey", keyBuffer, sizeof(keyBuffer))) {
                             pf->wsKey = keyBuffer;
                             pendingSave = true;
                         }
@@ -1186,6 +1355,7 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("New Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::InputText("Name", s_newName, sizeof(s_newName));
 
         const char* transports[] = {"OSC", "WebSocket"};
@@ -1266,6 +1436,44 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
     }
 }
 
+void ProtocolEditorWindow::DrawDeleteProtocolModal() {
+    if (s_showDeleteProtocolModal) {
+        ImGui::OpenPopup("Delete Protocol##modal");
+        s_showDeleteProtocolModal = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("Delete Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
+
+        ImGui::Text("Are you sure you want to delete this protocol?");
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", s_deleteProtocolName.c_str());
+        ImGui::Spacing();
+        ImGui::TextDisabled("This action cannot be undone.");
+        ImGui::Separator();
+
+        if (ImGui::Button("Delete", ImVec2(120, 0))) {
+            auto& registry = ProtocolRegistry::GetInstance();
+            registry.DeleteDefinition(s_deleteProtocolId);
+            if (s_selectedIndex >= (int)registry.GetDefinitions().size())
+                s_selectedIndex = (int)registry.GetDefinitions().size() - 1;
+            s_deleteProtocolId.clear();
+            s_deleteProtocolName.clear();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            s_deleteProtocolId.clear();
+            s_deleteProtocolName.clear();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
 void ProtocolEditorWindow::DrawDuplicateProtocolModal() {
     if (s_showDupModal) {
         ImGui::OpenPopup("Duplicate Protocol##modal");
@@ -1274,6 +1482,7 @@ void ProtocolEditorWindow::DrawDuplicateProtocolModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Duplicate Protocol##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::InputText("New Name", s_dupName, sizeof(s_dupName));
 
         const char* transports[] = {"OSC", "WebSocket"};
@@ -1317,6 +1526,7 @@ void ProtocolEditorWindow::DrawRenameCategoryModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Rename Category##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Rename a category across all fields");
 
         // Collect existing categories
@@ -1396,6 +1606,7 @@ void ProtocolEditorWindow::DrawDeleteCategoryModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Delete Category##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::TextWrapped("Delete a category and all its fields");
         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Warning: This cannot be undone!");
 
@@ -1487,141 +1698,204 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
     if (s_showCreateFieldModal) {
         ImGui::OpenPopup("Create/Edit Field##modal");
         s_showCreateFieldModal = false;
-        s_cfIdManuallyModified = false;
-        s_cfLabelManuallyModified = false;
+        // New field — clear everything when not pre-filled by edit/dup buttons.
+        if (!s_cfIsEditing && !s_cfIsDuplicate) {
+            s_cfId[0] = '\0';
+            s_cfLabel[0] = '\0';
+            std::strncpy(s_cfCategory, "Custom", sizeof(s_cfCategory));
+            s_cfType = 0;
+            std::strncpy(s_cfOsc, "/custom/", sizeof(s_cfOsc));
+            std::strncpy(s_cfWs,  "custom_",  sizeof(s_cfWs));
+            s_cfIdManuallyModified    = false;
+            s_cfLabelManuallyModified = false;
+            s_cfOscManuallyModified   = false;
+            s_cfWsManuallyModified    = false;
+        }
     }
+
+    // Helper: turn a string into a safe slug (lower-case, underscores).
+    auto slugify = [](const char* src) -> std::string {
+        std::string out;
+        for (const char* p = src; *p; ++p) {
+            char c = *p;
+            if (std::isalnum((unsigned char)c))
+                out += (char)std::tolower((unsigned char)c);
+            else if ((c == ' ' || c == '-' || c == '_') && !out.empty() && out.back() != '_')
+                out += '_';
+        }
+        // Trim trailing underscore
+        while (!out.empty() && out.back() == '_') out.pop_back();
+        return out;
+    };
+
+    // Derive the OSC / WS defaults from the current category slug.
+    auto updatePathDefaults = [&]() {
+        std::string slug = slugify(s_cfCategory);
+        if (slug.empty()) slug = "custom";
+        std::string idSlug = slugify(s_cfId);
+        if (!s_cfOscManuallyModified)
+            std::snprintf(s_cfOsc, sizeof(s_cfOsc), "/%s/%s", slug.c_str(), idSlug.c_str());
+        if (!s_cfWsManuallyModified)
+            std::snprintf(s_cfWs, sizeof(s_cfWs), "%s_%s", slug.c_str(), idSlug.c_str());
+    };
 
     bool open = true;
     if (ImGui::BeginPopupModal("Create/Edit Field##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        bool idChanged = false;
+        CloseModalOnEscape();
+        auto& registry = ProtocolRegistry::GetInstance();
 
-        if (ImGui::InputText("ID", s_cfId, sizeof(s_cfId))) {
-            s_cfIdManuallyModified = true;
-            idChanged = true;
-            if (!s_cfLabelManuallyModified) {
-                std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
+        bool idChanged       = false;
+        bool categoryChanged = false;
+
+        // ── ID ────────────────────────────────────────────────────────────
+        if (s_cfIsEditing) {
+            // ID is immutable when editing an existing field.
+            ImGui::BeginDisabled();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("ID:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputText("##cfId", s_cfId, sizeof(s_cfId));
+            ImGui::EndDisabled();
+        } else {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("ID:");
+            if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::InputText("##cfId", s_cfId, sizeof(s_cfId))) {
+                s_cfIdManuallyModified = true;
+                idChanged = true;
+                if (!s_cfLabelManuallyModified)
+                    std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
             }
         }
 
-        if (ImGui::InputText("Label", s_cfLabel, sizeof(s_cfLabel))) {
+        // ── Label ─────────────────────────────────────────────────────────
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Label:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##cfLabel", s_cfLabel, sizeof(s_cfLabel))) {
             s_cfLabelManuallyModified = true;
-            if (!s_cfIdManuallyModified) {
+            if (!s_cfIdManuallyModified && !s_cfIsEditing) {
                 // Auto-generate ID from label
-                std::string slug;
-                for (char* p = s_cfLabel; *p; ++p) {
-                    char c = *p;
-                    if (std::isalnum((unsigned char)c)) {
-                        slug += (char)std::tolower((unsigned char)c);
-                    } else if (c == ' ' || c == '-' || c == '_') {
-                        if (!slug.empty() && slug.back() != '_') {
-                            slug += '_';
-                        }
-                    }
-                }
-                if (slug.length() >= sizeof(s_cfId)) {
-                    slug.resize(sizeof(s_cfId) - 1);
-                }
+                std::string slug = slugify(s_cfLabel);
+                if (slug.length() >= sizeof(s_cfId)) slug.resize(sizeof(s_cfId) - 1);
                 std::strncpy(s_cfId, slug.c_str(), sizeof(s_cfId));
                 idChanged = true;
             }
         }
 
-        if (idChanged) {
-            std::snprintf(s_cfOsc, sizeof(s_cfOsc), "/custom/%s", s_cfId);
-            std::snprintf(s_cfWs, sizeof(s_cfWs), "custom_%s", s_cfId);
-        }
+        if (idChanged) updatePathDefaults();
 
-        // Collect existing categories for dropdown
+        // ── Category ──────────────────────────────────────────────────────
         std::vector<std::string> categories;
-        auto& registry = ProtocolRegistry::GetInstance();
-
-        for (const auto& field : registry.GetOutputFields()) {
-            if (std::find(categories.begin(), categories.end(), field.category) == categories.end()) {
-                categories.push_back(field.category);
-            }
-        }
-        for (const auto& field : registry.GetInputFields()) {
-            if (std::find(categories.begin(), categories.end(), field.category) == categories.end()) {
-                categories.push_back(field.category);
-            }
-        }
+        for (const auto& f : registry.GetOutputFields())
+            if (std::find(categories.begin(), categories.end(), f.category) == categories.end())
+                categories.push_back(f.category);
+        for (const auto& f : registry.GetInputFields())
+            if (std::find(categories.begin(), categories.end(), f.category) == categories.end())
+                categories.push_back(f.category);
         std::sort(categories.begin(), categories.end());
 
-        // Category input with dropdown
-        float buttonSize = ImGui::GetFrameHeight();
-        float itemWidth = ImGui::CalcItemWidth();
-        ImGui::SetNextItemWidth(itemWidth - buttonSize - ImGui::GetStyle().ItemInnerSpacing.x);
-        ImGui::InputText("##Category", s_cfCategory, sizeof(s_cfCategory));
+        float btnSize  = ImGui::GetFrameHeight();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Category:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        float itemWidth = ImGui::GetContentRegionAvail().x;
+        ImGui::SetNextItemWidth(itemWidth - btnSize - ImGui::GetStyle().ItemInnerSpacing.x);
+        char prevCat[64];
+        std::strncpy(prevCat, s_cfCategory, sizeof(prevCat));
+        if (ImGui::InputText("##cfCategory", s_cfCategory, sizeof(s_cfCategory))) {
+            categoryChanged = true;
+        }
         ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
-        ImGui::SetNextItemWidth(buttonSize);
-        if (ImGui::BeginCombo("Category", nullptr, ImGuiComboFlags_NoPreview)) {
-            for (const auto& category : categories) {
-                if (ImGui::Selectable(category.c_str())) {
-                    std::strncpy(s_cfCategory, category.c_str(), sizeof(s_cfCategory));
+        ImGui::SetNextItemWidth(btnSize);
+        if (ImGui::BeginCombo("##cfCatList", nullptr, ImGuiComboFlags_NoPreview)) {
+            for (const auto& cat : categories) {
+                if (ImGui::Selectable(cat.c_str())) {
+                    std::strncpy(s_cfCategory, cat.c_str(), sizeof(s_cfCategory));
                     s_cfCategory[sizeof(s_cfCategory) - 1] = '\0';
+                    categoryChanged = true;
                 }
             }
             ImGui::EndCombo();
         }
+        if (categoryChanged) updatePathDefaults();
 
+        // ── Type ──────────────────────────────────────────────────────────
         const char* types[] = {"Analog Axis", "Digital Button"};
-        ImGui::Combo("Type", &s_cfType, types, 2);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Type:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::Combo("##cfType", &s_cfType, types, 2);
 
-        ImGui::InputText("Default OSC Path", s_cfOsc, sizeof(s_cfOsc));
-        ImGui::InputText("Default WS Key", s_cfWs, sizeof(s_cfWs));
+        // ── OSC Path ──────────────────────────────────────────────────────
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Default OSC Path:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##cfOsc", s_cfOsc, sizeof(s_cfOsc)))
+            s_cfOscManuallyModified = true;
+
+        // ── WS Key ────────────────────────────────────────────────────────
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Default WS Key:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##cfWs", s_cfWs, sizeof(s_cfWs)))
+            s_cfWsManuallyModified = true;
 
         ImGui::Separator();
 
-        // Check if ID already exists
+        // ── Validation ────────────────────────────────────────────────────
         bool idExists = false;
-        for (const auto& field : registry.GetOutputFields()) {
-            if (field.id == s_cfId) {
-                idExists = true;
-                break;
-            }
-        }
-        if (!idExists) {
-            for (const auto& field : registry.GetInputFields()) {
-                if (field.id == s_cfId) {
-                    idExists = true;
-                    break;
-                }
-            }
-        }
-
-        if (idExists) {
-            ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ID already exists!");
+        if (!s_cfIsEditing) {
+            for (const auto& f : registry.GetOutputFields())
+                if (f.id == s_cfId) { idExists = true; break; }
+            if (!idExists)
+                for (const auto& f : registry.GetInputFields())
+                    if (f.id == s_cfId) { idExists = true; break; }
+            if (idExists)
+                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ID already exists!");
         }
 
         bool canSave = (s_cfId[0] != '\0') && !idExists;
-        if (!canSave) {
-            ImGui::BeginDisabled();
-        }
+        if (!canSave) ImGui::BeginDisabled();
 
-        if (ImGui::Button("Save Field", ImVec2(120, 0))) {
-            if (s_cfLabel[0] == '\0') {
+        const char* saveLabel = s_cfIsEditing ? "Update Field" : "Save Field";
+        if (ImGui::Button(saveLabel, ImVec2(120, 0))) {
+            if (s_cfLabel[0] == '\0')
                 std::strncpy(s_cfLabel, s_cfId, sizeof(s_cfLabel));
-            }
 
             FieldDescriptor fd;
-            fd.id = s_cfId;
-            fd.label = s_cfLabel;
-            fd.category = s_cfCategory;
-            fd.type = (s_cfType == 1) ? FieldType::DigitalButton : FieldType::AnalogAxis;
+            fd.id             = s_cfId;
+            fd.label          = s_cfLabel;
+            fd.category       = s_cfCategory;
+            fd.type           = (s_cfType == 1) ? FieldType::DigitalButton : FieldType::AnalogAxis;
             fd.defaultOscPath = s_cfOsc;
-            fd.defaultWsKey = s_cfWs;
-            fd.isBuiltIn = false;
+            fd.defaultWsKey   = s_cfWs;
+            fd.isBuiltIn      = false;
 
-            registry.AddOutputField(fd);
+            if (s_cfIsEditing) {
+                registry.UpdateOutputField(s_cfEditingId, fd);
+            } else {
+                registry.AddOutputField(fd);
+            }
+
+            // Reset mode flags
+            s_cfIsEditing   = false;
+            s_cfIsDuplicate = false;
             ImGui::CloseCurrentPopup();
         }
 
-        if (!canSave) {
-            ImGui::EndDisabled();
-        }
+        if (!canSave) ImGui::EndDisabled();
 
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            s_cfIsEditing   = false;
+            s_cfIsDuplicate = false;
             ImGui::CloseCurrentPopup();
         }
 
@@ -1638,6 +1912,7 @@ void ProtocolEditorWindow::DrawExportProtocolModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Export Protocol##modal", &open)) {
+        CloseModalOnEscape();
 
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
@@ -1694,6 +1969,7 @@ void ProtocolEditorWindow::DrawImportProtocolModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(780, 540), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Import Protocol##modal", &open)) {
+        CloseModalOnEscape();
 
         float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetStyle().ItemSpacing.y * 2;
         {
@@ -1736,6 +2012,7 @@ void ProtocolEditorWindow::DrawSavePresetModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Save Preset##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Save current enabled fields as a preset");
         ImGui::InputText("Preset Name", s_presetName, sizeof(s_presetName));
 
@@ -1792,11 +2069,11 @@ void ProtocolEditorWindow::CreateBackupBeforeOperation(const std::string& operat
     std::string catalogPath = ProtocolRegistry::GetProtocolsDir() + "/input_fields.json";
     std::string backupPath  = s_backupManager.CreateBackup(catalogPath);
     if (!backupPath.empty())
-        printf("Created backup before %s: %s\n", operationName.c_str(), backupPath.c_str());
+        LOG_INFO("ProtocolEditor", "Created backup before %s: %s", operationName.c_str(), backupPath.c_str());
 
     std::string defsBackup = s_backupManager.CreateDirectoryBackup(ProtocolRegistry::GetDefsDir());
     if (!defsBackup.empty())
-        printf("Created definitions backup: %s\n", defsBackup.c_str());
+        LOG_INFO("ProtocolEditor", "Created definitions backup: %s", defsBackup.c_str());
 }
 
 bool ProtocolEditorWindow::ValidateAndImportProtocol(const std::string& filePath) {
@@ -1973,6 +2250,7 @@ void ProtocolEditorWindow::DrawLoadPresetModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Load Preset##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Apply a preset to the current protocol");
         ImGui::Separator();
 
@@ -2045,6 +2323,7 @@ void ProtocolEditorWindow::DrawMergeCategoryModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Merge Categories##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::TextWrapped("Move all fields from the source category into the target category, then remove the source.");
 
         auto categories = GetAllCategories();
@@ -2092,6 +2371,82 @@ void ProtocolEditorWindow::DrawMergeCategoryModal() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Modal: Hide / Show Categories (per-protocol)
+// ═══════════════════════════════════════════════════════════════════════════
+
+void ProtocolEditorWindow::DrawHideCategoryModal() {
+    if (s_showHideCatModal) {
+        ImGui::OpenPopup("Hide / Show Categories##modal");
+        s_showHideCatModal = false;
+    }
+
+    bool open = true;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    // Size: at least 320px wide, up to 40% of the main viewport width.
+    float vpWidth   = viewport->WorkSize.x;
+    float modalW    = std::clamp(vpWidth * 0.40f, 320.0f, 600.0f);
+
+    // Auto-center when opened or when the main window is resized.
+    static ImVec2 lastVpSize = { 0.0f, 0.0f };
+    bool vpResized = (viewport->WorkSize.x != lastVpSize.x || viewport->WorkSize.y != lastVpSize.y);
+    if (vpResized) { lastVpSize = viewport->WorkSize; }
+    ImGui::SetNextWindowPos(viewport->GetCenter(), vpResized ? ImGuiCond_Always : ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    ImGui::SetNextWindowSizeConstraints(ImVec2(modalW, 0.0f), ImVec2(modalW, FLT_MAX));
+    if (ImGui::BeginPopupModal("Hide / Show Categories##modal", &open,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
+        auto& registry   = ProtocolRegistry::GetInstance();
+        auto& definitions = registry.GetDefinitions();
+        if (s_selectedIndex < 0 || s_selectedIndex >= (int)definitions.size()) {
+            ImGui::CloseCurrentPopup();
+        } else {
+            ProtocolDefinition& def = definitions[s_selectedIndex];
+
+            ImGui::TextWrapped(
+                "Tick the categories you want to hide from this protocol's field list.\n"
+                "Hidden categories are still available to all other protocols.");
+            ImGui::Separator();
+
+            // Build the full category list for the relevant catalog.
+            bool isOutput = (def.direction == ProtocolDirection::Output);
+            const auto& catalog = isOutput ? registry.GetOutputFields()
+                                           : registry.GetInputFields();
+            std::vector<std::string> cats;
+            for (const auto& fd : catalog)
+                if (std::find(cats.begin(), cats.end(), fd.category) == cats.end())
+                    cats.push_back(fd.category);
+            std::sort(cats.begin(), cats.end());
+
+            bool changed = false;
+            for (const auto& cat : cats) {
+                bool hidden = std::find(def.excludedCategories.begin(),
+                                        def.excludedCategories.end(),
+                                        cat) != def.excludedCategories.end();
+                if (ImGui::Checkbox(cat.c_str(), &hidden)) {
+                    if (hidden) {
+                        def.excludedCategories.push_back(cat);
+                    } else {
+                        def.excludedCategories.erase(
+                            std::remove(def.excludedCategories.begin(),
+                                        def.excludedCategories.end(), cat),
+                            def.excludedCategories.end());
+                    }
+                    changed = true;
+                }
+            }
+
+            if (changed) registry.SaveDefinition(def);
+
+            ImGui::Separator();
+            if (ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Modal: Save Template
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2103,6 +2458,7 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
 
     bool open = true;
     if (ImGui::BeginPopupModal("Save Template##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         ImGui::Text("Save the current protocol as a reusable template.");
         ImGui::Separator();
 
@@ -2156,9 +2512,9 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
 
                     std::ofstream out(templatePath);
                     out << j.dump(4);
-                    printf("Saved template: %s\n", templatePath.c_str());
+                    LOG_INFO("ProtocolEditor", "Saved template: %s", templatePath.c_str());
                 } catch (const std::exception& e) {
-                    fprintf(stderr, "Failed to save template: %s\n", e.what());
+                    LOG_ERROR("ProtocolEditor", "Failed to save template: %s", e.what());
                 }
             }
             ImGui::CloseCurrentPopup();
@@ -2185,6 +2541,7 @@ void ProtocolEditorWindow::DrawLoadTemplateModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(500, 340), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Load Template##modal", &open)) {
+        CloseModalOnEscape();
         // Enumerate template files
         std::string templatesDir = ProtocolRegistry::GetProtocolsDir() + "/templates";
         std::vector<std::string> templatePaths;
@@ -2268,7 +2625,7 @@ void ProtocolEditorWindow::DrawLoadTemplateModal() {
                     registry.SaveDefinition(def);
                 }
             } catch (const std::exception& e) {
-                fprintf(stderr, "Failed to load template: %s\n", e.what());
+                LOG_ERROR("ProtocolEditor", "Failed to load template: %s", e.what());
             }
             ImGui::CloseCurrentPopup();
         }
@@ -2295,6 +2652,7 @@ void ProtocolEditorWindow::DrawValidationResultModal() {
     // allowing AlwaysAutoResize to size the height to the wrapped text.
     ImGui::SetNextWindowSizeConstraints(ImVec2(480, 0), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::BeginPopupModal("Validation Result##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        CloseModalOnEscape();
         if (s_validationIsError)
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Validation Failed");
         else
@@ -2322,6 +2680,7 @@ void ProtocolEditorWindow::DrawBackupManagerModal() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(400, 220), ImGuiCond_FirstUseEver);
     if (ImGui::BeginPopupModal("Backup Manager##modal", &open)) {
+        CloseModalOnEscape();
         ImGui::Text("Automatic Backup System");
         ImGui::Separator();
 

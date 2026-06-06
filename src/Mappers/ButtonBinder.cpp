@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "ButtonBinder.h"
 #include "Devices/DeviceManager.h" // For DeviceState
 
@@ -13,11 +14,11 @@ void ButtonBinder::StartBinding(const std::vector<struct DeviceState>& connected
                 states[i] = SDL_GetJoystickButton(dev.joystick, i);
             }
             m_baselineButtonStates[id] = states;
-            SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "ButtonBinder: Captured baseline for joystick '%s' (ID: %u).", SDL_GetJoystickName(dev.joystick), id);
+            LOG_INFO("ButtonBinder", "Captured baseline for joystick '%s' (ID: %u).", SDL_GetJoystickName(dev.joystick), id);
         }
     }
     m_isBinding = true;
-    SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "ButtonBinder: Started binding process for all connected joysticks.");
+    LOG_INFO("ButtonBinder", "Started binding process for all connected joysticks.");
 }
 
 std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<struct DeviceState>& connectedDevices) {
@@ -40,7 +41,7 @@ std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<struct Dev
         int numButtons = SDL_GetNumJoystickButtons(dev.joystick);
 
         if (joystickBaseline.size() != numButtons) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_INPUT, "ButtonBinder: Joystick '%s' (ID: %u) button count changed or baseline mismatch. Re-snapshotting.", SDL_GetJoystickName(dev.joystick), id);
+            LOG_WARN("ButtonBinder", "Joystick '%s' (ID: %u) button count changed or baseline mismatch. Re-snapshotting.", SDL_GetJoystickName(dev.joystick), id);
             // Re-snapshot this specific joystick's baseline
             joystickBaseline.assign(numButtons, false);
             for (int i = 0; i < numButtons; ++i) joystickBaseline[i] = SDL_GetJoystickButton(dev.joystick, i);
@@ -53,7 +54,7 @@ std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<struct Dev
 
             if (currentState != wasActiveAtStart) {
                 m_isBinding = false;
-                SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "ButtonBinder: Button %d change detected on joystick '%s' (ID: %u).", i, SDL_GetJoystickName(dev.joystick), id);
+                LOG_INFO("ButtonBinder", "Button %d change detected on joystick '%s' (ID: %u).", i, SDL_GetJoystickName(dev.joystick), id);
                 return BoundButtonInfo{id, i};
             }
         }
@@ -62,7 +63,7 @@ std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<struct Dev
 }
 
 void ButtonBinder::Cancel() {
-    if (m_isBinding) SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "ButtonBinder: Binding process cancelled.");
+    if (m_isBinding) LOG_INFO("ButtonBinder", "Binding process cancelled.");
     m_isBinding = false;
     m_baselineButtonStates.clear();
 }

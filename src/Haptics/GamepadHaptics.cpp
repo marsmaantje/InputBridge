@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "GamepadHaptics.h"
 #include <SDL3/SDL_gamepad.h>
 #include "Core/Result.h"
@@ -26,25 +27,25 @@ InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
     if (IsDualSense()) {
         m_dualSense = std::make_unique<DualSenseController>(m_joystick);
         m_dualSense->Init();
-        SDL_Log("GamepadHaptics: Initialized as DualSense");
+        LOG_INFO("GamepadHaptics", "Initialized as DualSense");
     }
     else if (IsXboxController()) {
         m_xbox = std::make_unique<XboxController>(m_joystick);
         m_xbox->Init();
-        SDL_Log("GamepadHaptics: Initialized as Xbox");
+        LOG_INFO("GamepadHaptics", "Initialized as Xbox");
     }
     else if (IsSteamControllerV1()) {
         // V1 haptic pulses are sent via SDL_SendGamepadEffect in SendSteamControllerHaptic(),
         // which routes through SDL's already-open HIDAPI handle.  No separate HID open needed.
-        SDL_Log("GamepadHaptics: Initialized as Steam Controller V1 (trackpad HID haptics)");
+        LOG_INFO("GamepadHaptics", "Initialized as Steam Controller V1 (trackpad HID haptics)");
     }
     else if (IsSteamControllerV2()) {
         // V2 supports SDL_RumbleGamepad natively since SDL 3.4.10.
         // No special initialization required — the standard rumble path is used.
-        SDL_Log("GamepadHaptics: Initialized as Steam Controller V2 (SDL_RumbleGamepad)");
+        LOG_INFO("GamepadHaptics", "Initialized as Steam Controller V2 (SDL_RumbleGamepad)");
     }
     else {
-        SDL_Log("GamepadHaptics: Initialized as generic gamepad");
+        LOG_INFO("GamepadHaptics", "Initialized as generic gamepad");
     }
 
     return result;
@@ -160,7 +161,7 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
         // name-based fallback and routed here by mistake.
         if (!IsSteamControllerV2() && IsSteamControllerV1()) {
             const float magnitude = (largeMagnitude + smallMagnitude) * 0.5f;
-            SDL_Log("GamepadHaptics::PlayRumble - Steam Controller V1: HID trackpad haptic (magnitude=%.2f, duration=%ums)",
+            LOG_INFO("GamepadHaptics", "PlayRumble - Steam Controller V1: HID trackpad haptic (magnitude=%.2f, duration=%ums)",
                     magnitude, durationMs);
 
             SendSteamControllerHaptic(0, magnitude, durationMs); // left  trackpad
@@ -184,7 +185,7 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
             const Uint16 highFreq = static_cast<Uint16>(smallMagnitude * 0xFFFF);
 
             if (!SDL_RumbleGamepad(m_gamepad, lowFreq, highFreq, durationMs)) {
-                SDL_Log("GamepadHaptics::PlayRumble - SDL_RumbleGamepad failed: %s", SDL_GetError());
+                LOG_INFO("GamepadHaptics", "PlayRumble - SDL_RumbleGamepad failed: %s", SDL_GetError());
                 std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                 m_activeRumbles.erase(slot);
             } else {
@@ -195,11 +196,11 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
                 info.small_magnitude = smallMagnitude;
                 info.duration_ms     = durationMs;
                 info.last_updated    = SDL_GetTicks();
-                SDL_Log("GamepadHaptics::PlayRumble - Success slot=%d (low=%u, high=%u, duration=%ums)",
+                LOG_INFO("GamepadHaptics", "PlayRumble - Success slot=%d (low=%u, high=%u, duration=%ums)",
                         slot, lowFreq, highFreq, durationMs);
             }
         } else {
-            SDL_Log("GamepadHaptics::PlayRumble - No gamepad handle available");
+            LOG_INFO("GamepadHaptics", "PlayRumble - No gamepad handle available");
         }
     });
 
@@ -272,7 +273,7 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
     // report[10–11] = dBgain (Sint16) — 0 = default gain
     // report[12]    = priority flags — 0 = HAPTIC_PULSE_NORMAL
 
-    SDL_Log("SendSteamControllerHaptic - pad=%u magnitude=%.2f durationUs=%u periodUs=%u pulseCount=%u",
+    LOG_INFO("GamepadHaptics", "SendSteamControllerHaptic - pad=%u magnitude=%.2f durationUs=%u periodUs=%u pulseCount=%u",
             pad, magnitude, durationUs, periodUs, pulseCount);
 
     // Prefer the cached gamepad handle (SDL_SendGamepadEffect); fall back to
@@ -280,11 +281,11 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
     // Both reach the same HIDAPI steam SendJoystickEffect handler.
     if (m_gamepad) {
         if (!SDL_SendGamepadEffect(m_gamepad, report, sizeof(report))) {
-            SDL_Log("SendSteamControllerHaptic - SDL_SendGamepadEffect failed: %s", SDL_GetError());
+            LOG_INFO("GamepadHaptics", "SendSteamControllerHaptic - SDL_SendGamepadEffect failed: %s", SDL_GetError());
         }
     } else {
         if (!SDL_SendJoystickEffect(m_joystick, report, sizeof(report))) {
-            SDL_Log("SendSteamControllerHaptic - SDL_SendJoystickEffect fallback failed: %s", SDL_GetError());
+            LOG_INFO("GamepadHaptics", "SendSteamControllerHaptic - SDL_SendJoystickEffect fallback failed: %s", SDL_GetError());
         }
     }
 }
@@ -301,7 +302,7 @@ int GamepadHaptics::PlayDualSenseTrigger(const std::string& trigger,
                                          const std::string& effect_type,
                                          const std::map<std::string, int>& params) {
     if (!m_dualSense) {
-        SDL_Log("GamepadHaptics::SendDualSenseTrigger - Not a DualSense controller");
+        LOG_INFO("GamepadHaptics", "SendDualSenseTrigger - Not a DualSense controller");
         return -1;
     }
 
@@ -329,7 +330,7 @@ int GamepadHaptics::SendXboxImpulseTrigger(uint8_t leftIntensity,
                                            uint8_t rightIntensity,
                                            uint32_t durationMs) {
     if (!m_xbox) {
-        SDL_Log("GamepadHaptics::SendXboxImpulseTrigger - Not an Xbox controller");
+        LOG_INFO("GamepadHaptics", "SendXboxImpulseTrigger - Not an Xbox controller");
         return -1;
     }
 

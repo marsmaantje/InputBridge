@@ -55,7 +55,7 @@ struct TouchState {
     float primaryPressure() const { return fingers[0].active ? fingers[0].pressure : 0.f; }
 
     /// Returns finger x remapped to [-1, 1] (left=-1, right=+1).
-    float primaryXCentered() const { return primaryX() * 2.f - 1.f; }
+    float primaryXCentered() const { return fingers[0].active ? fingers[0].x * 2.f - 1.f : 0.f; }
     /// Returns finger y remapped to [-1, 1] (top=-1, bottom=+1).
-    float primaryYCentered() const { return primaryY() * 2.f - 1.f; }
+    float primaryYCentered() const { return fingers[0].active ? fingers[0].y * 2.f - 1.f : 0.f; }
 };
