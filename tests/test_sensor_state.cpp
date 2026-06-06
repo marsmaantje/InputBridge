@@ -213,15 +213,12 @@ TEST(TouchState, CenteredYAtMidpointIsZero) {
 }
 
 TEST(TouchState, CenteredXIsZeroWhenFingerInactive) {
-    // Even though the remap formula gives -1 for x=0, the getter must gate
-    // on the active flag and return 0 when the finger is not touching.
+    // When the finger is not touching, centered getters should return 0 (neutral)
+    // rather than -1 (the result of remapping a zero raw coordinate).
     TouchState t;
     t.fingers[0].active = false;
     t.fingers[0].x = 0.5f;
-    EXPECT_FLOAT_EQ(t.primaryXCentered(), -1.f); // primaryX() → 0 → 0*2-1 = -1
-    // Note: primaryXCentered = primaryX()*2-1.
-    // When inactive, primaryX() = 0, so primaryXCentered() = -1, not 0.
-    // This is expected behaviour: callers should check fingers[0].active first.
+    EXPECT_FLOAT_EQ(t.primaryXCentered(), 0.f);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
