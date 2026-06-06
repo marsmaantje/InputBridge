@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "ProtocolRegistry.h"
 #include "Utils/XdgDirs.h"
 #include <nlohmann/json.hpp>
@@ -30,6 +31,9 @@ ProtocolRegistry::ProtocolRegistry() {
 void ProtocolRegistry::LoadAll() {
     EnsureDirectories();
     LoadFieldCatalog();
+    // Re-save immediately so any stale entries that were blocked by the
+    // updated exists-check are purged from input_fields.json on disk.
+    SaveFieldCatalog();
     LoadPresets();
     LoadDefinitionFiles();
 }
@@ -61,6 +65,16 @@ void ProtocolRegistry::AddOutputField(const FieldDescriptor& fd) {
     SaveFieldCatalog();
 }
 
+void ProtocolRegistry::UpdateOutputField(const std::string& originalId, const FieldDescriptor& fd) {
+    for (auto& f : m_outputFields) {
+        if (f.id == originalId) {
+            f = fd;
+            SaveFieldCatalog();
+            return;
+        }
+    }
+}
+
 void ProtocolRegistry::DeleteOutputField(const std::string& id) {
     auto it = std::remove_if(m_outputFields.begin(), m_outputFields.end(),
                              [&](const FieldDescriptor& fd) { return fd.id == id && !fd.isBuiltIn; });
@@ -75,6 +89,13 @@ void ProtocolRegistry::SaveFieldCatalog() {
     json arr = json::array();
     for (const auto& fd : m_outputFields) {
         if (fd.isBuiltIn) continue;
+        // Skip entries whose ID is already registered in the input catalog —
+        // those were misplaced by an older code path and should not be
+        // persisted regardless of which category name they carry.
+        bool duplicateInOtherCatalog = false;
+        for (const auto& other : m_inputFields)
+            if (other.id == fd.id) { duplicateInOtherCatalog = true; break; }
+        if (duplicateInOtherCatalog) continue;
         json item;
         item["id"] = fd.id;
         item["label"] = fd.label;
@@ -186,12 +207,34 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
     j["ws"]["port"]      = def->wssPort;
 
     json fieldsArr = json::array();
+    const auto& outFields = m_outputFields;
+    const auto& inFields  = m_inputFields;
     for (const auto& f : def->fields) {
         json fj;
         fj["fieldId"] = f.fieldId;
         fj["oscPath"] = f.oscPath;
         fj["wsKey"]   = f.wsKey;
         fj["enabled"] = f.enabled;
+
+        // Embed inline field definition for any field that is not a built-in.
+        // This makes exported files self-describing so recipients can import
+        // them without pre-populating their own input_fields.json.
+        const FieldDescriptor* desc = nullptr;
+        for (const auto& fd : outFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (!desc) for (const auto& fd : inFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (desc && !desc->isBuiltIn) {
+            fj["label"]    = desc->label;
+            fj["category"] = desc->category;
+            fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
+        } else if (!desc && f.hasInlineDef) {
+            // Catalog entry absent (e.g. field not yet persisted) but the
+            // ProtocolField still carries its own inline metadata — use it so
+            // the exported file stays self-describing.
+            fj["label"]    = f.inlineLabel;
+            fj["category"] = f.inlineCategory;
+            fj["type"]     = (f.inlineType == FieldType::DigitalButton) ? "digital" : "analog";
+        }
+
         fieldsArr.push_back(fj);
     }
     j["fields"] = fieldsArr;
@@ -235,10 +278,72 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                 f.oscPath = fj.value("oscPath",  "");
                 f.wsKey   = fj.value("wsKey",    "");
                 f.enabled = fj.value("enabled",  true);
-                if (!f.fieldId.empty())
-                    def.fields.push_back(f);
+                if (f.fieldId.empty())
+                    continue;
+
+                // Read optional inline field definition.
+                // These keys are written by ExportDefinition for any field that
+                // is not a built-in, so the file is self-describing.
+                bool hasInline = fj.contains("label") || fj.contains("category") || fj.contains("type");
+                if (hasInline) {
+                    f.hasInlineDef   = true;
+                    f.inlineLabel    = fj.value("label",    f.fieldId);
+                    f.inlineCategory = fj.value("category", "Custom");
+                    std::string typeStr = fj.value("type", "digital");
+                    f.inlineType = (typeStr == "analog") ? FieldType::AnalogAxis : FieldType::DigitalButton;
+                }
+
+                def.fields.push_back(f);
+
+                // Auto-register the field in the catalog when it is unknown so
+                // that the editor can display and manipulate it without requiring
+                // a matching entry in input_fields.json.
+                auto& catalog = (def.direction == ProtocolDirection::Output)
+                                 ? m_outputFields : m_inputFields;
+
+                // Check both catalogs: a field may legitimately live in the
+                // opposite catalog (e.g. a sensor/button field referenced by an
+                // output-direction definition). Registering it a second time in
+                // the wrong catalog would create a duplicate "Custom (imported)"
+                // entry and break the category grouping in the editor.
+                bool knownInCatalog = false;
+                for (const auto& desc : m_outputFields)
+                    if (desc.id == f.fieldId) { knownInCatalog = true; break; }
+                if (!knownInCatalog)
+                    for (const auto& desc : m_inputFields)
+                        if (desc.id == f.fieldId) { knownInCatalog = true; break; }
+
+                if (!knownInCatalog) {
+                    FieldDescriptor fd;
+                    fd.id          = f.fieldId;
+                    fd.isBuiltIn   = false;
+                    if (f.hasInlineDef) {
+                        fd.label          = f.inlineLabel;
+                        fd.category       = f.inlineCategory;
+                        fd.type           = f.inlineType;
+                    } else {
+                        // No inline metadata — synthesise sensible defaults so
+                        // the field at least appears in the editor.
+                        fd.label    = f.fieldId;
+                        fd.category = "Custom (imported)";
+                        fd.type     = FieldType::DigitalButton;
+                    }
+                    fd.defaultOscPath = f.oscPath.empty() ? ("/" + f.fieldId) : f.oscPath;
+                    fd.defaultWsKey   = f.wsKey.empty()   ? f.fieldId         : f.wsKey;
+                    catalog.push_back(fd);
+                    // Persist so the field survives across restarts.
+                    SaveFieldCatalog();
+                }
             }
         }
+        // Load per-protocol exclusion lists.
+        if (j.contains("excluded_fields") && j["excluded_fields"].is_array())
+            for (const auto& v : j["excluded_fields"])
+                if (v.is_string()) def.excludedFieldIds.push_back(v.get<std::string>());
+        if (j.contains("excluded_categories") && j["excluded_categories"].is_array())
+            for (const auto& v : j["excluded_categories"])
+                if (v.is_string()) def.excludedCategories.push_back(v.get<std::string>());
+
         m_definitions.push_back(def);
         SaveDefinition(def);
         return def.id;
@@ -280,15 +385,40 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
         fj["oscPath"] = f.oscPath;
         fj["wsKey"]   = f.wsKey;
         fj["enabled"] = f.enabled;
+
+        // Embed inline field definition for non-built-in fields so that the
+        // stored definition file is self-describing.
+        const FieldDescriptor* desc = nullptr;
+        for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (!desc) for (const auto& fd : m_inputFields) if (fd.id == f.fieldId) { desc = &fd; break; }
+        if (desc && !desc->isBuiltIn) {
+            fj["label"]    = desc->label;
+            fj["category"] = desc->category;
+            fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
+        }
+
         fieldsArr.push_back(fj);
     }
     j["fields"] = fieldsArr;
+
+    // Per-protocol exclusions — only write the keys when non-empty so that
+    // the vast majority of definition files stay clean.
+    if (!def.excludedFieldIds.empty()) {
+        json arr = json::array();
+        for (const auto& s : def.excludedFieldIds) arr.push_back(s);
+        j["excluded_fields"] = arr;
+    }
+    if (!def.excludedCategories.empty()) {
+        json arr = json::array();
+        for (const auto& s : def.excludedCategories) arr.push_back(s);
+        j["excluded_categories"] = arr;
+    }
 
     std::ofstream ofs(path);
     if (ofs) {
         ofs << j.dump(4);
     } else {
-        std::cerr << "[ProtocolRegistry] Failed to write " << path << "\n";
+    LOG_ERROR("ProtocolRegistry", "Failed to write %s", path.c_str());
     }
 }
 
@@ -353,8 +483,8 @@ static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
                 fs::copy_file(entry.path(), dstFile,
                               fs::copy_options::skip_existing, ec);
                 if (ec)
-                    std::cerr << "[ProtocolRegistry] Bootstrap copy failed for "
-                              << entry.path() << ": " << ec.message() << "\n";
+                    LOG_ERROR("ProtocolRegistry", "Bootstrap copy failed for %s: %s",
+                              entry.path().string().c_str(), ec.message().c_str());
             }
         }
     };
@@ -401,10 +531,16 @@ void ProtocolRegistry::LoadFieldCatalog() {
                 fd.defaultWsKey   = item.value("wsKey",    fd.id);
                 fd.isBuiltIn      = false;
 
-                // Only add if not already present (built-ins take precedence by id)
+                // Skip if already present in either catalog — a field that
+                // belongs in m_inputFields (e.g. a built-in sensor or button)
+                // must not be duplicated into m_outputFields regardless of
+                // what was written to input_fields.json by an older code path.
                 bool exists = false;
                 for (const auto& existing : m_outputFields)
                     if (existing.id == fd.id) { exists = true; break; }
+                if (!exists)
+                    for (const auto& existing : m_inputFields)
+                        if (existing.id == fd.id) { exists = true; break; }
                 if (!exists && !fd.id.empty())
                     m_outputFields.push_back(fd);
             }
@@ -431,7 +567,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "[ProtocolRegistry] Failed to parse input_fields.json: " << e.what() << "\n";
+    LOG_ERROR("ProtocolRegistry", "Failed to parse input_fields.json: %s", e.what());
     }
 }
 
@@ -511,14 +647,94 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     f.oscPath = fj.value("oscPath",  "");
                     f.wsKey   = fj.value("wsKey",    "");
                     f.enabled = fj.value("enabled",  true);
-                    if (!f.fieldId.empty())
-                        def.fields.push_back(f);
+                    if (f.fieldId.empty())
+                        continue;
+
+                    bool hasInline = fj.contains("label") || fj.contains("category") || fj.contains("type");
+                    if (hasInline) {
+                        f.hasInlineDef   = true;
+                        f.inlineLabel    = fj.value("label",    f.fieldId);
+                        f.inlineCategory = fj.value("category", "Custom");
+                        std::string typeStr = fj.value("type", "digital");
+                        f.inlineType = (typeStr == "analog") ? FieldType::AnalogAxis : FieldType::DigitalButton;
+                    }
+
+                    def.fields.push_back(f);
+
+                    // Auto-register unknown fields so the editor shows them.
+                    auto& catalog = (def.direction == ProtocolDirection::Output)
+                                     ? m_outputFields : m_inputFields;
+                    // Check both catalogs before synthesising an entry; the
+                    // field may already be registered on the opposite side.
+                    bool known = false;
+                    for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) { known = true; break; }
+                    if (!known)
+                        for (const auto& fd : m_inputFields) if (fd.id == f.fieldId) { known = true; break; }
+
+                    // Sanitise stale entries written by older code paths. If
+                    // the field resolves to a real descriptor in either catalog,
+                    // evict every duplicate from both catalogs so the correct
+                    // category is always shown after a restart.
+                    if (known) {
+                        const FieldDescriptor* real = nullptr;
+                        for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) { real = &fd; break; }
+                        if (!real)
+                            for (const auto& fd : m_inputFields) if (fd.id == f.fieldId) { real = &fd; break; }
+
+                        // Count total occurrences across both catalogs.
+                        int count = 0;
+                        for (const auto& fd : m_outputFields) if (fd.id == f.fieldId) count++;
+                        for (const auto& fd : m_inputFields)  if (fd.id == f.fieldId) count++;
+
+                        if (count > 1) {
+                            // More than one entry for this ID — keep only the
+                            // first real (non-stale) one and remove the rest.
+                            bool kept = false;
+                            auto dedup = [&](std::vector<FieldDescriptor>& cat) {
+                                cat.erase(std::remove_if(cat.begin(), cat.end(),
+                                    [&](const FieldDescriptor& d) {
+                                        if (d.id != f.fieldId) return false;
+                                        if (!kept) { kept = true; return false; }
+                                        return true;
+                                    }), cat.end());
+                            };
+                            dedup(m_outputFields);
+                            dedup(m_inputFields);
+                            known = false; // fall through to re-register correctly below
+                        }
+                    }
+
+                    if (!known) {
+                        FieldDescriptor fd;
+                        fd.id        = f.fieldId;
+                        fd.isBuiltIn = false;
+                        if (f.hasInlineDef) {
+                            fd.label    = f.inlineLabel;
+                            fd.category = f.inlineCategory;
+                            fd.type     = f.inlineType;
+                        } else {
+                            fd.label    = f.fieldId;
+                            fd.category = "Custom (imported)";
+                            fd.type     = FieldType::DigitalButton;
+                        }
+                        fd.defaultOscPath = f.oscPath.empty() ? ("/" + f.fieldId) : f.oscPath;
+                        fd.defaultWsKey   = f.wsKey.empty()   ? f.fieldId         : f.wsKey;
+                        catalog.push_back(fd);
+                    }
                 }
             }
+            // Load per-protocol exclusion lists.
+            if (j.contains("excluded_fields") && j["excluded_fields"].is_array())
+                for (const auto& v : j["excluded_fields"])
+                    if (v.is_string()) def.excludedFieldIds.push_back(v.get<std::string>());
+            if (j.contains("excluded_categories") && j["excluded_categories"].is_array())
+                for (const auto& v : j["excluded_categories"])
+                    if (v.is_string()) def.excludedCategories.push_back(v.get<std::string>());
+
             m_definitions.push_back(def);
         } catch (const std::exception& e) {
-            std::cerr << "[ProtocolRegistry] Failed to parse "
-                      << entry.path() << ": " << e.what() << "\n";
+            LOG_ERROR("ProtocolRegistry", "Failed to parse %s: %s",
+                      entry.path().string().c_str(), e.what());
         }
     }
 }
@@ -602,7 +818,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "[ProtocolRegistry] Failed to parse builtin_fields.json: " << e.what() << "\n";
+    LOG_ERROR("ProtocolRegistry", "Failed to parse builtin_fields.json: %s", e.what());
     }
 }
 

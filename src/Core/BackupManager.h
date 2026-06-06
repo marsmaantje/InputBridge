@@ -84,7 +84,6 @@ public:
 private:
     std::string m_backupDir;
     size_t m_maxBackups;
-    
     /**
      * Generate backup filename with timestamp.
      */

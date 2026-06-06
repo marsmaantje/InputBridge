@@ -1,8 +1,8 @@
+#include "App/Log.h"
 #include "DeviceFactory.h"
 #include "Haptics/GamepadHaptics.h"
 #include "Haptics/SteeringWheelHaptics.h"
 #include "Haptics/FlightStickHaptics.h"
-#include <SDL3/SDL_log.h>
 
 namespace InputBridge {
 
@@ -24,7 +24,7 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateDevice(SDL_JoystickID i
 std::optional<DeviceCreationResult> DeviceFactory::CreateWheelDevice(SDL_JoystickID instance_id) {
     SDL_Joystick* joystick = SDL_OpenJoystick(instance_id);
     if (!joystick) {
-        SDL_Log("Failed to open steering wheel device %d: %s", instance_id, SDL_GetError());
+        LOG_ERROR("DeviceFactory", "Failed to open steering wheel device %d: %s", instance_id, SDL_GetError());
         return std::nullopt;
     }
     
@@ -41,13 +41,13 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateWheelDevice(SDL_Joystic
 std::optional<DeviceCreationResult> DeviceFactory::CreateGamepadDevice(SDL_JoystickID instance_id) {
     SDL_Gamepad* gamepad = SDL_OpenGamepad(instance_id);
     if (!gamepad) {
-        SDL_Log("Failed to open gamepad device %d: %s", instance_id, SDL_GetError());
+        LOG_ERROR("DeviceFactory", "Failed to open gamepad device %d: %s", instance_id, SDL_GetError());
         return std::nullopt;
     }
     
     SDL_Joystick* joystick = SDL_GetGamepadJoystick(gamepad);
     if (!joystick) {
-        SDL_Log("Failed to get joystick from gamepad %d", instance_id);
+        LOG_ERROR("DeviceFactory", "Failed to get joystick from gamepad %d", instance_id);
         SDL_CloseGamepad(gamepad);
         return std::nullopt;
     }
@@ -67,7 +67,7 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateGamepadDevice(SDL_Joyst
 std::optional<DeviceCreationResult> DeviceFactory::CreateGenericDevice(SDL_JoystickID instance_id) {
     SDL_Joystick* joystick = SDL_OpenJoystick(instance_id);
     if (!joystick) {
-        SDL_Log("Failed to open generic device %d: %s", instance_id, SDL_GetError());
+        LOG_ERROR("DeviceFactory", "Failed to open generic device %d: %s", instance_id, SDL_GetError());
         return std::nullopt;
     }
     
@@ -102,7 +102,7 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
     if (device_type == SDL_JOYSTICK_TYPE_GAMEPAD) {
         auto haptic = std::make_unique<GamepadHaptics>(joystick);
         if (haptic && !haptic->Init()) {
-            SDL_Log("Failed to initialize gamepad haptics");
+            LOG_ERROR("DeviceFactory", "Failed to initialize gamepad haptics");
             return nullptr;
         }
         return haptic;
@@ -126,12 +126,12 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
             break;
             
         default:
-            SDL_Log("Unknown haptic device type: %d", static_cast<int>(device_type));
+            LOG_INFO("DeviceFactory", "Unknown haptic device type: %d", static_cast<int>(device_type));
             return nullptr;
     }
     
     if (haptic && !haptic->Init()) {
-        SDL_Log("Failed to initialize haptic device");
+        LOG_ERROR("DeviceFactory", "Failed to initialize haptic device");
         return nullptr;
     }
     

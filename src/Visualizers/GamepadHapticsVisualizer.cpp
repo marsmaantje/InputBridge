@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "GamepadHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/GamepadHaptics.h"
@@ -142,7 +143,9 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             isDualSense = gamepadHaptics->IsDualSense();
     }
 
-    /*
+    /***
+     * TODO: Add adaptive trigger support later down the line again
+     *
     if (isDualSense) {
         ImGui::Separator();
         ImGui::Text("DualSense Adaptive Triggers");
@@ -250,7 +253,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                 }
                 
                 int result = gamepadHaptics->PlayDualSenseTrigger("left", leftEffectName, leftParams);
-                SDL_Log("Left trigger effect '%s' result: %d", leftEffectName.c_str(), result);
+                LOG_DEBUG("GamepadHapticsViz", "Left trigger effect '%s' result: %d", leftEffectName.c_str(), result);
                 
                 // Send right trigger effect
                 std::map<std::string, int> rightParams;
@@ -295,7 +298,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                 }
                 
                 result = gamepadHaptics->PlayDualSenseTrigger("right", rightEffectName, rightParams);
-                SDL_Log("Right trigger effect '%s' result: %d", rightEffectName.c_str(), result);
+                LOG_DEBUG("GamepadHapticsViz", "Right trigger effect '%s' result: %d", rightEffectName.c_str(), result);
             }
         }
     }

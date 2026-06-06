@@ -55,7 +55,7 @@ add_executable(test_protocol_validator
     ${IB_SRC}/Core/ProtocolValidator.cpp
 )
 target_include_directories(test_protocol_validator PRIVATE ${IB_SRC} ${IB_JSON})
-target_link_libraries(test_protocol_validator PRIVATE GTest::gtest_main)
+target_link_libraries(test_protocol_validator PRIVATE GTest::gtest_main SDL3::SDL3)
 gtest_discover_tests(test_protocol_validator)
 
 # 4. test_undo_redo ────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ add_executable(test_backup_manager
     ${IB_SRC}/Core/BackupManager.cpp
 )
 target_include_directories(test_backup_manager PRIVATE ${IB_SRC})
-target_link_libraries(test_backup_manager PRIVATE GTest::gtest_main)
+target_link_libraries(test_backup_manager PRIVATE GTest::gtest_main SDL3::SDL3)
 gtest_discover_tests(test_backup_manager)
 
 # 6. test_dualsense_trigger ────────────────────────────────────────────────────

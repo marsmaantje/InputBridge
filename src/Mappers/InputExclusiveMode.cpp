@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "InputExclusiveMode.h"
 #include "InputExclusiveModeImpl.h"
 
@@ -16,7 +17,7 @@
 class DummyExclusiveMode : public InputExclusiveModeImpl {
 public:
     bool HideDevice(SDL_Joystick*) override {
-        SDL_Log("Device hide: not implemented on this platform or feature disabled.");
+        LOG_INFO("ExclusiveMode", "Device hide: not implemented on this platform or feature disabled.");
         return false;
     }
     bool UnhideDevice(SDL_Joystick*) override { return true; }

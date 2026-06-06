@@ -1,3 +1,4 @@
+#include "App/Log.h"
 #include "Network/OSCServer.h"
 #include "Network/OSCSubchannel.h"
 #include "Network/HapticDispatcher.h"
@@ -9,7 +10,6 @@
 #include "Protocols/ProtocolRegistry.h"
 #include "Protocols/OSCBaseProtocol.h"
 #include <SDL3/SDL_timer.h>
-#include <iostream>
 #include <string>
 #include <cstdarg>
 #include <algorithm>
@@ -211,7 +211,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     // Setup sending address
     m_send_address = lo_address_new(send_host.c_str(), std::to_string(send_port).c_str());
     if (!m_send_address) {
-        std::cerr << "OSC Error: Could not create send address " << send_host << ":" << send_port << std::endl;
+        LOG_ERROR("OSCServer", "Could not create send address %s:%d", send_host.c_str(), send_port);
         return false;
     }
 
@@ -219,7 +219,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     std::string recv_port_str = std::to_string(recv_port);
     m_server_thread = lo_server_thread_new_with_proto(recv_port_str.c_str(), LO_UDP, nullptr);
     if (!m_server_thread) {
-        std::cerr << "OSC Error: Could not create server on port " << recv_port << std::endl;
+        LOG_ERROR("OSCServer", "Could not create server on port %d", recv_port);
         lo_address_free(m_send_address);
         m_send_address = nullptr;
         return false;
@@ -249,8 +249,8 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     if (!m_OutputMapper && m_savedOutputMapper)
         m_OutputMapper = m_savedOutputMapper;
 
-    std::cout << "OSC server started. Sending to " << send_host << ":" << send_port
-              << ", Listening on port " << recv_port << std::endl;
+    LOG_INFO("OSCServer", "Started — sending to %s:%d, listening on port %d",
+             send_host.c_str(), send_port, recv_port);
 
     m_logs.push_back({"OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port), false});
     if (m_logs.size() > 100) m_logs.pop_front();
@@ -322,7 +322,7 @@ void OSCServer::Stop() {
                 lo_address_free(address_to_free);
             }
             std::lock_guard<std::mutex> lock(m_mutex);
-            std::cout << "OSC server stopped." << std::endl;
+            LOG_INFO("OSCServer", "Stopped");
             m_logs.push_back({"OSC server stopped.", false});
             if (m_logs.size() > 100) m_logs.pop_front();
         });
