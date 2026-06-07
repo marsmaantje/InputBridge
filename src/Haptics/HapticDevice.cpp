@@ -89,6 +89,8 @@ void HapticDevice::RunAsync(std::function<void()> task) {
 }
 
 void HapticDevice::ThreadLoop() {
+    uint64_t lastKeepalive = SDL_GetTicks();
+
     while (true) {
         std::function<void()> task;
         {
@@ -112,6 +114,16 @@ void HapticDevice::ThreadLoop() {
 
         // Check for finished effects (handles hardware status and software timeout fallback)
         PruneFinishedEffects();
+
+        // Re-upload INFINITY effects on devices that truncate the 32-bit length
+        // field to 16 bits (e.g. Thrustmaster T150, which stops after ~65 s).
+        if (m_keepaliveEnabled) {
+            uint64_t now = SDL_GetTicks();
+            if (now - lastKeepalive >= kKeepaliveIntervalMs) {
+                lastKeepalive = now;
+                RefreshInfiniteEffects();
+            }
+        }
     }
 }
 
@@ -162,6 +174,83 @@ void HapticDevice::PruneFinishedEffects() {
     pruneMap(m_activePeriodicEffects,  m_periodicEffects);
     pruneMap(m_activeRumbles,          m_rumbleEffects);
     pruneMap(m_activeConditions,       m_conditionEffects);
+}
+
+// Re-upload every active effect that was created with SDL_HAPTIC_INFINITY so
+// that devices which silently truncate the 32-bit length to 16 bits
+// (Thrustmaster T150 and similar) never reach the ~65 s firmware cutoff.
+// On well-behaved hardware SDL_UpdateHapticEffect merely overwrites the
+// already-running effect with identical parameters, which is a no-op from
+// the user's perspective.
+void HapticDevice::RefreshInfiniteEffects() {
+    if (!m_haptic) return;
+
+    std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+
+    // Constants
+    for (auto const& [slot, info] : m_activeConstants) {
+        if (info.duration_ms != SDL_HAPTIC_INFINITY) continue;
+        auto idIt = m_constantEffects.find(slot);
+        if (idIt == m_constantEffects.end() || idIt->second == -1) continue;
+
+        SDL_HapticEffect e;
+        SDL_memset(&e, 0, sizeof(e));
+        e.type = SDL_HAPTIC_CONSTANT;
+        e.constant.direction.type    = SDL_HAPTIC_CARTESIAN;
+        e.constant.direction.dir[0]  = -1;
+        e.constant.level             = static_cast<Sint16>(info.strength * 32767.0f);
+        e.constant.length            = SDL_HAPTIC_INFINITY;
+
+        if (!SDL_UpdateHapticEffect(m_haptic.Get(), idIt->second, &e))
+            LOG_WARN("HapticDevice", "RefreshInfiniteEffects - constant slot %d update failed: %s", slot, SDL_GetError());
+        SDL_RunHapticEffect(m_haptic.Get(), idIt->second, 1);
+    }
+
+    // Periodics
+    for (auto const& [slot, info] : m_activePeriodicEffects) {
+        if (info.duration_ms != SDL_HAPTIC_INFINITY) continue;
+        auto idIt = m_periodicEffects.find(slot);
+        if (idIt == m_periodicEffects.end() || idIt->second == -1) continue;
+
+        SDL_HapticEffect e;
+        SDL_memset(&e, 0, sizeof(e));
+        e.type = ToSDLPeriodicType(info.wave_type);
+        e.periodic.direction.type    = SDL_HAPTIC_CARTESIAN;
+        e.periodic.direction.dir[0]  = 1;
+        e.periodic.period            = static_cast<Uint16>(info.period);
+        e.periodic.magnitude         = static_cast<Sint16>(info.magnitude * 32767.0f);
+        e.periodic.offset            = static_cast<Sint16>(info.offset    * 32767.0f);
+        e.periodic.phase             = static_cast<Uint16>(info.phase);
+        e.periodic.length            = SDL_HAPTIC_INFINITY;
+
+        if (!SDL_UpdateHapticEffect(m_haptic.Get(), idIt->second, &e))
+            LOG_WARN("HapticDevice", "RefreshInfiniteEffects - periodic slot %d update failed: %s", slot, SDL_GetError());
+        SDL_RunHapticEffect(m_haptic.Get(), idIt->second, 1);
+    }
+
+    // Conditions
+    for (auto const& [slot, info] : m_activeConditions) {
+        if (info.duration_ms != SDL_HAPTIC_INFINITY) continue;
+        auto idIt = m_conditionEffects.find(slot);
+        if (idIt == m_conditionEffects.end() || idIt->second == -1) continue;
+
+        SDL_HapticEffect e;
+        SDL_memset(&e, 0, sizeof(e));
+        e.type = ToSDLConditionType(info.type);
+        e.condition.direction.type   = SDL_HAPTIC_CARTESIAN;
+        e.condition.direction.dir[0] = 1;
+        e.condition.right_sat[0]     = static_cast<Uint16>(info.right_sat   * 65535.0f);
+        e.condition.left_sat[0]      = static_cast<Uint16>(info.left_sat    * 65535.0f);
+        e.condition.right_coeff[0]   = static_cast<Sint16>(info.right_coeff * 32767.0f);
+        e.condition.left_coeff[0]    = static_cast<Sint16>(info.left_coeff  * 32767.0f);
+        e.condition.deadband[0]      = static_cast<Uint16>(info.deadband    * 65535.0f);
+        e.condition.center[0]        = static_cast<Sint16>(info.center      * 32767.0f);
+        e.condition.length           = SDL_HAPTIC_INFINITY;
+
+        if (!SDL_UpdateHapticEffect(m_haptic.Get(), idIt->second, &e))
+            LOG_WARN("HapticDevice", "RefreshInfiniteEffects - condition slot %d update failed: %s", slot, SDL_GetError());
+        SDL_RunHapticEffect(m_haptic.Get(), idIt->second, 1);
+    }
 }
 
 SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId, bool* outCreated) {
