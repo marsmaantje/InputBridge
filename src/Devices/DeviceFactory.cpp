@@ -60,7 +60,15 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateGamepadDevice(SDL_Joyst
     state.name = gamepad_name ? gamepad_name : state.name; // Override with gamepad name if available
     
     auto haptic = CreateHapticDevice(joystick, SDL_JOYSTICK_TYPE_GAMEPAD);
-    
+
+    // SDL reports both Steam Controller generations as "Steam Controller", with
+    // no variant in the name. Now that the haptic device exists and has already
+    // detected the PID, we can ask it for the precise type and update the name.
+    if (auto* gh = dynamic_cast<GamepadHaptics*>(haptic.get())) {
+        if (gh->IsSteamController())
+            state.name = gh->GetControllerTypeName();
+    }
+
     return DeviceCreationResult{std::move(state), std::move(haptic)};
 }
 

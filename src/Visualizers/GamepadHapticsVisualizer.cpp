@@ -1,4 +1,4 @@
-#include "App/Log.h"
+//#include "App/Log.h" // currently unused expect for the adaptive trigger part
 #include "GamepadHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/GamepadHaptics.h"
