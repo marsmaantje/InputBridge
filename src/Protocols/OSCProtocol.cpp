@@ -127,96 +127,35 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         });
     }
     // DualSense Trigger Effects
-    // Example: /inputbridge/haptics/dualsense/trigger/left/feedback i i i (deviceId, position, strength)
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/feedback" && std::strcmp(types, "iii") == 0 && argc == 3) {
-        handled = true;
-        int position = argv[1]->i;
-        int strength = argv[2]->i;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::map<std::string, int> params;
-            params["position"] = position;
-            params["strength"] = strength;
-            gamepad->SendDualSenseTrigger("left", "feedback", params);
-        });
-    }
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/feedback" && std::strcmp(types, "iii") == 0 && argc == 3) {
-        handled = true;
-        int position = argv[1]->i;
-        int strength = argv[2]->i;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::map<std::string, int> params;
-            params["position"] = position;
-            params["strength"] = strength;
-            gamepad->SendDualSenseTrigger("right", "feedback", params);
-        });
-    }
-    // Example: /inputbridge/haptics/dualsense/trigger/left/weapon i i i i (deviceId, start_position, end_position, strength)
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/weapon" && std::strcmp(types, "iiii") == 0 && argc == 4) {
-        handled = true;
-        int start_pos = argv[1]->i;
-        int end_pos = argv[2]->i;
-        int strength = argv[3]->i;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::map<std::string, int> params;
-            params["start_position"] = start_pos;
-            params["end_position"] = end_pos;
-            params["strength"] = strength;
-            gamepad->SendDualSenseTrigger("left", "weapon", params);
-        });
-    }
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/weapon" && std::strcmp(types, "iiii") == 0 && argc == 4) {
-        handled = true;
-        int start_pos = argv[1]->i;
-        int end_pos = argv[2]->i;
-        int strength = argv[3]->i;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::map<std::string, int> params;
-            params["start_position"] = start_pos;
-            params["end_position"] = end_pos;
-            params["strength"] = strength;
-            gamepad->SendDualSenseTrigger("right", "weapon", params);
-        });
-    }
-    // Example: /inputbridge/haptics/dualsense/trigger/left/vibration i i i i (deviceId, position, amplitude, frequency)
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/vibration" && std::strcmp(types, "iiii") == 0 && argc == 4) {
-        handled = true;
-        int position = argv[1]->i;
-        int amplitude = argv[2]->i;
-        int frequency = argv[3]->i;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::map<std::string, int> params;
-            params["position"] = position;
-            params["amplitude"] = amplitude;
-            params["frequency"] = frequency;
-            gamepad->SendDualSenseTrigger("left", "vibration", params);
-        });
-    }
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/vibration" && std::strcmp(types, "iiii") == 0 && argc == 4) {
-        handled = true;
-        int position = argv[1]->i;
-        int amplitude = argv[2]->i;
-        int frequency = argv[3]->i;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::map<std::string, int> params;
-            params["position"] = position;
-            params["amplitude"] = amplitude;
-            params["frequency"] = frequency;
-            gamepad->SendDualSenseTrigger("right", "vibration", params);
-        });
-    }
-    // Example: /inputbridge/haptics/dualsense/trigger/left/off i (deviceId)
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/left/off" && std::strcmp(types, "i") == 0 && argc == 1) {
+    // /inputbridge/haptics/dualsense/trigger/{left|right}/{feedback|weapon|vibration|off}
+    else if (path_sv.find("/inputbridge/haptics/dualsense/trigger/") != std::string_view::npos) {
         handled = true;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
+            std::string trigger = (path_sv.find("/left/") != std::string_view::npos) ? "left" : "right";
+            std::string effect = "off";
             std::map<std::string, int> params;
-            gamepad->SendDualSenseTrigger("left", "off", params);
-        });
-    }
-    else if (path_sv == "/inputbridge/haptics/dualsense/trigger/right/off" && std::strcmp(types, "i") == 0 && argc == 1) {
-        handled = true;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::map<std::string, int> params;
-            gamepad->SendDualSenseTrigger("right", "off", params);
+
+            if (path_sv.ends_with("/feedback") && std::strcmp(types, "iii") == 0 && argc == 3) {
+                effect = "feedback";
+                params["position"] = argv[1]->i;
+                params["strength"] = argv[2]->i;
+            } else if (path_sv.ends_with("/weapon") && std::strcmp(types, "iiii") == 0 && argc == 4) {
+                effect = "weapon";
+                params["start_position"] = argv[1]->i;
+                params["end_position"]   = argv[2]->i;
+                params["strength"]       = argv[3]->i;
+            } else if (path_sv.ends_with("/vibration") && std::strcmp(types, "iiii") == 0 && argc == 4) {
+                effect = "vibration";
+                params["position"]  = argv[1]->i;
+                params["amplitude"] = argv[2]->i;
+                params["frequency"] = argv[3]->i;
+            } else if (path_sv.ends_with("/off")) {
+                effect = "off";
+            }
+
+            if (effect != "off" || path_sv.ends_with("/off")) {
+                gamepad->SendDualSenseTrigger(trigger.c_str(), effect.c_str(), params);
+            }
         });
     }
     // RPM LED meter — /inputbridge/wheel/led_rpm f  (value 0.0 – 1.0)
