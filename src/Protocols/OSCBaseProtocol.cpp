@@ -1,4 +1,3 @@
-#include "App/Log.h"
 #include "Protocols/OSCBaseProtocol.h"
 #include "Protocols/OscValidation.h"
 #include "Network/OSCServer.h"

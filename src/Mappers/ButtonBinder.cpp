@@ -4,7 +4,7 @@
 
 static constexpr const char* kTag = "ButtonBinder";
 
-void ButtonBinder::StartBinding(const std::vector<struct DeviceState>& connectedDevices) {
+void ButtonBinder::StartBinding(const std::vector<DeviceState>& connectedDevices) {
     m_baselineButtonStates.clear();
     for (const auto& dev : connectedDevices) {
         if (!dev.joystick) continue;
@@ -23,7 +23,7 @@ void ButtonBinder::StartBinding(const std::vector<struct DeviceState>& connected
     LOG_INFO(kTag, "Started binding process for all connected joysticks.");
 }
 
-std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<struct DeviceState>& connectedDevices) {
+std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<DeviceState>& connectedDevices) {
     if (!m_isBinding) {
         return std::nullopt;
     }
