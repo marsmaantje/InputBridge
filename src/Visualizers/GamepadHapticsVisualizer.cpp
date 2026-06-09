@@ -4,6 +4,8 @@
 #include "Haptics/GamepadHaptics.h"
 #include <SDL3/SDL.h>
 
+static constexpr const char* kTag = "GamepadHapticsViz";
+
 void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
     HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
     if (haptic) {
@@ -301,7 +303,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                 }
                 
                 int result = gamepadHaptics->PlayDualSenseTrigger("left", leftEffectName, leftParams);
-                LOG_DEBUG("GamepadHapticsViz", "Left trigger effect '%s' result: %d", leftEffectName.c_str(), result);
+                LOG_DEBUG(kTag, "Left trigger effect '%s' result: %d", leftEffectName.c_str(), result);
                 
                 // Send right trigger effect
                 std::map<std::string, int> rightParams;
@@ -346,7 +348,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                 }
                 
                 result = gamepadHaptics->PlayDualSenseTrigger("right", rightEffectName, rightParams);
-                LOG_DEBUG("GamepadHapticsViz", "Right trigger effect '%s' result: %d", rightEffectName.c_str(), result);
+                LOG_DEBUG(kTag, "Right trigger effect '%s' result: %d", rightEffectName.c_str(), result);
             }
         }
     }

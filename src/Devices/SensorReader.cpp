@@ -2,6 +2,8 @@
 #include "App/Log.h"
 #include <algorithm>
 
+static constexpr const char* kTag = "SensorReader";
+
 // ── Private helpers ───────────────────────────────────────────────────────────
 //
 // All six Read*Gyro / Read*Accel public methods previously duplicated the same
@@ -89,7 +91,7 @@ void SensorReader::Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps) 
     for (const auto& entry : kMotionSensors) {
         if (caps.*entry.flag) {
             if (!SDL_SetGamepadSensorEnabled(gamepad, entry.type, true))
-                LOG_WARN("SensorReader", "Enable: failed to enable sensor type %d: %s",
+                LOG_WARN(kTag, "Enable: failed to enable sensor type %d: %s",
                          (int)entry.type, SDL_GetError());
         }
     }
@@ -106,9 +108,9 @@ SensorCapabilities SensorReader::EnableAll(SDL_Gamepad* gamepad) {
 GyroState  SensorReader::ReadGyro (SDL_Gamepad* g) { return ReadGyroSensor (g, SDL_SENSOR_GYRO);    }
 AccelState SensorReader::ReadAccel(SDL_Gamepad* g) { return ReadAccelSensor(g, SDL_SENSOR_ACCEL);   }
 GyroState  SensorReader::ReadGyroL(SDL_Gamepad* g) { return ReadGyroSensor (g, SDL_SENSOR_GYRO_L);  }
-AccelState SensorReader::ReadAccelL(SDL_Gamepad* g){ return ReadAccelSensor(g, SDL_SENSOR_ACCEL_L); }
+AccelState SensorReader::ReadAccelL(SDL_Gamepad* g) { return ReadAccelSensor(g, SDL_SENSOR_ACCEL_L); }
 GyroState  SensorReader::ReadGyroR(SDL_Gamepad* g) { return ReadGyroSensor (g, SDL_SENSOR_GYRO_R);  }
-AccelState SensorReader::ReadAccelR(SDL_Gamepad* g){ return ReadAccelSensor(g, SDL_SENSOR_ACCEL_R); }
+AccelState SensorReader::ReadAccelR(SDL_Gamepad* g) { return ReadAccelSensor(g, SDL_SENSOR_ACCEL_R); }
 
 // ── Touch ─────────────────────────────────────────────────────────────────────
 

@@ -14,29 +14,32 @@
 
 #include "lo/lo_osc_types.h"
 #include "App/Log.h"
+#include <cstring>
 #include <string_view>
 #include <algorithm>
 
 namespace OscValidation {
 
+static constexpr const char* kTag = "OSCValidation";
+
 // ── Pointer safety ────────────────────────────────────────────────────────────
 
 inline bool CheckPointers(const char* path, const char* types, lo_arg** argv, int argc) {
     if (!path) {
-        LOG_WARN("OSCValidation", "Received OSC message with null path — ignored");
+        LOG_WARN(kTag, "Received OSC message with null path — ignored");
         return false;
     }
     if (!types) {
-        LOG_WARN("OSCValidation", "Received OSC message on '%s' with null type string — ignored", path);
+        LOG_WARN(kTag, "Received OSC message on '%s' with null type string — ignored", path);
         return false;
     }
     if (argc > 0 && !argv) {
-        LOG_WARN("OSCValidation", "Received OSC message on '%s' with argc=%d but null argv — ignored", path, argc);
+        LOG_WARN(kTag, "Received OSC message on '%s' with argc=%d but null argv — ignored", path, argc);
         return false;
     }
     for (int i = 0; i < argc; ++i) {
         if (!argv[i]) {
-            LOG_WARN("OSCValidation", "Received OSC message on '%s': argv[%d] is null — ignored", path, i);
+            LOG_WARN(kTag, "Received OSC message on '%s': argv[%d] is null — ignored", path, i);
             return false;
         }
     }
@@ -49,7 +52,7 @@ static constexpr int kMaxSlot = 255;
 
 inline bool ValidateSlot(int slot, std::string_view path) {
     if (slot < 0 || slot > kMaxSlot) {
-        LOG_WARN("OSCValidation", "OSC '%.*s': slot %d is out of range [0, %d] — ignored",
+        LOG_WARN(kTag, "OSC '%.*s': slot %d is out of range [0, %d] — ignored",
             (int)path.size(), path.data(), slot, kMaxSlot);
         return false;
     }
@@ -61,7 +64,7 @@ inline bool ValidateSlot(int slot, std::string_view path) {
 inline float Clamp(float v, float lo, float hi, const char* paramName, std::string_view path) {
     if (v < lo || v > hi) {
         float clamped = std::clamp(v, lo, hi);
-        LOG_WARN("OSCValidation", "OSC '%.*s': %s value %.4f out of range [%.1f, %.1f] — clamped to %.4f",
+        LOG_WARN(kTag, "OSC '%.*s': %s value %.4f out of range [%.1f, %.1f] — clamped to %.4f",
             (int)path.size(), path.data(), paramName, v, lo, hi, clamped);
         return clamped;
     }
@@ -76,7 +79,7 @@ inline float ClampStrength(float v, const char* n, std::string_view p) { return 
 
 inline bool ValidateWaveType(int idx, std::string_view path) {
     if (idx < 0 || idx > 4) {
-        LOG_WARN("OSCValidation", "OSC '%.*s': wave_type %d is out of range [0, 4] — ignored",
+        LOG_WARN(kTag, "OSC '%.*s': wave_type %d is out of range [0, 4] — ignored",
             (int)path.size(), path.data(), idx);
         return false;
     }
@@ -85,7 +88,7 @@ inline bool ValidateWaveType(int idx, std::string_view path) {
 
 inline bool ValidateConditionType(int idx, std::string_view path) {
     if (idx < 0 || idx > 3) {
-        LOG_WARN("OSCValidation", "OSC '%.*s': condition_type %d is out of range [0, 3] — ignored",
+        LOG_WARN(kTag, "OSC '%.*s': condition_type %d is out of range [0, 3] — ignored",
             (int)path.size(), path.data(), idx);
         return false;
     }
@@ -97,7 +100,7 @@ inline bool ValidateConditionType(int idx, std::string_view path) {
 inline int ClampInt(int v, int lo, int hi, const char* paramName, std::string_view path) {
     if (v < lo || v > hi) {
         int clamped = std::clamp(v, lo, hi);
-        LOG_WARN("OSCValidation", "OSC '%.*s': %s value %d out of range [%d, %d] — clamped to %d",
+        LOG_WARN(kTag, "OSC '%.*s': %s value %d out of range [%d, %d] — clamped to %d",
             (int)path.size(), path.data(), paramName, v, lo, hi, clamped);
         return clamped;
     }

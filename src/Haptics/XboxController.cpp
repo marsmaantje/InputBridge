@@ -12,6 +12,8 @@
 #include <SDL3/SDL_gamepad.h>
 #include <array>
 
+static constexpr const char* kTag = "XboxController";
+
 // ==================== Initialization ====================
 
 bool XboxController::IsReady() const {
@@ -70,7 +72,7 @@ int XboxController::SetImpulseTriggers(uint8_t leftIntensity,
                                        uint8_t rightIntensity,
                                        uint16_t durationMs) {
     if (!IsXboxController()) {
-        LOG_WARN("XboxController", "SetImpulseTriggers: Not an Xbox controller");
+        LOG_WARN(kTag, "SetImpulseTriggers: Not an Xbox controller");
         return -1;
     }
     
@@ -81,7 +83,7 @@ int XboxController::SetImpulseTriggers(uint8_t leftIntensity,
         state.durationMs = durationMs;
         
         if (!SendImpulseTriggerCommand(state)) {
-            LOG_ERROR("XboxController", "SetImpulseTriggers: Failed to send command");
+            LOG_ERROR(kTag, "SetImpulseTriggers: Failed to send command");
         }
     });
     
@@ -122,14 +124,14 @@ bool XboxController::SendImpulseTriggerCommand(const Xbox::ImpulseTriggerState& 
     data[6] = static_cast<uint8_t>(state.durationMs & 0xFF);
     data[7] = static_cast<uint8_t>((state.durationMs >> 8) & 0xFF);
     
-    LOG_DEBUG("XboxController", "Impulse: Report=0x%02X, L=%d, R=%d, Duration=%dms",
+    LOG_DEBUG(kTag, "Impulse: Report=0x%02X, L=%d, R=%d, Duration=%dms",
            data[0], state.leftTriggerMotor, state.rightTriggerMotor, state.durationMs);
     
     if (!SDL_SendJoystickEffect(m_joystick, data.data(), data.size())) {
-        LOG_ERROR("XboxController", "Impulse: Send failed - %s", SDL_GetError());
+        LOG_ERROR(kTag, "Impulse: Send failed - %s", SDL_GetError());
         return false;
     }
     
-    LOG_DEBUG("XboxController", "Impulse: Report sent successfully");
+    LOG_DEBUG(kTag, "Impulse: Report sent successfully");
     return true;
 }

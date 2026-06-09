@@ -20,6 +20,8 @@
 
 #include <string>
 
+static constexpr const char* kTag = "DevicePanel";
+
 // ---------------------------------------------------------------------------
 // DrawDeviceVisualizer
 // ---------------------------------------------------------------------------
@@ -191,7 +193,7 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
 
     if (ImGui::Checkbox("Hide from other applications", &hidden)) {
         if (!deviceManager.SetDeviceHidden(dev, hidden)) {
-            LOG_WARN("DevicePanel", "SetDeviceHidden failed for '%s'.", dev.name.c_str());
+            LOG_WARN(kTag, "SetDeviceHidden failed for '%s'.", dev.name.c_str());
         }
     }
 

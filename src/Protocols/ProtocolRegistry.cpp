@@ -11,6 +11,8 @@
 #include <random>
 #include <SDL3/SDL_filesystem.h>
 
+static constexpr const char* kTag = "ProtocolRegistry";
+
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -418,7 +420,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     if (ofs) {
         ofs << j.dump(4);
     } else {
-    LOG_ERROR("ProtocolRegistry", "Failed to write %s", path.c_str());
+    LOG_ERROR(kTag, "Failed to write %s", path.c_str());
     }
 }
 
@@ -483,7 +485,7 @@ static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
                 fs::copy_file(entry.path(), dstFile,
                               fs::copy_options::skip_existing, ec);
                 if (ec)
-                    LOG_ERROR("ProtocolRegistry", "Bootstrap copy failed for %s: %s",
+                    LOG_ERROR(kTag, "Bootstrap copy failed for %s: %s",
                               entry.path().string().c_str(), ec.message().c_str());
             }
         }
@@ -567,7 +569,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
             }
         }
     } catch (const std::exception& e) {
-    LOG_ERROR("ProtocolRegistry", "Failed to parse input_fields.json: %s", e.what());
+    LOG_ERROR(kTag, "Failed to parse input_fields.json: %s", e.what());
     }
 }
 
@@ -733,7 +735,7 @@ void ProtocolRegistry::LoadDefinitionFiles() {
 
             m_definitions.push_back(def);
         } catch (const std::exception& e) {
-            LOG_ERROR("ProtocolRegistry", "Failed to parse %s: %s",
+            LOG_ERROR(kTag, "Failed to parse %s: %s",
                       entry.path().string().c_str(), e.what());
         }
     }
@@ -818,7 +820,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
             }
         }
     } catch (const std::exception& e) {
-    LOG_ERROR("ProtocolRegistry", "Failed to parse builtin_fields.json: %s", e.what());
+    LOG_ERROR(kTag, "Failed to parse builtin_fields.json: %s", e.what());
     }
 }
 
