@@ -437,7 +437,7 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
         if (existing == -1) {
             LOG_WARN("HapticDevice", "SetCondition - existingID -1");
         } else {
-            LOG_INFO("HapticDevice", "SetCondition - existingID %d", existing);
+            LOG_DEBUG("HapticDevice", "SetCondition - existingID %d", existing);
         }
 
         bool created = false;

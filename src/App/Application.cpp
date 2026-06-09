@@ -187,13 +187,13 @@ void Application::MigrateUserData()
         std::error_code ec;
         fs::create_directories(dst.parent_path(), ec);
         if (ec) {
-            LOG_INFO("Application", "Migration: Could not create directory %s: %s",
+            LOG_WARN("Application", "Migration: Could not create directory %s: %s",
                     dst.parent_path().string().c_str(), ec.message().c_str());
             return false;
         }
         fs::copy_file(src, dst, fs::copy_options::skip_existing, ec);
         if (ec) {
-            LOG_INFO("Application", "Migration: Could not copy %s → %s: %s",
+            LOG_WARN("Application", "Migration: Could not copy %s → %s: %s",
                     src.string().c_str(), dst.string().c_str(), ec.message().c_str());
             return false;
         }

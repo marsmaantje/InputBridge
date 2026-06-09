@@ -198,11 +198,11 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
 
             if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
-                LOG_INFO("DeviceManager", "Battery [%s]: State=%s (battery info not available)",
+                LOG_WARN("DeviceManager", "Battery [%s]: State=%s (battery info not available)",
                         dev.name.c_str(), state_str);
-                LOG_INFO("DeviceManager", "Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
+                LOG_WARN("DeviceManager", "Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
             } else if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
-                LOG_INFO("DeviceManager", "Battery [%s]: State=%s, Percent=%d%%",
+                LOG_DEBUG("DeviceManager", "Battery [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
         }
@@ -237,7 +237,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
                     if (leftState != SDL_POWERSTATE_NO_BATTERY) {
                         dev.battery_state_L   = leftState;
                         dev.battery_percent_L = leftPercent;
-                        LOG_INFO("DeviceManager", "Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
+                        LOG_DEBUG("DeviceManager", "Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
                         SDL_CloseJoystick(joy);
                         break;
                     }
@@ -275,7 +275,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
 
             if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY && dev.battery_state != SDL_POWERSTATE_UNKNOWN) {
-                LOG_INFO("DeviceManager", "Battery (Joystick) [%s]: State=%s, Percent=%d%%",
+                LOG_DEBUG("DeviceManager", "Battery (Joystick) [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
         }
@@ -302,7 +302,7 @@ bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
                          ? dev.joystick
                          : (dev.gamepad ? SDL_GetGamepadJoystick(dev.gamepad) : nullptr);
     if (!joy) {
-        LOG_INFO("DeviceManager", "SetDeviceHidden: no joystick handle for '%s'.",
+        LOG_WARN("DeviceManager", "SetDeviceHidden: no joystick handle for '%s'.",
                 dev.name.c_str());
         return false;
     }

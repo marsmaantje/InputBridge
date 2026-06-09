@@ -134,7 +134,7 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
             break;
             
         default:
-            LOG_INFO("DeviceFactory", "Unknown haptic device type: %d", static_cast<int>(device_type));
+            LOG_WARN("DeviceFactory", "Unknown haptic device type: %d", static_cast<int>(device_type));
             return nullptr;
     }
     

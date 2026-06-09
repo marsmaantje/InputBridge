@@ -93,7 +93,7 @@ void ThemeManager::ResolveFontPath(const ThemeData& data) {
                 m_resolvedFontPath.c_str(), m_fontSize);
     } else {
         // File not found — fall back to ImGui default silently.
-        LOG_INFO("ThemeManager", "Font file not found (%s) — using default font.",
+        LOG_WARN("ThemeManager", "Font file not found (%s) — using default font.",
                 resolved.string().c_str());
         m_resolvedFontPath.clear();
         m_fontSize = 16.f;
@@ -108,7 +108,7 @@ Result<bool, std::string> ThemeManager::LoadFromFile(const std::string& path) {
     auto result = ParseFile(path);
     if (result.IsErr()) {
         m_lastError = result.Error();
-        LOG_INFO("ThemeManager", "Failed to load theme '%s': %s",
+        LOG_WARN("ThemeManager", "Failed to load theme '%s': %s",
                 path.c_str(), m_lastError.c_str());
         return Result<bool, std::string>::Err(m_lastError);
     }
@@ -244,7 +244,7 @@ void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
 
     auto result = LoadFromFile(path);
     if (result.IsErr()) {
-        LOG_INFO("ThemeManager", "Saved theme could not be restored: %s — using default.",
+        LOG_WARN("ThemeManager", "Saved theme could not be restored: %s — using default.",
                 result.Error().c_str());
         prefs.DeleteKey("Theme", "ThemePath");
     }

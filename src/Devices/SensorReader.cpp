@@ -1,4 +1,5 @@
 #include "SensorReader.h"
+#include "App/Log.h"
 #include <algorithm>
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -88,9 +89,8 @@ void SensorReader::Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps) 
     for (const auto& entry : kMotionSensors) {
         if (caps.*entry.flag) {
             if (!SDL_SetGamepadSensorEnabled(gamepad, entry.type, true))
-                SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
-                            "SensorReader::Enable: failed to enable sensor type %d: %s",
-                            (int)entry.type, SDL_GetError());
+                LOG_WARN("SensorReader", "Enable: failed to enable sensor type %d: %s",
+                         (int)entry.type, SDL_GetError());
         }
     }
 }

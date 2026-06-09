@@ -191,7 +191,7 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
 
     if (ImGui::Checkbox("Hide from other applications", &hidden)) {
         if (!deviceManager.SetDeviceHidden(dev, hidden)) {
-            LOG_INFO("DevicePanel", "SetDeviceHidden failed for '%s'.", dev.name.c_str());
+            LOG_WARN("DevicePanel", "SetDeviceHidden failed for '%s'.", dev.name.c_str());
         }
     }
 

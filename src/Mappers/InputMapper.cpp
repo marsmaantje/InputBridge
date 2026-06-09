@@ -2092,9 +2092,9 @@ void InputMapper::LoadProfiles() {
                 p.wsInputEnabled  = data.value("ws_input_enabled",  true);
 
                 m_Profiles.push_back(p);
-            } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to parse profile %s: %s",e.path().string().c_str(),ex.what()); }
+            } catch (const std::exception& ex) { LOG_ERROR("InputMapper", "Failed to parse profile %s: %s",e.path().string().c_str(),ex.what()); }
         }
-    } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to load profiles: %s",ex.what()); }
+    } catch (const std::exception& ex) { LOG_ERROR("InputMapper", "Failed to load profiles: %s",ex.what()); }
 }
 
 void InputMapper::SaveProfile(const MappingProfile &profile) const {
@@ -2151,7 +2151,7 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
         data["ws_input_enabled"]  = profile.wsInputEnabled;
 
         std::ofstream o(path); if (o) o<<data.dump(4);
-    } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to save profile: %s",ex.what()); }
+    } catch (const std::exception& ex) { LOG_ERROR("InputMapper", "Failed to save profile: %s",ex.what()); }
 }
 
 std::vector<HapticTarget>* InputMapper::GetCurrentHapticTargets() {
