@@ -4,6 +4,7 @@
 void HapticDispatcher::DispatchRumble(lo_arg** argv, int argc, OutputMapper* mapper)
 {
     if (!mapper || argc < 5) return;
+    for (int i = 0; i < 5; ++i) { if (!argv[i]) return; }
     const int   id       = argv[0]->i;
     const int   slot     = argv[1]->i;
     const float low      = argv[2]->f;
@@ -15,6 +16,7 @@ void HapticDispatcher::DispatchRumble(lo_arg** argv, int argc, OutputMapper* map
 void HapticDispatcher::DispatchConstant(lo_arg** argv, int argc, OutputMapper* mapper)
 {
     if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
     const int   id       = argv[0]->i;
     const int   slot     = argv[1]->i;
     const float strength = argv[2]->f;
@@ -55,6 +57,13 @@ void HapticDispatcher::DispatchPeriodic(lo_arg** argv, int argc, OutputMapper* m
 void HapticDispatcher::DispatchCondition(lo_arg** argv, int argc, OutputMapper* mapper)
 {
     if (!mapper || argc < 10) return;
+
+    // Guard every slot: a sparse or malformed OSC message can leave argv[i]
+    // null even when argc is large enough, causing a segfault on dereference.
+    for (int i = 0; i < 10; ++i) {
+        if (!argv[i]) return;
+    }
+
     const int   id       = argv[0]->i;
     const int   slot     = argv[1]->i;
     const HapticConditionType ctype = ConditionTypeFromIndex(argv[2]->i);
@@ -71,6 +80,7 @@ void HapticDispatcher::DispatchCondition(lo_arg** argv, int argc, OutputMapper* 
 void HapticDispatcher::DispatchGain(lo_arg** argv, int argc, OutputMapper* mapper)
 {
     if (!mapper || argc < 2) return;
+    for (int i = 0; i < 2; ++i) { if (!argv[i]) return; }
     const int id   = argv[0]->i;
     const int gain = argv[1]->i;
     mapper->QueueSetGain(id, gain);
