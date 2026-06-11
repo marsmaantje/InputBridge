@@ -172,6 +172,11 @@ HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
     return nullptr;
 }
 
+void DeviceManager::SetDeviceKeepalive(SDL_JoystickID instance_id, bool enable) {
+    HapticDevice* haptic = GetHapticDevice(instance_id);
+    if (haptic) haptic->EnableKeepalive(enable);
+}
+
 void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
     SDL_PowerState old_state = dev.battery_state;
     int old_percent = dev.battery_percent;

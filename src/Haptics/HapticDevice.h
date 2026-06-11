@@ -212,6 +212,7 @@ public:
     // Call this after Init() for devices known to truncate the 32-bit length
     // field to 16 bits (e.g. Thrustmaster T150).
     void EnableKeepalive(bool enable = true) { m_keepaliveEnabled = enable; }
+    bool IsKeepaliveEnabled() const { return m_keepaliveEnabled; }
 
     /**
      * @brief Return the set of haptic effect families this device supports.

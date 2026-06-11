@@ -52,6 +52,22 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
     ImGui::Separator();
     ImGui::Text("Haptics Test");
 
+    // ── Keepalive toggle ─────────────────────────────────────────────────────
+    if (haptic) {
+        bool keepalive = haptic->IsKeepaliveEnabled();
+        if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
+            deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Re-uploads active infinite-duration effects every 30 s.\n"
+                "Required for devices that truncate SDL_HAPTIC_INFINITY to ~65 s\n"
+                "(e.g. Thrustmaster T150). Safe to enable on any device."
+            );
+        }
+        ImGui::Spacing();
+    }
+
     auto* fsHaptics = dynamic_cast<FlightStickHaptics*>(haptic);
     if (!fsHaptics) {
         ImGui::TextDisabled("Flight Stick Haptics not available.");

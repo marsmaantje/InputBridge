@@ -31,6 +31,7 @@ class DeviceManager {
     static std::string GetDeviceGUIDString(const DeviceState& dev);
 
     HapticDevice* GetHapticDevice(SDL_JoystickID instance_id) const;
+    void SetDeviceKeepalive(SDL_JoystickID instance_id, bool enable);
 
     void UpdateBatteryInfo(DeviceState& dev);
 

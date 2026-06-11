@@ -37,6 +37,24 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     ImGui::Separator();
     ImGui::Text("Haptics Test");
 
+    // ── Keepalive toggle ─────────────────────────────────────────────────────
+    // Some devices (e.g. Thrustmaster T150) silently truncate SDL_HAPTIC_INFINITY
+    // to ~65 s. When enabled, active INFINITY effects are re-uploaded every 30 s.
+    if (haptic) {
+        bool keepalive = haptic->IsKeepaliveEnabled();
+        if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
+            deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Re-uploads active infinite-duration effects every 30 s.\n"
+                "Required for devices that truncate SDL_HAPTIC_INFINITY to ~65 s\n"
+                "(e.g. Thrustmaster T150). Safe to enable on any device."
+            );
+        }
+        ImGui::Spacing();
+    }
+
     auto* gamepadHaptics = haptic ? dynamic_cast<GamepadHaptics*>(haptic) : nullptr;
 
     // Slot selector: when it changes, populate fields from the running state.
