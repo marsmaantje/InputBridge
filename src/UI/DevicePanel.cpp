@@ -23,6 +23,44 @@
 static constexpr const char* kTag = "DevicePanel";
 
 // ---------------------------------------------------------------------------
+// DrawDeviceSettingsTab
+// ---------------------------------------------------------------------------
+// Draws the contents of the per-device "Settings" tab. Currently this just
+// hosts the "Infinite-effect keepalive" toggle, which used to live on each
+// Haptic Test tab individually.
+
+static void DrawDeviceSettingsTab(const DeviceState&  dev,
+                                   DeviceManager&      deviceManager,
+                                   PreferencesManager& prefs,
+                                   const std::string&  guid)
+{
+    HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
+
+    if (!haptic) {
+        ImGui::TextDisabled("No device-specific settings available.");
+        return;
+    }
+
+    // Restore saved preference once when the device first appears.
+    if (!prefs.IsPreferenceApplied(dev.instance_id)) {
+        haptic->EnableKeepalive(prefs.GetDeviceKeepalive(guid));
+    }
+
+    bool keepalive = haptic->IsKeepaliveEnabled();
+    if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
+        deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
+        prefs.SetDeviceKeepalive(guid, keepalive);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Re-uploads active infinite-duration effects every 30 s.\n"
+            "Required for devices that truncate SDL_HAPTIC_INFINITY to ~65 s\n"
+            "Untested on any other device than Thrustmaster T150!"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // DrawDeviceVisualizer
 // ---------------------------------------------------------------------------
 
@@ -108,6 +146,11 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                     TabItem("Sensors", sensor_viz);
             }
 
+            if (ImGui::BeginTabItem("Settings")) {
+                DrawDeviceSettingsTab(dev, deviceManager, prefs, guid);
+                ImGui::EndTabItem();
+            }
+
             SimulateTab();
             ImGui::EndTabBar();
         }
@@ -144,6 +187,11 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                         ImGui::EndTabItem();
                     }
                 }
+            }
+
+            if (ImGui::BeginTabItem("Settings")) {
+                DrawDeviceSettingsTab(dev, deviceManager, prefs, guid);
+                ImGui::EndTabItem();
             }
 
             SimulateTab();
