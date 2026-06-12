@@ -145,31 +145,6 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
         return nullptr;
     }
 
-    // Thrustmaster T150 (and potentially other Thrustmaster wheels) only
-    // honour the lower 16 bits of the DirectInput/HID effect-length field.
-    // SDL_HAPTIC_INFINITY (0xFFFF'FFFF) is therefore silently truncated to
-    // 0xFFFF = 65 535 ms, causing all infinite effects to stop after ~65 s.
-    // Enabling the keepalive causes the haptic thread to re-upload every
-    // INFINITY effect every 30 s, which keeps it alive on affected hardware
-    // while being a near-no-op on wheels that handle INFINITY correctly.
-    if (haptic) {
-        const char* name = SDL_GetJoystickName(joystick);
-        uint16_t vid = SDL_GetJoystickVendor(joystick);
-        uint16_t pid = SDL_GetJoystickProduct(joystick);
-        // Thrustmaster VID: 0x044F
-        // T150: PID 0xB677 (PS3/PC) / 0xB67A (PS4/PC)
-        // Enable keepalive for all Thrustmaster wheels as a safe fallback;
-        // on unaffected models the extra SDL_UpdateHapticEffect calls are harmless.
-        const bool isThrustmaster = (vid == 0x044F);
-        if (isThrustmaster) {
-            LOG_INFO(kTag,
-                     "Enabling INFINITY-effect keepalive for Thrustmaster device "
-                     "\"%s\" (VID=0x%04X PID=0x%04X)",
-                     name ? name : "unknown", vid, pid);
-            haptic->EnableKeepalive(true);
-        }
-    }
-
     return haptic;
 }
 

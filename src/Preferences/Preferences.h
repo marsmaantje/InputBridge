@@ -51,6 +51,9 @@ class PreferencesManager {
     std::string GetDeviceMapping(const std::string &guid) const;
     void SetDeviceMapping(const std::string &guid, const std::string &mapping);
 
+    bool GetDeviceKeepalive(const std::string &guid) const;
+    void SetDeviceKeepalive(const std::string &guid, bool enabled);
+
     bool IsPreferenceApplied(SDL_JoystickID instance_id) const;
     void MarkPreferenceApplied(SDL_JoystickID instance_id);
     void ClearAppliedPreference(SDL_JoystickID instance_id);
@@ -67,5 +70,6 @@ class PreferencesManager {
     static constexpr const char* kVisualizerKey = "Visualizer";
     static constexpr const char* kMappingKey = "Mapping";
     static constexpr const char* kMappingPrefix = "Mapping.";
+    static constexpr const char* kKeepaliveKey = "HapticKeepalive";
     static constexpr size_t kMappingPrefixLen = 8; // strlen("Mapping.")
 };

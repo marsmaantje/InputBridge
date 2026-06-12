@@ -262,6 +262,15 @@ void PreferencesManager::SetDeviceMapping(const std::string &guid, const std::st
     Save();
 }
 
+bool PreferencesManager::GetDeviceKeepalive(const std::string &guid) const {
+    return GetBool(std::string(kDeviceSectionPrefix) + guid, kKeepaliveKey, false);
+}
+
+void PreferencesManager::SetDeviceKeepalive(const std::string &guid, bool enabled) {
+    SetBool(std::string(kDeviceSectionPrefix) + guid, kKeepaliveKey, enabled);
+    Save();
+}
+
 bool PreferencesManager::IsPreferenceApplied(SDL_JoystickID instance_id) const { return m_AppliedPreferences.find(instance_id) != m_AppliedPreferences.end(); }
 
 void PreferencesManager::MarkPreferenceApplied(SDL_JoystickID instance_id) { m_AppliedPreferences.insert(instance_id); }

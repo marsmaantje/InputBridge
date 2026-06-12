@@ -88,7 +88,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
         if (ImGui::BeginTabBar("DeviceMode")) {
             TabItem("Raw Inputs", generic_viz);
             if (ImGui::BeginTabItem("Haptic Test")) {
-                gamepad_haptics_viz.Draw(dev, deviceManager);
+                gamepad_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                 ImGui::EndTabItem();
             }
 
@@ -120,7 +120,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
             if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK
                 || type == SDL_JOYSTICK_TYPE_THROTTLE) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
-                    flight_stick_haptics_viz.Draw(dev, deviceManager);
+                    flight_stick_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                     ImGui::EndTabItem();
                 }
             }
@@ -130,7 +130,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
             }
             if (type == SDL_JOYSTICK_TYPE_WHEEL) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
-                    wheel_haptics_viz.Draw(dev, deviceManager);
+                    wheel_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                     ImGui::EndTabItem();
                 }
             }

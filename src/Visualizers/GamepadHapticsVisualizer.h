@@ -1,10 +1,12 @@
 #pragma once
 #include "Devices/DeviceState.h"
 #include "Devices/DeviceManager.h"
+#include "Preferences/Preferences.h"
 
 class GamepadHapticsVisualizer {
 public:
-    void Draw(const DeviceState& dev, DeviceManager& deviceManager);
+    void Draw(const DeviceState& dev, DeviceManager& deviceManager,
+              PreferencesManager& prefs, const std::string& guid);
 
 private:
     // Rumble

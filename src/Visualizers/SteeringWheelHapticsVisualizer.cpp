@@ -47,7 +47,8 @@ void SteeringWheelHapticsVisualizer::LoadConditionFromActive(const ActiveConditi
 // Main draw
 // ---------------------------------------------------------------------------
 
-void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
+void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager,
+                                          PreferencesManager& prefs, const std::string& guid) {
     HapticDevice *haptic = deviceManager.GetHapticDevice(dev.instance_id);
     if (haptic) {
         if (haptic->IsReady() && dev.joystick) {
@@ -97,9 +98,14 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
 
     // ── Keepalive toggle ─────────────────────────────────────────────────────
     if (haptic) {
+        if (!prefs.IsPreferenceApplied(dev.instance_id)) {
+            haptic->EnableKeepalive(prefs.GetDeviceKeepalive(guid));
+        }
+
         bool keepalive = haptic->IsKeepaliveEnabled();
         if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
             deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
+            prefs.SetDeviceKeepalive(guid, keepalive);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(

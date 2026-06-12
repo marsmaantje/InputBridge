@@ -2,10 +2,12 @@
 #include "Devices/DeviceState.h"
 #include "Devices/DeviceManager.h"
 #include "Haptics/HapticDevice.h"
+#include "Preferences/Preferences.h"
 
 class SteeringWheelHapticsVisualizer {
 public:
-    void Draw(const DeviceState& dev, DeviceManager& deviceManager);
+    void Draw(const DeviceState& dev, DeviceManager& deviceManager,
+              PreferencesManager& prefs, const std::string& guid);
 
     // Draw only the RPM LED controls — independent of haptics availability.
     // Safe to call even when the device has no SDL haptic support.

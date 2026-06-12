@@ -6,7 +6,8 @@
 
 static constexpr const char* kTag = "GamepadHapticsViz";
 
-void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
+void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager,
+                                    PreferencesManager& prefs, const std::string& guid) {
     HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
     if (haptic) {
         if (haptic->IsReady() && dev.joystick) {
@@ -38,12 +39,16 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     ImGui::Text("Haptics Test");
 
     // ── Keepalive toggle ─────────────────────────────────────────────────────
-    // Some devices (e.g. Thrustmaster T150) silently truncate SDL_HAPTIC_INFINITY
-    // to ~65 s. When enabled, active INFINITY effects are re-uploaded every 30 s.
     if (haptic) {
+        // Restore saved preference once when the device first appears.
+        if (!prefs.IsPreferenceApplied(dev.instance_id)) {
+            haptic->EnableKeepalive(prefs.GetDeviceKeepalive(guid));
+        }
+
         bool keepalive = haptic->IsKeepaliveEnabled();
         if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
             deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
+            prefs.SetDeviceKeepalive(guid, keepalive);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
