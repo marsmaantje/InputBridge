@@ -1115,13 +1115,22 @@ void InputMapper::DrawMappingContent() {
                     if (sensor_channel && dev->gamepad) {
                         ImGui::Separator();
                         for (const auto& entry : kSensorEntries) {
-                            if (entry.channel < SC::LeftStickTouch) continue;
-                            
+                            // Only expose boolean sensor channels as digital inputs:
+                            // cap-sense touch pads and battery charging state.
+                            // Gyro, accel, touchpad position/pressure, and battery level
+                            // are all continuous/analog and must not appear here.
+                            bool isCap = (entry.channel == SC::LeftStickTouch  ||
+                                          entry.channel == SC::RightStickTouch ||
+                                          entry.channel == SC::LeftGripTouch   ||
+                                          entry.channel == SC::RightGripTouch);
+                            bool isCharge = (entry.channel == SC::BatteryCharging);
+                            if (!isCap && !isCharge) continue;
+
                             SDL_GamepadCapSenseType ct = SDL_GAMEPAD_CAPSENSE_LEFT_STICK;
                             if      (entry.channel == SC::RightStickTouch) ct = SDL_GAMEPAD_CAPSENSE_RIGHT_STICK;
                             else if (entry.channel == SC::LeftGripTouch)   ct = SDL_GAMEPAD_CAPSENSE_LEFT_GRIP;
                             else if (entry.channel == SC::RightGripTouch)  ct = SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP;
-                            if (!SDL_GamepadHasCapSense(dev->gamepad, ct)) continue;
+                            if (isCap && !SDL_GamepadHasCapSense(dev->gamepad, ct)) continue;
 
                             bool sel = (*sensor_channel == entry.channel);
                             if (ImGui::Selectable(entry.label, sel)) {
