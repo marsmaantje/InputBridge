@@ -263,6 +263,7 @@ add_executable(InputBridge
     src/Mappers/InputMapper.cpp
     src/Mappers/OutputMapper.cpp
     # WebSocket and OSC protocols
+    src/Protocols/OscValidation.h
     src/Protocols/OSCProtocol.cpp
     src/Protocols/ProtocolManager.cpp
     src/Protocols/WebSocketProtocol.cpp

@@ -27,6 +27,8 @@
 #include <unordered_set>
 #include <string_view>
 
+static constexpr const char* kTag = "InputMapper";
+
 using json = nlohmann::json;
 
 NLOHMANN_JSON_SERIALIZE_ENUM(InputMapper::ButtonToDigitalMapping::Mode, {
@@ -245,7 +247,7 @@ void InputMapper::UpdateListening() {
             bool updated = false;
             const DeviceState* boundDeviceState = getDeviceState(boundButton->joystickID);
             if (!boundDeviceState) {
-                LOG_WARN("InputMapper", "Bound joystick (ID: %u) not found for button binding.", boundButton->joystickID);
+                LOG_WARN(kTag, "Bound joystick (ID: %u) not found for button binding.", boundButton->joystickID);
                 CancelListening();
                 return;
             }
@@ -915,10 +917,10 @@ void InputMapper::DrawMappingContent() {
         float sp = style.ItemSpacing.x;
         float bindW = ImGui::CalcTextSize("Bind").x + style.FramePadding.x * 2;
 
-        float dw = 0.f, rw = 0.f;
+        float dw = 80.f, rw = 0.f;
         bool hasSrc = (src.axisIndex != -1) || (src.sensorChannel != SC::None);
         if (hasSrc) {
-            dw = 80.f;
+            dw = 180.f;
             rw = 80.f;
         }
 
@@ -2007,7 +2009,7 @@ void InputMapper::LoadProfiles() {
                             std::filesystem::copy_file(e.path(), dst,
                                 std::filesystem::copy_options::skip_existing, ec);
                             if (ec)
-                                LOG_ERROR("InputMapper", "Failed to seed preset profile %s: %s",
+                                LOG_ERROR(kTag, "Failed to seed preset profile %s: %s",
                                           e.path().filename().string().c_str(), ec.message().c_str());
                         }
                     }
@@ -2092,9 +2094,9 @@ void InputMapper::LoadProfiles() {
                 p.wsInputEnabled  = data.value("ws_input_enabled",  true);
 
                 m_Profiles.push_back(p);
-            } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to parse profile %s: %s",e.path().string().c_str(),ex.what()); }
+            } catch (const std::exception& ex) { LOG_ERROR(kTag, "Failed to parse profile %s: %s",e.path().string().c_str(),ex.what()); }
         }
-    } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to load profiles: %s",ex.what()); }
+    } catch (const std::exception& ex) { LOG_ERROR(kTag, "Failed to load profiles: %s",ex.what()); }
 }
 
 void InputMapper::SaveProfile(const MappingProfile &profile) const {
@@ -2151,7 +2153,7 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
         data["ws_input_enabled"]  = profile.wsInputEnabled;
 
         std::ofstream o(path); if (o) o<<data.dump(4);
-    } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to save profile: %s",ex.what()); }
+    } catch (const std::exception& ex) { LOG_ERROR(kTag, "Failed to save profile: %s",ex.what()); }
 }
 
 std::vector<HapticTarget>* InputMapper::GetCurrentHapticTargets() {

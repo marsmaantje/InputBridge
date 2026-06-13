@@ -3,6 +3,8 @@
 #include "SDL3/SDL_haptic.h"
 #include <algorithm>
 
+static constexpr const char* kTag = "HapticDevice";
+
 HapticDevice::HapticDevice(SDL_Joystick* joystick) : m_joystick(joystick) {}
 
 HapticDevice::~HapticDevice() {
@@ -11,23 +13,23 @@ HapticDevice::~HapticDevice() {
 
 InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
     if (!m_joystick) {
-        LOG_ERROR("HapticDevice", "Init - Failed: Device not found (joystick is null)");
+        LOG_ERROR(kTag, "Init - Failed: Device not found (joystick is null)");
         return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::DeviceNotFound);
     }
 
     auto joystickID = SDL_GetJoystickID(m_joystick);
     bool isHaptic = SDL_IsJoystickHaptic(m_joystick);
-    LOG_INFO("HapticDevice", "Init - Joystick ID %u, IsHaptic: %d", joystickID, isHaptic);
+    LOG_INFO(kTag, "Init - Joystick ID %u, IsHaptic: %d", joystickID, isHaptic);
 
     if (isHaptic) {
         m_haptic.Reset(SDL_OpenHapticFromJoystick(m_joystick));
         if (!m_haptic) {
-            LOG_WARN("HapticDevice", "Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
-            LOG_INFO("HapticDevice", "Will continue - gamepad rumble fallback may still work, but advanced haptics will NOT work.");
+            LOG_WARN(kTag, "Warning: SDL_OpenHapticFromJoystick failed: %s", SDL_GetError());
+            LOG_INFO(kTag, "Will continue - gamepad rumble fallback may still work, but advanced haptics will NOT work.");
         } else {
             if (SDL_HapticRumbleSupported(m_haptic.Get())) {
                 if (!SDL_InitHapticRumble(m_haptic.Get())) {
-                    LOG_WARN("HapticDevice", "Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
+                    LOG_WARN(kTag, "Warning: SDL_InitHapticRumble failed: %s", SDL_GetError());
                 }
             }
             SDL_SetHapticGain(m_haptic.Get(), 100);
@@ -41,11 +43,11 @@ InputBridge::Result<bool, InputBridge::HapticError> HapticDevice::Init() {
     }
 
     if (m_haptic || SDL_IsGamepad(joystickID)) {
-        LOG_INFO("HapticDevice", "Init - Success");
+        LOG_INFO(kTag, "Init - Success");
         return InputBridge::Result<bool, InputBridge::HapticError>::Ok(true);
     }
 
-    LOG_ERROR("HapticDevice", "Init - Failed: Unsupported device type");
+    LOG_ERROR(kTag, "Init - Failed: Unsupported device type");
     return InputBridge::Result<bool, InputBridge::HapticError>::Err(InputBridge::HapticError::UnsupportedEffect);
 }
 
@@ -89,6 +91,8 @@ void HapticDevice::RunAsync(std::function<void()> task) {
 }
 
 void HapticDevice::ThreadLoop() {
+    uint64_t lastKeepalive = SDL_GetTicks();
+
     while (true) {
         std::function<void()> task;
         {
@@ -112,6 +116,16 @@ void HapticDevice::ThreadLoop() {
 
         // Check for finished effects (handles hardware status and software timeout fallback)
         PruneFinishedEffects();
+
+        // Re-upload INFINITY effects on devices that truncate the 32-bit length
+        // field to 16 bits (e.g. Thrustmaster T150, which stops after ~65 s).
+        if (m_keepaliveEnabled) {
+            uint64_t now = SDL_GetTicks();
+            if (now - lastKeepalive >= kKeepaliveIntervalMs) {
+                lastKeepalive = now;
+                RefreshInfiniteEffects();
+            }
+        }
     }
 }
 
@@ -164,6 +178,83 @@ void HapticDevice::PruneFinishedEffects() {
     pruneMap(m_activeConditions,       m_conditionEffects);
 }
 
+// Re-upload every active effect that was created with SDL_HAPTIC_INFINITY so
+// that devices which silently truncate the 32-bit length to 16 bits
+// (Thrustmaster T150 and similar) never reach the ~65 s firmware cutoff.
+// On well-behaved hardware SDL_UpdateHapticEffect merely overwrites the
+// already-running effect with identical parameters, which is a no-op from
+// the user's perspective.
+void HapticDevice::RefreshInfiniteEffects() {
+    if (!m_haptic) return;
+
+    std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+
+    // Constants
+    for (auto const& [slot, info] : m_activeConstants) {
+        if (info.duration_ms != SDL_HAPTIC_INFINITY) continue;
+        auto idIt = m_constantEffects.find(slot);
+        if (idIt == m_constantEffects.end() || idIt->second == -1) continue;
+
+        SDL_HapticEffect e;
+        SDL_memset(&e, 0, sizeof(e));
+        e.type = SDL_HAPTIC_CONSTANT;
+        e.constant.direction.type    = SDL_HAPTIC_CARTESIAN;
+        e.constant.direction.dir[0]  = -1;
+        e.constant.level             = static_cast<Sint16>(info.strength * 32767.0f);
+        e.constant.length            = SDL_HAPTIC_INFINITY;
+
+        if (!SDL_UpdateHapticEffect(m_haptic.Get(), idIt->second, &e))
+            LOG_WARN(kTag, "RefreshInfiniteEffects - constant slot %d update failed: %s", slot, SDL_GetError());
+        SDL_RunHapticEffect(m_haptic.Get(), idIt->second, 1);
+    }
+
+    // Periodics
+    for (auto const& [slot, info] : m_activePeriodicEffects) {
+        if (info.duration_ms != SDL_HAPTIC_INFINITY) continue;
+        auto idIt = m_periodicEffects.find(slot);
+        if (idIt == m_periodicEffects.end() || idIt->second == -1) continue;
+
+        SDL_HapticEffect e;
+        SDL_memset(&e, 0, sizeof(e));
+        e.type = ToSDLPeriodicType(info.wave_type);
+        e.periodic.direction.type    = SDL_HAPTIC_CARTESIAN;
+        e.periodic.direction.dir[0]  = 1;
+        e.periodic.period            = static_cast<Uint16>(info.period);
+        e.periodic.magnitude         = static_cast<Sint16>(info.magnitude * 32767.0f);
+        e.periodic.offset            = static_cast<Sint16>(info.offset    * 32767.0f);
+        e.periodic.phase             = static_cast<Uint16>(info.phase);
+        e.periodic.length            = SDL_HAPTIC_INFINITY;
+
+        if (!SDL_UpdateHapticEffect(m_haptic.Get(), idIt->second, &e))
+            LOG_WARN(kTag, "RefreshInfiniteEffects - periodic slot %d update failed: %s", slot, SDL_GetError());
+        SDL_RunHapticEffect(m_haptic.Get(), idIt->second, 1);
+    }
+
+    // Conditions
+    for (auto const& [slot, info] : m_activeConditions) {
+        if (info.duration_ms != SDL_HAPTIC_INFINITY) continue;
+        auto idIt = m_conditionEffects.find(slot);
+        if (idIt == m_conditionEffects.end() || idIt->second == -1) continue;
+
+        SDL_HapticEffect e;
+        SDL_memset(&e, 0, sizeof(e));
+        e.type = ToSDLConditionType(info.type);
+        e.condition.direction.type   = SDL_HAPTIC_CARTESIAN;
+        e.condition.direction.dir[0] = 1;
+        e.condition.right_sat[0]     = static_cast<Uint16>(info.right_sat   * 65535.0f);
+        e.condition.left_sat[0]      = static_cast<Uint16>(info.left_sat    * 65535.0f);
+        e.condition.right_coeff[0]   = static_cast<Sint16>(info.right_coeff * 32767.0f);
+        e.condition.left_coeff[0]    = static_cast<Sint16>(info.left_coeff  * 32767.0f);
+        e.condition.deadband[0]      = static_cast<Uint16>(info.deadband    * 65535.0f);
+        e.condition.center[0]        = static_cast<Sint16>(info.center      * 32767.0f);
+        e.condition.length           = SDL_HAPTIC_INFINITY;
+
+        if (!SDL_UpdateHapticEffect(m_haptic.Get(), idIt->second, &e))
+            LOG_WARN(kTag, "RefreshInfiniteEffects - condition slot %d update failed: %s", slot, SDL_GetError());
+        SDL_RunHapticEffect(m_haptic.Get(), idIt->second, 1);
+    }
+}
+
 SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId, bool* outCreated) {
     if (!m_haptic) return -1;
 
@@ -173,14 +264,14 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
             if (outCreated) *outCreated = false;
             return existingId;
         } else {
-            LOG_ERROR("HapticDevice", "UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
+            LOG_ERROR(kTag, "UploadEffect - Update failed for ID %d: %s. Recreating.", existingId, SDL_GetError());
         }
         SDL_DestroyHapticEffect(m_haptic.Get(), existingId);
     }
 
     SDL_HapticEffectID newId = SDL_CreateHapticEffect(m_haptic.Get(), &effect);
     if (newId == -1) {
-        LOG_ERROR("HapticDevice", "UploadEffect - Create failed: %s", SDL_GetError());
+        LOG_ERROR(kTag, "UploadEffect - Create failed: %s", SDL_GetError());
     }
     if (outCreated) *outCreated = (newId != -1);
     return newId;
@@ -234,7 +325,7 @@ std::map<std::string, ActiveDualSenseTriggerInfo> HapticDevice::GetActiveDualSen
 void HapticDevice::SetConstantForce(float level, float direction) {
     RunAsync([this, level, direction]() {
         if (!m_haptic) {
-            LOG_WARN("HapticDevice", "SetConstantForce - Haptic device not ready");
+            LOG_WARN(kTag, "SetConstantForce - Haptic device not ready");
             return;
         }
 
@@ -256,7 +347,7 @@ void HapticDevice::SetConstantForce(float level, float direction) {
             m_constantEffects[kInternalSlot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "SetConstantForce - Run failed: %s", SDL_GetError());
+                    LOG_ERROR(kTag, "SetConstantForce - Run failed: %s", SDL_GetError());
                 }
             }
         }
@@ -309,7 +400,7 @@ void HapticDevice::SetPeriodic(HapticPeriodicType type, float magnitude, int per
             m_periodicEffects[kInternalSlot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "SetPeriodic - Run failed: %s", SDL_GetError());
+                    LOG_ERROR(kTag, "SetPeriodic - Run failed: %s", SDL_GetError());
                 }
             }
         }
@@ -346,9 +437,9 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
         if (it != m_conditionEffects.end()) existing = it->second;
 
         if (existing == -1) {
-            LOG_WARN("HapticDevice", "SetCondition - existingID -1");
+            LOG_WARN(kTag, "SetCondition - existingID -1");
         } else {
-            LOG_INFO("HapticDevice", "SetCondition - existingID %d", existing);
+            LOG_DEBUG(kTag, "SetCondition - existingID %d", existing);
         }
 
         bool created = false;
@@ -357,7 +448,7 @@ void HapticDevice::SetCondition(HapticConditionType type, float saturation, floa
             m_conditionEffects[internalKey] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "SetCondition - Run failed: %s", SDL_GetError());
+                    LOG_ERROR(kTag, "SetCondition - Run failed: %s", SDL_GetError());
                 }
             }
         }
@@ -385,7 +476,7 @@ void HapticDevice::SetRumble(float low_freq, float high_freq, Uint32 duration) {
             m_rumbleEffects[kInternalSlot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("HapticDevice", "SetRumble - Run failed: %s", SDL_GetError());
+                    LOG_ERROR(kTag, "SetRumble - Run failed: %s", SDL_GetError());
                 }
             }
         }

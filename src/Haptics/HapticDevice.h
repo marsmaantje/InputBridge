@@ -208,6 +208,12 @@ public:
     void Close();
     virtual bool IsReady() const;
 
+    // Enable periodic re-upload of SDL_HAPTIC_INFINITY effects.
+    // Call this after Init() for devices known to truncate the 32-bit length
+    // field to 16 bits (e.g. Thrustmaster T150).
+    void EnableKeepalive(bool enable = true) { m_keepaliveEnabled = enable; }
+    bool IsKeepaliveEnabled() const { return m_keepaliveEnabled; }
+
     /**
      * @brief Return the set of haptic effect families this device supports.
      *
@@ -300,6 +306,19 @@ protected:
     SDL_HapticEffectID UploadEffect(const SDL_HapticEffect& effect, SDL_HapticEffectID existingId, bool* outCreated = nullptr);
     void RunAsync(std::function<void()> task);
 
+    // Some devices (e.g. Thrustmaster T150) only honour the lower 16 bits of
+    // the SDL effect length field, so SDL_HAPTIC_INFINITY (0xFFFFFFFF) is
+    // silently truncated to 0xFFFF = 65 535 ms ≈ 65 s before the effect stops.
+    // Enabling keepalives causes the thread to periodically re-upload and
+    // re-run every active INFINITY effect before that window expires, which
+    // keeps it playing indefinitely on affected hardware while remaining a
+    // no-op on devices that handle INFINITY correctly.
+    bool m_keepaliveEnabled = false;
+
+    // Interval at which INFINITY effects are refreshed (ms).
+    // Must be safely below the 65 535 ms firmware cutoff.
+    static constexpr uint32_t kKeepaliveIntervalMs = 30000; // 30 s
+
 private:
     std::thread m_thread;
     std::mutex m_mutex;
@@ -308,4 +327,5 @@ private:
     bool m_running = false;
     void ThreadLoop();
     void PruneFinishedEffects();
+    void RefreshInfiniteEffects();
 };

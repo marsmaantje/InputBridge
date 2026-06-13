@@ -2,6 +2,8 @@
 #include "SteeringWheelHaptics.h"
 #include <algorithm>
 
+static constexpr const char* kTag = "SteeringWheelHaptics";
+
 int SteeringWheelHaptics::SetGain(int gain) {
     RunAsync([this, gain]() {
         if (!m_haptic) return;
@@ -13,7 +15,7 @@ int SteeringWheelHaptics::SetGain(int gain) {
 int SteeringWheelHaptics::PlayConstant(int slot, float strength, uint32_t duration_ms) {
     RunAsync([this, slot, strength, duration_ms]() {
         if (!m_haptic) {
-            LOG_WARN("SteeringWheelHaptics", "PlayConstant - Haptic device not ready");
+            LOG_WARN(kTag, "PlayConstant - Haptic device not ready");
             return;
         }
 
@@ -37,7 +39,7 @@ int SteeringWheelHaptics::PlayConstant(int slot, float strength, uint32_t durati
             m_constantEffects[slot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("SteeringWheelHaptics", "PlayConstant - Run failed: %s", SDL_GetError());
+                    LOG_ERROR(kTag, "PlayConstant - Run failed: %s", SDL_GetError());
                 }
             }
             {
@@ -71,7 +73,7 @@ int SteeringWheelHaptics::StopConstant(int slot) {
 int SteeringWheelHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) {
     RunAsync([this, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms]() {
         if (!m_haptic) {
-            LOG_WARN("SteeringWheelHaptics", "PlayPeriodic - Haptic device not ready");
+            LOG_WARN(kTag, "PlayPeriodic - Haptic device not ready");
             return;
         }
 
@@ -96,7 +98,7 @@ int SteeringWheelHaptics::PlayPeriodic(int slot, HapticPeriodicType wave_type, f
             m_periodicEffects[slot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("SteeringWheelHaptics", "PlayPeriodic - Run failed: %s", SDL_GetError());
+                    LOG_ERROR(kTag, "PlayPeriodic - Run failed: %s", SDL_GetError());
                 }
             }
             {
@@ -145,14 +147,14 @@ int SteeringWheelHaptics::PlayRumble(int slot, float large_magnitude, float smal
 int SteeringWheelHaptics::PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) {
     RunAsync([this, slot, type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms]() {
         if (!m_haptic) {
-            LOG_WARN("SteeringWheelHaptics", "PlayCondition - Haptic device not ready");
+            LOG_WARN(kTag, "PlayCondition - Haptic device not ready");
             return;
         }
 
         {
             int max_effects = SDL_GetMaxHapticEffects(m_haptic.Get());
             if (slot < 0 || slot >= max_effects) {
-                LOG_WARN("SteeringWheelHaptics", "PlayCondition - Invalid slot %d (max: %d)", slot, max_effects);
+                LOG_WARN(kTag, "PlayCondition - Invalid slot %d (max: %d)", slot, max_effects);
                 return;
             }
         }
@@ -182,7 +184,7 @@ int SteeringWheelHaptics::PlayCondition(int slot, HapticConditionType type, floa
             m_conditionEffects[slot] = newId;
             if (created) {
                 if (!SDL_RunHapticEffect(m_haptic.Get(), newId, 1)) {
-                    LOG_ERROR("SteeringWheelHaptics", "PlayCondition - Run failed for type %s: %s",
+                    LOG_ERROR(kTag, "PlayCondition - Run failed for type %s: %s",
                             ConditionTypeName(type), SDL_GetError());
                     std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
                     m_activeConditions.erase(slot);

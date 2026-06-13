@@ -16,6 +16,8 @@
 #include <cstdio>
 #include <algorithm>
 
+static constexpr const char* kTag = "ExclusiveMode";
+
 #ifndef EVIOCGRAB
 #define EVIOCGRAB _IOW('E', 0x90, int)
 #endif
@@ -43,10 +45,10 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
 
     const char* sdlPath = SDL_GetJoystickPath(joystick);
     if (!sdlPath) {
-        LOG_ERROR("ExclusiveMode", "LinuxExclusiveMode: cannot get joystick path.");
+        LOG_ERROR(kTag, "LinuxExclusiveMode: cannot get joystick path.");
         return result;
     }
-    LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: SDL reported path = %s", sdlPath);
+    LOG_INFO(kTag, "LinuxExclusiveMode: SDL reported path = %s", sdlPath);
 
     // Collect both event* and js* leaves from a sysfs input directory.
     auto collectInputNodes = [&](const std::filesystem::path& dir) {
@@ -58,14 +60,14 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
                 && std::isdigit(static_cast<unsigned char>(fname[5])))
             {
                 result.push_back("/dev/input/" + fname);
-                LOG_INFO("ExclusiveMode", "LinuxExclusiveMode:  + evdev  %s", result.back().c_str());
+                LOG_INFO(kTag, "LinuxExclusiveMode:  + evdev  %s", result.back().c_str());
             }
             // jsN  (/dev/input/jsN)
             else if (fname.rfind("js", 0) == 0 && fname.size() > 2
                      && std::isdigit(static_cast<unsigned char>(fname[2])))
             {
                 result.push_back("/dev/input/" + fname);
-                LOG_INFO("ExclusiveMode", "LinuxExclusiveMode:  + joydev %s", result.back().c_str());
+                LOG_INFO(kTag, "LinuxExclusiveMode:  + joydev %s", result.back().c_str());
             }
         }
     };
@@ -80,13 +82,13 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
                 && std::isdigit(static_cast<unsigned char>(fname[5])))
             {
                 result.push_back("/dev/input/" + fname);
-                LOG_INFO("ExclusiveMode", "LinuxExclusiveMode:  + evdev  %s", result.back().c_str());
+                LOG_INFO(kTag, "LinuxExclusiveMode:  + evdev  %s", result.back().c_str());
             }
             else if (fname.rfind("js", 0) == 0 && fname.size() > 2
                      && std::isdigit(static_cast<unsigned char>(fname[2])))
             {
                 result.push_back("/dev/input/" + fname);
-                LOG_INFO("ExclusiveMode", "LinuxExclusiveMode:  + joydev %s", result.back().c_str());
+                LOG_INFO(kTag, "LinuxExclusiveMode:  + joydev %s", result.back().c_str());
             }
         }
     };
@@ -113,14 +115,14 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
             }
             collectInputNodes(devPath);
         } catch (const std::exception& ex) {
-            LOG_ERROR("ExclusiveMode", "LinuxExclusiveMode: hidraw sysfs walk error: %s", ex.what());
+            LOG_ERROR(kTag, "LinuxExclusiveMode: hidraw sysfs walk error: %s", ex.what());
         }
     }
     // ── Case 2: legacy joydev path (/dev/input/jsN) ───────────────────────
     else if (strncmp(sdlPath, "/dev/input/js", 13) == 0) {
         // Add the js node itself first.
         result.push_back(sdlPath);
-        LOG_INFO("ExclusiveMode", "LinuxExclusiveMode:  + joydev %s", sdlPath);
+        LOG_INFO(kTag, "LinuxExclusiveMode:  + joydev %s", sdlPath);
 
         // Walk sysfs to find sibling eventN nodes.
         int num = std::atoi(sdlPath + 13);
@@ -130,14 +132,14 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
         try {
             collectInputNodes(sysPath);
         } catch (...) {
-            LOG_ERROR("ExclusiveMode", "LinuxExclusiveMode: js%d sysfs walk failed.", num);
+            LOG_ERROR(kTag, "LinuxExclusiveMode: js%d sysfs walk failed.", num);
         }
     }
     // ── Case 3: evdev path (/dev/input/eventN) ────────────────────────────
     else if (strncmp(sdlPath, "/dev/input/event", 16) == 0) {
         // Add the event node itself.
         result.push_back(sdlPath);
-        LOG_INFO("ExclusiveMode", "LinuxExclusiveMode:  + evdev  %s", sdlPath);
+        LOG_INFO(kTag, "LinuxExclusiveMode:  + evdev  %s", sdlPath);
 
         // Walk sysfs backward to find sibling js* nodes.
         // /sys/class/input/eventN -> device -> input -> inputN -> js*, event*
@@ -151,10 +153,10 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
                 std::filesystem::path(sysEventPath).parent_path()
                 / std::filesystem::read_symlink(sysEventPath));
 
-            LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: resolved inputN = %s", inputN.c_str());
+            LOG_INFO(kTag, "LinuxExclusiveMode: resolved inputN = %s", inputN.c_str());
             collectFromInputN(inputN);
         } catch (const std::exception& ex) {
-            LOG_ERROR("ExclusiveMode", "LinuxExclusiveMode: eventN sysfs walk error: %s", ex.what());
+            LOG_ERROR(kTag, "LinuxExclusiveMode: eventN sysfs walk error: %s", ex.what());
         }
     }
 
@@ -173,7 +175,7 @@ bool LinuxExclusiveMode::HideDevice(SDL_Joystick* joystick) {
 
     auto paths = FindAllInputDevicePaths(joystick);
     if (paths.empty()) {
-        LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: no input nodes found for '%s'.",
+        LOG_INFO(kTag, "LinuxExclusiveMode: no input nodes found for '%s'.",
                 SDL_GetJoystickName(joystick));
         return false;
     }
@@ -187,7 +189,7 @@ bool LinuxExclusiveMode::HideDevice(SDL_Joystick* joystick) {
             // to us (not other processes) once we also hold the evdev grab.
             fd = open(devPath.c_str(), O_RDONLY | O_NONBLOCK);
             if (fd < 0) {
-                LOG_ERROR("ExclusiveMode", "LinuxExclusiveMode: open(%s) failed: %s",
+                LOG_ERROR(kTag, "LinuxExclusiveMode: open(%s) failed: %s",
                         devPath.c_str(), strerror(errno));
                 continue;
             }
@@ -201,23 +203,23 @@ bool LinuxExclusiveMode::HideDevice(SDL_Joystick* joystick) {
             if (errno != ENOTTY && errno != EINVAL) {
                 // Real error (e.g. EBUSY — another process already has an
                 // exclusive grab).
-                LOG_ERROR("ExclusiveMode", "LinuxExclusiveMode: EVIOCGRAB on %s failed: %s",
+                LOG_ERROR(kTag, "LinuxExclusiveMode: EVIOCGRAB on %s failed: %s",
                         devPath.c_str(), strerror(errno));
             } else {
-                LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: EVIOCGRAB not supported on %s "
+                LOG_INFO(kTag, "LinuxExclusiveMode: EVIOCGRAB not supported on %s "
                         "(joydev node — fd held open).", devPath.c_str());
             }
             // Keep the fd open regardless so we at least hold a reference.
         }
 
         grabbed.push_back({fd, devPath});
-        LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: holding %s", devPath.c_str());
+        LOG_INFO(kTag, "LinuxExclusiveMode: holding %s", devPath.c_str());
     }
 
     if (grabbed.empty()) return false;
 
     m_GrabbedDevices[id] = std::move(grabbed);
-    LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: '%s' is now hidden (%zu node(s) grabbed).",
+    LOG_INFO(kTag, "LinuxExclusiveMode: '%s' is now hidden (%zu node(s) grabbed).",
             SDL_GetJoystickName(joystick), m_GrabbedDevices[id].size());
     return true;
 }
@@ -227,7 +229,7 @@ bool LinuxExclusiveMode::HideDevice(SDL_Joystick* joystick) {
 bool LinuxExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
     SDL_JoystickID id = SDL_GetJoystickID(joystick);
     ReleaseInstance(id);
-    LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: '%s' unhidden.", SDL_GetJoystickName(joystick));
+    LOG_INFO(kTag, "LinuxExclusiveMode: '%s' unhidden.", SDL_GetJoystickName(joystick));
     return true;
 }
 
@@ -238,7 +240,7 @@ void LinuxExclusiveMode::ReleaseInstance(SDL_JoystickID id) {
     for (auto& entry : it->second) {
         ioctl(entry.fd, EVIOCGRAB, 0); // no-op on js* fds but harmless
         close(entry.fd);
-        LOG_INFO("ExclusiveMode", "LinuxExclusiveMode: released %s", entry.path.c_str());
+        LOG_INFO(kTag, "LinuxExclusiveMode: released %s", entry.path.c_str());
     }
     m_GrabbedDevices.erase(it);
 }

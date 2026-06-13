@@ -3,7 +3,8 @@
 #include "Haptics/FlightStickHaptics.h"
 #include <SDL3/SDL.h>
 
-void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager) {
+void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager,
+                                        PreferencesManager& prefs, const std::string& guid) {
     HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
 
     // --- Status bar ---

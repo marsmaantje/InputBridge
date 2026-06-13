@@ -1,4 +1,5 @@
 #include "Protocols/OSCBaseProtocol.h"
+#include "Protocols/OscValidation.h"
 #include "Network/OSCServer.h"
 #include "Devices/DeviceManager.h"
 #include "Protocols/ProtocolManager.h"
@@ -24,6 +25,11 @@ namespace {
 }
 
 bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo_arg** argv, int argc) {
+    using namespace OscValidation;
+
+    if (!CheckPointers(path, types, argv, argc))
+        return false;
+
     std::string_view path_sv(path);
 
     std::string activeId = ProtocolManager::GetInstance().GetActiveInputProtocolId();
@@ -40,82 +46,128 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         }
     }
 
-    // Helper to check if we matched a field or if we should fallback to legacy path
     auto match = [&](const char* legacyPath, const char* fid) {
         return (fieldId == fid) || (fieldId.empty() && path_sv == legacyPath);
     };
 
     bool handled = false;
 
+    // /inputbridge/haptics/rumble  iiffi  (deviceId, slot, low_freq, high_freq, duration_ms)
     if (match("/inputbridge/haptics/rumble", "haptic_rumble") && std::strcmp(types, "iiffi") == 0 && argc == 5) {
         handled = true;
-        int slot = argv[1]->i;
-        float low_freq = argv[2]->f;
-        float high_freq = argv[3]->f;
-        int duration_ms = argv[4]->i;
+        int   slot        = argv[1]->i;
+        float low_freq    = argv[2]->f;
+        float high_freq   = argv[3]->f;
+        int   duration_ms = argv[4]->i;
+
+        if (!ValidateSlot(slot, path_sv)) return handled;
+        low_freq  = ClampNorm(low_freq,  "low_freq",  path_sv);
+        high_freq = ClampNorm(high_freq, "high_freq", path_sv);
+
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            gamepad->PlayRumble(slot, low_freq, high_freq, (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
+            gamepad->PlayRumble(slot, low_freq, high_freq,
+                (duration_ms < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_ms);
         });
     }
+    // /inputbridge/haptics/force  iifi  (deviceId, slot, strength, duration_ms)
     else if (match("/inputbridge/haptics/force", "haptic_constant") && std::strcmp(types, "iifi") == 0 && argc == 4) {
         handled = true;
-        int slot = argv[1]->i;
-        float strength = argv[2]->f;
-        int duration_int = argv[3]->i;
+        int   slot         = argv[1]->i;
+        float strength     = argv[2]->f;
+        int   duration_int = argv[3]->i;
+
+        if (!ValidateSlot(slot, path_sv)) return handled;
+        strength = ClampStrength(strength, "strength", path_sv);
+
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayConstant(slot, strength, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayConstant(slot, strength,
+                (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
+    // /inputbridge/haptics/periodic  iiififfii  (deviceId, slot, wave_type, strength, period, magnitude, offset, phase, duration_ms)
     else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "iiififfii") == 0 && argc == 9) {
         handled = true;
-        int slot = argv[1]->i;
-        HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[2]->i);
-        float strength = argv[3]->f;
-        int period = argv[4]->i;
-        float magnitude = argv[5]->f;
-        float offset = argv[6]->f;
-        int phase = argv[7]->i;
-        int duration_int = argv[8]->i;
+        int   slot         = argv[1]->i;
+        int   wave_idx     = argv[2]->i;
+        float strength     = argv[3]->f;
+        int   period       = argv[4]->i;
+        float magnitude    = argv[5]->f;
+        float offset       = argv[6]->f;
+        int   phase        = argv[7]->i;
+        int   duration_int = argv[8]->i;
+
+        if (!ValidateSlot(slot, path_sv))         return handled;
+        if (!ValidateWaveType(wave_idx, path_sv)) return handled;
+        strength  = ClampNorm(strength,  "strength",  path_sv);
+        magnitude = ClampNorm(magnitude, "magnitude", path_sv);
+        offset    = ClampSigned(offset,  "offset",    path_sv);
+
+        HapticPeriodicType wave_type = PeriodicTypeFromIndex(wave_idx);
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayPeriodic(slot, wave_type, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayPeriodic(slot, wave_type, strength, period, magnitude, offset, phase,
+                (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
-    // Legacy: no wave_type argument — defaults to Sine.
+    // Legacy periodic — no wave_type, defaults to Sine.
     else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "iififfii") == 0 && argc == 8) {
         handled = true;
-        int slot = argv[1]->i;
-        float strength = argv[2]->f;
-        int period = argv[3]->i;
-        float magnitude = argv[4]->f;
-        float offset = argv[5]->f;
-        int phase = argv[6]->i;
-        int duration_int = argv[7]->i;
+        int   slot         = argv[1]->i;
+        float strength     = argv[2]->f;
+        int   period       = argv[3]->i;
+        float magnitude    = argv[4]->f;
+        float offset       = argv[5]->f;
+        int   phase        = argv[6]->i;
+        int   duration_int = argv[7]->i;
+
+        if (!ValidateSlot(slot, path_sv)) return handled;
+        strength  = ClampNorm(strength,  "strength",  path_sv);
+        magnitude = ClampNorm(magnitude, "magnitude", path_sv);
+        offset    = ClampSigned(offset,  "offset",    path_sv);
+
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayPeriodic(slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayPeriodic(slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase,
+                (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
+    // /inputbridge/haptics/condition  iiiffffffi  (deviceId, slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, duration_ms)
     else if (match("/inputbridge/haptics/condition", "haptic_condition") && std::strcmp(types, "iiiffffffi") == 0 && argc == 10) {
         handled = true;
-        int slot = argv[1]->i;
-        HapticConditionType condition_type = ConditionTypeFromIndex(argv[2]->i);
-        float right_sat = argv[3]->f;
-        float left_sat = argv[4]->f;
-        float right_coeff = argv[5]->f;
-        float left_coeff = argv[6]->f;
-        float deadband = argv[7]->f;
-        float center = argv[8]->f;
-        int duration_int = argv[9]->i;
+        int   slot           = argv[1]->i;
+        int   cond_idx       = argv[2]->i;
+        float right_sat      = argv[3]->f;
+        float left_sat       = argv[4]->f;
+        float right_coeff    = argv[5]->f;
+        float left_coeff     = argv[6]->f;
+        float deadband       = argv[7]->f;
+        float center         = argv[8]->f;
+        int   duration_int   = argv[9]->i;
+
+        if (!ValidateSlot(slot, path_sv))              return handled;
+        if (!ValidateConditionType(cond_idx, path_sv)) return handled;
+        right_sat   = ClampNorm(right_sat,     "right_sat",   path_sv);
+        left_sat    = ClampNorm(left_sat,       "left_sat",    path_sv);
+        right_coeff = ClampSigned(right_coeff, "right_coeff", path_sv);
+        left_coeff  = ClampSigned(left_coeff,  "left_coeff",  path_sv);
+        deadband    = ClampNorm(deadband,      "deadband",    path_sv);
+        center      = ClampSigned(center,      "center",      path_sv);
+
+        HapticConditionType condition_type = ConditionTypeFromIndex(cond_idx);
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
-            wheel->PlayCondition(slot, condition_type, right_sat, left_sat, right_coeff, left_coeff, deadband, center, (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
+            wheel->PlayCondition(slot, condition_type, right_sat, left_sat,
+                right_coeff, left_coeff, deadband, center,
+                (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
+    // /inputbridge/haptics/gain  ii  (deviceId, gain)
     else if (match("/inputbridge/haptics/gain", "haptic_gain") && std::strcmp(types, "ii") == 0 && argc == 2) {
         handled = true;
-        int gain = argv[1]->i;
+        int gain = ClampGain(argv[1]->i, path_sv);
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
             wheel->SetGain(gain);
         });
     }
+    // DualSense Trigger Effects
+    // /inputbridge/haptics/dualsense/trigger/{left|right}/{feedback|weapon|vibration|off}
     else if (path_sv.find("/inputbridge/haptics/dualsense/trigger/") != std::string_view::npos) {
         handled = true;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
@@ -125,18 +177,18 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
 
             if (path_sv.ends_with("/feedback") && std::strcmp(types, "iii") == 0 && argc == 3) {
                 effect = "feedback";
-                params["position"] = argv[1]->i;
-                params["strength"] = argv[2]->i;
+                params["position"] = ClampDSPosition(argv[1]->i, path_sv);
+                params["strength"] = ClampDSStrength(argv[2]->i, path_sv);
             } else if (path_sv.ends_with("/weapon") && std::strcmp(types, "iiii") == 0 && argc == 4) {
                 effect = "weapon";
-                params["start_position"] = argv[1]->i;
-                params["end_position"] = argv[2]->i;
-                params["strength"] = argv[3]->i;
+                params["start_position"] = ClampDSStartPos(argv[1]->i, path_sv);
+                params["end_position"]   = ClampDSEndPos(argv[2]->i,   path_sv);
+                params["strength"]       = ClampDSStrength(argv[3]->i, path_sv);
             } else if (path_sv.ends_with("/vibration") && std::strcmp(types, "iiii") == 0 && argc == 4) {
                 effect = "vibration";
-                params["position"] = argv[1]->i;
-                params["amplitude"] = argv[2]->i;
-                params["frequency"] = argv[3]->i;
+                params["position"]  = ClampDSPosition(argv[1]->i,  path_sv);
+                params["amplitude"] = ClampDSAmplitude(argv[2]->i, path_sv);
+                params["frequency"] = ClampDSFrequency(argv[3]->i, path_sv);
             } else if (path_sv.ends_with("/off")) {
                 effect = "off";
             }
@@ -145,6 +197,16 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
                 gamepad->SendDualSenseTrigger(trigger.c_str(), effect.c_str(), params);
             }
         });
+    }
+    // /inputbridge/wheel/led_rpm  f  (rpm_percent 0.0–1.0)
+    else if (path_sv == "/inputbridge/wheel/led_rpm" && std::strcmp(types, "f") == 0 && argc == 1) {
+        handled = true;
+        float rpm_percent = ClampNorm(argv[0]->f, "rpm_percent", path_sv);
+
+        auto& deviceManager = DeviceManager::GetInstance();
+        for (const auto& wheel : deviceManager.GetWheelRPMDevices()) {
+            wheel->setRPM(rpm_percent);
+        }
     }
 
     // ── Subchannel paths: /inputbridge/haptics/<effect>/<slot> ───────────────
@@ -171,6 +233,8 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     for (char c : tail) slot = slot * 10 + (c - '0');
     const std::string_view base = path_sv.substr(0, last_slash);
 
+    if (!ValidateSlot(slot, path_sv)) return handled;
+
     // Re-run field-id lookup against the base path (without the /N suffix).
     std::string baseFieldId;
     if (def) {
@@ -189,9 +253,9 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     if (matchBase("/inputbridge/haptics/rumble", "haptic_rumble")
         && std::strcmp(types, "iffi") == 0 && argc == 4) {
         handled = true;
-        const float low      = argv[1]->f;
-        const float high     = argv[2]->f;
-        const int   duration = argv[3]->i;
+        float low      = ClampNorm(argv[1]->f, "low_freq",  path_sv);
+        float high     = ClampNorm(argv[2]->f, "high_freq", path_sv);
+        const int duration = argv[3]->i;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
             gamepad->PlayRumble(slot, low, high, (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
         });
@@ -200,8 +264,8 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     else if (matchBase("/inputbridge/haptics/force", "haptic_constant")
         && std::strcmp(types, "ifi") == 0 && argc == 3) {
         handled = true;
-        const float strength = argv[1]->f;
-        const int   duration = argv[2]->i;
+        float strength     = ClampStrength(argv[1]->f, "strength", path_sv);
+        const int duration = argv[2]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
             wheel->PlayConstant(slot, strength, (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
         });
@@ -210,13 +274,15 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     else if (matchBase("/inputbridge/haptics/periodic", "haptic_periodic")
         && std::strcmp(types, "iififfii") == 0 && argc == 8) {
         handled = true;
-        const HapticPeriodicType wave_type = PeriodicTypeFromIndex(argv[1]->i);
-        const float strength  = argv[2]->f;
-        const int   period    = argv[3]->i;
-        const float magnitude = argv[4]->f;
-        const float offset    = argv[5]->f;
-        const int   phase     = argv[6]->i;
-        const int   duration  = argv[7]->i;
+        int wave_idx = argv[1]->i;
+        if (!ValidateWaveType(wave_idx, path_sv)) return handled;
+        float strength      = ClampNorm(argv[2]->f,    "strength",  path_sv);
+        const int period    = argv[3]->i;
+        float magnitude     = ClampNorm(argv[4]->f,    "magnitude", path_sv);
+        float offset        = ClampSigned(argv[5]->f,  "offset",    path_sv);
+        const int phase     = argv[6]->i;
+        const int duration  = argv[7]->i;
+        HapticPeriodicType wave_type = PeriodicTypeFromIndex(wave_idx);
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
             wheel->PlayPeriodic(slot, wave_type, strength, period, magnitude, offset, phase,
                 (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
@@ -226,12 +292,12 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     else if (matchBase("/inputbridge/haptics/periodic", "haptic_periodic")
         && std::strcmp(types, "ififfii") == 0 && argc == 7) {
         handled = true;
-        const float strength  = argv[1]->f;
-        const int   period    = argv[2]->i;
-        const float magnitude = argv[3]->f;
-        const float offset    = argv[4]->f;
-        const int   phase     = argv[5]->i;
-        const int   duration  = argv[6]->i;
+        float strength      = ClampNorm(argv[1]->f,    "strength",  path_sv);
+        const int period    = argv[2]->i;
+        float magnitude     = ClampNorm(argv[3]->f,    "magnitude", path_sv);
+        float offset        = ClampSigned(argv[4]->f,  "offset",    path_sv);
+        const int phase     = argv[5]->i;
+        const int duration  = argv[6]->i;
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
             wheel->PlayPeriodic(slot, HapticPeriodicType::Sine, strength, period, magnitude, offset, phase,
                 (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
@@ -241,14 +307,16 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     else if (matchBase("/inputbridge/haptics/condition", "haptic_condition")
         && std::strcmp(types, "iiffffffi") == 0 && argc == 9) {
         handled = true;
-        const HapticConditionType ctype  = ConditionTypeFromIndex(argv[1]->i);
-        const float right_sat  = argv[2]->f;
-        const float left_sat   = argv[3]->f;
-        const float right_coeff = argv[4]->f;
-        const float left_coeff  = argv[5]->f;
-        const float deadband   = argv[6]->f;
-        const float center     = argv[7]->f;
-        const int   duration   = argv[8]->i;
+        int cond_idx = argv[1]->i;
+        if (!ValidateConditionType(cond_idx, path_sv)) return handled;
+        float right_sat     = ClampNorm(argv[2]->f,    "right_sat",   path_sv);
+        float left_sat      = ClampNorm(argv[3]->f,    "left_sat",    path_sv);
+        float right_coeff   = ClampSigned(argv[4]->f,  "right_coeff", path_sv);
+        float left_coeff    = ClampSigned(argv[5]->f,  "left_coeff",  path_sv);
+        float deadband      = ClampNorm(argv[6]->f,    "deadband",    path_sv);
+        float center        = ClampSigned(argv[7]->f,  "center",      path_sv);
+        const int duration  = argv[8]->i;
+        HapticConditionType ctype = ConditionTypeFromIndex(cond_idx);
         DispatchHapticCommand<SteeringWheelHaptics>([&](SteeringWheelHaptics* wheel) {
             wheel->PlayCondition(slot, ctype, right_sat, left_sat, right_coeff, left_coeff, deadband, center,
                 (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);

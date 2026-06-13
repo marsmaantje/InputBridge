@@ -14,8 +14,8 @@ struct BoundButtonInfo {
 
 class ButtonBinder {
 public:
-    void StartBinding(const std::vector<struct DeviceState>& connectedDevices);
-    std::optional<BoundButtonInfo> Update(const std::vector<struct DeviceState>& connectedDevices);
+    void StartBinding(const std::vector<DeviceState>& connectedDevices);
+    std::optional<BoundButtonInfo> Update(const std::vector<DeviceState>& connectedDevices);
     void Cancel();
     bool IsBindingActive() const;
 

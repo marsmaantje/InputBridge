@@ -15,6 +15,8 @@
 #include <cstring>
 #include <cctype>
 
+static constexpr const char* kTag = "DualSense";
+
 // ==================== OutputState Implementation ====================
 
 DualSense::OutputState::OutputState() 
@@ -56,7 +58,7 @@ InputBridge::Result<bool, InputBridge::HapticError> DualSenseController::Init() 
         m_connectionType = DetectConnectionType();
         m_connectionTypeDetected = true;
         
-        LOG_INFO("DualSense", "DualSense initialized: Connection=%s", 
+        LOG_INFO(kTag, "DualSense initialized: Connection=%s", 
                m_connectionType == DualSense::ConnectionType::USB ? "USB" : "Bluetooth");
     }
     
@@ -92,13 +94,13 @@ DualSense::ConnectionType DualSenseController::DetectConnectionType() const {
         
         // USB devices report as charging or charged
         if (state == SDL_POWERSTATE_CHARGING || state == SDL_POWERSTATE_CHARGED) {
-            LOG_INFO("DualSense", "USB detected via power state (charging/charged)");
+            LOG_DEBUG(kTag, "USB detected via power state (charging/charged)");
             return DualSense::ConnectionType::USB;
         }
         
         // Battery-powered means Bluetooth
         if (state == SDL_POWERSTATE_ON_BATTERY) {
-            LOG_INFO("DualSense", "Bluetooth detected via power state (on battery)");
+            LOG_DEBUG(kTag, "Bluetooth detected via power state (on battery)");
             return DualSense::ConnectionType::Bluetooth;
         }
     }
@@ -110,25 +112,25 @@ DualSense::ConnectionType DualSenseController::DetectConnectionType() const {
         std::transform(pathStr.begin(), pathStr.end(), pathStr.begin(),
                       [](unsigned char c) { return std::tolower(c); });
         
-        LOG_INFO("DualSense", "Checking path: %s", path);
+        LOG_DEBUG(kTag, "Checking path: %s", path);
         
         // Explicit USB indicators
         if (pathStr.find("usb") != std::string::npos) {
-            LOG_INFO("DualSense", "USB detected via path (contains 'usb')");
+            LOG_DEBUG(kTag, "USB detected via path (contains 'usb')");
             return DualSense::ConnectionType::USB;
         }
         
         // Explicit Bluetooth indicators
         if (pathStr.find("bluetooth") != std::string::npos ||
             pathStr.find("-bt-") != std::string::npos) {
-            LOG_INFO("DualSense", "Bluetooth detected via path (contains 'bluetooth'/'bt')");
+            LOG_DEBUG(kTag, "Bluetooth detected via path (contains 'bluetooth'/'bt')");
             return DualSense::ConnectionType::Bluetooth;
         }
         
         // On Linux: hidraw without Bluetooth indicators = USB
         #ifdef __linux__
         if (pathStr.find("hidraw") != std::string::npos) {
-            LOG_INFO("DualSense", "USB detected via Linux hidraw");
+            LOG_DEBUG(kTag, "USB detected via Linux hidraw");
             return DualSense::ConnectionType::USB;
         }
         #endif
@@ -139,7 +141,7 @@ DualSense::ConnectionType DualSenseController::DetectConnectionType() const {
     
     // Default to Bluetooth (more common for wireless play)
     // Note: Previous code defaulted to USB, but Bluetooth is more common
-    LOG_INFO("DualSense", "Defaulting to Bluetooth (could not determine definitively)");
+    LOG_DEBUG(kTag, "Defaulting to Bluetooth (could not determine definitively)");
     return DualSense::ConnectionType::Bluetooth;
 }
 
@@ -162,7 +164,7 @@ int DualSenseController::SetTriggerEffect(const std::string& trigger,
     const bool updateRight = (trigger == "right" || trigger == "both");
     
     if (!updateLeft && !updateRight) {
-        LOG_INFO("DualSense", "SetTriggerEffect - Invalid trigger: %s", trigger.c_str());
+        LOG_WARN(kTag, "SetTriggerEffect - Invalid trigger: %s", trigger.c_str());
         return -1;
     }
     
@@ -176,7 +178,7 @@ int DualSenseController::SetTriggerEffect(const std::string& trigger,
     }
     
     if (!success) {
-        LOG_INFO("DualSense", "SetTriggerEffect - Failed to apply effect");
+        LOG_WARN(kTag, "SetTriggerEffect - Failed to apply effect");
         return -1;
     }
     
@@ -243,7 +245,7 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
                                                         amplitudeA, amplitudeB, frequency, period);
     }
     else {
-        LOG_INFO("DualSense", "Unknown effect type '%s'", effectType.c_str());
+        LOG_WARN(kTag, "Unknown effect type '%s'", effectType.c_str());
         return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(triggerData, 0);
     }
 }
@@ -293,7 +295,7 @@ void DualSenseController::ApplyOutputState() {
         }
         
         if (!success) {
-            LOG_INFO("DualSense", "Failed to send output state");
+            LOG_WARN(kTag, "Failed to send output state");
         }
     });
 }
@@ -350,18 +352,18 @@ bool DualSenseController::SendUSBOutput() {
     // LED brightness (offset 43)
     data[43] = m_outputState.ledBrightness;
     
-    LOG_DEBUG("DualSense", "USB: Sending report, size=%zu", data.size());
-    LOG_DEBUG("DualSense", "  Flags: [1]=0x%02X [2]=0x%02X", data[1], data[2]);
-    LOG_DEBUG("DualSense", "  Rumble: L=%d R=%d", data[4], data[3]);
-    LOG_DEBUG("DualSense", "  Triggers: R[0]=0x%02X L[0]=0x%02X", 
+    LOG_DEBUG(kTag, "USB: Sending report, size=%zu", data.size());
+    LOG_DEBUG(kTag, "  Flags: [1]=0x%02X [2]=0x%02X", data[1], data[2]);
+    LOG_DEBUG(kTag, "  Rumble: L=%d R=%d", data[4], data[3]);
+    LOG_DEBUG(kTag, "  Triggers: R[0]=0x%02X L[0]=0x%02X", 
            m_outputState.rightTriggerEffect[0], m_outputState.leftTriggerEffect[0]);
     
     if (!SDL_SendJoystickEffect(m_joystick, data.data(), data.size())) {
-        LOG_INFO("DualSense", "DualSense USB: Send failed - %s", SDL_GetError());
+        LOG_WARN(kTag, "DualSense USB: Send failed - %s", SDL_GetError());
         return false;
     }
     
-    LOG_DEBUG("DualSense", "USB: Report sent successfully");
+    LOG_DEBUG(kTag, "USB: Report sent successfully");
     return true;
 }
 
@@ -419,18 +421,18 @@ bool DualSenseController::SendBluetoothOutput() {
     // Player LEDs (offset 44)
     data[44] = m_outputState.playerLEDs;
     
-    LOG_DEBUG("DualSense", "BT: Sending report, size=%zu, seq=%d", data.size(), m_bluetoothSequence);
-    LOG_DEBUG("DualSense", "  Flags: [1]=0x%02X [2]=0x%02X [3]=0x%02X", data[1], data[2], data[3]);
-    LOG_DEBUG("DualSense", "  Rumble: L=%d R=%d", data[5], data[4]);
-    LOG_DEBUG("DualSense", "  Triggers: R[0]=0x%02X L[0]=0x%02X", 
+    LOG_DEBUG(kTag, "BT: Sending report, size=%zu, seq=%d", data.size(), m_bluetoothSequence);
+    LOG_DEBUG(kTag, "  Flags: [1]=0x%02X [2]=0x%02X [3]=0x%02X", data[1], data[2], data[3]);
+    LOG_DEBUG(kTag, "  Rumble: L=%d R=%d", data[5], data[4]);
+    LOG_DEBUG(kTag, "  Triggers: R[0]=0x%02X L[0]=0x%02X", 
            m_outputState.rightTriggerEffect[0], m_outputState.leftTriggerEffect[0]);
     
     // SDL handles CRC32 for Bluetooth automatically
     if (!SDL_SendJoystickEffect(m_joystick, data.data(), data.size())) {
-        LOG_INFO("DualSense", "DualSense BT: Send failed - %s", SDL_GetError());
+        LOG_WARN(kTag, "DualSense BT: Send failed - %s", SDL_GetError());
         return false;
     }
     
-    LOG_DEBUG("DualSense", "BT: Report sent successfully");
+    LOG_DEBUG(kTag, "BT: Report sent successfully");
     return true;
 }

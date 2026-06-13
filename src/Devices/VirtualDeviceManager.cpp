@@ -2,6 +2,8 @@
 #include "VirtualDeviceManager.h"
 #include <algorithm>
 
+static constexpr const char* kTag = "VirtualDeviceManager";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Preset tables
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,14 +134,14 @@ SDL_JoystickID VirtualDeviceManager::AddDevice(VirtualDeviceType type,
 
     SDL_JoystickID id = SDL_AttachVirtualJoystick(&desc);
     if (id == 0) {
-        LOG_ERROR("VirtualDeviceManager", "SDL_AttachVirtualJoystick failed: %s",
+        LOG_ERROR(kTag, "SDL_AttachVirtualJoystick failed: %s",
                 SDL_GetError());
         return 0;
     }
 
     SDL_Joystick* joystick = SDL_OpenJoystick(id);
     if (!joystick) {
-        LOG_ERROR("VirtualDeviceManager", "SDL_OpenJoystick failed: %s", SDL_GetError());
+        LOG_ERROR(kTag, "SDL_OpenJoystick failed: %s", SDL_GetError());
         SDL_DetachVirtualJoystick(id);
         return 0;
     }
@@ -149,7 +151,7 @@ SDL_JoystickID VirtualDeviceManager::AddDevice(VirtualDeviceType type,
     // Push defaults immediately so SDL has a consistent initial state.
     PushState(id);
 
-    LOG_INFO("VirtualDeviceManager", "created '%s' (type=%d, id=%u)",
+    LOG_INFO(kTag, "created '%s' (type=%d, id=%u)",
             name.c_str(), static_cast<int>(type), static_cast<unsigned>(id));
     return id;
 }
@@ -170,7 +172,7 @@ void VirtualDeviceManager::RemoveDevice(SDL_JoystickID id) {
     SDL_DetachVirtualJoystick(id);
 
     m_Devices.erase(it);
-    LOG_INFO("VirtualDeviceManager", "removed virtual device id=%u",
+    LOG_INFO(kTag, "removed virtual device id=%u",
             static_cast<unsigned>(id));
 }
 
