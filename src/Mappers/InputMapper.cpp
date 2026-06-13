@@ -917,10 +917,10 @@ void InputMapper::DrawMappingContent() {
         float sp = style.ItemSpacing.x;
         float bindW = ImGui::CalcTextSize("Bind").x + style.FramePadding.x * 2;
 
-        float dw = 0.f, rw = 0.f;
+        float dw = 80.f, rw = 0.f;
         bool hasSrc = (src.axisIndex != -1) || (src.sensorChannel != SC::None);
         if (hasSrc) {
-            dw = 80.f;
+            dw = 180.f;
             rw = 80.f;
         }
 
