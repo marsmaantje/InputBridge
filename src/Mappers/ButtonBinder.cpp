@@ -60,6 +60,33 @@ std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<DeviceStat
                 return BoundButtonInfo{id, i};
             }
         }
+
+        // Elite-style controllers expose paddle buttons through the gamepad
+        // abstraction layer only — they are not visible as raw joystick buttons.
+        // Scan them explicitly so they can be bound in the mapper.
+        // We encode gamepad-only buttons as a negative sentinel:
+        //   stored index = -(SDL_GamepadButton + 1)
+        // The read path in InputMapper::Update decodes this back to the
+        // SDL_GamepadButton and uses SDL_GetGamepadButton for those entries.
+        if (dev.gamepad) {
+            static const SDL_GamepadButton kPaddleButtons[] = {
+                SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1,
+                SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2,
+                SDL_GAMEPAD_BUTTON_LEFT_PADDLE1,
+                SDL_GAMEPAD_BUTTON_LEFT_PADDLE2,
+            };
+            for (SDL_GamepadButton btn : kPaddleButtons) {
+                if (!SDL_GamepadHasButton(dev.gamepad, btn)) continue;
+                if (SDL_GetGamepadButton(dev.gamepad, btn)) {
+                    int sentinelIndex = -(static_cast<int>(btn) + 1);
+                    m_isBinding = false;
+                    LOG_INFO(kTag, "Paddle button %d (sentinel %d) detected on gamepad '%s' (ID: %u).",
+                             static_cast<int>(btn), sentinelIndex,
+                             SDL_GetGamepadName(dev.gamepad), id);
+                    return BoundButtonInfo{id, sentinelIndex};
+                }
+            }
+        }
     }
     return std::nullopt;
 }

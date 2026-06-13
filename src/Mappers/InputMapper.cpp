@@ -57,6 +57,31 @@ SDL_Joystick *GetJoystickByID(SDL_JoystickID id, const DeviceManager &dm) {
     return nullptr;
 }
 
+// Returns the SDL_Gamepad* for the given joystick instance ID, or nullptr.
+static SDL_Gamepad *GetGamepadByID(SDL_JoystickID id, const DeviceManager &dm) {
+    if (id == 0) return nullptr;
+    for (const auto &d : dm.GetDevices())
+        if (d.instance_id == id) return d.gamepad;
+    return nullptr;
+}
+
+// ButtonBinder encodes gamepad-only buttons (e.g. Elite paddles) as negative
+// sentinels: stored_index = -(SDL_GamepadButton + 1).
+// This helper decodes and reads the correct API for both cases.
+static bool ReadButton(SDL_JoystickID instance_id, int button_index,
+                       const DeviceManager &dm) {
+    if (button_index < 0) {
+        // Gamepad-only button (paddle sentinel)
+        SDL_Gamepad *gp = GetGamepadByID(instance_id, dm);
+        if (!gp) return false;
+        SDL_GamepadButton btn = static_cast<SDL_GamepadButton>(-(button_index + 1));
+        return SDL_GetGamepadButton(gp, btn) != 0;
+    }
+    SDL_Joystick *j = GetJoystickByID(instance_id, dm);
+    if (!j) return false;
+    return SDL_GetJoystickButton(j, button_index) != 0;
+}
+
 std::filesystem::path GetMappingsDirectory() {
     // Mapping profiles are user data — they belong in
     // $XDG_DATA_HOME/InputBridge/mappings/ per the XDG Base Directory
@@ -1490,10 +1515,10 @@ bool InputMapper::Update(bool dynamic_rate) {
             if (bm.instance_id==0 || bm.target_output_name.empty()) continue;
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1513,10 +1538,10 @@ bool InputMapper::Update(bool dynamic_rate) {
             if (bm.instance_id==0||bm.target_output_name.empty()) continue;
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1540,7 +1565,7 @@ bool InputMapper::Update(bool dynamic_rate) {
             if (dm.button_index != -1 || dm.hat_index != -1) {
                 SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                    if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
                 } else {
                     dm.last_physical_state = false;
@@ -1727,10 +1752,10 @@ std::string InputMapper::GetOutputPreview() {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue; // NOLINT(readability-misleading-indentation)
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1764,7 +1789,7 @@ std::string InputMapper::GetOutputPreview() {
                 if (dm.button_index != -1 || dm.hat_index != -1) {
                     SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
                     if (j) {
-                        if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                        if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
                         else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
                     }
                 } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1789,10 +1814,10 @@ std::string InputMapper::GetOutputPreview() {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
