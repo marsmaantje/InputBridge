@@ -483,25 +483,9 @@ void InputMapper::UpdateListening() {
                 return false;
             };
 
-            auto checkCap = [&](SDL_GamepadCapSenseType ct, bool baseline_val, SC ch) -> bool {
-                bool cur = SDL_GetGamepadCapSense(dev.gamepad, ct);
-                if (cur != baseline_val) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
-                    src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
-                    src.instance_id   = dev.instance_id;
-                    src.axisIndex     = -1;
-                    src.sensorChannel = ch;
-                    SaveCurrentProfile();
-                    CancelListening();
-                    return true;
-                }
-                return false;
-            };
-
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  baseline->capSenseLeftStick,  SC::LeftStickTouch))  return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, baseline->capSenseRightStick, SC::RightStickTouch)) return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   baseline->capSenseLeftGrip,   SC::LeftGripTouch))   return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  baseline->capSenseRightGrip,  SC::RightGripTouch))  return;
+            // Cap-sense (stick/grip touch) inputs are boolean — they are intentionally
+            // excluded here so the Bind button never resolves them as analog sources.
+            // They are handled exclusively in the Digital listening branch above.
 
             // Use a significant threshold to avoid triggering on sensor noise/jitter
             if (checkSensor(g.x, baseline->gyro.x,   SC::GyroX,  0.4f)) return;
