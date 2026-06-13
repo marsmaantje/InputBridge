@@ -986,6 +986,14 @@ void InputMapper::DrawMappingContent() {
                 ImGui::TextDisabled("%s  [Sensors/Battery]", dev.name.c_str());
 
                 for (const auto& entry : kSensorEntries) {
+                    // Cap-sense (stick/grip touch) and BatteryCharging are boolean signals —
+                    // they belong in the digital combo only, not here as analog inputs.
+                    bool isCap = (entry.channel == SC::LeftStickTouch  ||
+                                  entry.channel == SC::RightStickTouch ||
+                                  entry.channel == SC::LeftGripTouch   ||
+                                  entry.channel == SC::RightGripTouch);
+                    if (isCap || entry.channel == SC::BatteryCharging) continue;
+
                     // Skip channels the hardware doesn't have.
                     bool isGyro  = (entry.channel >= SC::GyroX  && entry.channel <= SC::GyroZ);
                     bool isAccel = (entry.channel >= SC::AccelX && entry.channel <= SC::AccelZ);
@@ -994,26 +1002,17 @@ void InputMapper::DrawMappingContent() {
                     bool isGyroR = (entry.channel >= SC::GyroRX && entry.channel <= SC::GyroRZ);
                     bool isAccelR= (entry.channel >= SC::AccelRX && entry.channel <= SC::AccelRZ);
                     bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Pressure);
-                    bool isCap   = (entry.channel >= SC::LeftStickTouch && entry.channel <= SC::RightGripTouch);
-                    bool isBattery = (entry.channel == SC::BatteryLevel || entry.channel == SC::BatteryCharging);
+                    bool isBattery = (entry.channel == SC::BatteryLevel);
 
                     // Hide combined sensors if split (L/R) sensors are available to avoid redundancy
                     if (isGyro  && (hasGyroLR || !hasGyro))  continue;
                     if (isAccel && (hasAccelLR || !hasAccel)) continue;
-                    if (isGyroL && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)) continue;
-                    if (isAccelL&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L))continue;
-                    if (isGyroR && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R)) continue;
-                    if (isAccelR&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R))continue;
-                    if (isTouch && !hasTouch) continue;
+                    if (isGyroL && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L))  continue;
+                    if (isAccelL&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L)) continue;
+                    if (isGyroR && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R))  continue;
+                    if (isAccelR&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R)) continue;
+                    if (isTouch   && !hasTouch)   continue;
                     if (isBattery && !hasBattery) continue;
-
-                    if (isCap) {
-                        SDL_GamepadCapSenseType ct = SDL_GAMEPAD_CAPSENSE_LEFT_STICK;
-                        if      (entry.channel == SC::RightStickTouch) ct = SDL_GAMEPAD_CAPSENSE_RIGHT_STICK;
-                        else if (entry.channel == SC::LeftGripTouch)   ct = SDL_GAMEPAD_CAPSENSE_LEFT_GRIP;
-                        else if (entry.channel == SC::RightGripTouch)  ct = SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP;
-                        if (!SDL_GamepadHasCapSense(dev.gamepad, ct)) continue;
-                    }
 
                     std::string lbl = std::string("  ") + entry.label;
                     bool sel = src.instance_id == dev.instance_id && src.sensorChannel == entry.channel;
