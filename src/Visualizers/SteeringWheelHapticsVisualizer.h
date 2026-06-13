@@ -52,4 +52,11 @@ private:
 
     // RPM LEDs (wheel-rpm-lib)
     float m_rpm_percent = 0.0f;
+
+    // Rumble (simulated via periodic)
+    int   m_rumble_slot              = 0;
+    float m_rumble_large             = 0.5f;
+    float m_rumble_small             = 0.3f;
+    int   m_rumble_duration          = 500;
+    bool  m_rumble_infinite_duration = false;
 };

@@ -275,6 +275,32 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
         }
 
         // ----------------------------------------------------------------
+        // Rumble (simulated via periodic)
+        // ----------------------------------------------------------------
+        if (ImGui::TreeNode("Rumble (Impact)")) {
+            ImGui::TextDisabled("Steering wheels have no rumble motors; this is simulated\n"
+                                "as a low-frequency vibration burst on the wheel's force feedback.");
+            ImGui::SliderInt("Slot##rum", &m_rumble_slot, 0, 7);
+            ImGui::SliderFloat("Large Motor##rum", &m_rumble_large, 0.0f, 1.0f);
+            ImGui::SliderFloat("Small Motor##rum", &m_rumble_small, 0.0f, 1.0f);
+            ImGui::Checkbox("Infinite Duration##rum", &m_rumble_infinite_duration);
+            if (!m_rumble_infinite_duration)
+                ImGui::SliderInt("Duration (ms)##rum", &m_rumble_duration, 0, 2000);
+
+            if (ImGui::Button("Play Rumble##wheel")) {
+                wheelHaptics->PlayRumble(
+                    m_rumble_slot, m_rumble_large, m_rumble_small,
+                    m_rumble_infinite_duration ? SDL_HAPTIC_INFINITY
+                                               : static_cast<uint32_t>(m_rumble_duration));
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Stop Rumble##wheel"))
+                wheelHaptics->StopPeriodic(m_rumble_slot);  // Rumble reuses periodic slots
+
+            ImGui::TreePop();
+        }
+
+        // ----------------------------------------------------------------
         // Active Slots read-out (click a slot label to load its values)
         // ----------------------------------------------------------------
         ImGui::Separator();

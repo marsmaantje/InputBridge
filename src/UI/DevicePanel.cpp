@@ -55,7 +55,7 @@ static void DrawDeviceSettingsTab(const DeviceState&  dev,
         ImGui::SetTooltip(
             "Re-uploads active infinite-duration effects every 30 s.\n"
             "Required for devices that truncate SDL_HAPTIC_INFINITY to ~65 s\n"
-            "Untested on any other device than Thrustmaster T150!"
+            "(e.g. Thrustmaster T150). Safe to enable on any device."
         );
     }
 }
