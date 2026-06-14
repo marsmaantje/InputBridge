@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.9.1)
+project(InputBridge VERSION 0.9.2)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -263,6 +263,7 @@ add_executable(InputBridge
     src/Mappers/InputMapper.cpp
     src/Mappers/OutputMapper.cpp
     # WebSocket and OSC protocols
+    src/Protocols/OSCValidation.h
     src/Protocols/OSCProtocol.cpp
     src/Protocols/ProtocolManager.cpp
     src/Protocols/WebSocketProtocol.cpp

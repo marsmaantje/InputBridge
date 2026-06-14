@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cstdlib>
 
+static constexpr const char* kTag = "DeviceManager";
+
 DeviceManager &DeviceManager::GetInstance() {
     static DeviceManager instance;
     return instance;
@@ -33,7 +35,7 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
 void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     auto result = InputBridge::DeviceFactory::CreateDevice(instance_id);
     if (!result) {
-        LOG_ERROR("DeviceManager", "Failed to create device %d", instance_id);
+        LOG_ERROR(kTag, "Failed to create device %d", instance_id);
         return;
     }
     
@@ -153,7 +155,7 @@ void DeviceManager::Update(bool isMinimized) {
 
 void DeviceManager::ScanWheelRPMDevices() {
     m_WheelRPMDevices = wheel::WheelManager::scan();
-    LOG_INFO("DeviceManager", "WheelRPM scan complete: %zu device(s) found",
+    LOG_INFO(kTag, "WheelRPM scan complete: %zu device(s) found",
             m_WheelRPMDevices.size());
 }
 
@@ -168,6 +170,11 @@ HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
         return it->second.get();
     }
     return nullptr;
+}
+
+void DeviceManager::SetDeviceKeepalive(SDL_JoystickID instance_id, bool enable) {
+    HapticDevice* haptic = GetHapticDevice(instance_id);
+    if (haptic) haptic->EnableKeepalive(enable);
 }
 
 void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
@@ -198,11 +205,11 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
 
             if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
-                LOG_INFO("DeviceManager", "Battery [%s]: State=%s (battery info not available)",
+                LOG_WARN(kTag, "Battery [%s]: State=%s (battery info not available)",
                         dev.name.c_str(), state_str);
-                LOG_INFO("DeviceManager", "Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
+                LOG_WARN(kTag, "Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
             } else if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
-                LOG_INFO("DeviceManager", "Battery [%s]: State=%s, Percent=%d%%",
+                LOG_DEBUG(kTag, "Battery [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
         }
@@ -237,7 +244,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
                     if (leftState != SDL_POWERSTATE_NO_BATTERY) {
                         dev.battery_state_L   = leftState;
                         dev.battery_percent_L = leftPercent;
-                        LOG_INFO("DeviceManager", "Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
+                        LOG_DEBUG(kTag, "Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
                         SDL_CloseJoystick(joy);
                         break;
                     }
@@ -275,7 +282,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
 
             if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY && dev.battery_state != SDL_POWERSTATE_UNKNOWN) {
-                LOG_INFO("DeviceManager", "Battery (Joystick) [%s]: State=%s, Percent=%d%%",
+                LOG_DEBUG(kTag, "Battery (Joystick) [%s]: State=%s, Percent=%d%%",
                         dev.name.c_str(), state_str, percent);
             }
         }
@@ -302,7 +309,7 @@ bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
                          ? dev.joystick
                          : (dev.gamepad ? SDL_GetGamepadJoystick(dev.gamepad) : nullptr);
     if (!joy) {
-        LOG_INFO("DeviceManager", "SetDeviceHidden: no joystick handle for '%s'.",
+        LOG_WARN(kTag, "SetDeviceHidden: no joystick handle for '%s'.",
                 dev.name.c_str());
         return false;
     }
@@ -312,7 +319,7 @@ bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
     return ok;
 #else
     (void)dev; (void)hidden;
-    LOG_WARN("DeviceManager", "SetDeviceHidden: exclusive input support not compiled in.");
+    LOG_WARN(kTag, "SetDeviceHidden: exclusive input support not compiled in.");
     return false;
 #endif
 }

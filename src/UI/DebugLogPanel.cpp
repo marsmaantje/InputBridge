@@ -145,29 +145,14 @@ void DrawDebugLogContent() {
         for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
             const auto& e = entries[s_visible[row]];
 
-            // Selectable gives ImGui a stable, unique item ID (required by
-            // BeginPopupContextItem) and also lets users click to highlight a
-            // line.  We draw it with zero vertical padding so it looks like
-            // plain text, then overlay the coloured text manually.
             ImGui::PushID(s_visible[row]);
 
-            const ImVec2 textSize = ImGui::CalcTextSize(e.text.c_str(), nullptr, false);
-            const float  lineH    = textSize.y + ImGui::GetStyle().ItemSpacing.y * 0.5f;
+            // Record the top-left of this row in screen space before rendering text.
+            const ImVec2 rowScreenMin = ImGui::GetCursorScreenPos();
+            const float  rowWidth     = ImGui::GetContentRegionAvail().x;
 
-            // Save the left edge before the Selectable consumes the full width.
-            const float textStartX = ImGui::GetCursorPosX();
-            const float textStartY = ImGui::GetCursorPosY();
-
-            ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(1,1,1,0.08f));
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1,1,1,0.12f));
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(1,1,1,0.20f));
-            ImGui::Selectable("##row", false,
-                              ImGuiSelectableFlags_None,
-                              ImVec2(ImGui::GetContentRegionAvail().x, lineH));
-            ImGui::PopStyleColor(3);
-
-            // Overlay the log text at the saved left edge in the correct colour.
-            ImGui::SetCursorPos(ImVec2(textStartX, textStartY));
+            // 1. Render the coloured text first — this advances the cursor naturally
+            //    so no rewinding is needed and row height is always correct.
             ImGui::PushStyleColor(ImGuiCol_Text, LevelColour(e.level));
             if (s_wordWrap)
                 ImGui::TextWrapped("%s", e.text.c_str());
@@ -175,7 +160,29 @@ void DrawDebugLogContent() {
                 ImGui::TextUnformatted(e.text.c_str());
             ImGui::PopStyleColor();
 
-            // Right-click context menu — ID comes from the Selectable above.
+            // 2. Now we know the row's screen-space bounds. Draw a hover/click
+            //    highlight behind the text using the draw list, and register an
+            //    InvisibleButton over the same rect for hover detection and the
+            //    right-click context menu.
+            const ImVec2 rowScreenMax = ImVec2(rowScreenMin.x + rowWidth,
+                                               ImGui::GetCursorScreenPos().y);
+            const float  rowH         = rowScreenMax.y - rowScreenMin.y;
+
+            ImGui::SetCursorScreenPos(rowScreenMin);
+            ImGui::InvisibleButton("##hit", ImVec2(rowWidth, rowH));
+
+            if (ImGui::IsItemHovered()) {
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    rowScreenMin, rowScreenMax,
+                    IM_COL32(255, 255, 255, 20));
+            }
+            if (ImGui::IsItemActive()) {
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    rowScreenMin, rowScreenMax,
+                    IM_COL32(255, 255, 255, 40));
+            }
+
+            // Right-click context menu.
             if (ImGui::BeginPopupContextItem("##ctx")) {
                 if (ImGui::MenuItem("Copy line"))
                     SDL_SetClipboardText(e.text.c_str());

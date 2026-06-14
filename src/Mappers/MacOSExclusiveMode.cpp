@@ -5,6 +5,8 @@
 
 #include <SDL3/SDL.h>
 
+static constexpr const char* kTag = "ExclusiveMode";
+
 // kIOMainPortDefault was renamed from kIOMasterPortDefault in newer SDKs.
 #ifndef kIOMainPortDefault
 #define kIOMainPortDefault kIOMasterPortDefault
@@ -59,21 +61,21 @@ bool MacOSExclusiveMode::HideDevice(SDL_Joystick* joystick) {
 
     IOHIDDeviceRef dev = FindHIDDevice(vid, pid);
     if (!dev) {
-        LOG_INFO("ExclusiveMode", "MacOSExclusiveMode: could not find IOHIDDevice for '%s' "
+        LOG_INFO(kTag, "MacOSExclusiveMode: could not find IOHIDDevice for '%s' "
                 "(VID=%04X PID=%04X).", SDL_GetJoystickName(joystick), vid, pid);
         return false;
     }
 
     IOReturn ret = IOHIDDeviceOpen(dev, kIOHIDOptionsTypeSeizeDevice);
     if (ret != kIOReturnSuccess) {
-        LOG_ERROR("ExclusiveMode", "MacOSExclusiveMode: IOHIDDeviceOpen(seize) failed for '%s': 0x%x.",
+        LOG_ERROR(kTag, "MacOSExclusiveMode: IOHIDDeviceOpen(seize) failed for '%s': 0x%x.",
                 SDL_GetJoystickName(joystick), ret);
         CFRelease(dev);
         return false;
     }
 
     m_SeizedDevices[id] = dev;
-    LOG_INFO("ExclusiveMode", "MacOSExclusiveMode: '%s' is now hidden.", SDL_GetJoystickName(joystick));
+    LOG_INFO(kTag, "MacOSExclusiveMode: '%s' is now hidden.", SDL_GetJoystickName(joystick));
     return true;
 }
 
@@ -87,7 +89,7 @@ bool MacOSExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
     IOHIDDeviceClose(it->second, kIOHIDOptionsTypeSeizeDevice);
     CFRelease(it->second);
     m_SeizedDevices.erase(it);
-    LOG_INFO("ExclusiveMode", "MacOSExclusiveMode: '%s' is now visible.", SDL_GetJoystickName(joystick));
+    LOG_INFO(kTag, "MacOSExclusiveMode: '%s' is now visible.", SDL_GetJoystickName(joystick));
     return true;
 }
 

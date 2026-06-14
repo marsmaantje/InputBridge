@@ -193,4 +193,35 @@ void GamepadVisualizer::Draw(const DeviceState &dev) {
                                         dpad_center.y + dpad_size / 2),
                                  right ? color_active : color_fill);
     }
+
+    // Elite Paddles (P1–P4): shown only when the hardware reports them.
+    // Layout: two paddles on each grip, stacked vertically.
+    //   Left grip:  P3 (upper) / P4 (lower)   at x ≈ 10
+    //   Right grip: P1 (upper) / P2 (lower)   at x ≈ 390
+    struct PaddleDesc {
+        SDL_GamepadButton button;
+        float x, y;        // top-left of the paddle rect
+        float w, h;
+        const char* label;
+    };
+    static const PaddleDesc kPaddles[] = {
+        { SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, p.x + 370, p.y + 100, 22, 14, "P1" },
+        { SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2, p.x + 370, p.y + 120, 22, 14, "P2" },
+        { SDL_GAMEPAD_BUTTON_LEFT_PADDLE1,  p.x +   8, p.y + 100, 22, 14, "P3" },
+        { SDL_GAMEPAD_BUTTON_LEFT_PADDLE2,  p.x +   8, p.y + 120, 22, 14, "P4" },
+    };
+    for (const auto& pd : kPaddles) {
+        if (!SDL_GamepadHasButton(dev.gamepad, pd.button)) continue;
+        bool pressed = SDL_GetGamepadButton(dev.gamepad, pd.button);
+        ImVec2 tl(pd.x, pd.y);
+        ImVec2 br(pd.x + pd.w, pd.y + pd.h);
+        draw_list->AddRectFilled(tl, br, pressed ? color_active : color_fill, 3.0f);
+        draw_list->AddRect(tl, br, color_outline, 3.0f);
+        // Label centred inside the rect
+        ImVec2 text_size = ImGui::CalcTextSize(pd.label);
+        draw_list->AddText(
+            ImVec2(pd.x + (pd.w - text_size.x) * 0.5f,
+                   pd.y + (pd.h - text_size.y) * 0.5f),
+            IM_COL32(220, 220, 220, 255), pd.label);
+    }
 }

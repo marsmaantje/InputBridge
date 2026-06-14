@@ -8,6 +8,8 @@
 
 #include <string>
 
+static constexpr const char* kTag = "FontManager";
+
 void UpdateUIScale(SDL_Window*         window,
                    float&              user_ui_scale,
                    float&              user_font_scale,
@@ -60,7 +62,7 @@ void RebuildFontAtlas()
         base_font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), themeFontSize);
         loaded_theme_font = (base_font != nullptr);
         if (!loaded_theme_font)
-            LOG_INFO("FontManager", "Font: Failed to load '%s' — falling back to default.",
+            LOG_WARN(kTag, "Font: Failed to load '%s' — falling back to default.",
                     fontPath.c_str());
     }
     if (!loaded_theme_font)
@@ -97,7 +99,7 @@ void RebuildFontAtlas()
             iconFontPath.c_str(), merge_size, &cfg, icon_ranges);
 
         if (!icons)
-            LOG_INFO("FontManager", "Font: FA6 not found at '%s' — icon glyphs will be missing.",
+            LOG_WARN(kTag, "Font: FA6 not found at '%s' — icon glyphs will be missing.",
                     iconFontPath.c_str());
     }
 

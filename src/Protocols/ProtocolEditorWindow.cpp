@@ -21,6 +21,8 @@
 #include <cctype>
 #include <cstdio>
 
+static constexpr const char* kTag = "ProtocolEditor";
+
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -99,7 +101,7 @@ void ProtocolEditorWindow::LoadSettings() {
         }
     } catch (const std::exception& e) {
         // Silently ignore settings load errors
-        LOG_ERROR("ProtocolEditor", "Failed to load protocol editor settings: %s", e.what());
+        LOG_ERROR(kTag, "Failed to load protocol editor settings: %s", e.what());
     }
 }
 
@@ -112,7 +114,7 @@ void ProtocolEditorWindow::SaveSettings() {
         std::ofstream outputFile(SETTINGS_FILE);
         outputFile << settingsJson.dump(4);
     } catch (const std::exception& e) {
-        LOG_ERROR("ProtocolEditor", "Failed to save protocol editor settings: %s", e.what());
+        LOG_ERROR(kTag, "Failed to save protocol editor settings: %s", e.what());
     }
 }
 
@@ -807,7 +809,7 @@ void ProtocolEditorWindow::HandleDroppedFile(const std::string& filePath) {
     }
 
     if (ValidateAndImportProtocol(filePath)) {
-        LOG_INFO("ProtocolEditor", "Successfully imported protocol via drag-and-drop: %s", filePath.c_str());
+        LOG_INFO(kTag, "Successfully imported protocol via drag-and-drop: %s", filePath.c_str());
     }
 }
 
@@ -2069,11 +2071,11 @@ void ProtocolEditorWindow::CreateBackupBeforeOperation(const std::string& operat
     std::string catalogPath = ProtocolRegistry::GetProtocolsDir() + "/input_fields.json";
     std::string backupPath  = s_backupManager.CreateBackup(catalogPath);
     if (!backupPath.empty())
-        LOG_INFO("ProtocolEditor", "Created backup before %s: %s", operationName.c_str(), backupPath.c_str());
+        LOG_INFO(kTag, "Created backup before %s: %s", operationName.c_str(), backupPath.c_str());
 
     std::string defsBackup = s_backupManager.CreateDirectoryBackup(ProtocolRegistry::GetDefsDir());
     if (!defsBackup.empty())
-        LOG_INFO("ProtocolEditor", "Created definitions backup: %s", defsBackup.c_str());
+        LOG_INFO(kTag, "Created definitions backup: %s", defsBackup.c_str());
 }
 
 bool ProtocolEditorWindow::ValidateAndImportProtocol(const std::string& filePath) {
@@ -2512,9 +2514,9 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
 
                     std::ofstream out(templatePath);
                     out << j.dump(4);
-                    LOG_INFO("ProtocolEditor", "Saved template: %s", templatePath.c_str());
+                    LOG_INFO(kTag, "Saved template: %s", templatePath.c_str());
                 } catch (const std::exception& e) {
-                    LOG_ERROR("ProtocolEditor", "Failed to save template: %s", e.what());
+                    LOG_ERROR(kTag, "Failed to save template: %s", e.what());
                 }
             }
             ImGui::CloseCurrentPopup();
@@ -2625,7 +2627,7 @@ void ProtocolEditorWindow::DrawLoadTemplateModal() {
                     registry.SaveDefinition(def);
                 }
             } catch (const std::exception& e) {
-                LOG_ERROR("ProtocolEditor", "Failed to load template: %s", e.what());
+                LOG_ERROR(kTag, "Failed to load template: %s", e.what());
             }
             ImGui::CloseCurrentPopup();
         }

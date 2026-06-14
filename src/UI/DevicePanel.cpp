@@ -20,6 +20,46 @@
 
 #include <string>
 
+static constexpr const char* kTag = "DevicePanel";
+
+// ---------------------------------------------------------------------------
+// DrawDeviceSettingsTab
+// ---------------------------------------------------------------------------
+// Draws the contents of the per-device "Settings" tab. Currently this just
+// hosts the "Infinite-effect keepalive" toggle, which used to live on each
+// Haptic Test tab individually.
+
+static void DrawDeviceSettingsTab(const DeviceState&  dev,
+                                   DeviceManager&      deviceManager,
+                                   PreferencesManager& prefs,
+                                   const std::string&  guid)
+{
+    HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
+
+    if (!haptic) {
+        ImGui::TextDisabled("No device-specific settings available.");
+        return;
+    }
+
+    // Restore saved preference once when the device first appears.
+    if (!prefs.IsPreferenceApplied(dev.instance_id)) {
+        haptic->EnableKeepalive(prefs.GetDeviceKeepalive(guid));
+    }
+
+    bool keepalive = haptic->IsKeepaliveEnabled();
+    if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
+        deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
+        prefs.SetDeviceKeepalive(guid, keepalive);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Re-uploads active infinite-duration effects every 30 s.\n"
+            "Required for devices that truncate SDL_HAPTIC_INFINITY to ~65 s\n"
+            "(e.g. Thrustmaster T150). Safe to enable on any device."
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // DrawDeviceVisualizer
 // ---------------------------------------------------------------------------
@@ -86,7 +126,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
         if (ImGui::BeginTabBar("DeviceMode")) {
             TabItem("Raw Inputs", generic_viz);
             if (ImGui::BeginTabItem("Haptic Test")) {
-                gamepad_haptics_viz.Draw(dev, deviceManager);
+                gamepad_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                 ImGui::EndTabItem();
             }
 
@@ -106,6 +146,11 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                     TabItem("Sensors", sensor_viz);
             }
 
+            if (ImGui::BeginTabItem("Settings")) {
+                DrawDeviceSettingsTab(dev, deviceManager, prefs, guid);
+                ImGui::EndTabItem();
+            }
+
             SimulateTab();
             ImGui::EndTabBar();
         }
@@ -118,7 +163,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
             if (type == SDL_JOYSTICK_TYPE_FLIGHT_STICK
                 || type == SDL_JOYSTICK_TYPE_THROTTLE) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
-                    flight_stick_haptics_viz.Draw(dev, deviceManager);
+                    flight_stick_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                     ImGui::EndTabItem();
                 }
             }
@@ -128,7 +173,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
             }
             if (type == SDL_JOYSTICK_TYPE_WHEEL) {
                 if (ImGui::BeginTabItem("Haptic Test")) {
-                    wheel_haptics_viz.Draw(dev, deviceManager);
+                    wheel_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                     ImGui::EndTabItem();
                 }
             }
@@ -142,6 +187,11 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
                         ImGui::EndTabItem();
                     }
                 }
+            }
+
+            if (ImGui::BeginTabItem("Settings")) {
+                DrawDeviceSettingsTab(dev, deviceManager, prefs, guid);
+                ImGui::EndTabItem();
             }
 
             SimulateTab();
@@ -191,7 +241,7 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
 
     if (ImGui::Checkbox("Hide from other applications", &hidden)) {
         if (!deviceManager.SetDeviceHidden(dev, hidden)) {
-            LOG_INFO("DevicePanel", "SetDeviceHidden failed for '%s'.", dev.name.c_str());
+            LOG_WARN(kTag, "SetDeviceHidden failed for '%s'.", dev.name.c_str());
         }
     }
 

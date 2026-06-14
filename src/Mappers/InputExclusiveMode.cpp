@@ -2,6 +2,8 @@
 #include "InputExclusiveMode.h"
 #include "InputExclusiveModeImpl.h"
 
+static constexpr const char* kTag = "ExclusiveMode";
+
 #ifdef ENABLE_EXCLUSIVE_INPUT
 #  ifdef _WIN32
 #    include "WindowsExclusiveMode.h"
@@ -17,7 +19,7 @@
 class DummyExclusiveMode : public InputExclusiveModeImpl {
 public:
     bool HideDevice(SDL_Joystick*) override {
-        LOG_INFO("ExclusiveMode", "Device hide: not implemented on this platform or feature disabled.");
+        LOG_INFO(kTag, "Device hide: not implemented on this platform or feature disabled.");
         return false;
     }
     bool UnhideDevice(SDL_Joystick*) override { return true; }

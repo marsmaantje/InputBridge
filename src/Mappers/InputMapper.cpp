@@ -27,6 +27,8 @@
 #include <unordered_set>
 #include <string_view>
 
+static constexpr const char* kTag = "InputMapper";
+
 using json = nlohmann::json;
 
 NLOHMANN_JSON_SERIALIZE_ENUM(InputMapper::ButtonToDigitalMapping::Mode, {
@@ -53,6 +55,31 @@ SDL_Joystick *GetJoystickByID(SDL_JoystickID id, const DeviceManager &dm) {
     for (const auto &d : dm.GetDevices())
         if (d.instance_id == id) return d.joystick;
     return nullptr;
+}
+
+// Returns the SDL_Gamepad* for the given joystick instance ID, or nullptr.
+static SDL_Gamepad *GetGamepadByID(SDL_JoystickID id, const DeviceManager &dm) {
+    if (id == 0) return nullptr;
+    for (const auto &d : dm.GetDevices())
+        if (d.instance_id == id) return d.gamepad;
+    return nullptr;
+}
+
+// ButtonBinder encodes gamepad-only buttons (e.g. Elite paddles) as negative
+// sentinels: stored_index = -(SDL_GamepadButton + 1).
+// This helper decodes and reads the correct API for both cases.
+static bool ReadButton(SDL_JoystickID instance_id, int button_index,
+                       const DeviceManager &dm) {
+    if (button_index < 0) {
+        // Gamepad-only button (paddle sentinel)
+        SDL_Gamepad *gp = GetGamepadByID(instance_id, dm);
+        if (!gp) return false;
+        SDL_GamepadButton btn = static_cast<SDL_GamepadButton>(-(button_index + 1));
+        return SDL_GetGamepadButton(gp, btn) != 0;
+    }
+    SDL_Joystick *j = GetJoystickByID(instance_id, dm);
+    if (!j) return false;
+    return SDL_GetJoystickButton(j, button_index) != 0;
 }
 
 std::filesystem::path GetMappingsDirectory() {
@@ -245,7 +272,7 @@ void InputMapper::UpdateListening() {
             bool updated = false;
             const DeviceState* boundDeviceState = getDeviceState(boundButton->joystickID);
             if (!boundDeviceState) {
-                LOG_WARN("InputMapper", "Bound joystick (ID: %u) not found for button binding.", boundButton->joystickID);
+                LOG_WARN(kTag, "Bound joystick (ID: %u) not found for button binding.", boundButton->joystickID);
                 CancelListening();
                 return;
             }
@@ -415,6 +442,7 @@ void InputMapper::UpdateListening() {
                     src.deviceGuid = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id = dev.instance_id;
                     src.axisIndex = i;
+                    src.sensorChannel = InputSource::SensorChannel::None;
                     SaveCurrentProfile();
                     CancelListening();
                     return;
@@ -456,25 +484,9 @@ void InputMapper::UpdateListening() {
                 return false;
             };
 
-            auto checkCap = [&](SDL_GamepadCapSenseType ct, bool baseline_val, SC ch) -> bool {
-                bool cur = SDL_GetGamepadCapSense(dev.gamepad, ct);
-                if (cur != baseline_val) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
-                    src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
-                    src.instance_id   = dev.instance_id;
-                    src.axisIndex     = -1;
-                    src.sensorChannel = ch;
-                    SaveCurrentProfile();
-                    CancelListening();
-                    return true;
-                }
-                return false;
-            };
-
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_STICK,  baseline->capSenseLeftStick,  SC::LeftStickTouch))  return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_STICK, baseline->capSenseRightStick, SC::RightStickTouch)) return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_LEFT_GRIP,   baseline->capSenseLeftGrip,   SC::LeftGripTouch))   return;
-            if (checkCap(SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP,  baseline->capSenseRightGrip,  SC::RightGripTouch))  return;
+            // Cap-sense (stick/grip touch) inputs are boolean — they are intentionally
+            // excluded here so the Bind button never resolves them as analog sources.
+            // They are handled exclusively in the Digital listening branch above.
 
             // Use a significant threshold to avoid triggering on sensor noise/jitter
             if (checkSensor(g.x, baseline->gyro.x,   SC::GyroX,  0.4f)) return;
@@ -915,10 +927,10 @@ void InputMapper::DrawMappingContent() {
         float sp = style.ItemSpacing.x;
         float bindW = ImGui::CalcTextSize("Bind").x + style.FramePadding.x * 2;
 
-        float dw = 0.f, rw = 0.f;
+        float dw = 80.f, rw = 0.f;
         bool hasSrc = (src.axisIndex != -1) || (src.sensorChannel != SC::None);
         if (hasSrc) {
-            dw = 80.f;
+            dw = 180.f;
             rw = 80.f;
         }
 
@@ -959,6 +971,14 @@ void InputMapper::DrawMappingContent() {
                 ImGui::TextDisabled("%s  [Sensors/Battery]", dev.name.c_str());
 
                 for (const auto& entry : kSensorEntries) {
+                    // Cap-sense (stick/grip touch) and BatteryCharging are boolean signals —
+                    // they belong in the digital combo only, not here as analog inputs.
+                    bool isCap = (entry.channel == SC::LeftStickTouch  ||
+                                  entry.channel == SC::RightStickTouch ||
+                                  entry.channel == SC::LeftGripTouch   ||
+                                  entry.channel == SC::RightGripTouch);
+                    if (isCap || entry.channel == SC::BatteryCharging) continue;
+
                     // Skip channels the hardware doesn't have.
                     bool isGyro  = (entry.channel >= SC::GyroX  && entry.channel <= SC::GyroZ);
                     bool isAccel = (entry.channel >= SC::AccelX && entry.channel <= SC::AccelZ);
@@ -967,26 +987,17 @@ void InputMapper::DrawMappingContent() {
                     bool isGyroR = (entry.channel >= SC::GyroRX && entry.channel <= SC::GyroRZ);
                     bool isAccelR= (entry.channel >= SC::AccelRX && entry.channel <= SC::AccelRZ);
                     bool isTouch = (entry.channel >= SC::TouchX && entry.channel <= SC::Touch2Pressure);
-                    bool isCap   = (entry.channel >= SC::LeftStickTouch && entry.channel <= SC::RightGripTouch);
-                    bool isBattery = (entry.channel == SC::BatteryLevel || entry.channel == SC::BatteryCharging);
+                    bool isBattery = (entry.channel == SC::BatteryLevel);
 
                     // Hide combined sensors if split (L/R) sensors are available to avoid redundancy
                     if (isGyro  && (hasGyroLR || !hasGyro))  continue;
                     if (isAccel && (hasAccelLR || !hasAccel)) continue;
-                    if (isGyroL && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)) continue;
-                    if (isAccelL&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L))continue;
-                    if (isGyroR && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R)) continue;
-                    if (isAccelR&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R))continue;
-                    if (isTouch && !hasTouch) continue;
+                    if (isGyroL && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L))  continue;
+                    if (isAccelL&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L)) continue;
+                    if (isGyroR && !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R))  continue;
+                    if (isAccelR&& !SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_R)) continue;
+                    if (isTouch   && !hasTouch)   continue;
                     if (isBattery && !hasBattery) continue;
-
-                    if (isCap) {
-                        SDL_GamepadCapSenseType ct = SDL_GAMEPAD_CAPSENSE_LEFT_STICK;
-                        if      (entry.channel == SC::RightStickTouch) ct = SDL_GAMEPAD_CAPSENSE_RIGHT_STICK;
-                        else if (entry.channel == SC::LeftGripTouch)   ct = SDL_GAMEPAD_CAPSENSE_LEFT_GRIP;
-                        else if (entry.channel == SC::RightGripTouch)  ct = SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP;
-                        if (!SDL_GamepadHasCapSense(dev.gamepad, ct)) continue;
-                    }
 
                     std::string lbl = std::string("  ") + entry.label;
                     bool sel = src.instance_id == dev.instance_id && src.sensorChannel == entry.channel;
@@ -1088,13 +1099,22 @@ void InputMapper::DrawMappingContent() {
                     if (sensor_channel && dev->gamepad) {
                         ImGui::Separator();
                         for (const auto& entry : kSensorEntries) {
-                            if (entry.channel < SC::LeftStickTouch) continue;
-                            
+                            // Only expose boolean sensor channels as digital inputs:
+                            // cap-sense touch pads and battery charging state.
+                            // Gyro, accel, touchpad position/pressure, and battery level
+                            // are all continuous/analog and must not appear here.
+                            bool isCap = (entry.channel == SC::LeftStickTouch  ||
+                                          entry.channel == SC::RightStickTouch ||
+                                          entry.channel == SC::LeftGripTouch   ||
+                                          entry.channel == SC::RightGripTouch);
+                            bool isCharge = (entry.channel == SC::BatteryCharging);
+                            if (!isCap && !isCharge) continue;
+
                             SDL_GamepadCapSenseType ct = SDL_GAMEPAD_CAPSENSE_LEFT_STICK;
                             if      (entry.channel == SC::RightStickTouch) ct = SDL_GAMEPAD_CAPSENSE_RIGHT_STICK;
                             else if (entry.channel == SC::LeftGripTouch)   ct = SDL_GAMEPAD_CAPSENSE_LEFT_GRIP;
                             else if (entry.channel == SC::RightGripTouch)  ct = SDL_GAMEPAD_CAPSENSE_RIGHT_GRIP;
-                            if (!SDL_GamepadHasCapSense(dev->gamepad, ct)) continue;
+                            if (isCap && !SDL_GamepadHasCapSense(dev->gamepad, ct)) continue;
 
                             bool sel = (*sensor_channel == entry.channel);
                             if (ImGui::Selectable(entry.label, sel)) {
@@ -1488,10 +1508,10 @@ bool InputMapper::Update(bool dynamic_rate) {
             if (bm.instance_id==0 || bm.target_output_name.empty()) continue;
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1511,10 +1531,10 @@ bool InputMapper::Update(bool dynamic_rate) {
             if (bm.instance_id==0||bm.target_output_name.empty()) continue;
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1538,7 +1558,7 @@ bool InputMapper::Update(bool dynamic_rate) {
             if (dm.button_index != -1 || dm.hat_index != -1) {
                 SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                    if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
                 } else {
                     dm.last_physical_state = false;
@@ -1725,10 +1745,10 @@ std::string InputMapper::GetOutputPreview() {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue; // NOLINT(readability-misleading-indentation)
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1762,7 +1782,7 @@ std::string InputMapper::GetOutputPreview() {
                 if (dm.button_index != -1 || dm.hat_index != -1) {
                     SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
                     if (j) {
-                        if (dm.button_index != -1) pressed = SDL_GetJoystickButton(j, dm.button_index);
+                        if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
                         else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
                     }
                 } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
@@ -1787,10 +1807,10 @@ std::string InputMapper::GetOutputPreview() {
             if (bm.instance_id == 0 || bm.target_output_name.empty()) continue;
 
             bool pressed = false;
-            if (bm.button_index != -1 || bm.hat_index != -1) {
+            if (bm.button_index != -1 || bm.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button
                 SDL_Joystick* j = GetJoystickByID(bm.instance_id, m_DeviceManager);
                 if (j) {
-                    if (bm.button_index != -1) pressed = SDL_GetJoystickButton(j, bm.button_index);
+                    if (bm.button_index != -1) pressed = ReadButton(bm.instance_id, bm.button_index, m_DeviceManager);
                     else pressed = (SDL_GetJoystickHat(j, bm.hat_index) & bm.hat_mask);
                 }
             } else if (bm.sensor_channel != InputSource::SensorChannel::None) {
@@ -2007,7 +2027,7 @@ void InputMapper::LoadProfiles() {
                             std::filesystem::copy_file(e.path(), dst,
                                 std::filesystem::copy_options::skip_existing, ec);
                             if (ec)
-                                LOG_ERROR("InputMapper", "Failed to seed preset profile %s: %s",
+                                LOG_ERROR(kTag, "Failed to seed preset profile %s: %s",
                                           e.path().filename().string().c_str(), ec.message().c_str());
                         }
                     }
@@ -2092,9 +2112,9 @@ void InputMapper::LoadProfiles() {
                 p.wsInputEnabled  = data.value("ws_input_enabled",  true);
 
                 m_Profiles.push_back(p);
-            } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to parse profile %s: %s",e.path().string().c_str(),ex.what()); }
+            } catch (const std::exception& ex) { LOG_ERROR(kTag, "Failed to parse profile %s: %s",e.path().string().c_str(),ex.what()); }
         }
-    } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to load profiles: %s",ex.what()); }
+    } catch (const std::exception& ex) { LOG_ERROR(kTag, "Failed to load profiles: %s",ex.what()); }
 }
 
 void InputMapper::SaveProfile(const MappingProfile &profile) const {
@@ -2151,7 +2171,7 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
         data["ws_input_enabled"]  = profile.wsInputEnabled;
 
         std::ofstream o(path); if (o) o<<data.dump(4);
-    } catch (const std::exception& ex) { LOG_INFO("InputMapper", "Failed to save profile: %s",ex.what()); }
+    } catch (const std::exception& ex) { LOG_ERROR(kTag, "Failed to save profile: %s",ex.what()); }
 }
 
 std::vector<HapticTarget>* InputMapper::GetCurrentHapticTargets() {

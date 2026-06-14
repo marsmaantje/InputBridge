@@ -4,6 +4,8 @@
 #include "Haptics/SteeringWheelHaptics.h"
 #include "Haptics/FlightStickHaptics.h"
 
+static constexpr const char* kTag = "DeviceFactory";
+
 namespace InputBridge {
 
 std::optional<DeviceCreationResult> DeviceFactory::CreateDevice(SDL_JoystickID instance_id) {
@@ -24,7 +26,7 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateDevice(SDL_JoystickID i
 std::optional<DeviceCreationResult> DeviceFactory::CreateWheelDevice(SDL_JoystickID instance_id) {
     SDL_Joystick* joystick = SDL_OpenJoystick(instance_id);
     if (!joystick) {
-        LOG_ERROR("DeviceFactory", "Failed to open steering wheel device %d: %s", instance_id, SDL_GetError());
+        LOG_ERROR(kTag, "Failed to open steering wheel device %d: %s", instance_id, SDL_GetError());
         return std::nullopt;
     }
     
@@ -41,13 +43,13 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateWheelDevice(SDL_Joystic
 std::optional<DeviceCreationResult> DeviceFactory::CreateGamepadDevice(SDL_JoystickID instance_id) {
     SDL_Gamepad* gamepad = SDL_OpenGamepad(instance_id);
     if (!gamepad) {
-        LOG_ERROR("DeviceFactory", "Failed to open gamepad device %d: %s", instance_id, SDL_GetError());
+        LOG_ERROR(kTag, "Failed to open gamepad device %d: %s", instance_id, SDL_GetError());
         return std::nullopt;
     }
     
     SDL_Joystick* joystick = SDL_GetGamepadJoystick(gamepad);
     if (!joystick) {
-        LOG_ERROR("DeviceFactory", "Failed to get joystick from gamepad %d", instance_id);
+        LOG_ERROR(kTag, "Failed to get joystick from gamepad %d", instance_id);
         SDL_CloseGamepad(gamepad);
         return std::nullopt;
     }
@@ -60,14 +62,22 @@ std::optional<DeviceCreationResult> DeviceFactory::CreateGamepadDevice(SDL_Joyst
     state.name = gamepad_name ? gamepad_name : state.name; // Override with gamepad name if available
     
     auto haptic = CreateHapticDevice(joystick, SDL_JOYSTICK_TYPE_GAMEPAD);
-    
+
+    // SDL reports both Steam Controller generations as "Steam Controller", with
+    // no variant in the name. Now that the haptic device exists and has already
+    // detected the PID, we can ask it for the precise type and update the name.
+    if (auto* gh = dynamic_cast<GamepadHaptics*>(haptic.get())) {
+        if (gh->IsSteamController())
+            state.name = gh->GetControllerTypeName();
+    }
+
     return DeviceCreationResult{std::move(state), std::move(haptic)};
 }
 
 std::optional<DeviceCreationResult> DeviceFactory::CreateGenericDevice(SDL_JoystickID instance_id) {
     SDL_Joystick* joystick = SDL_OpenJoystick(instance_id);
     if (!joystick) {
-        LOG_ERROR("DeviceFactory", "Failed to open generic device %d: %s", instance_id, SDL_GetError());
+        LOG_ERROR(kTag, "Failed to open generic device %d: %s", instance_id, SDL_GetError());
         return std::nullopt;
     }
     
@@ -102,7 +112,7 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
     if (device_type == SDL_JOYSTICK_TYPE_GAMEPAD) {
         auto haptic = std::make_unique<GamepadHaptics>(joystick);
         if (haptic && !haptic->Init()) {
-            LOG_ERROR("DeviceFactory", "Failed to initialize gamepad haptics");
+            LOG_ERROR(kTag, "Failed to initialize gamepad haptics");
             return nullptr;
         }
         return haptic;
@@ -126,15 +136,15 @@ std::unique_ptr<HapticDevice> DeviceFactory::CreateHapticDevice(SDL_Joystick* jo
             break;
             
         default:
-            LOG_INFO("DeviceFactory", "Unknown haptic device type: %d", static_cast<int>(device_type));
+            LOG_WARN(kTag, "Unknown haptic device type: %d", static_cast<int>(device_type));
             return nullptr;
     }
     
     if (haptic && !haptic->Init()) {
-        LOG_ERROR("DeviceFactory", "Failed to initialize haptic device");
+        LOG_ERROR(kTag, "Failed to initialize haptic device");
         return nullptr;
     }
-    
+
     return haptic;
 }
 
