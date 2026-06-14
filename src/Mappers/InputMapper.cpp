@@ -1874,10 +1874,13 @@ bool InputMapper::Update(bool dynamic_rate) {
 #endif
         }
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            // Only send if this field has a button mapped to it.
+            // Only send if this field has a button or analog→digital mapping assigned.
             bool hasSrc = false;
             for (const auto& dm : profile.digitalMappings)
                 if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+            if (!hasSrc)
+                for (const auto& am : profile.analogToDigitalMappings)
+                    if (am.source.instance_id != 0 && am.target_field_id == pf->fieldId) { hasSrc = true; break; }
             if (!hasSrc) continue;
 
             int val = digitalValues.count(pf->fieldId) && digitalValues[pf->fieldId] ? 1 : 0;
@@ -2068,10 +2071,13 @@ std::string InputMapper::GetOutputPreview() {
                 ++sentCount;
             }
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                // Check device mapping
+                // Check device mapping (button or analog→digital)
                 bool hasSrc = false;
                 for (const auto& dm : profile.digitalMappings)
                     if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc)
+                    for (const auto& am : profile.analogToDigitalMappings)
+                        if (am.source.instance_id != 0 && am.target_field_id == pf->fieldId) { hasSrc = true; break; }
                 if (!hasSrc) continue;
 
                 const ProtocolField* op = nullptr;
@@ -2120,9 +2126,13 @@ std::string InputMapper::GetOutputPreview() {
                     ++sentCount;
                 }
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+                    // Check device mapping (button or analog→digital)
                     bool hasSrc = false;
                     for (const auto& dm : profile.digitalMappings)
                         if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc)
+                        for (const auto& am : profile.analogToDigitalMappings)
+                            if (am.source.instance_id != 0 && am.target_field_id == pf->fieldId) { hasSrc = true; break; }
                     if (!hasSrc) continue;
 
                     const ProtocolField* wp = nullptr;
