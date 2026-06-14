@@ -442,6 +442,7 @@ void InputMapper::UpdateListening() {
                     src.deviceGuid = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id = dev.instance_id;
                     src.axisIndex = i;
+                    src.sensorChannel = InputSource::SensorChannel::None;
                     SaveCurrentProfile();
                     CancelListening();
                     return;
