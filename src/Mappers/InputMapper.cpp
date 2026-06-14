@@ -1370,12 +1370,13 @@ void InputMapper::DrawMappingContent() {
             if (ImGui::Button("Add Analog->Digital Mapping")) { profile.analogToDigitalMappings.push_back({}); changed = true; }
 
             int a2dToDelete = -1;
-            if (ImGui::BeginTable("t_a2d", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+            if (ImGui::BeginTable("t_a2d", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
                 ImGui::TableSetupColumn("Axis Source",    ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("Digital Field",  ImGuiTableColumnFlags_WidthFixed, 140.f);
                 ImGui::TableSetupColumn("Threshold",      ImGuiTableColumnFlags_WidthFixed, 160.f);
                 ImGui::TableSetupColumn("Inv",            ImGuiTableColumnFlags_WidthFixed, 30.f);
-                ImGui::TableSetupColumn("Mode / Del",     ImGuiTableColumnFlags_WidthFixed, 130.f);
+                ImGui::TableSetupColumn("Mode",           ImGuiTableColumnFlags_WidthFixed, 100.f);
+                ImGui::TableSetupColumn("",               ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableHeadersRow();
 
                 for (int i = 0; i < (int)profile.analogToDigitalMappings.size(); ++i) {
@@ -1443,17 +1444,17 @@ void InputMapper::DrawMappingContent() {
                     if (ImGui::Checkbox("##a2dinv", &am.invert_threshold)) rc = true;
                     ImGui::SetItemTooltip("Active when value is BELOW threshold instead of above.");
 
-                    // Mode / Bind / Delete column
+                    // Mode column
                     ImGui::TableSetColumnIndex(4);
                     {
-                        ImGuiStyle& sty = ImGui::GetStyle();
-                        float bindW2 = ImGui::CalcTextSize("Bind").x + sty.FramePadding.x * 2.f;
-                        float delW   = ImGui::CalcTextSize("Delete").x + sty.FramePadding.x * 2.f;
-                        float sp2    = sty.ItemSpacing.x;
                         const char* a2dModes[] = { "Momentary", "Toggle", "Set On", "Set Off" };
-                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - bindW2 - delW - sp2 * 2.f);
+                        ImGui::SetNextItemWidth(-FLT_MIN);
                         if (ImGui::Combo("##a2dmode", (int*)&am.mode, a2dModes, IM_ARRAYSIZE(a2dModes))) rc = true;
-                        ImGui::SameLine();
+                    }
+
+                    // Bind / Delete column
+                    ImGui::TableSetColumnIndex(5);
+                    {
                         bool isListeningA2D = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == a2dId;
                         if (isListeningA2D) {
                             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
