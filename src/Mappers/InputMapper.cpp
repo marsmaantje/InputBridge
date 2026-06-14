@@ -928,7 +928,7 @@ void InputMapper::DrawMappingContent() {
     };
 
     // Axis combo helper
-    auto drawAxisCombo = [&](const std::string& id, InputSource& src, const char* comboId, float colW) {
+    auto drawAxisCombo = [&](const std::string& id, InputSource& src, const char* comboId, float colW, bool showBind = true) {
         // Build preview string: sensor name takes priority over axis index.
         std::string preview = "None";
         if (src.sensorChannel != SC::None) {
@@ -955,7 +955,7 @@ void InputMapper::DrawMappingContent() {
             rw = 80.f;
         }
 
-        ImGui::SetNextItemWidth(std::max(1.0f, colW - sp - bindW));
+        ImGui::SetNextItemWidth(std::max(1.0f, colW - sp - (showBind ? bindW + sp : 0.f)));
 
         if (ImGui::BeginCombo(comboId, preview.c_str())) {
             if (ImGui::Selectable("None", !hasSrc)) { src = {}; changed = true; }
@@ -1037,14 +1037,16 @@ void InputMapper::DrawMappingContent() {
 
         ImGui::SameLine();
         bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == id;
-        if (isListening) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
-            if (ImGui::Button("Waiting...")) CancelListening();
-            ImGui::PopStyleColor();
-            ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
-        } else {
-            if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, id);
-            ImGui::SetItemTooltip("Click to bind an axis.");
+        if (showBind) {
+            if (isListening) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+                if (ImGui::Button("Waiting...")) CancelListening();
+                ImGui::PopStyleColor();
+                ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
+            } else {
+                if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, id);
+                ImGui::SetItemTooltip("Click to bind an axis.");
+            }
         }
 
         if (hasSrc) {
@@ -1368,13 +1370,12 @@ void InputMapper::DrawMappingContent() {
             if (ImGui::Button("Add Analog->Digital Mapping")) { profile.analogToDigitalMappings.push_back({}); changed = true; }
 
             int a2dToDelete = -1;
-            if (ImGui::BeginTable("t_a2d", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+            if (ImGui::BeginTable("t_a2d", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
                 ImGui::TableSetupColumn("Axis Source",    ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("Digital Field",  ImGuiTableColumnFlags_WidthFixed, 140.f);
-                ImGui::TableSetupColumn("Threshold",      ImGuiTableColumnFlags_WidthFixed, 80.f);
+                ImGui::TableSetupColumn("Threshold",      ImGuiTableColumnFlags_WidthFixed, 160.f);
                 ImGui::TableSetupColumn("Inv",            ImGuiTableColumnFlags_WidthFixed, 30.f);
-                ImGui::TableSetupColumn("Mode",           ImGuiTableColumnFlags_WidthFixed, 90.f);
-                ImGui::TableSetupColumn("",               ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Mode / Del",     ImGuiTableColumnFlags_WidthFixed, 130.f);
                 ImGui::TableHeadersRow();
 
                 for (int i = 0; i < (int)profile.analogToDigitalMappings.size(); ++i) {
@@ -1382,10 +1383,11 @@ void InputMapper::DrawMappingContent() {
                     bool rc = false;
                     ImGui::PushID(7000 + i); ImGui::TableNextRow();
 
-                    // Axis source column – reuse drawAxisCombo
+                    // Axis source column – drawAxisCombo's internal Bind is suppressed here;
+                    // the standalone Bind/Delete column at the end handles binding for this row.
                     ImGui::TableSetColumnIndex(0);
                     std::string a2dId = "__a2d_" + std::to_string(i);
-                    drawAxisCombo(a2dId, am.source, "##a2dax", ImGui::GetContentRegionAvail().x);
+                    drawAxisCombo(a2dId, am.source, "##a2dax", ImGui::GetContentRegionAvail().x, /*showBind=*/false);
 
                     // Digital field target column
                     ImGui::TableSetColumnIndex(1);
@@ -1402,37 +1404,70 @@ void InputMapper::DrawMappingContent() {
                         ImGui::EndCombo();
                     }
 
-                    // Threshold column
+                    // Threshold column: SliderFloat with live input bar + threshold marker on foreground draw list
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    if (ImGui::DragFloat("##a2dthr", &am.threshold, 0.01f, -1.f, 1.f, "%.2f")) rc = true;
-                    ImGui::SetItemTooltip("Analog value that triggers the digital output.");
+                    {
+                        bool hasSrc = (am.source.instance_id != 0) &&
+                                      (am.source.axisIndex != -1 || am.source.sensorChannel != InputSource::SensorChannel::None);
+                        float liveVal = 0.f;
+                        if (hasSrc) {
+                            liveVal = (am.source.sensorChannel != InputSource::SensorChannel::None)
+                                ? ProcessSensor(am.source)
+                                : ProcessAxis(am.source);
+                        }
+
+                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                        if (ImGui::SliderFloat("##a2dthr", &am.threshold, -1.f, 1.f, "Thr: %.2f")) rc = true;
+                        ImGui::SetItemTooltip("Threshold: axis must cross this value to activate.\nGreen bar = current live input level.");
+
+                        // Draw overlay on the foreground draw list (on top of the slider, not behind it)
+                        ImVec2 rMin = ImGui::GetItemRectMin();
+                        ImVec2 rMax = ImGui::GetItemRectMax();
+                        float  w    = rMax.x - rMin.x;
+                        ImDrawList* fg = ImGui::GetForegroundDrawList();
+
+                        // Green fill bar: live input level, [-1..1] -> [0..w]
+                        float fillFrac = std::clamp((liveVal + 1.f) * 0.5f, 0.f, 1.f);
+                        ImU32 barCol = hasSrc ? IM_COL32(50, 200, 80, 110) : IM_COL32(80, 80, 80, 60);
+                        fg->AddRectFilled(rMin, ImVec2(rMin.x + w * fillFrac, rMax.y), barCol, 2.f);
+
+                        // Thin vertical threshold marker line
+                        float thrFrac = std::clamp((am.threshold + 1.f) * 0.5f, 0.f, 1.f);
+                        float thrX    = rMin.x + w * thrFrac;
+                        ImU32 thrCol  = am.invert_threshold ? IM_COL32(255, 90, 60, 230) : IM_COL32(255, 220, 50, 230);
+                        fg->AddLine(ImVec2(thrX, rMin.y + 1.f), ImVec2(thrX, rMax.y - 1.f), thrCol, 2.f);
+                    }
 
                     // Invert column
                     ImGui::TableSetColumnIndex(3);
                     if (ImGui::Checkbox("##a2dinv", &am.invert_threshold)) rc = true;
                     ImGui::SetItemTooltip("Active when value is BELOW threshold instead of above.");
 
-                    // Mode column
+                    // Mode / Bind / Delete column
                     ImGui::TableSetColumnIndex(4);
-                    const char* a2dModes[] = { "Momentary", "Toggle", "Set On", "Set Off" };
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    if (ImGui::Combo("##a2dmode", (int*)&am.mode, a2dModes, IM_ARRAYSIZE(a2dModes))) rc = true;
-
-                    // Bind / Delete column
-                    ImGui::TableSetColumnIndex(5);
-                    bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == a2dId;
-                    if (isListening) {
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
-                        if (ImGui::Button("Waiting...")) CancelListening();
-                        ImGui::PopStyleColor();
-                        ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
-                    } else {
-                        if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, a2dId);
-                        ImGui::SetItemTooltip("Click to bind an analog axis.");
+                    {
+                        ImGuiStyle& sty = ImGui::GetStyle();
+                        float bindW2 = ImGui::CalcTextSize("Bind").x + sty.FramePadding.x * 2.f;
+                        float delW   = ImGui::CalcTextSize("Delete").x + sty.FramePadding.x * 2.f;
+                        float sp2    = sty.ItemSpacing.x;
+                        const char* a2dModes[] = { "Momentary", "Toggle", "Set On", "Set Off" };
+                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - bindW2 - delW - sp2 * 2.f);
+                        if (ImGui::Combo("##a2dmode", (int*)&am.mode, a2dModes, IM_ARRAYSIZE(a2dModes))) rc = true;
+                        ImGui::SameLine();
+                        bool isListeningA2D = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == a2dId;
+                        if (isListeningA2D) {
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+                            if (ImGui::Button("Waiting...")) CancelListening();
+                            ImGui::PopStyleColor();
+                            ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
+                        } else {
+                            if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, a2dId);
+                            ImGui::SetItemTooltip("Click to bind an analog axis.");
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Delete")) a2dToDelete = i;
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Delete")) a2dToDelete = i;
+
                     if (rc) changed = true;
                     ImGui::PopID();
                 }
