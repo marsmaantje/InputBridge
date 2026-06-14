@@ -1,5 +1,5 @@
 #include "Protocols/OSCProtocol.h"
-#include "Protocols/OscValidation.h"
+#include "Protocols/OSCValidation.h"
 #include "Network/OSCServer.h"
 #include "Devices/DeviceManager.h"
 #include "Haptics/GamepadHaptics.h"
