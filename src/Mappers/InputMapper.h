@@ -99,13 +99,26 @@ class InputMapper {
         bool last_physical_state = false;
     };
 
+    // Maps a device analog axis (or sensor) to a digital output field via a threshold
+    struct AnalogToDigitalMapping {
+        InputSource source;              // reuse InputSource for axis/sensor + options
+        std::string target_field_id;     // FieldDescriptor::id  (digital field)
+        float threshold = 0.5f;          // crossing point in the source's output range
+        bool  invert_threshold = false;  // true → active when value < threshold
+
+        bool last_state = false;         // for Toggle/SetOn/SetOff edge detection
+        enum class Mode { Momentary, Toggle, SetOn, SetOff };
+        Mode mode = Mode::Momentary;
+    };
+
     struct MappingProfile {
         std::string name;
-        std::map<std::string, InputSource>   outputToInput;      // fieldId → axis source
-        std::vector<HapticTarget>            hapticTargets;
-        std::vector<ButtonToAnalogMapping>   buttonMappings;     // button → analog field
-        std::vector<ButtonToDigitalMapping>  digitalMappings;    // button → digital field
-        std::map<std::string, bool>          digitalToggleStates;
+        std::map<std::string, InputSource>      outputToInput;            // fieldId → axis source
+        std::vector<HapticTarget>               hapticTargets;
+        std::vector<ButtonToAnalogMapping>      buttonMappings;           // button → analog field
+        std::vector<ButtonToDigitalMapping>     digitalMappings;          // button → digital field
+        std::vector<AnalogToDigitalMapping>     analogToDigitalMappings;  // axis → digital field
+        std::map<std::string, bool>             digitalToggleStates;
 
         // Protocol selections
         std::string oscOutputProtocolId;

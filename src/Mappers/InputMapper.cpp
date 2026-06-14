@@ -38,6 +38,13 @@ NLOHMANN_JSON_SERIALIZE_ENUM(InputMapper::ButtonToDigitalMapping::Mode, {
     {InputMapper::ButtonToDigitalMapping::Mode::SetOff,    "set_off"},
 })
 
+NLOHMANN_JSON_SERIALIZE_ENUM(InputMapper::AnalogToDigitalMapping::Mode, {
+    {InputMapper::AnalogToDigitalMapping::Mode::Momentary, "momentary"},
+    {InputMapper::AnalogToDigitalMapping::Mode::Toggle,    "toggle"},
+    {InputMapper::AnalogToDigitalMapping::Mode::SetOn,     "set_on"},
+    {InputMapper::AnalogToDigitalMapping::Mode::SetOff,    "set_off"},
+})
+
 std::unique_ptr<InputMapper> InputMapper::s_Instance;
 
 InputMapper &InputMapper::GetInstance() { return *s_Instance; }
@@ -257,6 +264,20 @@ void InputMapper::UpdateListening() {
     MappingProfile &profile = m_Profiles[m_SelectedProfileIndex];
     const auto& devices = m_DeviceManager.GetDevices();
 
+    // Helper to resolve the axis listen target to an InputSource&.
+    // Names prefixed with "__a2d_N" map into analogToDigitalMappings[N].source;
+    // all other names map into outputToInput.
+    auto resolveAxisSource = [&](const std::string& name) -> InputSource* {
+        static const std::string prefix = "__a2d_";
+        if (name.size() > prefix.size() && name.substr(0, prefix.size()) == prefix) {
+            int idx = std::stoi(name.substr(prefix.size()));
+            if (idx >= 0 && idx < (int)profile.analogToDigitalMappings.size())
+                return &profile.analogToDigitalMappings[idx].source;
+            return nullptr;
+        }
+        return &profile.outputToInput[name];
+    };
+
     // Helper to find DeviceState by ID
     auto getDeviceState = [&](SDL_JoystickID id) -> const DeviceState* {
         for (const auto& dev : devices) {
@@ -325,7 +346,7 @@ void InputMapper::UpdateListening() {
             // Check battery level (Axis mapping listening)
             if (m_ListeningState.type == ListeningState::Axis) {
                 if (curPercent != baseline->batteryLevel && curPercent != -1) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
                     src.axisIndex     = -1;
@@ -335,7 +356,7 @@ void InputMapper::UpdateListening() {
                     return;
                 }
                 if (isCurrentlyCharging != baseline->charging) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
                     src.axisIndex     = -1;
@@ -438,7 +459,7 @@ void InputMapper::UpdateListening() {
                     }
                 }
                 if (found && std::abs((int)val - (int)baseline) > 10000) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id = dev.instance_id;
                     src.axisIndex = i;
@@ -472,7 +493,7 @@ void InputMapper::UpdateListening() {
 
             auto checkSensor = [&](float cur, float base, SC ch, float threshold) -> bool {
                 if (std::abs(cur - base) > threshold) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
                     src.axisIndex     = -1;
@@ -1337,6 +1358,90 @@ void InputMapper::DrawMappingContent() {
     }
     if (bToDelete != -1) { profile.buttonMappings.erase(profile.buttonMappings.begin()+bToDelete); changed=true; }
 
+    // ── Analog → Digital mappings ─────────────────────────────────────────────
+    if (outDef) {
+        auto digitalFields = GetEnabledFields(*outDef, FieldType::DigitalButton);
+        if (!digitalFields.empty()) {
+            ImGui::Spacing(); ImGui::Separator();
+            ImGui::Text("Analog to Digital Mappings");
+            ImGui::TextWrapped("Drive a digital (0/1) output field from an analog axis or sensor when it crosses a threshold.");
+            if (ImGui::Button("Add Analog->Digital Mapping")) { profile.analogToDigitalMappings.push_back({}); changed = true; }
+
+            int a2dToDelete = -1;
+            if (ImGui::BeginTable("t_a2d", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+                ImGui::TableSetupColumn("Axis Source",    ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Digital Field",  ImGuiTableColumnFlags_WidthFixed, 140.f);
+                ImGui::TableSetupColumn("Threshold",      ImGuiTableColumnFlags_WidthFixed, 80.f);
+                ImGui::TableSetupColumn("Inv",            ImGuiTableColumnFlags_WidthFixed, 30.f);
+                ImGui::TableSetupColumn("Mode",           ImGuiTableColumnFlags_WidthFixed, 90.f);
+                ImGui::TableSetupColumn("",               ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableHeadersRow();
+
+                for (int i = 0; i < (int)profile.analogToDigitalMappings.size(); ++i) {
+                    auto& am = profile.analogToDigitalMappings[i];
+                    bool rc = false;
+                    ImGui::PushID(7000 + i); ImGui::TableNextRow();
+
+                    // Axis source column – reuse drawAxisCombo
+                    ImGui::TableSetColumnIndex(0);
+                    std::string a2dId = "__a2d_" + std::to_string(i);
+                    drawAxisCombo(a2dId, am.source, "##a2dax", ImGui::GetContentRegionAvail().x);
+
+                    // Digital field target column
+                    ImGui::TableSetColumnIndex(1);
+                    std::string flabel = am.target_field_id.empty() ? "None" : am.target_field_id;
+                    for (auto& [pf2, fd2] : digitalFields) if (pf2->fieldId == am.target_field_id) { flabel = fd2->label; break; }
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::BeginCombo("##a2df", flabel.c_str())) {
+                        if (ImGui::Selectable("None", am.target_field_id.empty())) { am.target_field_id = ""; rc = true; }
+                        for (auto& [pf2, fd2] : digitalFields) {
+                            bool s = am.target_field_id == pf2->fieldId;
+                            if (ImGui::Selectable(fd2->label.c_str(), s)) { am.target_field_id = pf2->fieldId; rc = true; }
+                            if (s) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    // Threshold column
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::DragFloat("##a2dthr", &am.threshold, 0.01f, -1.f, 1.f, "%.2f")) rc = true;
+                    ImGui::SetItemTooltip("Analog value that triggers the digital output.");
+
+                    // Invert column
+                    ImGui::TableSetColumnIndex(3);
+                    if (ImGui::Checkbox("##a2dinv", &am.invert_threshold)) rc = true;
+                    ImGui::SetItemTooltip("Active when value is BELOW threshold instead of above.");
+
+                    // Mode column
+                    ImGui::TableSetColumnIndex(4);
+                    const char* a2dModes[] = { "Momentary", "Toggle", "Set On", "Set Off" };
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::Combo("##a2dmode", (int*)&am.mode, a2dModes, IM_ARRAYSIZE(a2dModes))) rc = true;
+
+                    // Bind / Delete column
+                    ImGui::TableSetColumnIndex(5);
+                    bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == a2dId;
+                    if (isListening) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+                        if (ImGui::Button("Waiting...")) CancelListening();
+                        ImGui::PopStyleColor();
+                        ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
+                    } else {
+                        if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, a2dId);
+                        ImGui::SetItemTooltip("Click to bind an analog axis.");
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Delete")) a2dToDelete = i;
+                    if (rc) changed = true;
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+            if (a2dToDelete != -1) { profile.analogToDigitalMappings.erase(profile.analogToDigitalMappings.begin() + a2dToDelete); changed = true; }
+        }
+    }
+
     // Protocol Selection
     ImGui::Spacing(); ImGui::Separator();
 
@@ -1348,6 +1453,11 @@ void InputMapper::DrawMappingContent() {
         for (const auto& dm : profile.digitalMappings) {
             if (!dm.target_field_id.empty() && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
                 activeFields.insert(dm.target_field_id);
+            }
+        }
+        for (const auto& am : profile.analogToDigitalMappings) {
+            if (!am.target_field_id.empty() && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                activeFields.insert(am.target_field_id);
             }
         }
 
@@ -1593,6 +1703,32 @@ bool InputMapper::Update(bool dynamic_rate) {
             dm.last_physical_state = pressed;
         }
 
+        // 1b. Update states from analog→digital mappings
+        for (auto& am : profile.analogToDigitalMappings) {
+            if (am.target_field_id.empty()) continue;
+            if (am.source.instance_id == 0 && am.source.axisIndex == -1 && am.source.sensorChannel == InputSource::SensorChannel::None) continue;
+
+            float val = (am.source.sensorChannel != InputSource::SensorChannel::None)
+                ? ProcessSensor(am.source)
+                : ProcessAxis(am.source);
+
+            bool pressed = am.invert_threshold ? (val < am.threshold) : (val >= am.threshold);
+
+            if (am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                if (pressed && !am.last_state) { // rising edge
+                    auto it = profile.digitalToggleStates.find(am.target_field_id);
+                    bool cur = (it != profile.digitalToggleStates.end()) ? it->second : false;
+                    switch (am.mode) {
+                        case AnalogToDigitalMapping::Mode::Toggle:  profile.digitalToggleStates[am.target_field_id] = !cur; break;
+                        case AnalogToDigitalMapping::Mode::SetOn:   profile.digitalToggleStates[am.target_field_id] = true;  break;
+                        case AnalogToDigitalMapping::Mode::SetOff:  profile.digitalToggleStates[am.target_field_id] = false; break;
+                        default: break;
+                    }
+                }
+            }
+            am.last_state = pressed;
+        }
+
         // 2. Determine final value for each field
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
             // Check if this field has any mappings in a state-managing mode (Toggle/SetOn/SetOff)
@@ -1601,6 +1737,14 @@ bool InputMapper::Update(bool dynamic_rate) {
                 if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
                     hasStateMapping = true;
                     break;
+                }
+            }
+            if (!hasStateMapping) {
+                for (const auto& am : profile.analogToDigitalMappings) {
+                    if (am.target_field_id == pf->fieldId && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                        hasStateMapping = true;
+                        break;
+                    }
                 }
             }
 
@@ -1614,6 +1758,13 @@ bool InputMapper::Update(bool dynamic_rate) {
                 if (dm.last_physical_state) {
                     value = true;
                     break;
+                }
+            }
+            // Analog→Digital momentary contribution
+            if (!value) {
+                for (const auto& am : profile.analogToDigitalMappings) {
+                    if (am.target_field_id != pf->fieldId || am.mode != AnalogToDigitalMapping::Mode::Momentary) continue;
+                    if (am.last_state) { value = true; break; }
                 }
             }
             digitalValues[pf->fieldId] = value;
@@ -2089,6 +2240,22 @@ void InputMapper::LoadProfiles() {
                         }
                         p.digitalMappings.push_back(dm);
                     }
+                if (data.contains("analog_to_digital_mappings"))
+                    for (const auto& item : data["analog_to_digital_mappings"]) {
+                        AnalogToDigitalMapping am;
+                        am.source.deviceGuid     = item.value("device_guid", "");
+                        am.source.axisIndex      = item.value("axis", -1);
+                        am.source.sensorChannel  = static_cast<InputSource::SensorChannel>(
+                            item.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
+                        am.source.invert         = item.value("invert", false);
+                        am.source.deadzone       = item.value("deadzone", 0.05f);
+                        am.source.outputRange    = item.value("range", 0);
+                        am.target_field_id       = item.value("target_field_id", "");
+                        am.threshold             = item.value("threshold", 0.5f);
+                        am.invert_threshold      = item.value("invert_threshold", false);
+                        am.mode                  = item.value("mode", AnalogToDigitalMapping::Mode::Momentary);
+                        p.analogToDigitalMappings.push_back(am);
+                    }
                 if (data.contains("digital_toggle_states")) {
                     for (const auto& [key, val] : data["digital_toggle_states"].items()) {
                         if (val.is_boolean()) p.digitalToggleStates[key] = val.get<bool>();
@@ -2152,6 +2319,23 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
             if (dm.sensor_channel != InputSource::SensorChannel::None) j["sensor_channel"] = static_cast<int>(dm.sensor_channel);
             data["digital_mappings"].push_back(j);
         }
+        data["analog_to_digital_mappings"]=json::array();
+        for (const auto& am : profile.analogToDigitalMappings) {
+            if (am.target_field_id.empty()) continue;
+            json j = {
+                {"device_guid",     am.source.deviceGuid},
+                {"axis",            am.source.axisIndex},
+                {"sensor_channel",  static_cast<int>(am.source.sensorChannel)},
+                {"invert",          am.source.invert},
+                {"deadzone",        am.source.deadzone},
+                {"range",           am.source.outputRange},
+                {"target_field_id", am.target_field_id},
+                {"threshold",       am.threshold},
+                {"invert_threshold",am.invert_threshold},
+                {"mode",            am.mode}
+            };
+            data["analog_to_digital_mappings"].push_back(j);
+        }
         data["digital_toggle_states"] = profile.digitalToggleStates;
 
         data["osc_output_protocol_id"] = profile.oscOutputProtocolId;
@@ -2188,6 +2372,7 @@ void InputMapper::HandleDeviceConnectionChange() {
         for (auto& t : p.hapticTargets)        { if(t.device_guid.empty())continue; auto it=guidMap.find(t.device_guid); t.instance_id=it!=guidMap.end()?it->second:0; }
         for (auto& bm : p.buttonMappings)      { if(bm.device_guid.empty())continue; auto it=guidMap.find(bm.device_guid); bm.instance_id=it!=guidMap.end()?it->second:0; }
         for (auto& dm : p.digitalMappings)     { if(dm.device_guid.empty())continue; auto it=guidMap.find(dm.device_guid); dm.instance_id=it!=guidMap.end()?it->second:0; }
+        for (auto& am : p.analogToDigitalMappings) { if(am.source.deviceGuid.empty())continue; auto it=guidMap.find(am.source.deviceGuid); am.source.instance_id=it!=guidMap.end()?it->second:0; }
     }
 }
 
