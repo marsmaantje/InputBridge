@@ -24,6 +24,7 @@
 #include <SDL3/SDL.h>
 #include <sstream>
 #include <iomanip>
+#include <set>
 #include <unordered_set>
 #include <string_view>
 
@@ -1695,116 +1696,154 @@ bool InputMapper::Update(bool dynamic_rate) {
 
     // Collect digital values
     std::map<std::string,bool> digitalValues;
+
+    // 1. Update button states (last_physical_state + digitalToggleStates).
+    // Run unconditionally — processes profile mappings, not protocol fields, so
+    // must NOT be gated on outDef. GetActiveOutputDefinition() only returns the
+    // definition for the currently-viewed UI tab; gating here would mean the
+    // OSC state stops updating whenever the WebSocket tab is active (or vice-versa).
+    for (auto& dm : profile.digitalMappings) {
+        if (dm.instance_id==0||dm.target_field_id.empty()) continue;
+
+        bool pressed = false;
+        if (dm.button_index != -1 || dm.hat_index != -1) {
+            SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+            if (j) {
+                if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
+                else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+            } else {
+                dm.last_physical_state = false;
+                continue;
+            }
+        } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
+            InputSource tmp;
+            tmp.instance_id = dm.instance_id;
+            tmp.sensorChannel = dm.sensor_channel;
+            pressed = (ProcessSensor(tmp) > 0.5f);
+        }
+
+        if (dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+            if (pressed && !dm.last_physical_state) { // on rising edge
+                auto it = profile.digitalToggleStates.find(dm.target_field_id);
+                bool currentState = (it != profile.digitalToggleStates.end()) ? it->second : false;
+
+                switch (dm.mode) {
+                    case ButtonToDigitalMapping::Mode::Toggle:
+                        profile.digitalToggleStates[dm.target_field_id] = !currentState;
+                        break;
+                    case ButtonToDigitalMapping::Mode::SetOn:
+                        profile.digitalToggleStates[dm.target_field_id] = true;
+                        break;
+                    case ButtonToDigitalMapping::Mode::SetOff:
+                        profile.digitalToggleStates[dm.target_field_id] = false;
+                        break;
+                    default: break;
+                }
+            }
+        }
+        dm.last_physical_state = pressed;
+    }
+
+    // 1b. Update states from analog→digital mappings -- also unconditional, same reason.
+    for (auto& am : profile.analogToDigitalMappings) {
+        if (am.target_field_id.empty()) continue;
+        if (am.source.instance_id == 0 && am.source.axisIndex == -1 && am.source.sensorChannel == InputSource::SensorChannel::None) continue;
+
+        float val = (am.source.sensorChannel != InputSource::SensorChannel::None)
+            ? ProcessSensor(am.source)
+            : ProcessAxis(am.source);
+
+        bool pressed = am.invert_threshold ? (val < am.threshold) : (val >= am.threshold);
+
+        if (am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+            if (pressed && !am.last_state) { // rising edge
+                auto it = profile.digitalToggleStates.find(am.target_field_id);
+                bool cur = (it != profile.digitalToggleStates.end()) ? it->second : false;
+                switch (am.mode) {
+                    case AnalogToDigitalMapping::Mode::Toggle:  profile.digitalToggleStates[am.target_field_id] = !cur; break;
+                    case AnalogToDigitalMapping::Mode::SetOn:   profile.digitalToggleStates[am.target_field_id] = true;  break;
+                    case AnalogToDigitalMapping::Mode::SetOff:  profile.digitalToggleStates[am.target_field_id] = false; break;
+                    default: break;
+                }
+            }
+        }
+        am.last_state = pressed;
+    }
+
     if (outDef) {
-        // 1. Update states from all buttons and update last_physical_state
-        for (auto& dm : profile.digitalMappings) {
-            if (dm.instance_id==0||dm.target_field_id.empty()) continue;
-
-            bool pressed = false;
-            if (dm.button_index != -1 || dm.hat_index != -1) {
-                SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-                if (j) {
-                    if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
-                    else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-                } else {
-                    dm.last_physical_state = false;
-                    continue;
-                }
-            } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
-                InputSource tmp;
-                tmp.instance_id = dm.instance_id;
-                tmp.sensorChannel = dm.sensor_channel;
-                pressed = (ProcessSensor(tmp) > 0.5f);
-            }
-
-            if (dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
-                if (pressed && !dm.last_physical_state) { // on rising edge
-                    auto it = profile.digitalToggleStates.find(dm.target_field_id);
-                    bool currentState = (it != profile.digitalToggleStates.end()) ? it->second : false;
-
-                    switch (dm.mode) {
-                        case ButtonToDigitalMapping::Mode::Toggle:
-                            profile.digitalToggleStates[dm.target_field_id] = !currentState;
-                            break;
-                        case ButtonToDigitalMapping::Mode::SetOn:
-                            profile.digitalToggleStates[dm.target_field_id] = true;
-                            break;
-                        case ButtonToDigitalMapping::Mode::SetOff:
-                            profile.digitalToggleStates[dm.target_field_id] = false;
-                            break;
-                        default: break;
-                    }
+        // 2. Determine final value for each digital field.
+        // Enumerate fields from BOTH the OSC and WebSocket protocol definitions,
+        // not just outDef (which only reflects the currently-viewed UI tab).
+        // If OSC and WS use different protocol definitions, fields belonging to
+        // the non-active tab would otherwise never be populated in digitalValues
+        // and therefore never transmitted.
+        const ProtocolDefinition* oscDef2 = nullptr;
+        {
+            std::string oscId = OSCServer::GetInstance().GetOutputDefinitionId();
+            if (!oscId.empty()) oscDef2 = ProtocolRegistry::GetInstance().FindById(oscId);
+            else {
+                std::string protocol = OSCServer::GetInstance().GetProtocol();
+                if (protocol == "SteamLink OSC") {
+                    static ProtocolDefinition s_steamLinkDef2; s_steamLinkDef2 = OSCSteamLinkProtocol::CreateDefaultDefinition();
+                    oscDef2 = &s_steamLinkDef2;
+                } else if (protocol == "Project Babble OSC") {
+                    static ProtocolDefinition s_projectBabbleDef2; s_projectBabbleDef2 = OSCProjectBabbleProtocol::CreateDefaultDefinition();
+                    oscDef2 = &s_projectBabbleDef2;
                 }
             }
-            dm.last_physical_state = pressed;
         }
+#ifdef ENABLE_WEBSOCKETS
+        const ProtocolDefinition* wsDef2 = ProtocolRegistry::GetInstance().FindById(WebSocketServer::GetInstance().GetOutputDefinitionId());
+#else
+        const ProtocolDefinition* wsDef2 = nullptr;
+#endif
 
-        // 1b. Update states from analog→digital mappings
-        for (auto& am : profile.analogToDigitalMappings) {
-            if (am.target_field_id.empty()) continue;
-            if (am.source.instance_id == 0 && am.source.axisIndex == -1 && am.source.sensorChannel == InputSource::SensorChannel::None) continue;
+        std::set<std::string> resolvedFieldIds;
+        auto resolveDigitalFields = [&](const ProtocolDefinition* def) {
+            if (!def) return;
+            for (auto& [pf,fd] : GetEnabledFields(*def, FieldType::DigitalButton)) {
+                if (!resolvedFieldIds.insert(pf->fieldId).second) continue; // already done
 
-            float val = (am.source.sensorChannel != InputSource::SensorChannel::None)
-                ? ProcessSensor(am.source)
-                : ProcessAxis(am.source);
-
-            bool pressed = am.invert_threshold ? (val < am.threshold) : (val >= am.threshold);
-
-            if (am.mode != AnalogToDigitalMapping::Mode::Momentary) {
-                if (pressed && !am.last_state) { // rising edge
-                    auto it = profile.digitalToggleStates.find(am.target_field_id);
-                    bool cur = (it != profile.digitalToggleStates.end()) ? it->second : false;
-                    switch (am.mode) {
-                        case AnalogToDigitalMapping::Mode::Toggle:  profile.digitalToggleStates[am.target_field_id] = !cur; break;
-                        case AnalogToDigitalMapping::Mode::SetOn:   profile.digitalToggleStates[am.target_field_id] = true;  break;
-                        case AnalogToDigitalMapping::Mode::SetOff:  profile.digitalToggleStates[am.target_field_id] = false; break;
-                        default: break;
-                    }
-                }
-            }
-            am.last_state = pressed;
-        }
-
-        // 2. Determine final value for each field
-        for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            // Check if this field has any mappings in a state-managing mode (Toggle/SetOn/SetOff)
-            bool hasStateMapping = false;
-            for (const auto& dm : profile.digitalMappings) {
-                if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
-                    hasStateMapping = true;
-                    break;
-                }
-            }
-            if (!hasStateMapping) {
-                for (const auto& am : profile.analogToDigitalMappings) {
-                    if (am.target_field_id == pf->fieldId && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                // Check if this field has any mappings in a state-managing mode (Toggle/SetOn/SetOff)
+                bool hasStateMapping = false;
+                for (const auto& dm : profile.digitalMappings) {
+                    if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
                         hasStateMapping = true;
                         break;
                     }
                 }
-            }
+                if (!hasStateMapping) {
+                    for (const auto& am : profile.analogToDigitalMappings) {
+                        if (am.target_field_id == pf->fieldId && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                            hasStateMapping = true;
+                            break;
+                        }
+                    }
+                }
 
-            bool value = false;
-            if (hasStateMapping) {
-                auto it = profile.digitalToggleStates.find(pf->fieldId);
-                if (it != profile.digitalToggleStates.end()) value = it->second;
-            }
-            for (const auto& dm : profile.digitalMappings) {
-                if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
-                if (dm.last_physical_state) {
-                    value = true;
-                    break;
+                bool value = false;
+                if (hasStateMapping) {
+                    auto it = profile.digitalToggleStates.find(pf->fieldId);
+                    if (it != profile.digitalToggleStates.end()) value = it->second;
                 }
-            }
-            // Analog→Digital momentary contribution
-            if (!value) {
-                for (const auto& am : profile.analogToDigitalMappings) {
-                    if (am.target_field_id != pf->fieldId || am.mode != AnalogToDigitalMapping::Mode::Momentary) continue;
-                    if (am.last_state) { value = true; break; }
+                for (const auto& dm : profile.digitalMappings) {
+                    if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
+                    if (dm.last_physical_state) { value = true; break; }
                 }
+                // Analog→Digital momentary contribution
+                if (!value) {
+                    for (const auto& am : profile.analogToDigitalMappings) {
+                        if (am.target_field_id != pf->fieldId || am.mode != AnalogToDigitalMapping::Mode::Momentary) continue;
+                        if (am.last_state) { value = true; break; }
+                    }
+                }
+                digitalValues[pf->fieldId] = value;
             }
-            digitalValues[pf->fieldId] = value;
-        }
+        };
+        resolveDigitalFields(oscDef2);
+        resolveDigitalFields(wsDef2);
+        // Also cover outDef in case it differs from both (e.g. a third custom view)
+        resolveDigitalFields(outDef);
     }
 
     // Change detection snapshot
