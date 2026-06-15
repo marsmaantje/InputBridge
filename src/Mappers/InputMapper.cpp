@@ -1998,6 +1998,14 @@ std::string InputMapper::GetOutputPreview() {
                     break;
                 }
             }
+            if (!hasStateMapping) {
+                for (const auto& am : profile.analogToDigitalMappings) {
+                    if (am.target_field_id == pf->fieldId && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                        hasStateMapping = true;
+                        break;
+                    }
+                }
+            }
             bool value = false;
             if (hasStateMapping) {
                 auto it = profile.digitalToggleStates.find(pf->fieldId);
@@ -2023,6 +2031,17 @@ std::string InputMapper::GetOutputPreview() {
                 if (pressed) {
                     value = true;
                     break;
+                }
+            }
+            // Analog->Digital momentary contribution for preview
+            if (!value) {
+                for (const auto& am : profile.analogToDigitalMappings) {
+                    if (am.target_field_id != pf->fieldId || am.mode != AnalogToDigitalMapping::Mode::Momentary) continue;
+                    if (am.source.instance_id == 0 && am.source.axisIndex == -1 && am.source.sensorChannel == InputSource::SensorChannel::None) continue;
+                    float val = (am.source.sensorChannel != InputSource::SensorChannel::None)
+                        ? ProcessSensor(am.source) : ProcessAxis(am.source);
+                    bool pressed = am.invert_threshold ? (val < am.threshold) : (val >= am.threshold);
+                    if (pressed) { value = true; break; }
                 }
             }
             digitalValues[pf->fieldId] = value;
@@ -2623,6 +2642,11 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
         if (mapping.target_field_id == fieldId && 
             (mapping.button_index != -1 || mapping.hat_index != -1 || 
              mapping.sensor_channel != InputSource::SensorChannel::None)) 
+            return true;
+    }
+    for (const auto& mapping : profile.analogToDigitalMappings) {
+        if (mapping.target_field_id == fieldId &&
+            (mapping.source.axisIndex != -1 || mapping.source.sensorChannel != InputSource::SensorChannel::None))
             return true;
     }
 
