@@ -1077,8 +1077,8 @@ void InputMapper::DrawMappingContent() {
             if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 0.5f, "%.3f")) changed = true;
             ImGui::SetItemTooltip("Deadzone");
             ImGui::SameLine(); ImGui::SetNextItemWidth(rw);
-            const char* ranges[] = {"-1..1","0..1","-1..0"};
-            if (ImGui::Combo("Range", &src.outputRange, ranges, 3)) changed = true;
+            const char* ranges[] = {"-1..1", "0..1", "-1..0", "+half (0..1)", "-half (0..1)"};
+            if (ImGui::Combo("Range", &src.outputRange, ranges, IM_ARRAYSIZE(ranges))) changed = true;
         }
     };
 
@@ -1662,8 +1662,10 @@ float InputMapper::ProcessAxis(const InputSource &cfg) {
     if (std::abs(norm) < cfg.deadzone) norm = 0.f;
     else norm = norm>0 ? (norm-cfg.deadzone)/(1.f-cfg.deadzone) : (norm+cfg.deadzone)/(1.f-cfg.deadzone);
     float r = std::clamp(norm, -1.f, 1.f);
-    if (cfg.outputRange==1) r=(r+1.f)*0.5f;
-    else if (cfg.outputRange==2) r=(r-1.f)*0.5f;
+    if      (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;         // 0..1
+    else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;         // -1..0
+    else if (cfg.outputRange == 3) r = std::max(r, 0.f);          // +half: 0 at centre, 1 at max positive
+    else if (cfg.outputRange == 4) r = std::max(-r, 0.f);         // -half: 0 at centre, 1 at max negative
     return r;
 }
 
@@ -1763,8 +1765,10 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
     if (!isImu) {
         if (std::abs(raw) < cfg.deadzone) raw = 0.f;
         float r = std::clamp(raw, -1.f, 1.f);
-        if (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
+        if      (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
         else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;
+        else if (cfg.outputRange == 3) r = std::max(r, 0.f);
+        else if (cfg.outputRange == 4) r = std::max(-r, 0.f);
         return r;
     }
 
