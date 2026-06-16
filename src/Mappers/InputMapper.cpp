@@ -266,14 +266,29 @@ void InputMapper::UpdateListening() {
     const auto& devices = m_DeviceManager.GetDevices();
 
     // Helper to resolve the axis listen target to an InputSource&.
-    // Names prefixed with "__a2d_N" map into analogToDigitalMappings[N].source;
-    // all other names map into outputToInput.
+    // "__a2d_N"   → analogToDigitalMappings[N].source
+    // "__mix_M_S" → channelMixes[M].sources[S].source
+    // anything else → outputToInput[name]
     auto resolveAxisSource = [&](const std::string& name) -> InputSource* {
-        static const std::string prefix = "__a2d_";
-        if (name.size() > prefix.size() && name.substr(0, prefix.size()) == prefix) {
-            int idx = std::stoi(name.substr(prefix.size()));
+        static const std::string a2dPfx  = "__a2d_";
+        static const std::string mixPfx  = "__mix_";
+        if (name.size() > a2dPfx.size() && name.substr(0, a2dPfx.size()) == a2dPfx) {
+            int idx = std::stoi(name.substr(a2dPfx.size()));
             if (idx >= 0 && idx < (int)profile.analogToDigitalMappings.size())
                 return &profile.analogToDigitalMappings[idx].source;
+            return nullptr;
+        }
+        if (name.size() > mixPfx.size() && name.substr(0, mixPfx.size()) == mixPfx) {
+            // Format: "__mix_M_S"
+            std::string rest = name.substr(mixPfx.size());
+            auto sep = rest.find('_');
+            if (sep != std::string::npos) {
+                int mi = std::stoi(rest.substr(0, sep));
+                int si = std::stoi(rest.substr(sep + 1));
+                if (mi >= 0 && mi < (int)profile.channelMixes.size() &&
+                    si >= 0 && si < (int)profile.channelMixes[mi].sources.size())
+                    return &profile.channelMixes[mi].sources[si].source;
+            }
             return nullptr;
         }
         return &profile.outputToInput[name];
@@ -1361,6 +1376,130 @@ void InputMapper::DrawMappingContent() {
     }
     if (bToDelete != -1) { profile.buttonMappings.erase(profile.buttonMappings.begin()+bToDelete); changed=true; }
 
+    // ── Channel Mix mappings ───────────────────────────────────────────────────
+    if (outDef) {
+        auto analogFields = GetEnabledFields(*outDef, FieldType::AnalogAxis);
+        if (!analogFields.empty()) {
+            ImGui::Spacing(); ImGui::Separator();
+            ImGui::Text("Channel Mixes");
+            ImGui::TextWrapped("Combine multiple analog inputs (with individual weights) into a single analog output field. Useful for mixing two pedal axes into one rudder output.");
+            if (ImGui::Button("Add Channel Mix")) { profile.channelMixes.push_back({}); changed = true; }
+
+            int mixToDelete = -1;
+            for (int mi = 0; mi < (int)profile.channelMixes.size(); ++mi) {
+                auto& mix = profile.channelMixes[mi];
+                bool rc = false;
+                ImGui::PushID(8000 + mi);
+
+                ImGui::Spacing();
+
+                // ── Mix header: target field, clamp, delete ──────────────────
+                // Target field combo
+                std::string mixLabel = mix.target_field_id.empty() ? "None" : mix.target_field_id;
+                for (auto& [pf2, fd2] : analogFields) if (pf2->fieldId == mix.target_field_id) { mixLabel = fd2->label; break; }
+
+                ImGui::SetNextItemWidth(200.f);
+                if (ImGui::BeginCombo("##mixField", mixLabel.c_str())) {
+                    if (ImGui::Selectable("None", mix.target_field_id.empty())) { mix.target_field_id = ""; rc = true; }
+                    for (auto& [pf2, fd2] : analogFields) {
+                        bool s = mix.target_field_id == pf2->fieldId;
+                        if (ImGui::Selectable(fd2->label.c_str(), s)) { mix.target_field_id = pf2->fieldId; rc = true; }
+                        if (s) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::SetItemTooltip("Output analog field this mix writes to.");
+                ImGui::SameLine();
+                if (ImGui::Checkbox("Clamp [-1..1]", &mix.clamp_output)) rc = true;
+                ImGui::SetItemTooltip("Clamp the summed output to the [-1, 1] range.");
+                ImGui::SameLine();
+                if (ImGui::Button("Add Source")) { mix.sources.push_back({}); rc = true; }
+                ImGui::SetItemTooltip("Add another analog source to this mix.");
+                ImGui::SameLine();
+                if (ImGui::Button("Delete Mix")) mixToDelete = mi;
+
+                // ── Sources table ────────────────────────────────────────────
+                if (!mix.sources.empty()) {
+                    if (ImGui::BeginTable("t_mix_src", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+                        ImGui::TableSetupColumn("Axis Source", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableSetupColumn("Weight",      ImGuiTableColumnFlags_WidthFixed, 120.f);
+                        ImGui::TableSetupColumn("",            ImGuiTableColumnFlags_WidthFixed, 60.f);
+                        ImGui::TableHeadersRow();
+
+                        int srcToDelete = -1;
+                        for (int si = 0; si < (int)mix.sources.size(); ++si) {
+                            auto& ms = mix.sources[si];
+                            ImGui::PushID(si); ImGui::TableNextRow();
+
+                            // Axis source — reuse drawAxisCombo (with built-in Bind)
+                            ImGui::TableSetColumnIndex(0);
+                            std::string mixSrcId = "__mix_" + std::to_string(mi) + "_" + std::to_string(si);
+                            drawAxisCombo(mixSrcId, ms.source, "##mixax", ImGui::GetContentRegionAvail().x);
+
+                            // Weight slider
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::SetNextItemWidth(-FLT_MIN);
+                            if (ImGui::SliderFloat("##mixw", &ms.weight, -2.f, 2.f, "%.2f")) rc = true;
+                            ImGui::SetItemTooltip("Weight applied to this source before summing. -1 inverts the axis, 0 mutes it, 1 passes through.");
+
+                            // Delete source
+                            ImGui::TableSetColumnIndex(2);
+                            if (ImGui::Button("Del")) srcToDelete = si;
+
+                            ImGui::PopID();
+                        }
+                        ImGui::EndTable();
+                        if (srcToDelete != -1) { mix.sources.erase(mix.sources.begin() + srcToDelete); rc = true; }
+                    }
+
+                    // Live mix preview bar
+                    if (!mix.target_field_id.empty()) {
+                        float sum = 0.f;
+                        for (const auto& ms : mix.sources) {
+                            float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                                ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                            sum += v * ms.weight;
+                        }
+                        float clamped = mix.clamp_output ? std::clamp(sum, -1.f, 1.f) : sum;
+
+                        // Draw a compact progress bar showing the current mixed output
+                        float barW = std::min(ImGui::GetContentRegionAvail().x, 400.f);
+                        ImVec2 bPos = ImGui::GetCursorScreenPos();
+                        float  bH   = ImGui::GetFrameHeight() * 0.6f;
+
+                        // Background track
+                        ImDrawList* dl = ImGui::GetWindowDrawList();
+                        dl->AddRectFilled(bPos, ImVec2(bPos.x + barW, bPos.y + bH), IM_COL32(50, 50, 50, 180), 3.f);
+
+                        // Centre line
+                        float cx = bPos.x + barW * 0.5f;
+                        dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
+
+                        // Fill from centre to current value
+                        float frac   = std::clamp((clamped + 1.f) * 0.5f, 0.f, 1.f);
+                        float fillX  = bPos.x + barW * frac;
+                        bool  over   = !mix.clamp_output && (sum < -1.f || sum > 1.f);
+                        ImU32 fillCol = over ? IM_COL32(220, 80, 50, 200) : IM_COL32(60, 180, 100, 200);
+                        if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
+                        else            dl->AddRectFilled(ImVec2(fillX, bPos.y + 1), ImVec2(cx, bPos.y + bH - 1), fillCol, 2.f);
+
+                        // Advance cursor past the bar
+                        ImGui::Dummy(ImVec2(barW, bH));
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(60.f);
+                        ImGui::Text("%.3f", clamped);
+                        if (over) { ImGui::SameLine(); ImGui::TextColored(ImVec4(1,0.4f,0.2f,1), "(clipped)"); }
+                    }
+                }
+
+                if (rc) changed = true;
+                ImGui::PopID();
+            }
+
+            if (mixToDelete != -1) { profile.channelMixes.erase(profile.channelMixes.begin() + mixToDelete); changed = true; }
+        }
+    }
+
     // ── Analog → Digital mappings ─────────────────────────────────────────────
     if (outDef) {
         auto digitalFields = GetEnabledFields(*outDef, FieldType::DigitalButton);
@@ -1669,6 +1808,19 @@ bool InputMapper::Update(bool dynamic_rate) {
             }
             if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
+        // Apply channel mixes — sum weighted sources into the target field,
+        // overriding any outputToInput value for that field.
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
+        }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name]=0.f;
         for (const auto& [k,src] : profile.outputToInput)
@@ -1691,6 +1843,18 @@ bool InputMapper::Update(bool dynamic_rate) {
                 pressed = (ProcessSensor(tmp) > 0.5f);
             }
             if (pressed) analogValues[bm.target_output_name]=bm.on_value;
+        }
+        // Apply channel mixes (legacy/generic path)
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
         }
     }
 
@@ -1900,6 +2064,9 @@ bool InputMapper::Update(bool dynamic_rate) {
                 for (const auto& bm : profile.buttonMappings)
                     if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
             }
+            if (!hasSrc)
+                for (const auto& mix : profile.channelMixes)
+                    if (!mix.sources.empty() && mix.target_field_id == pf->fieldId) { hasSrc = true; break; }
             if (!hasSrc) continue;
 
             float val = analogValues.count(pf->fieldId) ? analogValues[pf->fieldId] : 0.f;
@@ -2119,6 +2286,9 @@ std::string InputMapper::GetOutputPreview() {
                 if (!hasSrc)
                     for (const auto& bm : profile.buttonMappings)
                         if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc)
+                    for (const auto& mix : profile.channelMixes)
+                        if (!mix.sources.empty() && mix.target_field_id == pf->fieldId) { hasSrc = true; break; }
                 if (!hasSrc) continue;
 
                 const ProtocolField* op = nullptr;
@@ -2174,6 +2344,9 @@ std::string InputMapper::GetOutputPreview() {
                     if (!hasSrc)
                         for (const auto& bm : profile.buttonMappings)
                             if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc)
+                        for (const auto& mix : profile.channelMixes)
+                            if (!mix.sources.empty() && mix.target_field_id == pf->fieldId) { hasSrc = true; break; }
                     if (!hasSrc) continue;
 
                     const ProtocolField* wp = nullptr;
@@ -2360,6 +2533,26 @@ void InputMapper::LoadProfiles() {
                         am.mode                  = item.value("mode", AnalogToDigitalMapping::Mode::Momentary);
                         p.analogToDigitalMappings.push_back(am);
                     }
+                if (data.contains("channel_mixes"))
+                    for (const auto& item : data["channel_mixes"]) {
+                        ChannelMix mix;
+                        mix.target_field_id = item.value("target_field_id", "");
+                        mix.clamp_output    = item.value("clamp_output", true);
+                        if (item.contains("sources"))
+                            for (const auto& s : item["sources"]) {
+                                ChannelMix::MixSource ms;
+                                ms.source.deviceGuid    = s.value("device_guid", "");
+                                ms.source.axisIndex     = s.value("axis", -1);
+                                ms.source.sensorChannel = static_cast<InputSource::SensorChannel>(
+                                    s.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
+                                ms.source.invert        = s.value("invert", false);
+                                ms.source.deadzone      = s.value("deadzone", 0.05f);
+                                ms.source.outputRange   = s.value("range", 0);
+                                ms.weight               = s.value("weight", 1.0f);
+                                mix.sources.push_back(ms);
+                            }
+                        p.channelMixes.push_back(mix);
+                    }
                 if (data.contains("digital_toggle_states")) {
                     for (const auto& [key, val] : data["digital_toggle_states"].items()) {
                         if (val.is_boolean()) p.digitalToggleStates[key] = val.get<bool>();
@@ -2440,6 +2633,27 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
             };
             data["analog_to_digital_mappings"].push_back(j);
         }
+        data["channel_mixes"] = json::array();
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            json srcs = json::array();
+            for (const auto& ms : mix.sources) {
+                srcs.push_back({
+                    {"device_guid",    ms.source.deviceGuid},
+                    {"axis",           ms.source.axisIndex},
+                    {"sensor_channel", static_cast<int>(ms.source.sensorChannel)},
+                    {"invert",         ms.source.invert},
+                    {"deadzone",       ms.source.deadzone},
+                    {"range",          ms.source.outputRange},
+                    {"weight",         ms.weight}
+                });
+            }
+            data["channel_mixes"].push_back({
+                {"target_field_id", mix.target_field_id},
+                {"clamp_output",    mix.clamp_output},
+                {"sources",         srcs}
+            });
+        }
         data["digital_toggle_states"] = profile.digitalToggleStates;
 
         data["osc_output_protocol_id"] = profile.oscOutputProtocolId;
@@ -2477,6 +2691,7 @@ void InputMapper::HandleDeviceConnectionChange() {
         for (auto& bm : p.buttonMappings)      { if(bm.device_guid.empty())continue; auto it=guidMap.find(bm.device_guid); bm.instance_id=it!=guidMap.end()?it->second:0; }
         for (auto& dm : p.digitalMappings)     { if(dm.device_guid.empty())continue; auto it=guidMap.find(dm.device_guid); dm.instance_id=it!=guidMap.end()?it->second:0; }
         for (auto& am : p.analogToDigitalMappings) { if(am.source.deviceGuid.empty())continue; auto it=guidMap.find(am.source.deviceGuid); am.source.instance_id=it!=guidMap.end()?it->second:0; }
+        for (auto& mix : p.channelMixes) { for (auto& ms : mix.sources) { if(ms.source.deviceGuid.empty())continue; auto it=guidMap.find(ms.source.deviceGuid); ms.source.instance_id=it!=guidMap.end()?it->second:0; } }
     }
 }
 
@@ -2648,6 +2863,14 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
         if (mapping.target_field_id == fieldId &&
             (mapping.source.axisIndex != -1 || mapping.source.sensorChannel != InputSource::SensorChannel::None))
             return true;
+    }
+    for (const auto& mix : profile.channelMixes) {
+        if (mix.target_field_id == fieldId && !mix.sources.empty()) {
+            for (const auto& ms : mix.sources) {
+                if (ms.source.axisIndex != -1 || ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    return true;
+            }
+        }
     }
 
     return false;

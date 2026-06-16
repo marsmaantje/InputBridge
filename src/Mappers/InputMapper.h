@@ -111,6 +111,19 @@ class InputMapper {
         Mode mode = Mode::Momentary;
     };
 
+    // Mixes multiple analog sources into a single analog output field.
+    // Each source has its own InputSource (device/axis/sensor) and a weight.
+    // Mixed value = sum(ProcessAxis(src) * weight), optionally clamped to [-1, 1].
+    struct ChannelMix {
+        struct MixSource {
+            InputSource source;
+            float weight = 1.0f;
+        };
+        std::string              target_field_id;   // FieldDescriptor::id (analog field)
+        std::vector<MixSource>   sources;
+        bool                     clamp_output = true;
+    };
+
     struct MappingProfile {
         std::string name;
         std::map<std::string, InputSource>      outputToInput;            // fieldId → axis source
@@ -118,6 +131,7 @@ class InputMapper {
         std::vector<ButtonToAnalogMapping>      buttonMappings;           // button → analog field
         std::vector<ButtonToDigitalMapping>     digitalMappings;          // button → digital field
         std::vector<AnalogToDigitalMapping>     analogToDigitalMappings;  // axis → digital field
+        std::vector<ChannelMix>                 channelMixes;             // mixed sources → analog field
         std::map<std::string, bool>             digitalToggleStates;
 
         // Protocol selections
