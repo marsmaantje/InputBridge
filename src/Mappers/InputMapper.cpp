@@ -2159,6 +2159,18 @@ std::string InputMapper::GetOutputPreview() {
             }
             if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
+        // Apply channel mixes into analogValues for preview
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
+        }
 
         // Determine final value for each field for preview
         for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
@@ -2239,6 +2251,18 @@ std::string InputMapper::GetOutputPreview() {
                 pressed = (ProcessSensor(tmp) > 0.5f);
             }
             if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+        }
+        // Apply channel mixes into analogValues for preview (generic path)
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
         }
     }
 
