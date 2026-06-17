@@ -1074,49 +1074,8 @@ void InputMapper::DrawMappingContent() {
             if (ImGui::Checkbox("Inv", &src.invert)) changed = true;
             ImGui::SetItemTooltip("Invert");
             ImGui::SameLine(); ImGui::SetNextItemWidth(dw);
-            if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 0.5f, "%.3f")) changed = true;
-            ImGui::SetItemTooltip("Deadzone: raw input below this value is zeroed out.\nOrange bar = current absolute raw axis value.");
-            {
-                // Read the raw value BEFORE deadzone is applied so the bar shows
-                // where the resting noise sits relative to the deadzone boundary.
-                float rawAbs = 0.f;
-                if (src.instance_id != 0) {
-                    if (src.sensorChannel != SC::None) {
-                        // For sensors, just use ProcessSensor (deadzone applied internally,
-                        // but at small DZ values the difference is negligible for visualisation).
-                        rawAbs = std::abs(ProcessSensor(src));
-                    } else if (src.axisIndex >= 0) {
-                        SDL_Joystick* j = GetJoystickByID(src.instance_id, m_DeviceManager);
-                        if (j) {
-                            Sint16 raw16 = SDL_GetJoystickAxis(j, src.axisIndex);
-                            float norm = raw16 < 0 ? (float)raw16 / 32768.f : (float)raw16 / 32767.f;
-                            if (src.invert) norm = -norm;
-                            rawAbs = std::abs(norm); // raw, before deadzone
-                        }
-                    }
-                }
-
-                // GetItemRectMin is the top-left of the slider frame only.
-                // We clamp the draw width to dw (SetNextItemWidth value) so the bar
-                // never bleeds past the slider frame into the label or adjacent widgets.
-                ImVec2 rMin = ImGui::GetItemRectMin();
-                ImVec2 rMax = ImGui::GetItemRectMax();
-                // ImGui SliderFloat frame width == item width set via SetNextItemWidth
-                float  w    = std::min(rMax.x - rMin.x, dw);
-                ImDrawList* fg = ImGui::GetForegroundDrawList();
-
-                // Clip to exact slider frame so the bar never overflows
-                fg->PushClipRect(rMin, ImVec2(rMin.x + w, rMax.y), true);
-
-                // Bar: fills from left proportional to |raw| mapped over [0..0.5] (the DZ slider range)
-                float barFrac = std::clamp(rawAbs / 0.5f, 0.f, 1.f);
-                // Orange when inside deadzone (noise), green when outside (live signal)
-                bool inDeadzone = rawAbs < src.deadzone;
-                ImU32 barCol = inDeadzone ? IM_COL32(200, 130, 30, 120) : IM_COL32(50, 200, 80, 120);
-                fg->AddRectFilled(rMin, ImVec2(rMin.x + w * barFrac, rMax.y), barCol, 2.f);
-
-                fg->PopClipRect();
-            }
+            if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 1.0f, "%.3f")) changed = true;
+            ImGui::SetItemTooltip("Deadzone: axis input below this absolute value is zeroed out.\nOrange lines on the value bar show the deadzone boundary on each side of centre.");
             ImGui::SameLine(); ImGui::SetNextItemWidth(rw);
             const char* ranges[] = {"-1..1", "0..1", "-1..0", "+half (0..1)", "-half (0..1)"};
             if (ImGui::Combo("Range", &src.outputRange, ranges, IM_ARRAYSIZE(ranges))) changed = true;
@@ -1238,6 +1197,20 @@ void InputMapper::DrawMappingContent() {
         ImU32 fillCol = IM_COL32(60, 180, 100, 200);
         if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
         else            dl->AddRectFilled(ImVec2(fillX, bPos.y + 1), ImVec2(cx, bPos.y + bH - 1), fillCol, 2.f);
+
+        // Deadzone boundary lines: two symmetric orange markers at ±deadzone
+        // mapped from [-1..1] space onto the bar width.
+        if (src.deadzone > 0.f) {
+            ImU32 dzCol = IM_COL32(255, 180, 50, 230);
+            float dzPos  = src.deadzone;                                     // +DZ in [-1..1]
+            float dzNeg  = -src.deadzone;                                    // -DZ in [-1..1]
+            float dzFracPos = std::clamp((dzPos + 1.f) * 0.5f, 0.f, 1.f);
+            float dzFracNeg = std::clamp((dzNeg + 1.f) * 0.5f, 0.f, 1.f);
+            float dzXPos = bPos.x + barW * dzFracPos;
+            float dzXNeg = bPos.x + barW * dzFracNeg;
+            dl->AddLine(ImVec2(dzXPos, bPos.y), ImVec2(dzXPos, bPos.y + bH), dzCol, 2.f);
+            dl->AddLine(ImVec2(dzXNeg, bPos.y), ImVec2(dzXNeg, bPos.y + bH), dzCol, 2.f);
+        }
 
         // Advance cursor and show numeric value beside the bar
         ImGui::Dummy(ImVec2(barW, bH));
@@ -2724,7 +2697,6 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
         }
         data["analog_to_digital_mappings"]=json::array();
         for (const auto& am : profile.analogToDigitalMappings) {
-            if (am.target_field_id.empty()) continue;
             json j = {
                 {"device_guid",     am.source.deviceGuid},
                 {"axis",            am.source.axisIndex},
