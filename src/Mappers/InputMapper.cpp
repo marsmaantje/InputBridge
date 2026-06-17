@@ -1075,7 +1075,48 @@ void InputMapper::DrawMappingContent() {
             ImGui::SetItemTooltip("Invert");
             ImGui::SameLine(); ImGui::SetNextItemWidth(dw);
             if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 0.5f, "%.3f")) changed = true;
-            ImGui::SetItemTooltip("Deadzone");
+            ImGui::SetItemTooltip("Deadzone: raw input below this value is zeroed out.\nOrange bar = current absolute raw axis value.");
+            {
+                // Read the raw value BEFORE deadzone is applied so the bar shows
+                // where the resting noise sits relative to the deadzone boundary.
+                float rawAbs = 0.f;
+                if (src.instance_id != 0) {
+                    if (src.sensorChannel != SC::None) {
+                        // For sensors, just use ProcessSensor (deadzone applied internally,
+                        // but at small DZ values the difference is negligible for visualisation).
+                        rawAbs = std::abs(ProcessSensor(src));
+                    } else if (src.axisIndex >= 0) {
+                        SDL_Joystick* j = GetJoystickByID(src.instance_id, m_DeviceManager);
+                        if (j) {
+                            Sint16 raw16 = SDL_GetJoystickAxis(j, src.axisIndex);
+                            float norm = raw16 < 0 ? (float)raw16 / 32768.f : (float)raw16 / 32767.f;
+                            if (src.invert) norm = -norm;
+                            rawAbs = std::abs(norm); // raw, before deadzone
+                        }
+                    }
+                }
+
+                // GetItemRectMin is the top-left of the slider frame only.
+                // We clamp the draw width to dw (SetNextItemWidth value) so the bar
+                // never bleeds past the slider frame into the label or adjacent widgets.
+                ImVec2 rMin = ImGui::GetItemRectMin();
+                ImVec2 rMax = ImGui::GetItemRectMax();
+                // ImGui SliderFloat frame width == item width set via SetNextItemWidth
+                float  w    = std::min(rMax.x - rMin.x, dw);
+                ImDrawList* fg = ImGui::GetForegroundDrawList();
+
+                // Clip to exact slider frame so the bar never overflows
+                fg->PushClipRect(rMin, ImVec2(rMin.x + w, rMax.y), true);
+
+                // Bar: fills from left proportional to |raw| mapped over [0..0.5] (the DZ slider range)
+                float barFrac = std::clamp(rawAbs / 0.5f, 0.f, 1.f);
+                // Orange when inside deadzone (noise), green when outside (live signal)
+                bool inDeadzone = rawAbs < src.deadzone;
+                ImU32 barCol = inDeadzone ? IM_COL32(200, 130, 30, 120) : IM_COL32(50, 200, 80, 120);
+                fg->AddRectFilled(rMin, ImVec2(rMin.x + w * barFrac, rMax.y), barCol, 2.f);
+
+                fg->PopClipRect();
+            }
             ImGui::SameLine(); ImGui::SetNextItemWidth(rw);
             const char* ranges[] = {"-1..1", "0..1", "-1..0", "+half (0..1)", "-half (0..1)"};
             if (ImGui::Combo("Range", &src.outputRange, ranges, IM_ARRAYSIZE(ranges))) changed = true;
@@ -1169,6 +1210,41 @@ void InputMapper::DrawMappingContent() {
         }
     };
 
+    // Draws a dual-direction live value bar (centred at zero) for an analog source.
+    // Shows the post-deadzone, post-range processed output value.
+    auto drawAnalogLiveBar = [&](const InputSource& src) {
+        if (src.instance_id == 0 ||
+            (src.axisIndex == -1 && src.sensorChannel == InputSource::SensorChannel::None)) return;
+
+        float val = (src.sensorChannel != InputSource::SensorChannel::None)
+            ? ProcessSensor(src) : ProcessAxis(src);
+
+        float barW = ImGui::GetContentRegionAvail().x;
+        float bH   = ImGui::GetFrameHeight() * 0.6f;
+        ImVec2 bPos = ImGui::GetCursorScreenPos();
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        // Background track
+        dl->AddRectFilled(bPos, ImVec2(bPos.x + barW, bPos.y + bH), IM_COL32(50, 50, 50, 180), 3.f);
+
+        // Centre line
+        float cx = bPos.x + barW * 0.5f;
+        dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
+
+        // Fill from centre to current value
+        float frac  = std::clamp((val + 1.f) * 0.5f, 0.f, 1.f);
+        float fillX = bPos.x + barW * frac;
+        ImU32 fillCol = IM_COL32(60, 180, 100, 200);
+        if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
+        else            dl->AddRectFilled(ImVec2(fillX, bPos.y + 1), ImVec2(cx, bPos.y + bH - 1), fillCol, 2.f);
+
+        // Advance cursor and show numeric value beside the bar
+        ImGui::Dummy(ImVec2(barW, bH));
+        ImGui::SameLine();
+        ImGui::Text("%.3f", val);
+    };
+
     // ── Analog output channels ────────────────────────────────────────────────
     ImGui::Spacing();
     if (outDef) {
@@ -1188,6 +1264,7 @@ void InputMapper::DrawMappingContent() {
                 ImGui::TableSetColumnIndex(1);
                 ImGui::PushID(("a_" + pf->fieldId).c_str());
                 drawAxisCombo(pf->fieldId, profile.outputToInput[pf->fieldId], "##ax", ImGui::GetContentRegionAvail().x);
+                drawAnalogLiveBar(profile.outputToInput[pf->fieldId]);
                 ImGui::PopID();
             }
             ImGui::EndTable();
@@ -1204,6 +1281,7 @@ void InputMapper::DrawMappingContent() {
                 ImGui::TableSetColumnIndex(1);
                 ImGui::PushID(name.c_str());
                 drawAxisCombo(name, profile.outputToInput[name], "##ax", ImGui::GetContentRegionAvail().x);
+                drawAnalogLiveBar(profile.outputToInput[name]);
                 ImGui::PopID();
             }
             ImGui::EndTable();
