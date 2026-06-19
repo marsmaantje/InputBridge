@@ -944,6 +944,55 @@ void InputMapper::DrawMappingContent() {
     };
 
     // Axis combo helper
+    // Draws a dual-direction live value bar (centred at zero) for an analog source.
+    // Shows the post-deadzone, post-range processed output value.
+    auto drawAnalogLiveBar = [&](const InputSource& src) {
+        if (src.instance_id == 0 ||
+            (src.axisIndex == -1 && src.sensorChannel == InputSource::SensorChannel::None)) return;
+
+        float val = (src.sensorChannel != InputSource::SensorChannel::None)
+            ? ProcessSensor(src) : ProcessAxis(src);
+
+        float barW = ImGui::GetContentRegionAvail().x;
+        float bH   = ImGui::GetFrameHeight() * 0.6f;
+        ImVec2 bPos = ImGui::GetCursorScreenPos();
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        // Background track
+        dl->AddRectFilled(bPos, ImVec2(bPos.x + barW, bPos.y + bH), IM_COL32(50, 50, 50, 180), 3.f);
+
+        // Centre line
+        float cx = bPos.x + barW * 0.5f;
+        dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
+
+        // Fill from centre to current value
+        float frac  = std::clamp((val + 1.f) * 0.5f, 0.f, 1.f);
+        float fillX = bPos.x + barW * frac;
+        ImU32 fillCol = IM_COL32(60, 180, 100, 200);
+        if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
+        else            dl->AddRectFilled(ImVec2(fillX, bPos.y + 1), ImVec2(cx, bPos.y + bH - 1), fillCol, 2.f);
+
+        // Deadzone boundary lines: two symmetric orange markers at ±deadzone
+        // mapped from [-1..1] space onto the bar width.
+        if (src.deadzone > 0.f) {
+            ImU32 dzCol = IM_COL32(255, 180, 50, 230);
+            float dzPos  = src.deadzone;                                     // +DZ in [-1..1]
+            float dzNeg  = -src.deadzone;                                    // -DZ in [-1..1]
+            float dzFracPos = std::clamp((dzPos + 1.f) * 0.5f, 0.f, 1.f);
+            float dzFracNeg = std::clamp((dzNeg + 1.f) * 0.5f, 0.f, 1.f);
+            float dzXPos = bPos.x + barW * dzFracPos;
+            float dzXNeg = bPos.x + barW * dzFracNeg;
+            dl->AddLine(ImVec2(dzXPos, bPos.y), ImVec2(dzXPos, bPos.y + bH), dzCol, 2.f);
+            dl->AddLine(ImVec2(dzXNeg, bPos.y), ImVec2(dzXNeg, bPos.y + bH), dzCol, 2.f);
+        }
+
+        // Advance cursor and show numeric value beside the bar
+        ImGui::Dummy(ImVec2(barW, bH));
+        ImGui::SameLine();
+        ImGui::Text("%.3f", val);
+    };
+
     auto drawAxisCombo = [&](const std::string& id, InputSource& src, const char* comboId, float colW, bool showBind = true) {
         // Build preview string: sensor name takes priority over axis index.
         std::string preview = "None";
@@ -1065,6 +1114,10 @@ void InputMapper::DrawMappingContent() {
             }
         }
 
+        // Live value bar — drawn after the device/axis dropdown and Bind button,
+        // before the Inv/DZ/Range options row.
+        drawAnalogLiveBar(src);
+
         if (hasSrc) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
             if (ImGui::Button("X")) { src = {}; changed = true; }
@@ -1169,55 +1222,6 @@ void InputMapper::DrawMappingContent() {
         }
     };
 
-    // Draws a dual-direction live value bar (centred at zero) for an analog source.
-    // Shows the post-deadzone, post-range processed output value.
-    auto drawAnalogLiveBar = [&](const InputSource& src) {
-        if (src.instance_id == 0 ||
-            (src.axisIndex == -1 && src.sensorChannel == InputSource::SensorChannel::None)) return;
-
-        float val = (src.sensorChannel != InputSource::SensorChannel::None)
-            ? ProcessSensor(src) : ProcessAxis(src);
-
-        float barW = ImGui::GetContentRegionAvail().x;
-        float bH   = ImGui::GetFrameHeight() * 0.6f;
-        ImVec2 bPos = ImGui::GetCursorScreenPos();
-
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-
-        // Background track
-        dl->AddRectFilled(bPos, ImVec2(bPos.x + barW, bPos.y + bH), IM_COL32(50, 50, 50, 180), 3.f);
-
-        // Centre line
-        float cx = bPos.x + barW * 0.5f;
-        dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
-
-        // Fill from centre to current value
-        float frac  = std::clamp((val + 1.f) * 0.5f, 0.f, 1.f);
-        float fillX = bPos.x + barW * frac;
-        ImU32 fillCol = IM_COL32(60, 180, 100, 200);
-        if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
-        else            dl->AddRectFilled(ImVec2(fillX, bPos.y + 1), ImVec2(cx, bPos.y + bH - 1), fillCol, 2.f);
-
-        // Deadzone boundary lines: two symmetric orange markers at ±deadzone
-        // mapped from [-1..1] space onto the bar width.
-        if (src.deadzone > 0.f) {
-            ImU32 dzCol = IM_COL32(255, 180, 50, 230);
-            float dzPos  = src.deadzone;                                     // +DZ in [-1..1]
-            float dzNeg  = -src.deadzone;                                    // -DZ in [-1..1]
-            float dzFracPos = std::clamp((dzPos + 1.f) * 0.5f, 0.f, 1.f);
-            float dzFracNeg = std::clamp((dzNeg + 1.f) * 0.5f, 0.f, 1.f);
-            float dzXPos = bPos.x + barW * dzFracPos;
-            float dzXNeg = bPos.x + barW * dzFracNeg;
-            dl->AddLine(ImVec2(dzXPos, bPos.y), ImVec2(dzXPos, bPos.y + bH), dzCol, 2.f);
-            dl->AddLine(ImVec2(dzXNeg, bPos.y), ImVec2(dzXNeg, bPos.y + bH), dzCol, 2.f);
-        }
-
-        // Advance cursor and show numeric value beside the bar
-        ImGui::Dummy(ImVec2(barW, bH));
-        ImGui::SameLine();
-        ImGui::Text("%.3f", val);
-    };
-
     // ── Analog output channels ────────────────────────────────────────────────
     ImGui::Spacing();
     if (outDef) {
@@ -1237,7 +1241,6 @@ void InputMapper::DrawMappingContent() {
                 ImGui::TableSetColumnIndex(1);
                 ImGui::PushID(("a_" + pf->fieldId).c_str());
                 drawAxisCombo(pf->fieldId, profile.outputToInput[pf->fieldId], "##ax", ImGui::GetContentRegionAvail().x);
-                drawAnalogLiveBar(profile.outputToInput[pf->fieldId]);
                 ImGui::PopID();
             }
             ImGui::EndTable();
@@ -1254,7 +1257,6 @@ void InputMapper::DrawMappingContent() {
                 ImGui::TableSetColumnIndex(1);
                 ImGui::PushID(name.c_str());
                 drawAxisCombo(name, profile.outputToInput[name], "##ax", ImGui::GetContentRegionAvail().x);
-                drawAnalogLiveBar(profile.outputToInput[name]);
                 ImGui::PopID();
             }
             ImGui::EndTable();
