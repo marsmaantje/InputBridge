@@ -24,6 +24,7 @@
 #include <SDL3/SDL.h>
 #include <sstream>
 #include <iomanip>
+#include <set>
 #include <unordered_set>
 #include <string_view>
 
@@ -36,6 +37,13 @@ NLOHMANN_JSON_SERIALIZE_ENUM(InputMapper::ButtonToDigitalMapping::Mode, {
     {InputMapper::ButtonToDigitalMapping::Mode::Toggle,    "toggle"},
     {InputMapper::ButtonToDigitalMapping::Mode::SetOn,     "set_on"},
     {InputMapper::ButtonToDigitalMapping::Mode::SetOff,    "set_off"},
+})
+
+NLOHMANN_JSON_SERIALIZE_ENUM(InputMapper::AnalogToDigitalMapping::Mode, {
+    {InputMapper::AnalogToDigitalMapping::Mode::Momentary, "momentary"},
+    {InputMapper::AnalogToDigitalMapping::Mode::Toggle,    "toggle"},
+    {InputMapper::AnalogToDigitalMapping::Mode::SetOn,     "set_on"},
+    {InputMapper::AnalogToDigitalMapping::Mode::SetOff,    "set_off"},
 })
 
 std::unique_ptr<InputMapper> InputMapper::s_Instance;
@@ -257,6 +265,35 @@ void InputMapper::UpdateListening() {
     MappingProfile &profile = m_Profiles[m_SelectedProfileIndex];
     const auto& devices = m_DeviceManager.GetDevices();
 
+    // Helper to resolve the axis listen target to an InputSource&.
+    // "__a2d_N"   → analogToDigitalMappings[N].source
+    // "__mix_M_S" → channelMixes[M].sources[S].source
+    // anything else → outputToInput[name]
+    auto resolveAxisSource = [&](const std::string& name) -> InputSource* {
+        static const std::string a2dPfx  = "__a2d_";
+        static const std::string mixPfx  = "__mix_";
+        if (name.size() > a2dPfx.size() && name.substr(0, a2dPfx.size()) == a2dPfx) {
+            int idx = std::stoi(name.substr(a2dPfx.size()));
+            if (idx >= 0 && idx < (int)profile.analogToDigitalMappings.size())
+                return &profile.analogToDigitalMappings[idx].source;
+            return nullptr;
+        }
+        if (name.size() > mixPfx.size() && name.substr(0, mixPfx.size()) == mixPfx) {
+            // Format: "__mix_M_S"
+            std::string rest = name.substr(mixPfx.size());
+            auto sep = rest.find('_');
+            if (sep != std::string::npos) {
+                int mi = std::stoi(rest.substr(0, sep));
+                int si = std::stoi(rest.substr(sep + 1));
+                if (mi >= 0 && mi < (int)profile.channelMixes.size() &&
+                    si >= 0 && si < (int)profile.channelMixes[mi].sources.size())
+                    return &profile.channelMixes[mi].sources[si].source;
+            }
+            return nullptr;
+        }
+        return &profile.outputToInput[name];
+    };
+
     // Helper to find DeviceState by ID
     auto getDeviceState = [&](SDL_JoystickID id) -> const DeviceState* {
         for (const auto& dev : devices) {
@@ -325,7 +362,7 @@ void InputMapper::UpdateListening() {
             // Check battery level (Axis mapping listening)
             if (m_ListeningState.type == ListeningState::Axis) {
                 if (curPercent != baseline->batteryLevel && curPercent != -1) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
                     src.axisIndex     = -1;
@@ -335,7 +372,7 @@ void InputMapper::UpdateListening() {
                     return;
                 }
                 if (isCurrentlyCharging != baseline->charging) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
                     src.axisIndex     = -1;
@@ -438,7 +475,7 @@ void InputMapper::UpdateListening() {
                     }
                 }
                 if (found && std::abs((int)val - (int)baseline) > 10000) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id = dev.instance_id;
                     src.axisIndex = i;
@@ -472,7 +509,7 @@ void InputMapper::UpdateListening() {
 
             auto checkSensor = [&](float cur, float base, SC ch, float threshold) -> bool {
                 if (std::abs(cur - base) > threshold) {
-                    InputSource& src = profile.outputToInput[m_ListeningState.targetName];
+                    InputSource& src = *resolveAxisSource(m_ListeningState.targetName);
                     src.deviceGuid    = DeviceManager::GetDeviceGUIDString(dev);
                     src.instance_id   = dev.instance_id;
                     src.axisIndex     = -1;
@@ -907,7 +944,56 @@ void InputMapper::DrawMappingContent() {
     };
 
     // Axis combo helper
-    auto drawAxisCombo = [&](const std::string& id, InputSource& src, const char* comboId, float colW) {
+    // Draws a dual-direction live value bar (centred at zero) for an analog source.
+    // Shows the post-deadzone, post-range processed output value.
+    auto drawAnalogLiveBar = [&](const InputSource& src) {
+        if (src.instance_id == 0 ||
+            (src.axisIndex == -1 && src.sensorChannel == InputSource::SensorChannel::None)) return;
+
+        float val = (src.sensorChannel != InputSource::SensorChannel::None)
+            ? ProcessSensor(src) : ProcessAxis(src);
+
+        float barW = ImGui::GetContentRegionAvail().x;
+        float bH   = ImGui::GetFrameHeight() * 0.6f;
+        ImVec2 bPos = ImGui::GetCursorScreenPos();
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        // Background track
+        dl->AddRectFilled(bPos, ImVec2(bPos.x + barW, bPos.y + bH), IM_COL32(50, 50, 50, 180), 3.f);
+
+        // Centre line
+        float cx = bPos.x + barW * 0.5f;
+        dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
+
+        // Fill from centre to current value
+        float frac  = std::clamp((val + 1.f) * 0.5f, 0.f, 1.f);
+        float fillX = bPos.x + barW * frac;
+        ImU32 fillCol = IM_COL32(60, 180, 100, 200);
+        if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
+        else            dl->AddRectFilled(ImVec2(fillX, bPos.y + 1), ImVec2(cx, bPos.y + bH - 1), fillCol, 2.f);
+
+        // Deadzone boundary lines: two symmetric orange markers at ±deadzone
+        // mapped from [-1..1] space onto the bar width.
+        if (src.deadzone > 0.f) {
+            ImU32 dzCol = IM_COL32(255, 180, 50, 230);
+            float dzPos  = src.deadzone;                                     // +DZ in [-1..1]
+            float dzNeg  = -src.deadzone;                                    // -DZ in [-1..1]
+            float dzFracPos = std::clamp((dzPos + 1.f) * 0.5f, 0.f, 1.f);
+            float dzFracNeg = std::clamp((dzNeg + 1.f) * 0.5f, 0.f, 1.f);
+            float dzXPos = bPos.x + barW * dzFracPos;
+            float dzXNeg = bPos.x + barW * dzFracNeg;
+            dl->AddLine(ImVec2(dzXPos, bPos.y), ImVec2(dzXPos, bPos.y + bH), dzCol, 2.f);
+            dl->AddLine(ImVec2(dzXNeg, bPos.y), ImVec2(dzXNeg, bPos.y + bH), dzCol, 2.f);
+        }
+
+        // Advance cursor and show numeric value beside the bar
+        ImGui::Dummy(ImVec2(barW, bH));
+        ImGui::SameLine();
+        ImGui::Text("%.3f", val);
+    };
+
+    auto drawAxisCombo = [&](const std::string& id, InputSource& src, const char* comboId, float colW, bool showBind = true) {
         // Build preview string: sensor name takes priority over axis index.
         std::string preview = "None";
         if (src.sensorChannel != SC::None) {
@@ -934,7 +1020,7 @@ void InputMapper::DrawMappingContent() {
             rw = 80.f;
         }
 
-        ImGui::SetNextItemWidth(std::max(1.0f, colW - sp - bindW));
+        ImGui::SetNextItemWidth(std::max(1.0f, colW - sp - (showBind ? bindW + sp : 0.f)));
 
         if (ImGui::BeginCombo(comboId, preview.c_str())) {
             if (ImGui::Selectable("None", !hasSrc)) { src = {}; changed = true; }
@@ -1016,15 +1102,21 @@ void InputMapper::DrawMappingContent() {
 
         ImGui::SameLine();
         bool isListening = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == id;
-        if (isListening) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
-            if (ImGui::Button("Waiting...")) CancelListening();
-            ImGui::PopStyleColor();
-            ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
-        } else {
-            if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, id);
-            ImGui::SetItemTooltip("Click to bind an axis.");
+        if (showBind) {
+            if (isListening) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+                if (ImGui::Button("Waiting...")) CancelListening();
+                ImGui::PopStyleColor();
+                ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
+            } else {
+                if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, id);
+                ImGui::SetItemTooltip("Click to bind an axis.");
+            }
         }
+
+        // Live value bar — drawn after the device/axis dropdown and Bind button,
+        // before the Inv/DZ/Range options row.
+        drawAnalogLiveBar(src);
 
         if (hasSrc) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
@@ -1035,11 +1127,11 @@ void InputMapper::DrawMappingContent() {
             if (ImGui::Checkbox("Inv", &src.invert)) changed = true;
             ImGui::SetItemTooltip("Invert");
             ImGui::SameLine(); ImGui::SetNextItemWidth(dw);
-            if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 0.5f, "%.3f")) changed = true;
-            ImGui::SetItemTooltip("Deadzone");
+            if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 1.0f, "%.3f")) changed = true;
+            ImGui::SetItemTooltip("Deadzone: axis input below this absolute value is zeroed out.\nOrange lines on the value bar show the deadzone boundary on each side of centre.");
             ImGui::SameLine(); ImGui::SetNextItemWidth(rw);
-            const char* ranges[] = {"-1..1","0..1","-1..0"};
-            if (ImGui::Combo("Range", &src.outputRange, ranges, 3)) changed = true;
+            const char* ranges[] = {"-1..1", "0..1", "-1..0", "+half (0..1)", "-half (0..1)"};
+            if (ImGui::Combo("Range", &src.outputRange, ranges, IM_ARRAYSIZE(ranges))) changed = true;
         }
     };
 
@@ -1337,6 +1429,248 @@ void InputMapper::DrawMappingContent() {
     }
     if (bToDelete != -1) { profile.buttonMappings.erase(profile.buttonMappings.begin()+bToDelete); changed=true; }
 
+    // ── Channel Mix mappings ───────────────────────────────────────────────────
+    if (outDef) {
+        auto analogFields = GetEnabledFields(*outDef, FieldType::AnalogAxis);
+        if (!analogFields.empty()) {
+            ImGui::Spacing(); ImGui::Separator();
+            ImGui::Text("Channel Mixes");
+            ImGui::TextWrapped("Combine multiple analog inputs (with individual weights) into a single analog output field. Useful for mixing two pedal axes into one rudder output.");
+            if (ImGui::Button("Add Channel Mix")) { profile.channelMixes.push_back({}); changed = true; }
+
+            int mixToDelete = -1;
+            for (int mi = 0; mi < (int)profile.channelMixes.size(); ++mi) {
+                auto& mix = profile.channelMixes[mi];
+                bool rc = false;
+                ImGui::PushID(8000 + mi);
+
+                ImGui::Spacing();
+
+                // ── Mix header: target field, clamp, delete ──────────────────
+                // Target field combo
+                std::string mixLabel = mix.target_field_id.empty() ? "None" : mix.target_field_id;
+                for (auto& [pf2, fd2] : analogFields) if (pf2->fieldId == mix.target_field_id) { mixLabel = fd2->label; break; }
+
+                ImGui::SetNextItemWidth(200.f);
+                if (ImGui::BeginCombo("##mixField", mixLabel.c_str())) {
+                    if (ImGui::Selectable("None", mix.target_field_id.empty())) { mix.target_field_id = ""; rc = true; }
+                    for (auto& [pf2, fd2] : analogFields) {
+                        bool s = mix.target_field_id == pf2->fieldId;
+                        if (ImGui::Selectable(fd2->label.c_str(), s)) { mix.target_field_id = pf2->fieldId; rc = true; }
+                        if (s) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::SetItemTooltip("Output analog field this mix writes to.");
+                ImGui::SameLine();
+                if (ImGui::Checkbox("Clamp [-1..1]", &mix.clamp_output)) rc = true;
+                ImGui::SetItemTooltip("Clamp the summed output to the [-1, 1] range.");
+                ImGui::SameLine();
+                if (ImGui::Button("Add Source")) { mix.sources.push_back({}); rc = true; }
+                ImGui::SetItemTooltip("Add another analog source to this mix.");
+                ImGui::SameLine();
+                if (ImGui::Button("Delete Mix")) mixToDelete = mi;
+
+                // ── Sources table ────────────────────────────────────────────
+                if (!mix.sources.empty()) {
+                    if (ImGui::BeginTable("t_mix_src", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+                        ImGui::TableSetupColumn("Axis Source", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableSetupColumn("Weight",      ImGuiTableColumnFlags_WidthFixed, 120.f);
+                        ImGui::TableSetupColumn("",            ImGuiTableColumnFlags_WidthFixed, 60.f);
+                        ImGui::TableHeadersRow();
+
+                        int srcToDelete = -1;
+                        for (int si = 0; si < (int)mix.sources.size(); ++si) {
+                            auto& ms = mix.sources[si];
+                            ImGui::PushID(si); ImGui::TableNextRow();
+
+                            // Axis source — reuse drawAxisCombo (with built-in Bind)
+                            ImGui::TableSetColumnIndex(0);
+                            std::string mixSrcId = "__mix_" + std::to_string(mi) + "_" + std::to_string(si);
+                            drawAxisCombo(mixSrcId, ms.source, "##mixax", ImGui::GetContentRegionAvail().x);
+
+                            // Weight slider
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::SetNextItemWidth(-FLT_MIN);
+                            if (ImGui::SliderFloat("##mixw", &ms.weight, -2.f, 2.f, "%.2f")) rc = true;
+                            ImGui::SetItemTooltip("Weight applied to this source before summing. -1 inverts the axis, 0 mutes it, 1 passes through.");
+
+                            // Delete source
+                            ImGui::TableSetColumnIndex(2);
+                            if (ImGui::Button("Del")) srcToDelete = si;
+
+                            ImGui::PopID();
+                        }
+                        ImGui::EndTable();
+                        if (srcToDelete != -1) { mix.sources.erase(mix.sources.begin() + srcToDelete); rc = true; }
+                    }
+
+                    // Live mix preview bar
+                    if (!mix.target_field_id.empty()) {
+                        float sum = 0.f;
+                        for (const auto& ms : mix.sources) {
+                            float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                                ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                            sum += v * ms.weight;
+                        }
+                        float clamped = mix.clamp_output ? std::clamp(sum, -1.f, 1.f) : sum;
+
+                        // Draw a compact progress bar showing the current mixed output
+                        float barW = std::min(ImGui::GetContentRegionAvail().x, 400.f);
+                        ImVec2 bPos = ImGui::GetCursorScreenPos();
+                        float  bH   = ImGui::GetFrameHeight() * 0.6f;
+
+                        // Background track
+                        ImDrawList* dl = ImGui::GetWindowDrawList();
+                        dl->AddRectFilled(bPos, ImVec2(bPos.x + barW, bPos.y + bH), IM_COL32(50, 50, 50, 180), 3.f);
+
+                        // Centre line
+                        float cx = bPos.x + barW * 0.5f;
+                        dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
+
+                        // Fill from centre to current value
+                        float frac   = std::clamp((clamped + 1.f) * 0.5f, 0.f, 1.f);
+                        float fillX  = bPos.x + barW * frac;
+                        bool  over   = !mix.clamp_output && (sum < -1.f || sum > 1.f);
+                        ImU32 fillCol = over ? IM_COL32(220, 80, 50, 200) : IM_COL32(60, 180, 100, 200);
+                        if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
+                        else            dl->AddRectFilled(ImVec2(fillX, bPos.y + 1), ImVec2(cx, bPos.y + bH - 1), fillCol, 2.f);
+
+                        // Advance cursor past the bar
+                        ImGui::Dummy(ImVec2(barW, bH));
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(60.f);
+                        ImGui::Text("%.3f", clamped);
+                        if (over) { ImGui::SameLine(); ImGui::TextColored(ImVec4(1,0.4f,0.2f,1), "(clipped)"); }
+                    }
+                }
+
+                if (rc) changed = true;
+                ImGui::PopID();
+            }
+
+            if (mixToDelete != -1) { profile.channelMixes.erase(profile.channelMixes.begin() + mixToDelete); changed = true; }
+        }
+    }
+
+    // ── Analog → Digital mappings ─────────────────────────────────────────────
+    if (outDef) {
+        auto digitalFields = GetEnabledFields(*outDef, FieldType::DigitalButton);
+        if (!digitalFields.empty()) {
+            ImGui::Spacing(); ImGui::Separator();
+            ImGui::Text("Analog to Digital Mappings");
+            ImGui::TextWrapped("Drive a digital (0/1) output field from an analog axis or sensor when it crosses a threshold.");
+            if (ImGui::Button("Add Analog->Digital Mapping")) { profile.analogToDigitalMappings.push_back({}); changed = true; }
+
+            int a2dToDelete = -1;
+            if (ImGui::BeginTable("t_a2d", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+                ImGui::TableSetupColumn("Axis Source",    ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Digital Field",  ImGuiTableColumnFlags_WidthFixed, 140.f);
+                ImGui::TableSetupColumn("Threshold",      ImGuiTableColumnFlags_WidthFixed, 160.f);
+                ImGui::TableSetupColumn("Inv",            ImGuiTableColumnFlags_WidthFixed, 30.f);
+                ImGui::TableSetupColumn("Mode",           ImGuiTableColumnFlags_WidthFixed, 100.f);
+                ImGui::TableSetupColumn("",               ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableHeadersRow();
+
+                for (int i = 0; i < (int)profile.analogToDigitalMappings.size(); ++i) {
+                    auto& am = profile.analogToDigitalMappings[i];
+                    bool rc = false;
+                    ImGui::PushID(7000 + i); ImGui::TableNextRow();
+
+                    // Axis source column – drawAxisCombo's internal Bind is suppressed here;
+                    // the standalone Bind/Delete column at the end handles binding for this row.
+                    ImGui::TableSetColumnIndex(0);
+                    std::string a2dId = "__a2d_" + std::to_string(i);
+                    drawAxisCombo(a2dId, am.source, "##a2dax", ImGui::GetContentRegionAvail().x, /*showBind=*/false);
+
+                    // Digital field target column
+                    ImGui::TableSetColumnIndex(1);
+                    std::string flabel = am.target_field_id.empty() ? "None" : am.target_field_id;
+                    for (auto& [pf2, fd2] : digitalFields) if (pf2->fieldId == am.target_field_id) { flabel = fd2->label; break; }
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::BeginCombo("##a2df", flabel.c_str())) {
+                        if (ImGui::Selectable("None", am.target_field_id.empty())) { am.target_field_id = ""; rc = true; }
+                        for (auto& [pf2, fd2] : digitalFields) {
+                            bool s = am.target_field_id == pf2->fieldId;
+                            if (ImGui::Selectable(fd2->label.c_str(), s)) { am.target_field_id = pf2->fieldId; rc = true; }
+                            if (s) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    // Threshold column: SliderFloat with live input bar + threshold marker on foreground draw list
+                    ImGui::TableSetColumnIndex(2);
+                    {
+                        bool hasSrc = (am.source.instance_id != 0) &&
+                                      (am.source.axisIndex != -1 || am.source.sensorChannel != InputSource::SensorChannel::None);
+                        float liveVal = 0.f;
+                        if (hasSrc) {
+                            liveVal = (am.source.sensorChannel != InputSource::SensorChannel::None)
+                                ? ProcessSensor(am.source)
+                                : ProcessAxis(am.source);
+                        }
+
+                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                        if (ImGui::SliderFloat("##a2dthr", &am.threshold, -1.f, 1.f, "Thr: %.2f")) rc = true;
+                        ImGui::SetItemTooltip("Threshold: axis must cross this value to activate.\nGreen bar = current live input level.");
+
+                        // Draw overlay on the foreground draw list (on top of the slider, not behind it)
+                        ImVec2 rMin = ImGui::GetItemRectMin();
+                        ImVec2 rMax = ImGui::GetItemRectMax();
+                        float  w    = rMax.x - rMin.x;
+                        ImDrawList* fg = ImGui::GetForegroundDrawList();
+
+                        // Green fill bar: live input level, [-1..1] -> [0..w]
+                        float fillFrac = std::clamp((liveVal + 1.f) * 0.5f, 0.f, 1.f);
+                        ImU32 barCol = hasSrc ? IM_COL32(50, 200, 80, 110) : IM_COL32(80, 80, 80, 60);
+                        fg->AddRectFilled(rMin, ImVec2(rMin.x + w * fillFrac, rMax.y), barCol, 2.f);
+
+                        // Thin vertical threshold marker line
+                        float thrFrac = std::clamp((am.threshold + 1.f) * 0.5f, 0.f, 1.f);
+                        float thrX    = rMin.x + w * thrFrac;
+                        ImU32 thrCol  = am.invert_threshold ? IM_COL32(255, 90, 60, 230) : IM_COL32(255, 220, 50, 230);
+                        fg->AddLine(ImVec2(thrX, rMin.y + 1.f), ImVec2(thrX, rMax.y - 1.f), thrCol, 2.f);
+                    }
+
+                    // Invert column
+                    ImGui::TableSetColumnIndex(3);
+                    if (ImGui::Checkbox("##a2dinv", &am.invert_threshold)) rc = true;
+                    ImGui::SetItemTooltip("Active when value is BELOW threshold instead of above.");
+
+                    // Mode column
+                    ImGui::TableSetColumnIndex(4);
+                    {
+                        const char* a2dModes[] = { "Momentary", "Toggle", "Set On", "Set Off" };
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        if (ImGui::Combo("##a2dmode", (int*)&am.mode, a2dModes, IM_ARRAYSIZE(a2dModes))) rc = true;
+                    }
+
+                    // Bind / Delete column
+                    ImGui::TableSetColumnIndex(5);
+                    {
+                        bool isListeningA2D = m_ListeningState.active && m_ListeningState.type == ListeningState::Axis && m_ListeningState.targetName == a2dId;
+                        if (isListeningA2D) {
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.4f, 1.0f));
+                            if (ImGui::Button("Waiting...")) CancelListening();
+                            ImGui::PopStyleColor();
+                            ImGui::SetItemTooltip("Waiting for input... Click to cancel.");
+                        } else {
+                            if (ImGui::Button("Bind")) StartListening(ListeningState::Axis, a2dId);
+                            ImGui::SetItemTooltip("Click to bind an analog axis.");
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Delete")) a2dToDelete = i;
+                    }
+
+                    if (rc) changed = true;
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+            if (a2dToDelete != -1) { profile.analogToDigitalMappings.erase(profile.analogToDigitalMappings.begin() + a2dToDelete); changed = true; }
+        }
+    }
+
     // Protocol Selection
     ImGui::Spacing(); ImGui::Separator();
 
@@ -1348,6 +1682,11 @@ void InputMapper::DrawMappingContent() {
         for (const auto& dm : profile.digitalMappings) {
             if (!dm.target_field_id.empty() && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
                 activeFields.insert(dm.target_field_id);
+            }
+        }
+        for (const auto& am : profile.analogToDigitalMappings) {
+            if (!am.target_field_id.empty() && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                activeFields.insert(am.target_field_id);
             }
         }
 
@@ -1376,8 +1715,10 @@ float InputMapper::ProcessAxis(const InputSource &cfg) {
     if (std::abs(norm) < cfg.deadzone) norm = 0.f;
     else norm = norm>0 ? (norm-cfg.deadzone)/(1.f-cfg.deadzone) : (norm+cfg.deadzone)/(1.f-cfg.deadzone);
     float r = std::clamp(norm, -1.f, 1.f);
-    if (cfg.outputRange==1) r=(r+1.f)*0.5f;
-    else if (cfg.outputRange==2) r=(r-1.f)*0.5f;
+    if      (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;         // 0..1
+    else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;         // -1..0
+    else if (cfg.outputRange == 3) r = std::max(r, 0.f);          // +half: 0 at centre, 1 at max positive
+    else if (cfg.outputRange == 4) r = std::max(-r, 0.f);         // -half: 0 at centre, 1 at max negative
     return r;
 }
 
@@ -1477,8 +1818,10 @@ float InputMapper::ProcessSensor(const InputSource &cfg) {
     if (!isImu) {
         if (std::abs(raw) < cfg.deadzone) raw = 0.f;
         float r = std::clamp(raw, -1.f, 1.f);
-        if (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
+        if      (cfg.outputRange == 1) r = (r + 1.f) * 0.5f;
         else if (cfg.outputRange == 2) r = (r - 1.f) * 0.5f;
+        else if (cfg.outputRange == 3) r = std::max(r, 0.f);
+        else if (cfg.outputRange == 4) r = std::max(-r, 0.f);
         return r;
     }
 
@@ -1522,6 +1865,19 @@ bool InputMapper::Update(bool dynamic_rate) {
             }
             if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
+        // Apply channel mixes — sum weighted sources into the target field,
+        // overriding any outputToInput value for that field.
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
+        }
     } else {
         for (const auto& name : m_GenericOutputs) analogValues[name]=0.f;
         for (const auto& [k,src] : profile.outputToInput)
@@ -1545,79 +1901,170 @@ bool InputMapper::Update(bool dynamic_rate) {
             }
             if (pressed) analogValues[bm.target_output_name]=bm.on_value;
         }
+        // Apply channel mixes (legacy/generic path)
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
+        }
     }
 
     // Collect digital values
     std::map<std::string,bool> digitalValues;
-    if (outDef) {
-        // 1. Update states from all buttons and update last_physical_state
-        for (auto& dm : profile.digitalMappings) {
-            if (dm.instance_id==0||dm.target_field_id.empty()) continue;
 
-            bool pressed = false;
-            if (dm.button_index != -1 || dm.hat_index != -1) {
-                SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
-                if (j) {
-                    if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
-                    else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
-                } else {
-                    dm.last_physical_state = false;
-                    continue;
-                }
-            } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
-                InputSource tmp;
-                tmp.instance_id = dm.instance_id;
-                tmp.sensorChannel = dm.sensor_channel;
-                pressed = (ProcessSensor(tmp) > 0.5f);
+    // 1. Update button states (last_physical_state + digitalToggleStates).
+    // Run unconditionally — processes profile mappings, not protocol fields, so
+    // must NOT be gated on outDef. GetActiveOutputDefinition() only returns the
+    // definition for the currently-viewed UI tab; gating here would mean the
+    // OSC state stops updating whenever the WebSocket tab is active (or vice-versa).
+    for (auto& dm : profile.digitalMappings) {
+        if (dm.instance_id==0||dm.target_field_id.empty()) continue;
+
+        bool pressed = false;
+        if (dm.button_index != -1 || dm.hat_index != -1) {
+            SDL_Joystick* j = GetJoystickByID(dm.instance_id, m_DeviceManager);
+            if (j) {
+                if (dm.button_index != -1) pressed = ReadButton(dm.instance_id, dm.button_index, m_DeviceManager);
+                else pressed = (SDL_GetJoystickHat(j, dm.hat_index) & dm.hat_mask);
+            } else {
+                dm.last_physical_state = false;
+                continue;
             }
+        } else if (dm.sensor_channel != InputSource::SensorChannel::None) {
+            InputSource tmp;
+            tmp.instance_id = dm.instance_id;
+            tmp.sensorChannel = dm.sensor_channel;
+            pressed = (ProcessSensor(tmp) > 0.5f);
+        }
 
-            if (dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
-                if (pressed && !dm.last_physical_state) { // on rising edge
-                    auto it = profile.digitalToggleStates.find(dm.target_field_id);
-                    bool currentState = (it != profile.digitalToggleStates.end()) ? it->second : false;
+        if (dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+            if (pressed && !dm.last_physical_state) { // on rising edge
+                auto it = profile.digitalToggleStates.find(dm.target_field_id);
+                bool currentState = (it != profile.digitalToggleStates.end()) ? it->second : false;
 
-                    switch (dm.mode) {
-                        case ButtonToDigitalMapping::Mode::Toggle:
-                            profile.digitalToggleStates[dm.target_field_id] = !currentState;
-                            break;
-                        case ButtonToDigitalMapping::Mode::SetOn:
-                            profile.digitalToggleStates[dm.target_field_id] = true;
-                            break;
-                        case ButtonToDigitalMapping::Mode::SetOff:
-                            profile.digitalToggleStates[dm.target_field_id] = false;
-                            break;
-                        default: break;
+                switch (dm.mode) {
+                    case ButtonToDigitalMapping::Mode::Toggle:
+                        profile.digitalToggleStates[dm.target_field_id] = !currentState;
+                        break;
+                    case ButtonToDigitalMapping::Mode::SetOn:
+                        profile.digitalToggleStates[dm.target_field_id] = true;
+                        break;
+                    case ButtonToDigitalMapping::Mode::SetOff:
+                        profile.digitalToggleStates[dm.target_field_id] = false;
+                        break;
+                    default: break;
+                }
+            }
+        }
+        dm.last_physical_state = pressed;
+    }
+
+    // 1b. Update states from analog→digital mappings -- also unconditional, same reason.
+    for (auto& am : profile.analogToDigitalMappings) {
+        if (am.target_field_id.empty()) continue;
+        if (am.source.instance_id == 0 && am.source.axisIndex == -1 && am.source.sensorChannel == InputSource::SensorChannel::None) continue;
+
+        float val = (am.source.sensorChannel != InputSource::SensorChannel::None)
+            ? ProcessSensor(am.source)
+            : ProcessAxis(am.source);
+
+        bool pressed = am.invert_threshold ? (val < am.threshold) : (val >= am.threshold);
+
+        if (am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+            if (pressed && !am.last_state) { // rising edge
+                auto it = profile.digitalToggleStates.find(am.target_field_id);
+                bool cur = (it != profile.digitalToggleStates.end()) ? it->second : false;
+                switch (am.mode) {
+                    case AnalogToDigitalMapping::Mode::Toggle:  profile.digitalToggleStates[am.target_field_id] = !cur; break;
+                    case AnalogToDigitalMapping::Mode::SetOn:   profile.digitalToggleStates[am.target_field_id] = true;  break;
+                    case AnalogToDigitalMapping::Mode::SetOff:  profile.digitalToggleStates[am.target_field_id] = false; break;
+                    default: break;
+                }
+            }
+        }
+        am.last_state = pressed;
+    }
+
+    if (outDef) {
+        // 2. Determine final value for each digital field.
+        // Enumerate fields from BOTH the OSC and WebSocket protocol definitions,
+        // not just outDef (which only reflects the currently-viewed UI tab).
+        // If OSC and WS use different protocol definitions, fields belonging to
+        // the non-active tab would otherwise never be populated in digitalValues
+        // and therefore never transmitted.
+        const ProtocolDefinition* oscDef2 = nullptr;
+        {
+            std::string oscId = OSCServer::GetInstance().GetOutputDefinitionId();
+            if (!oscId.empty()) oscDef2 = ProtocolRegistry::GetInstance().FindById(oscId);
+            else {
+                std::string protocol = OSCServer::GetInstance().GetProtocol();
+                if (protocol == "SteamLink OSC") {
+                    static ProtocolDefinition s_steamLinkDef2; s_steamLinkDef2 = OSCSteamLinkProtocol::CreateDefaultDefinition();
+                    oscDef2 = &s_steamLinkDef2;
+                } else if (protocol == "Project Babble OSC") {
+                    static ProtocolDefinition s_projectBabbleDef2; s_projectBabbleDef2 = OSCProjectBabbleProtocol::CreateDefaultDefinition();
+                    oscDef2 = &s_projectBabbleDef2;
+                }
+            }
+        }
+#ifdef ENABLE_WEBSOCKETS
+        const ProtocolDefinition* wsDef2 = ProtocolRegistry::GetInstance().FindById(WebSocketServer::GetInstance().GetOutputDefinitionId());
+#else
+        const ProtocolDefinition* wsDef2 = nullptr;
+#endif
+
+        std::set<std::string> resolvedFieldIds;
+        auto resolveDigitalFields = [&](const ProtocolDefinition* def) {
+            if (!def) return;
+            for (auto& [pf,fd] : GetEnabledFields(*def, FieldType::DigitalButton)) {
+                if (!resolvedFieldIds.insert(pf->fieldId).second) continue; // already done
+
+                // Check if this field has any mappings in a state-managing mode (Toggle/SetOn/SetOff)
+                bool hasStateMapping = false;
+                for (const auto& dm : profile.digitalMappings) {
+                    if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
+                        hasStateMapping = true;
+                        break;
                     }
                 }
-            }
-            dm.last_physical_state = pressed;
-        }
-
-        // 2. Determine final value for each field
-        for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            // Check if this field has any mappings in a state-managing mode (Toggle/SetOn/SetOff)
-            bool hasStateMapping = false;
-            for (const auto& dm : profile.digitalMappings) {
-                if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
-                    hasStateMapping = true;
-                    break;
+                if (!hasStateMapping) {
+                    for (const auto& am : profile.analogToDigitalMappings) {
+                        if (am.target_field_id == pf->fieldId && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                            hasStateMapping = true;
+                            break;
+                        }
+                    }
                 }
-            }
 
-            bool value = false;
-            if (hasStateMapping) {
-                auto it = profile.digitalToggleStates.find(pf->fieldId);
-                if (it != profile.digitalToggleStates.end()) value = it->second;
-            }
-            for (const auto& dm : profile.digitalMappings) {
-                if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
-                if (dm.last_physical_state) {
-                    value = true;
-                    break;
+                bool value = false;
+                if (hasStateMapping) {
+                    auto it = profile.digitalToggleStates.find(pf->fieldId);
+                    if (it != profile.digitalToggleStates.end()) value = it->second;
                 }
+                for (const auto& dm : profile.digitalMappings) {
+                    if (dm.target_field_id != pf->fieldId || dm.mode != ButtonToDigitalMapping::Mode::Momentary) continue;
+                    if (dm.last_physical_state) { value = true; break; }
+                }
+                // Analog→Digital momentary contribution
+                if (!value) {
+                    for (const auto& am : profile.analogToDigitalMappings) {
+                        if (am.target_field_id != pf->fieldId || am.mode != AnalogToDigitalMapping::Mode::Momentary) continue;
+                        if (am.last_state) { value = true; break; }
+                    }
+                }
+                digitalValues[pf->fieldId] = value;
             }
-            digitalValues[pf->fieldId] = value;
-        }
+        };
+        resolveDigitalFields(oscDef2);
+        resolveDigitalFields(wsDef2);
+        // Also cover outDef in case it differs from both (e.g. a third custom view)
+        resolveDigitalFields(outDef);
     }
 
     // Change detection snapshot
@@ -1674,6 +2121,9 @@ bool InputMapper::Update(bool dynamic_rate) {
                 for (const auto& bm : profile.buttonMappings)
                     if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
             }
+            if (!hasSrc)
+                for (const auto& mix : profile.channelMixes)
+                    if (!mix.sources.empty() && mix.target_field_id == pf->fieldId) { hasSrc = true; break; }
             if (!hasSrc) continue;
 
             float val = analogValues.count(pf->fieldId) ? analogValues[pf->fieldId] : 0.f;
@@ -1687,10 +2137,13 @@ bool InputMapper::Update(bool dynamic_rate) {
 #endif
         }
         for (auto& [pf,fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-            // Only send if this field has a button mapped to it.
+            // Only send if this field has a button or analog→digital mapping assigned.
             bool hasSrc = false;
             for (const auto& dm : profile.digitalMappings)
                 if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+            if (!hasSrc)
+                for (const auto& am : profile.analogToDigitalMappings)
+                    if (am.source.instance_id != 0 && am.target_field_id == pf->fieldId) { hasSrc = true; break; }
             if (!hasSrc) continue;
 
             int val = digitalValues.count(pf->fieldId) && digitalValues[pf->fieldId] ? 1 : 0;
@@ -1759,6 +2212,18 @@ std::string InputMapper::GetOutputPreview() {
             }
             if (pressed) analogValues[bm.target_output_name] = bm.on_value;
         }
+        // Apply channel mixes into analogValues for preview
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
+        }
 
         // Determine final value for each field for preview
         for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
@@ -1767,6 +2232,14 @@ std::string InputMapper::GetOutputPreview() {
                 if (dm.target_field_id == pf->fieldId && dm.mode != ButtonToDigitalMapping::Mode::Momentary) {
                     hasStateMapping = true;
                     break;
+                }
+            }
+            if (!hasStateMapping) {
+                for (const auto& am : profile.analogToDigitalMappings) {
+                    if (am.target_field_id == pf->fieldId && am.mode != AnalogToDigitalMapping::Mode::Momentary) {
+                        hasStateMapping = true;
+                        break;
+                    }
                 }
             }
             bool value = false;
@@ -1796,6 +2269,17 @@ std::string InputMapper::GetOutputPreview() {
                     break;
                 }
             }
+            // Analog->Digital momentary contribution for preview
+            if (!value) {
+                for (const auto& am : profile.analogToDigitalMappings) {
+                    if (am.target_field_id != pf->fieldId || am.mode != AnalogToDigitalMapping::Mode::Momentary) continue;
+                    if (am.source.instance_id == 0 && am.source.axisIndex == -1 && am.source.sensorChannel == InputSource::SensorChannel::None) continue;
+                    float val = (am.source.sensorChannel != InputSource::SensorChannel::None)
+                        ? ProcessSensor(am.source) : ProcessAxis(am.source);
+                    bool pressed = am.invert_threshold ? (val < am.threshold) : (val >= am.threshold);
+                    if (pressed) { value = true; break; }
+                }
+            }
             digitalValues[pf->fieldId] = value;
         }
     } else {
@@ -1820,6 +2304,18 @@ std::string InputMapper::GetOutputPreview() {
                 pressed = (ProcessSensor(tmp) > 0.5f);
             }
             if (pressed) analogValues[bm.target_output_name] = bm.on_value;
+        }
+        // Apply channel mixes into analogValues for preview (generic path)
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            float sum = 0.f;
+            for (const auto& ms : mix.sources) {
+                float v = (ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    ? ProcessSensor(ms.source) : ProcessAxis(ms.source);
+                sum += v * ms.weight;
+            }
+            if (mix.clamp_output) sum = std::clamp(sum, -1.f, 1.f);
+            analogValues[mix.target_field_id] = sum;
         }
     }
 
@@ -1871,6 +2367,9 @@ std::string InputMapper::GetOutputPreview() {
                 if (!hasSrc)
                     for (const auto& bm : profile.buttonMappings)
                         if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc)
+                    for (const auto& mix : profile.channelMixes)
+                        if (!mix.sources.empty() && mix.target_field_id == pf->fieldId) { hasSrc = true; break; }
                 if (!hasSrc) continue;
 
                 const ProtocolField* op = nullptr;
@@ -1881,10 +2380,13 @@ std::string InputMapper::GetOutputPreview() {
                 ++sentCount;
             }
             for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
-                // Check device mapping
+                // Check device mapping (button or analog→digital)
                 bool hasSrc = false;
                 for (const auto& dm : profile.digitalMappings)
                     if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                if (!hasSrc)
+                    for (const auto& am : profile.analogToDigitalMappings)
+                        if (am.source.instance_id != 0 && am.target_field_id == pf->fieldId) { hasSrc = true; break; }
                 if (!hasSrc) continue;
 
                 const ProtocolField* op = nullptr;
@@ -1923,6 +2425,9 @@ std::string InputMapper::GetOutputPreview() {
                     if (!hasSrc)
                         for (const auto& bm : profile.buttonMappings)
                             if (bm.instance_id != 0 && bm.target_output_name == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc)
+                        for (const auto& mix : profile.channelMixes)
+                            if (!mix.sources.empty() && mix.target_field_id == pf->fieldId) { hasSrc = true; break; }
                     if (!hasSrc) continue;
 
                     const ProtocolField* wp = nullptr;
@@ -1933,9 +2438,13 @@ std::string InputMapper::GetOutputPreview() {
                     ++sentCount;
                 }
                 for (auto& [pf, fd] : GetEnabledFields(*outDef, FieldType::DigitalButton)) {
+                    // Check device mapping (button or analog→digital)
                     bool hasSrc = false;
                     for (const auto& dm : profile.digitalMappings)
                         if (dm.instance_id != 0 && dm.target_field_id == pf->fieldId) { hasSrc = true; break; }
+                    if (!hasSrc)
+                        for (const auto& am : profile.analogToDigitalMappings)
+                            if (am.source.instance_id != 0 && am.target_field_id == pf->fieldId) { hasSrc = true; break; }
                     if (!hasSrc) continue;
 
                     const ProtocolField* wp = nullptr;
@@ -2089,6 +2598,42 @@ void InputMapper::LoadProfiles() {
                         }
                         p.digitalMappings.push_back(dm);
                     }
+                if (data.contains("analog_to_digital_mappings"))
+                    for (const auto& item : data["analog_to_digital_mappings"]) {
+                        AnalogToDigitalMapping am;
+                        am.source.deviceGuid     = item.value("device_guid", "");
+                        am.source.axisIndex      = item.value("axis", -1);
+                        am.source.sensorChannel  = static_cast<InputSource::SensorChannel>(
+                            item.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
+                        am.source.invert         = item.value("invert", false);
+                        am.source.deadzone       = item.value("deadzone", 0.05f);
+                        am.source.outputRange    = item.value("range", 0);
+                        am.target_field_id       = item.value("target_field_id", "");
+                        am.threshold             = item.value("threshold", 0.5f);
+                        am.invert_threshold      = item.value("invert_threshold", false);
+                        am.mode                  = item.value("mode", AnalogToDigitalMapping::Mode::Momentary);
+                        p.analogToDigitalMappings.push_back(am);
+                    }
+                if (data.contains("channel_mixes"))
+                    for (const auto& item : data["channel_mixes"]) {
+                        ChannelMix mix;
+                        mix.target_field_id = item.value("target_field_id", "");
+                        mix.clamp_output    = item.value("clamp_output", true);
+                        if (item.contains("sources"))
+                            for (const auto& s : item["sources"]) {
+                                ChannelMix::MixSource ms;
+                                ms.source.deviceGuid    = s.value("device_guid", "");
+                                ms.source.axisIndex     = s.value("axis", -1);
+                                ms.source.sensorChannel = static_cast<InputSource::SensorChannel>(
+                                    s.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
+                                ms.source.invert        = s.value("invert", false);
+                                ms.source.deadzone      = s.value("deadzone", 0.05f);
+                                ms.source.outputRange   = s.value("range", 0);
+                                ms.weight               = s.value("weight", 1.0f);
+                                mix.sources.push_back(ms);
+                            }
+                        p.channelMixes.push_back(mix);
+                    }
                 if (data.contains("digital_toggle_states")) {
                     for (const auto& [key, val] : data["digital_toggle_states"].items()) {
                         if (val.is_boolean()) p.digitalToggleStates[key] = val.get<bool>();
@@ -2152,6 +2697,43 @@ void InputMapper::SaveProfile(const MappingProfile &profile) const {
             if (dm.sensor_channel != InputSource::SensorChannel::None) j["sensor_channel"] = static_cast<int>(dm.sensor_channel);
             data["digital_mappings"].push_back(j);
         }
+        data["analog_to_digital_mappings"]=json::array();
+        for (const auto& am : profile.analogToDigitalMappings) {
+            json j = {
+                {"device_guid",     am.source.deviceGuid},
+                {"axis",            am.source.axisIndex},
+                {"sensor_channel",  static_cast<int>(am.source.sensorChannel)},
+                {"invert",          am.source.invert},
+                {"deadzone",        am.source.deadzone},
+                {"range",           am.source.outputRange},
+                {"target_field_id", am.target_field_id},
+                {"threshold",       am.threshold},
+                {"invert_threshold",am.invert_threshold},
+                {"mode",            am.mode}
+            };
+            data["analog_to_digital_mappings"].push_back(j);
+        }
+        data["channel_mixes"] = json::array();
+        for (const auto& mix : profile.channelMixes) {
+            if (mix.target_field_id.empty() || mix.sources.empty()) continue;
+            json srcs = json::array();
+            for (const auto& ms : mix.sources) {
+                srcs.push_back({
+                    {"device_guid",    ms.source.deviceGuid},
+                    {"axis",           ms.source.axisIndex},
+                    {"sensor_channel", static_cast<int>(ms.source.sensorChannel)},
+                    {"invert",         ms.source.invert},
+                    {"deadzone",       ms.source.deadzone},
+                    {"range",          ms.source.outputRange},
+                    {"weight",         ms.weight}
+                });
+            }
+            data["channel_mixes"].push_back({
+                {"target_field_id", mix.target_field_id},
+                {"clamp_output",    mix.clamp_output},
+                {"sources",         srcs}
+            });
+        }
         data["digital_toggle_states"] = profile.digitalToggleStates;
 
         data["osc_output_protocol_id"] = profile.oscOutputProtocolId;
@@ -2188,6 +2770,8 @@ void InputMapper::HandleDeviceConnectionChange() {
         for (auto& t : p.hapticTargets)        { if(t.device_guid.empty())continue; auto it=guidMap.find(t.device_guid); t.instance_id=it!=guidMap.end()?it->second:0; }
         for (auto& bm : p.buttonMappings)      { if(bm.device_guid.empty())continue; auto it=guidMap.find(bm.device_guid); bm.instance_id=it!=guidMap.end()?it->second:0; }
         for (auto& dm : p.digitalMappings)     { if(dm.device_guid.empty())continue; auto it=guidMap.find(dm.device_guid); dm.instance_id=it!=guidMap.end()?it->second:0; }
+        for (auto& am : p.analogToDigitalMappings) { if(am.source.deviceGuid.empty())continue; auto it=guidMap.find(am.source.deviceGuid); am.source.instance_id=it!=guidMap.end()?it->second:0; }
+        for (auto& mix : p.channelMixes) { for (auto& ms : mix.sources) { if(ms.source.deviceGuid.empty())continue; auto it=guidMap.find(ms.source.deviceGuid); ms.source.instance_id=it!=guidMap.end()?it->second:0; } }
     }
 }
 
@@ -2354,6 +2938,19 @@ bool InputMapper::IsOutputAddressBound(const std::string& address) const {
             (mapping.button_index != -1 || mapping.hat_index != -1 || 
              mapping.sensor_channel != InputSource::SensorChannel::None)) 
             return true;
+    }
+    for (const auto& mapping : profile.analogToDigitalMappings) {
+        if (mapping.target_field_id == fieldId &&
+            (mapping.source.axisIndex != -1 || mapping.source.sensorChannel != InputSource::SensorChannel::None))
+            return true;
+    }
+    for (const auto& mix : profile.channelMixes) {
+        if (mix.target_field_id == fieldId && !mix.sources.empty()) {
+            for (const auto& ms : mix.sources) {
+                if (ms.source.axisIndex != -1 || ms.source.sensorChannel != InputSource::SensorChannel::None)
+                    return true;
+            }
+        }
     }
 
     return false;
