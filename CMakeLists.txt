@@ -261,6 +261,12 @@ add_executable(InputBridge
     # Device input and protocol output mappings
     src/Mappers/ButtonBinder.cpp
     src/Mappers/InputMapper.cpp
+    src/Mappers/InputMapping/MappingProfileStore.cpp
+    src/Mappers/InputMapping/InputBindingListener.cpp
+    src/Mappers/InputMapping/OutputRuntimeUpdater.cpp
+    src/Mappers/InputMapping/InputMapperUI.cpp
+    src/Mappers/InputMapping/InputSignalProcessing.cpp
+    src/Mappers/InputMapping/ProtocolFieldUtils.cpp
     src/Mappers/OutputMapper.cpp
     # WebSocket and OSC protocols
     src/Protocols/OSCValidation.h
