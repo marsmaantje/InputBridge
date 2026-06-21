@@ -22,21 +22,29 @@ static constexpr const char* kTag = "InputMapper";
 
 using json = nlohmann::json;
 
-NLOHMANN_JSON_SERIALIZE_ENUM(InputMapping::ButtonToDigitalMapping::Mode, {
-    {InputMapping::ButtonToDigitalMapping::Mode::Momentary, "momentary"},
-    {InputMapping::ButtonToDigitalMapping::Mode::Toggle,    "toggle"},
-    {InputMapping::ButtonToDigitalMapping::Mode::SetOn,     "set_on"},
-    {InputMapping::ButtonToDigitalMapping::Mode::SetOff,    "set_off"},
-})
-
-NLOHMANN_JSON_SERIALIZE_ENUM(InputMapping::AnalogToDigitalMapping::Mode, {
-    {InputMapping::AnalogToDigitalMapping::Mode::Momentary, "momentary"},
-    {InputMapping::AnalogToDigitalMapping::Mode::Toggle,    "toggle"},
-    {InputMapping::AnalogToDigitalMapping::Mode::SetOn,     "set_on"},
-    {InputMapping::AnalogToDigitalMapping::Mode::SetOff,    "set_off"},
-})
-
 namespace InputMapping {
+
+// NOTE: these macros MUST live inside namespace InputMapping. nlohmann's
+// json::value<T>()/get<T>() find the macro-generated to_json/from_json
+// overloads via ADL, which only searches namespaces associated with T.
+// Declaring them at global scope (as before) made them invisible to ADL
+// for InputMapping::ButtonToDigitalMapping::Mode /
+// InputMapping::AnalogToDigitalMapping::Mode, silently falling back to
+// nlohmann's default "treat enum as its underlying int" handling — which
+// throws type_error.302 the moment it hits a "mode": "momentary" string.
+NLOHMANN_JSON_SERIALIZE_ENUM(ButtonToDigitalMapping::Mode, {
+    {ButtonToDigitalMapping::Mode::Momentary, "momentary"},
+    {ButtonToDigitalMapping::Mode::Toggle,    "toggle"},
+    {ButtonToDigitalMapping::Mode::SetOn,     "set_on"},
+    {ButtonToDigitalMapping::Mode::SetOff,    "set_off"},
+})
+
+NLOHMANN_JSON_SERIALIZE_ENUM(AnalogToDigitalMapping::Mode, {
+    {AnalogToDigitalMapping::Mode::Momentary, "momentary"},
+    {AnalogToDigitalMapping::Mode::Toggle,    "toggle"},
+    {AnalogToDigitalMapping::Mode::SetOn,     "set_on"},
+    {AnalogToDigitalMapping::Mode::SetOff,    "set_off"},
+})
 
 namespace {
 
