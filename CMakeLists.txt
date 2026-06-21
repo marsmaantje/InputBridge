@@ -283,6 +283,7 @@ add_executable(InputBridge
     src/Protocols/ProtocolRegistry.cpp
     # Utilities
     src/Utils/FileDialog.cpp
+    src/Utils/OpenFolder.cpp
     # UI helpers
     src/UI/ThemeManager.cpp
     src/UI/AboutWindow.cpp
