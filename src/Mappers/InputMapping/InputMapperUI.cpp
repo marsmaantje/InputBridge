@@ -81,8 +81,7 @@ void InputMapperUI::DrawContent() {
     ImGui::End();
 }
 
-// Was a copy-pasted lambda in DrawOutputProtocolSelector, DrawInputProtocolSelector,
-// and DrawMappingContent. Draws a "pick a protocol definition" combo for one
+// Draws a "pick a protocol definition" combo for one
 // transport/direction and reports whether the selection changed.
 bool InputMapperUI::DrawProtocolDefinitionCombo(const char* label, std::string& currentId,
                                                  ProtocolTransport transport, ProtocolDirection dir, float width) {
@@ -111,9 +110,7 @@ bool InputMapperUI::DrawProtocolDefinitionCombo(const char* label, std::string& 
     return changed;
 }
 
-// Was duplicated between DrawMappingContent (querying output definition ids)
-// and DrawInputProtocolSelector (querying input definition ids): the OSC/
-// WebSocket tab switcher plus "(Active)" / "[Running]"/"[Stopped]" indicators.
+// The OSC / WebSocket tab switcher plus "(Active)" / "[Running]"/"[Stopped]" indicators.
 void InputMapperUI::DrawProtocolViewSelector(const char* comboId, bool oscActive, bool wsActive, bool oscRunning,
                                               bool wsRunning, const char* tooltip, bool& changed) {
     ImGui::SetNextItemWidth(120);
@@ -294,7 +291,7 @@ void InputMapperUI::DrawAnalogLiveBar(const InputSource& src) {
     // Background track
     dl->AddRectFilled(bPos, ImVec2(bPos.x + barW, bPos.y + bH), IM_COL32(50, 50, 50, 180), 3.f);
 
-    // Centre line
+    // Center line
     float cx = bPos.x + barW * 0.5f;
     dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
 

@@ -3,13 +3,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure data types describing a mapping profile: how device axes/buttons/
 // sensors map onto protocol output fields.
-//
-// These used to be nested inside InputMapper itself. They were pulled out so
-// every piece of the input-mapping subsystem (persistence, the input-binding
-// listener, runtime broadcasting, the UI) can share one definition without
-// depending on the whole InputMapper class. InputMapper.h still exposes
-// `InputMapper::InputSource` etc. as aliases of the types below, so existing
-// call sites and tests are unaffected.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <SDL3/SDL.h>
@@ -166,9 +159,5 @@ struct MappingProfile {
 
 // Legacy fallback output names used when no protocol definition is selected.
 // Shared by the UI (legacy mapping table) and the runtime updater
-// (Update()/GetOutputPreview()'s no-outDef path) — both used to read this off
-// InputMapper's own m_GenericOutputs member.
 inline const std::vector<std::string> kGenericOutputs = {
     "Steering", "Throttle", "Brake", "Clutch", "Handbrake", "Pitch", "Roll"};
-
-

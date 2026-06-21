@@ -1,13 +1,7 @@
 #pragma once
 
 // ─────────────────────────────────────────────────────────────────────────────
-// All of InputMapper's ImGui rendering. This used to be five InputMapper
-// methods, one of which (DrawMappingContent) was an ~875-line function
-// covering eight visually-distinct sections (protocol selector, analog
-// table, digital table, button→analog table, channel mixes, analog→digital
-// table, plus three near-identical copies of a "pick a protocol definition"
-// combo). Each section is now its own method below, and the three duplicated
-// combo lambdas are now the one shared DrawProtocolDefinitionCombo.
+// All of InputMapper's ImGui rendering.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "InputBindingListener.h"

@@ -4,13 +4,6 @@
 // Owns the list of mapping profiles, which one is active, persistence
 // (load/save JSON files), and pushing the active profile's settings out to
 // the OSC/WebSocket servers and ProtocolManager.
-//
-// This is everything that used to live directly on InputMapper around
-// m_Profiles / m_SelectedProfileIndex: LoadProfiles/SaveProfile,
-// ActivateProfile, HandleDeviceConnectionChange, UpdateActiveProtocols,
-// SnapshotServerSettings, IsOutputAddressBound, plus the profile
-// create/rename/delete logic that used to live inline inside the UI's
-// button handlers.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "MappingTypes.h"

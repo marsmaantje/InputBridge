@@ -10,7 +10,7 @@
 #include "wheel/wheel_manager.hpp"
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
-#include "Mappers/InputExclusiveMode.h"
+#include "ExclusiveMode/InputExclusiveMode.h"
 #endif
 
 class DeviceManager {

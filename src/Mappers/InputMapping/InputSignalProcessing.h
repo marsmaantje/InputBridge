@@ -4,11 +4,6 @@
 // Stateless device-reading helpers: turn a raw SDL joystick/gamepad/sensor
 // reading into the normalised [-1,1] (or [0,1]) values the rest of the
 // mapping system works with.
-//
-// These take a `const DeviceManager&` explicitly instead of being members of
-// InputMapper, so they can be unit-tested and reused by the binding listener,
-// the runtime updater, and the UI without any of them needing to know about
-// each other.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "MappingTypes.h"

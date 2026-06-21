@@ -331,10 +331,10 @@ target_include_directories(InputBridge PRIVATE
 
 if(ENABLE_EXCLUSIVE_INPUT)
     target_sources(InputBridge PRIVATE
-        src/Mappers/InputExclusiveMode.cpp
-        src/Mappers/LinuxExclusiveMode.cpp
-        src/Mappers/MacOSExclusiveMode.cpp
-        src/Mappers/WindowsExclusiveMode.cpp
+        src/ExclusiveMode/InputExclusiveMode.cpp
+        src/ExclusiveMode/LinuxExclusiveMode.cpp
+        src/ExclusiveMode/MacOSExclusiveMode.cpp
+        src/ExclusiveMode/WindowsExclusiveMode.cpp
     )
 endif()
 

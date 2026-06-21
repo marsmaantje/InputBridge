@@ -2,18 +2,8 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "Listen for the next input and bind it" state machine, used by the mapping
-// UI's Bind buttons. Pulled out of InputMapper's StartListening/
-// UpdateListening/CancelListening.
-//
-// The original UpdateListening() was a single ~350-line function that
-// resolved one listening session against six different kinds of hardware
-// events (a button-binder hit, a battery level/charging change, a cap-sense
-// touch change, a raw axis change, an IMU/touch sensor change, a hat change),
-// with the "write the result into digitalMappings[i] or buttonMappings[i]"
-// branch duplicated almost verbatim in four of those six places. Update()
-// below keeps the same priority order but delegates each kind of event to
-// its own small Try* method, and those four duplicated branches now share
-// one ApplyDigitalBinding() helper.
+// UI's Bind buttons.
+// Utilizing one ApplyDigitalBinding() helper.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "Devices/SensorState.h"

@@ -2,8 +2,6 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Small free-function helpers for working with ProtocolDefinition field lists.
-// Pulled out of InputMapper because they were duplicated/used by several of
-// its pieces (UI, runtime broadcasting, preview) with no shared home.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "Protocols/ProtocolDefinition.h"

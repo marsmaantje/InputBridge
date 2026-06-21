@@ -4,13 +4,6 @@
 // Per-frame output computation: reads the active profile's mappings against
 // live hardware state, then either broadcasts the result over OSC/WebSocket
 // (Update) or formats it as human-readable text (GetOutputPreview).
-//
-// In the original InputMapper, these were two ~340-line functions that
-// independently re-implemented the same "compute analog values, compute
-// digital values" pipeline — one to actually send packets, one to describe
-// what would be sent. The two pipelines are pulled out as free functions in
-// OutputRuntimeUpdater.cpp and shared by both; only the final "what do we do
-// with these values" step (network send vs. text formatting) differs.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "MappingTypes.h"
