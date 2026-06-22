@@ -3,7 +3,9 @@
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
+#include "UI/DeviceIconProvider.h"
 #include "UI/IconsFontAwesome6.h"
+#include "UI/KenneyIcons.h"
 #include "UI/ThemeManager.h"
 
 #include <string>
@@ -104,6 +106,53 @@ void RebuildFontAtlas()
         if (!icons)
             LOG_WARN(kTag, "Font: FA6 not found at '%s' — icon glyphs will be missing.",
                     iconFontPath.c_str());
+    }
+
+    // ── Kenney Input Prompt fonts ─────────────────────────────────────────
+    // Each Kenney font occupies the same Private Use Area block (U+E000+),
+    // so they cannot be merged into the base font.  Instead each is loaded as
+    // a separate ImFont* stored in KenneyFonts.  DeviceIconProvider pushes the
+    // appropriate font with ImGui::PushFont() when it renders a device icon.
+    //
+    // Missing font files are silently skipped; DeviceIconProvider returns an
+    // invalid DeviceIcon in that case and the caller simply omits the icon.
+    {
+        KenneyFonts& kf = KenneyFonts::Get();
+        kf.Reset(); // invalidate previous atlas pointers before rebuilding
+
+        // Glyph range covering U+E000–U+F8FF (entire Kenney PUA block).
+        static const ImWchar kenney_ranges[] = { 0xE000, 0xF8FF, 0 };
+
+        // Render Kenney icons at the same pixel size as the UI text so they
+        // sit naturally on the baseline next to device names.
+        const float kenney_size = themeFontSize > 0.0f ? themeFontSize : 16.0f;
+
+        const std::string fontsDir = GetFontsDir();
+
+        // Helper: load one Kenney TTF and return the ImFont* (or nullptr).
+        auto LoadKenney = [&](const char* subDir, const char* file) -> ImFont*
+        {
+            std::string path = fontsDir + subDir + file;
+            ImFontConfig cfg;
+            cfg.PixelSnapH = true;
+            ImFont* f = io.Fonts->AddFontFromFileTTF(
+                path.c_str(), kenney_size, &cfg, kenney_ranges);
+            if (!f)
+                LOG_WARN(kTag,
+                    "Kenney font not found at '%s' — device icons may be missing.",
+                    path.c_str());
+            return f;
+        };
+
+        kf.xbox             = LoadKenney(KENNEY_DIR_XBOX,           KENNEY_FILE_XBOX);
+        kf.playstation      = LoadKenney(KENNEY_DIR_PLAYSTATION,    KENNEY_FILE_PLAYSTATION);
+        kf.nintendoSwitch   = LoadKenney(KENNEY_DIR_SWITCH,         KENNEY_FILE_SWITCH);
+        kf.nintendoWii      = LoadKenney(KENNEY_DIR_WII,            KENNEY_FILE_WII);
+        kf.nintendoGamecube = LoadKenney(KENNEY_DIR_GAMECUBE,       KENNEY_FILE_GAMECUBE);
+        kf.keyboardMouse    = LoadKenney(KENNEY_DIR_KEYBOARD_MOUSE, KENNEY_FILE_KEYBOARD_MOUSE);
+        kf.steamDeck        = LoadKenney(KENNEY_DIR_STEAM_DECK,     KENNEY_FILE_STEAM_DECK);
+        kf.steamController  = LoadKenney(KENNEY_DIR_STEAM_CTRL,     KENNEY_FILE_STEAM_CTRL);
+        kf.generic          = LoadKenney(KENNEY_DIR_GENERIC,        KENNEY_FILE_GENERIC);
     }
 
     io.Fonts->Build();

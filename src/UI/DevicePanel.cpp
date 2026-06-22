@@ -6,6 +6,7 @@
 
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
+#include "UI/DeviceIconProvider.h"
 #include "Visualizers/FlightStickVisualizer.h"
 #include "Visualizers/FlightStickHapticsVisualizer.h"
 #include "Visualizers/GamepadHapticsVisualizer.h"
@@ -320,13 +321,48 @@ void DrawDeviceItem(DeviceState&        dev,
 {
     ImGui::PushID(static_cast<int>(dev.instance_id));
 
-    const std::string label = dev.name
+    // ── Device icon ───────────────────────────────────────────────────────
+    // Resolve the Kenney icon for this device before building the label so we
+    // know whether to reserve leading space for it.
+    const DeviceIcon icon = DeviceIconProvider::GetIcon(dev);
+    const float      font_sz  = ImGui::GetFontSize();
+
+    // When an icon is available we pad the label with a leading space wide
+    // enough to accommodate the glyph.  ImGui CollapsingHeader renders the
+    // text starting just after the tree arrow; we overlay the glyph there.
+    std::string label;
+    if (icon.IsValid()) {
+        // Reserve space: "\t" would collapse, so we use a fixed number of
+        // spaces.  We'll draw the actual glyph via ImDrawList afterwards.
+        label  = "    ";   // ~icon_w worth of space at default font sizes
+    }
+    label += dev.name
         + " [ID: " + std::to_string(dev.instance_id) + "]"
         + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)")
         + (dev.hide_from_other_apps ? "  [HIDDEN]" : "");
 
     const bool header_open = ImGui::CollapsingHeader(
         label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+    // Overlay the Kenney icon glyph at the left of the header row.
+    if (icon.IsValid()) {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2      rect_min  = ImGui::GetItemRectMin();
+        ImVec2      rect_max  = ImGui::GetItemRectMax();
+
+        // Align the glyph vertically centred in the header row, placed just
+        // after the tree-node arrow (which ImGui draws at FramePadding.x).
+        const float pad_x   = ImGui::GetStyle().FramePadding.x;
+        const float arrow_w = font_sz; // ImGui's tree arrow occupies ~1 em
+        const float glyph_x = rect_min.x + pad_x + arrow_w + 2.0f;
+        const float glyph_y = rect_min.y + (rect_max.y - rect_min.y - font_sz) * 0.5f;
+
+        ImGui::PushFont(icon.font);
+        draw_list->AddText(ImVec2(glyph_x, glyph_y),
+                           ImGui::GetColorU32(ImGuiCol_Text),
+                           icon.glyph);
+        ImGui::PopFont();
+    }
 
     // ── Battery indicator ─────────────────────────────────────────────────
     const bool hasBattery = (dev.battery_state != SDL_POWERSTATE_UNKNOWN

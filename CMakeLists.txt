@@ -289,6 +289,7 @@ add_executable(InputBridge
     src/UI/AboutWindow.cpp
     src/UI/DebugLogPanel.cpp
     src/UI/FontManager.cpp
+    src/UI/DeviceIconProvider.cpp
     src/UI/DevicePanel.cpp
     src/UI/SettingsPanel.cpp
     src/UI/SidebarLayout.cpp
