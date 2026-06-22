@@ -48,13 +48,6 @@ NLOHMANN_JSON_SERIALIZE_ENUM(AnalogToDigitalMapping::Mode, {
 
 namespace {
 
-std::filesystem::path GetMappingsDirectory() {
-    // Mapping profiles are user data — they belong in
-    // $XDG_DATA_HOME/InputBridge/mappings/ per the XDG Base Directory
-    // Specification (fallback: ~/.local/share/InputBridge/mappings/).
-    return std::filesystem::path(XdgDirs::dataDir()) / "mappings";
-}
-
 // ── JSON ⇄ InputSource ──────────────────────────────────────────────────────
 // All three places an InputSource is embedded in the profile JSON (the
 // top-level "mappings" map, an analog→digital mapping's "source", and a
@@ -374,6 +367,13 @@ const ProtocolDefinition* ResolveOscFallbackDefinition(const std::string& protoc
 
 MappingProfileStore::MappingProfileStore(const DeviceManager& deviceManager)
     : m_DeviceManager(deviceManager) {}
+
+std::filesystem::path MappingProfileStore::GetMappingsDirectory() {
+    // Mapping profiles are user data — they belong in
+    // $XDG_DATA_HOME/InputBridge/mappings/ per the XDG Base Directory
+    // Specification (fallback: ~/.local/share/InputBridge/mappings/).
+    return std::filesystem::path(XdgDirs::dataDir()) / "mappings";
+}
 
 void MappingProfileStore::LoadProfiles() {
     m_Profiles.clear();

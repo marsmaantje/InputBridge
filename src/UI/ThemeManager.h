@@ -74,6 +74,12 @@ public:
     /** All themes found by the last scan (does not include the built-in default). */
     const std::vector<ThemeEntry>& GetAvailableThemes() const { return m_entries; }
 
+    /**
+     * Full path to the themes/ folder under the last basePath passed to
+     * ScanThemesDirectory(). Empty if ScanThemesDirectory() hasn't run yet.
+     */
+    std::string GetThemesDir() const;
+
     // -----------------------------------------------------------------------
     // Loading / applying
     // -----------------------------------------------------------------------

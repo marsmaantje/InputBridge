@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "MappingTypes.h"
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -77,6 +78,12 @@ class MappingProfileStore {
     // Resolves which ProtocolDefinition is currently being edited/previewed
     // for the active profile + selected protocol view (OSC vs WebSocket).
     const ProtocolDefinition* GetActiveOutputDefinition() const;
+
+    // The folder mapping profile .json files are stored in
+    // ($XDG_DATA_HOME/InputBridge/mappings/, with platform fallbacks — see
+    // XdgDirs). Exposed publicly so other code (e.g. the Settings page's
+    // "open folder" buttons) doesn't need to duplicate this path logic.
+    static std::filesystem::path GetMappingsDirectory();
 
     // True if `address` (an OSC path or WebSocket key) is bound to a device
     // input anywhere in the active profile.

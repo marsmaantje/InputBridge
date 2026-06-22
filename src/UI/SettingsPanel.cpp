@@ -3,7 +3,7 @@
 #include "UI/FontManager.h"
 #include "UI/ThemeManager.h"
 #include "Devices/DeviceManager.h"
-/*
+
 #include "Mappers/InputMapping/MappingProfileStore.h"
 #include "Protocols/ProtocolEditorWindow.h"
 #include "Protocols/ProtocolRegistry.h"
@@ -11,8 +11,8 @@
 #include "Utils/XdgDirs.h"
 
 #include <filesystem>
+#include <iterator>
 #include <vector>
-*/
 
 void DrawSettingsContent(float&              user_ui_scale,
                          float&              user_font_scale,
@@ -231,7 +231,6 @@ void DrawSettingsContent(float&              user_ui_scale,
     // One button per folder InputBridge reads/writes outside of itself, so
     // users can find, back up, or hand-edit files without hunting through
     // platform-specific config/data locations.
-/*
     ImGui::Separator();
     ImGui::Text("External Folders");
 
@@ -270,7 +269,15 @@ void DrawSettingsContent(float&              user_ui_scale,
         ImGui::PopID();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("%s\n\n%s", f.tooltip, f.path.empty() ? "(unavailable)" : f.path.c_str());
-        if (i + 1 < std::size(folders)) ImGui::SameLine();
+
+        // Wrap to the next line instead of running off the edge of a narrow
+        // sidebar: only continue the row if the *next* button would still
+        // fit in the space remaining.
+        if (i + 1 < std::size(folders)) {
+            float nextW = ImGui::CalcTextSize(folders[i + 1].label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            float spaceLeft = ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x;
+            if (nextW <= spaceLeft) ImGui::SameLine();
+        }
     }
 
     if (!s_openFolderError.empty()) {
@@ -278,5 +285,4 @@ void DrawSettingsContent(float&              user_ui_scale,
         ImGui::TextWrapped("Error: %s", s_openFolderError.c_str());
         ImGui::PopStyleColor();
     }
-*/
 }

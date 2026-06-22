@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include "Preferences/Preferences.h"
+#include <string>
 
 /// Recomputes and applies DPI / user-scale to the active ImGui style.
 ///
@@ -25,3 +26,8 @@ void UpdateUIScale(SDL_Window*         window,
 /// The SDL3 renderer backend manages the GPU texture automatically; calling
 /// this function is sufficient — no manual Create/Destroy is required.
 void RebuildFontAtlas();
+
+/// Full path to the fonts/ folder next to the executable
+/// (SDL_GetBasePath() + "fonts/"). Used both for loading the Font Awesome
+/// icon font and for the Settings page's "open folder" button.
+std::string GetFontsDir();
