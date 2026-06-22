@@ -1,14 +1,19 @@
 #pragma once
 
 // ─────────────────────────────────────────────────────────────────────────────
-// InputMapper is now a thin facade: it owns the four pieces the mapping
-// system was split into (MappingProfileStore, InputBindingListener,
-// OutputRuntimeUpdater, InputMapperUI — see src/Mappers/InputMapping/) and
-// forwards every public call to one of them. This keeps the public API and
-// every call site elsewhere in the codebase unchanged, while each piece of
-// actual logic now lives in a small, focused, independently-readable class.
+// InputMapper provides the central interface for the input-mapping system.
 //
-// InputExclusiveMode / device-hide is managed by DeviceManager, not InputMapper.
+// Features:
+// • Manages mapping profiles, including loading, saving, activation,
+//   and device-change handling.
+// • Listens for input bindings and supports interactive remapping.
+// • Updates runtime output state and generates output previews.
+// • Provides all input-mapping UI panels and profile-selection controls.
+// • Exposes a stable public API while coordinating profile storage,
+//   binding capture, runtime updates, and user-interface components.
+//
+// InputExclusiveMode / device-hide functionality is managed by
+// DeviceManager, not InputMapper.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "InputMapping/InputBindingListener.h"

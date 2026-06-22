@@ -19,11 +19,6 @@ namespace InputMapping {
 
 namespace {
 
-// ── Shared "is this mapping currently active" predicates ───────────────────
-// Used to read the live state of a button/hat/sensor-backed mapping. Works
-// for both ButtonToAnalogMapping and ButtonToDigitalMapping since they share
-// ───────────────────────────────────────────────────────────────────────────
-
 template <typename ButtonMapping>
 bool IsButtonMappingPressed(const ButtonMapping& m, const DeviceManager& dm) {
     if (m.button_index != -1 || m.hat_index != -1) { // sentinel (< -1) is a gamepad paddle button

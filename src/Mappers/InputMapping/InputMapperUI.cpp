@@ -6,7 +6,6 @@
 #include "ProtocolFieldUtils.h"
 
 #include "Devices/DeviceManager.h"
-#include "Mappers/OutputMapper.h"
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
 #include "Protocols/ProtocolDefinition.h"
@@ -810,7 +809,7 @@ void InputMapperUI::DrawButtonToAnalogSection(MappingProfile& profile, const Pro
                                                bool& changed) {
     ImGui::Spacing();
     ImGui::Separator();
-    ImGui::Text("Button to Analog Mappings");
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.f, 1.f), "Button to Analog Mappings  (%s)", outDef->name.c_str());
     ImGui::TextWrapped("Override an analog output with a fixed value when a button is held.");
     if (ImGui::Button("Add Mapping")) {
         profile.buttonMappings.push_back({});
@@ -926,7 +925,7 @@ void InputMapperUI::DrawChannelMixSection(MappingProfile& profile, const Protoco
 
     ImGui::Spacing();
     ImGui::Separator();
-    ImGui::Text("Channel Mixes");
+    ImGui::TextColored(ImVec4(0.4f, 1.f, 0.6f, 1.f), "Channel Mixes  (%s)", outDef->name.c_str());
     ImGui::TextWrapped("Combine multiple analog inputs (with individual weights) into a single analog output "
                         "field. Useful for mixing two pedal axes into one rudder output.");
     if (ImGui::Button("Add Channel Mix")) {

@@ -1,4 +1,5 @@
 #include "HapticDispatcher.h"
+#include "Haptics/HapticDevice.h"
 #include "../Mappers/OutputMapper.h"
 
 void HapticDispatcher::DispatchRumble(lo_arg** argv, int argc, OutputMapper* mapper)

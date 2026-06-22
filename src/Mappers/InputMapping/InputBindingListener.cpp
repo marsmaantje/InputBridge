@@ -4,7 +4,6 @@
 #include "Devices/DeviceManager.h"
 #include "Devices/SensorReader.h"
 #include <cmath>
-#include <stdexcept>
 
 static constexpr const char* kTag = "InputMapper";
 
