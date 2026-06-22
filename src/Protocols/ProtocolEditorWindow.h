@@ -35,6 +35,13 @@ public:
     static void Draw(bool& open);
 
     /**
+     * The folder protocol catalog/definition backups are stored in.
+     * Exposed so other code (e.g. the Settings page's "open folder" button)
+     * doesn't need to know about s_backupManager's existence.
+     */
+    static const std::string& GetBackupDir() { return s_backupManager.GetBackupDir(); }
+
+    /**
      * Draw only the Protocol Editor content, no ImGui::Begin/End wrapper.
      * Use this to embed the editor inside an existing window or child region.
      */

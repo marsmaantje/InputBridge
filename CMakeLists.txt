@@ -261,6 +261,12 @@ add_executable(InputBridge
     # Device input and protocol output mappings
     src/Mappers/ButtonBinder.cpp
     src/Mappers/InputMapper.cpp
+    src/Mappers/InputMapping/MappingProfileStore.cpp
+    src/Mappers/InputMapping/InputBindingListener.cpp
+    src/Mappers/InputMapping/OutputRuntimeUpdater.cpp
+    src/Mappers/InputMapping/InputMapperUI.cpp
+    src/Mappers/InputMapping/InputSignalProcessing.cpp
+    src/Mappers/InputMapping/ProtocolFieldUtils.cpp
     src/Mappers/OutputMapper.cpp
     # WebSocket and OSC protocols
     src/Protocols/OSCValidation.h
@@ -277,6 +283,7 @@ add_executable(InputBridge
     src/Protocols/ProtocolRegistry.cpp
     # Utilities
     src/Utils/FileDialog.cpp
+    src/Utils/OpenFolder.cpp
     # UI helpers
     src/UI/ThemeManager.cpp
     src/UI/AboutWindow.cpp
@@ -325,10 +332,10 @@ target_include_directories(InputBridge PRIVATE
 
 if(ENABLE_EXCLUSIVE_INPUT)
     target_sources(InputBridge PRIVATE
-        src/Mappers/InputExclusiveMode.cpp
-        src/Mappers/LinuxExclusiveMode.cpp
-        src/Mappers/MacOSExclusiveMode.cpp
-        src/Mappers/WindowsExclusiveMode.cpp
+        src/ExclusiveMode/InputExclusiveMode.cpp
+        src/ExclusiveMode/LinuxExclusiveMode.cpp
+        src/ExclusiveMode/MacOSExclusiveMode.cpp
+        src/ExclusiveMode/WindowsExclusiveMode.cpp
     )
 endif()
 

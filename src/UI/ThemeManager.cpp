@@ -70,6 +70,11 @@ void ThemeManager::ScanThemesDirectory(const std::string& basePath) {
     }
 }
 
+std::string ThemeManager::GetThemesDir() const {
+    if (m_scanBasePath.empty()) return {};
+    return (fs::path(m_scanBasePath) / "themes").string();
+}
+
 void ThemeManager::Refresh() {
     if (!m_scanBasePath.empty())
         ScanThemesDirectory(m_scanBasePath);

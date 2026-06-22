@@ -7,15 +7,11 @@
  *
  * Subchannel OSC path support for haptic effects.
  *
- * Problem
- * -------
  * Hosts such as Resonite only deliver *one* OSC message per path per frame.
  * The existing haptic paths (/haptic/rumble, /haptic/constant, …) encode the
  * destination slot as a message *argument*, which means a sender can only
  * address one slot per effect type per frame.
  *
- * Solution
- * --------
  * Subchannel paths encode the slot in the path itself:
  *
  *   /haptic/rumble/<slot>

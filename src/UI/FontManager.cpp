@@ -46,6 +46,11 @@ void UpdateUIScale(SDL_Window*         window,
     ImGui::GetStyle().FontScaleMain = ui_scale * user_font_scale;
 }
 
+std::string GetFontsDir() {
+    const char* base = SDL_GetBasePath();
+    return (base ? std::string(base) : std::string(".")) + "fonts/";
+}
+
 void RebuildFontAtlas()
 {
     ImGuiIO&      io    = ImGui::GetIO();
@@ -72,9 +77,7 @@ void RebuildFontAtlas()
     // The TTF must be at fonts/fa-solid-900.ttf next to the executable.
     // If absent the app still works; buttons show the fallback text instead.
     {
-        const char* base = SDL_GetBasePath();
-        std::string iconFontPath = (base ? std::string(base) : std::string("."))
-                                   + "fonts/" FONT_ICON_FILE_NAME_FAS;
+        std::string iconFontPath = GetFontsDir() + FONT_ICON_FILE_NAME_FAS;
 
         // Icon glyphs are rendered at the same pixel size as the text font so
         // they sit on the baseline naturally.  GlyphMinAdvanceX makes them

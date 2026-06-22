@@ -1,7 +1,6 @@
 #pragma once
 
 #include <SDL3/SDL.h>
-#include "imgui.h"
 #include "Preferences/Preferences.h"
 
 class DeviceManager;

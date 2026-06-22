@@ -1,5 +1,5 @@
 /**
- * @file GamepadHaptics.h (Refactored)
+ * @file GamepadHaptics.h
  * @brief Unified haptic interface for game controllers
  * 
  * This class provides a high-level interface that automatically delegates to

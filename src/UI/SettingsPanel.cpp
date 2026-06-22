@@ -4,6 +4,16 @@
 #include "UI/ThemeManager.h"
 #include "Devices/DeviceManager.h"
 
+#include "Mappers/InputMapping/MappingProfileStore.h"
+#include "Protocols/ProtocolEditorWindow.h"
+#include "Protocols/ProtocolRegistry.h"
+#include "Utils/OpenFolder.h"
+#include "Utils/XdgDirs.h"
+
+#include <filesystem>
+#include <iterator>
+#include <vector>
+
 void DrawSettingsContent(float&              user_ui_scale,
                          float&              user_font_scale,
                          bool&               scale_with_window,
@@ -213,6 +223,66 @@ void DrawSettingsContent(float&              user_ui_scale,
     if (!theme.GetLastError().empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
         ImGui::TextWrapped("Error: %s", theme.GetLastError().c_str());
+        ImGui::PopStyleColor();
+    }
+
+    
+    // ── External Folders ───────────────────────────────────────────────────
+    // One button per folder InputBridge reads/writes outside of itself, so
+    // users can find, back up, or hand-edit files without hunting through
+    // platform-specific config/data locations.
+    ImGui::Separator();
+    ImGui::Text("External Folders");
+
+    struct FolderEntry {
+        const char* label;
+        std::string path;
+        const char* tooltip;
+    };
+    const FolderEntry folders[] = {
+        {"Config",           XdgDirs::configDir(),
+         "Preferences and window layout (preferences.ini, imgui.ini)"},
+        {"Mapping Profiles", InputMapping::MappingProfileStore::GetMappingsDirectory().string(),
+         "Saved input-mapping profiles (.json)"},
+        {"Protocols",        ProtocolRegistry::GetProtocolsDir(),
+         "Protocol definitions and field-catalog templates"},
+        {"Themes",           ThemeManager::GetInstance().GetThemesDir(),
+         "Colour theme files (.json) — drop new ones here, then hit Refresh above"},
+        {"Fonts",            GetFontsDir(),
+         "Bundled fonts, including the Font Awesome icon set"},
+        {"Backups",          ProtocolEditorWindow::GetBackupDir(),
+         "Automatic backups made before destructive protocol-editor operations"},
+    };
+
+    // Cleared on every successful open; persists across frames otherwise so
+    // the message stays visible until the user tries again.
+    static std::string s_openFolderError;
+
+    for (size_t i = 0; i < std::size(folders); ++i) {
+        const FolderEntry& f = folders[i];
+        ImGui::PushID(static_cast<int>(i));
+        if (ImGui::Button(f.label)) {
+            std::string err;
+            if (OpenFolderInFileBrowser(f.path, &err)) s_openFolderError.clear();
+            else s_openFolderError = err;
+        }
+        ImGui::PopID();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s\n\n%s", f.tooltip, f.path.empty() ? "(unavailable)" : f.path.c_str());
+
+        // Wrap to the next line instead of running off the edge of a narrow
+        // sidebar: only continue the row if the *next* button would still
+        // fit in the space remaining.
+        if (i + 1 < std::size(folders)) {
+            float nextW = ImGui::CalcTextSize(folders[i + 1].label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            float spaceLeft = ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x;
+            if (nextW <= spaceLeft) ImGui::SameLine();
+        }
+    }
+
+    if (!s_openFolderError.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+        ImGui::TextWrapped("Error: %s", s_openFolderError.c_str());
         ImGui::PopStyleColor();
     }
 }

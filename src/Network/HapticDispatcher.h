@@ -1,7 +1,6 @@
 #pragma once
 
 #include <lo/lo.h>
-#include "Haptics/HapticDevice.h"
 
 class OutputMapper;
 
@@ -9,29 +8,7 @@ class OutputMapper;
  * @file HapticDispatcher.h
  * @brief Centralised OSC haptic argument parsing and OutputMapper dispatch.
  *
- * Problem
- * -------
- * Before this class existed, argument parsing and QueueXxx() calls were
- * duplicated in five independent liblo handler functions
- * (haptic_rumble_handler, haptic_constant_handler, …) **and** again in the
- * subchannel switch-statement inside haptic_subchannel_handler.  Any change
- * to argument layout or queue-call signature had to be made in two places.
- *
- * Solution
- * --------
- * HapticDispatcher owns the single authoritative implementation for each
- * effect type.  Both the per-path handlers and the subchannel handler now
- * delegate here:
- *
- * @code
- *   // Fixed path handler (e.g. /haptic/rumble)
- *   HapticDispatcher::DispatchRumble(argv, argc, mapper);
- *
- *   // Subchannel handler (e.g. /haptic/rumble/3)
- *   HapticDispatcher::DispatchRumble(argv, argc, mapper); // same call
- * @endcode
- *
- * Argument formats (unchanged from the original protocol)
+ * Argument formats
  * --------------------------------------------------------
  * Rumble    iiffi   id, slot, low_freq, high_freq, duration_ms
  * Constant  iifi    id, slot, strength, duration_ms

@@ -12,7 +12,7 @@
  * - AccelState: m/s² divided by ACCEL_SCALE  → [-1, 1]  (gravity ≈ 0.1 at rest)
  * - TouchState: x/y already [0,1] from SDL;  pressure [0,1];  active bool.
  *
- * These structs are value types — cheap to copy and hold no SDL handles.
+ * These structs are value types - cheap to copy and hold no SDL handles.
  */
 
 struct GyroState {
