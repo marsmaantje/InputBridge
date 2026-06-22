@@ -334,7 +334,7 @@ void DrawDeviceItem(DeviceState&        dev,
     if (icon.IsValid()) {
         // Reserve space: "\t" would collapse, so we use a fixed number of
         // spaces.  We'll draw the actual glyph via ImDrawList afterwards.
-        label  = "    ";   // ~icon_w worth of space at default font sizes
+        label  = "      ";   // ~row-height icon width at default font sizes
     }
     label += dev.name
         + " [ID: " + std::to_string(dev.instance_id) + "]"
@@ -350,18 +350,41 @@ void DrawDeviceItem(DeviceState&        dev,
         ImVec2      rect_min  = ImGui::GetItemRectMin();
         ImVec2      rect_max  = ImGui::GetItemRectMax();
 
-        // Align the glyph vertically centred in the header row, placed just
-        // after the tree-node arrow (which ImGui draws at FramePadding.x).
+        const float row_h   = rect_max.y - rect_min.y;
         const float pad_x   = ImGui::GetStyle().FramePadding.x;
         const float arrow_w = font_sz; // ImGui's tree arrow occupies ~1 em
-        const float glyph_x = rect_min.x + pad_x + arrow_w + 2.0f;
-        const float glyph_y = rect_min.y + (rect_max.y - rect_min.y - font_sz) * 0.5f;
 
-        ImGui::PushFont(icon.font);
-        draw_list->AddText(ImVec2(glyph_x, glyph_y),
+        // In ImGui 1.92 GetFontSize() returns the size AFTER FontScaleMain and
+        // FontScaleDpi are applied — this is the correct value to pass to
+        // AddText so the icon respects the application's DPI/UI-scale setting.
+        //
+        // To get the Ascent/Size ratio we need ImFontBaked.  GetFontBaked()
+        // must be called with the UNSCALED base size (FontSizeBase), which is
+        // what the atlas was built from.  Passing GetFontSize() here would ask
+        // for a size the atlas doesn't have and cause a fallback/rescale.
+        const float scaled_sz   = ImGui::GetFontSize();             // post-scale
+        const float unscaled_sz = ImGui::GetStyle().FontSizeBase;   // pre-scale
+
+        // Compute how much we need to inflate the em-square so the *visible*
+        // glyph pixels end up exactly scaled_sz tall.
+        //   render_sz * (Ascent / Size) = scaled_sz
+        //   render_sz = scaled_sz * (Size / Ascent)
+        float render_sz = scaled_sz; // safe fallback
+        if (ImFontBaked* baked = icon.font->GetFontBaked(unscaled_sz))
+            if (baked->Ascent > 0.0f)
+                render_sz = scaled_sz * (baked->Size / baked->Ascent);
+
+        // Horizontally: just after the tree-node arrow.
+        const float glyph_x = rect_min.x + pad_x + arrow_w + 2.0f;
+
+        // Vertically: centre the inflated em-square in the row so the visible
+        // glyph lands perfectly centred.
+        const float glyph_y = rect_min.y + (row_h - render_sz) * 0.5f;
+
+        draw_list->AddText(icon.font, render_sz,
+                           ImVec2(glyph_x, glyph_y),
                            ImGui::GetColorU32(ImGuiCol_Text),
                            icon.glyph);
-        ImGui::PopFont();
     }
 
     // ── Battery indicator ─────────────────────────────────────────────────

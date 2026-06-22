@@ -123,8 +123,11 @@ void RebuildFontAtlas()
         // Glyph range covering U+E000–U+F8FF (entire Kenney PUA block).
         static const ImWchar kenney_ranges[] = { 0xE000, 0xF8FF, 0 };
 
-        // Render Kenney icons at the same pixel size as the UI text so they
-        // sit naturally on the baseline next to device names.
+        // Bake Kenney fonts at the same base size as the UI text font.
+        // In ImGui 1.92, FontScaleMain/FontScaleDpi are applied at render time
+        // by AddText, so the atlas only needs to contain the unscaled size.
+        // DevicePanel calls GetFontBaked(FontSizeBase) to retrieve metrics for
+        // this exact baked size.
         const float kenney_size = themeFontSize > 0.0f ? themeFontSize : 16.0f;
 
         const std::string fontsDir = GetFontsDir();
