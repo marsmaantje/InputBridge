@@ -464,11 +464,19 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/themes"
 
 # Copy the fonts/ folder next to the executable at build time so the
 # program can find its fonts in the development build layout.
+# Map files (*.txt) are excluded — they are only needed to look up codepoints
+# when editing KenneyIcons.h and serve no purpose at runtime.
 add_custom_command(TARGET InputBridge POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
     "$<TARGET_FILE_DIR:InputBridge>/fonts"
     COMMENT "Copying fonts/ to build output directory"
+)
+add_custom_command(TARGET InputBridge POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        -DFONT_DIR="$<TARGET_FILE_DIR:InputBridge>/fonts"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RemoveFontMapFiles.cmake"
+    COMMENT "Removing font map files from build output directory"
 )
 
 # Install the fonts/ folder alongside the binary.

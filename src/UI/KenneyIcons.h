@@ -9,12 +9,57 @@
 // Font files are expected next to the executable inside:
 //   fonts/Kenney/<SubFolder>/<name>.ttf
 //
-// Every icon is defined as a pair:
-//   KENNEY_<NAME>_CP   — raw Unicode codepoint (ImWchar), for ImFontBaked::FindGlyphNoFallback()
-//   KENNEY_<NAME>      — UTF-8 string literal,            for ImDrawList::AddText()
+// The map .txt files next to each font list every glyph name and its
+// codepoint.  Use them to look up the U+XXXX value when adding a new icon,
+// then define a _CP constant here.  The UTF-8 string is derived automatically
+// by KenneyIconUTF8() below — no manual byte calculation needed.
 //
-// The two values always refer to the same glyph and are kept in the same place
-// so they can never drift out of sync.
+// Every icon is defined as a pair:
+//   KENNEY_<NAME>_CP  — raw Unicode codepoint (ImWchar), hand-picked from the map file
+//   KENNEY_<NAME>     — UTF-8 string literal,            computed by KenneyIconUTF8()
+
+#include "imgui.h"
+#include <array>
+#include <string_view>
+
+// ---------------------------------------------------------------------------
+// KenneyIconUTF8
+//
+// Converts a Private Use Area codepoint (U+E000-U+F8FF) to a 3-byte UTF-8
+// std::array at compile time.  Returns a null-terminated char array that can
+// be passed directly to ImDrawList::AddText().
+//
+// All codepoints in this range encode as:
+//   byte 0 = 0xE0 | (cp >> 12)        — always 0xEE for U+E000-U+EFFF
+//   byte 1 = 0x80 | ((cp >> 6) & 0x3F)
+//   byte 2 = 0x80 | (cp & 0x3F)
+//   byte 3 = 0x00                      — null terminator
+//
+// Usage:
+//   static constexpr auto buf = KenneyIconUTF8(KENNEY_STEAM_CONTROLLER_CP);
+//   draw_list->AddText(..., buf.data());
+//
+// The convenience macros KENNEY_<NAME> wrap this so call sites look identical
+// to a plain string literal.
+// ---------------------------------------------------------------------------
+constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
+{
+    return {{
+        static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)),
+        static_cast<char>(0x80 | ((cp >>  6) & 0x3F)),
+        static_cast<char>(0x80 | ((cp      ) & 0x3F)),
+        '\0'
+    }};
+}
+
+// Convenience macro: declares a static constexpr buffer and evaluates to a
+// const char* pointing to it.  Safe to use anywhere a string literal is
+// expected, including as a function argument.
+#define KENNEY_ICON_STR(cp) \
+    ([]() -> const char* { \
+        static constexpr auto _buf = KenneyIconUTF8(cp); \
+        return _buf.data(); \
+    }())
 
 // Sub-folder constants -------------------------------------------------------
 #define KENNEY_DIR_XBOX           "Kenney/Xbox/"
@@ -39,100 +84,82 @@
 #define KENNEY_FILE_GENERIC        "kenney_input_generic.ttf"
 
 // ---------------------------------------------------------------------------
-// UTF-8 encoding helper
-//
-// All Kenney codepoints live in the BMP Private Use Area (U+E000-U+F8FF),
-// which encodes as 3-byte UTF-8.  KENNEY_ICON_UTF8(cp) converts a codepoint
-// constant into the corresponding string literal at compile time.
-//
-// Formula for any U+EXYZ in this range:
-//   byte1 = 0xEE  (constant for U+E000-U+EFFF)
-//   byte2 = 0x80 | ((cp >> 6) & 0x3F)
-//   byte3 = 0x80 | (cp & 0x3F)
-//
-// Because the preprocessor cannot stringify computed hex values, the bytes
-// are pre-computed per icon and written as explicit escape sequences.
-// KENNEY_ICON_UTF8 is provided for documentation purposes; the per-icon
-// string macros below are the authoritative UTF-8 form.
-#define KENNEY_ICON_UTF8(cp) /* see per-icon _CP / string pairs below */
-
-// ---------------------------------------------------------------------------
 // Xbox icons  (kenney_input_xbox_series.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_XBOX_CONTROLLER_360_CP     0xE000
-#define KENNEY_XBOX_CONTROLLER_360        "\xEE\x80\x80"  // U+E000  controller_xbox360
+#define KENNEY_XBOX_CONTROLLER_360_CP     0xE000  // controller_xbox360
+#define KENNEY_XBOX_CONTROLLER_360        KENNEY_ICON_STR(KENNEY_XBOX_CONTROLLER_360_CP)
 
-#define KENNEY_XBOX_CONTROLLER_ONE_CP     0xE002
-#define KENNEY_XBOX_CONTROLLER_ONE        "\xEE\x80\x82"  // U+E002  controller_xboxone
+#define KENNEY_XBOX_CONTROLLER_ONE_CP     0xE002  // controller_xboxone
+#define KENNEY_XBOX_CONTROLLER_ONE        KENNEY_ICON_STR(KENNEY_XBOX_CONTROLLER_ONE_CP)
 
-#define KENNEY_XBOX_CONTROLLER_SERIES_CP  0xE003
-#define KENNEY_XBOX_CONTROLLER_SERIES     "\xEE\x80\x83"  // U+E003  controller_xboxseries
+#define KENNEY_XBOX_CONTROLLER_SERIES_CP  0xE003  // controller_xboxseries
+#define KENNEY_XBOX_CONTROLLER_SERIES     KENNEY_ICON_STR(KENNEY_XBOX_CONTROLLER_SERIES_CP)
 
 // ---------------------------------------------------------------------------
 // PlayStation icons  (kenney_input_playstation_series.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_PS_CONTROLLER_PS4_CP  0xE003
-#define KENNEY_PS_CONTROLLER_PS4     "\xEE\x80\x83"  // U+E003  controller_playstation4
+#define KENNEY_PS_CONTROLLER_PS4_CP  0xE003  // controller_playstation4
+#define KENNEY_PS_CONTROLLER_PS4     KENNEY_ICON_STR(KENNEY_PS_CONTROLLER_PS4_CP)
 
-#define KENNEY_PS_CONTROLLER_PS5_CP  0xE004
-#define KENNEY_PS_CONTROLLER_PS5     "\xEE\x80\x84"  // U+E004  controller_playstation5
+#define KENNEY_PS_CONTROLLER_PS5_CP  0xE004  // controller_playstation5
+#define KENNEY_PS_CONTROLLER_PS5     KENNEY_ICON_STR(KENNEY_PS_CONTROLLER_PS5_CP)
 
 // ---------------------------------------------------------------------------
 // Nintendo Switch icons  (kenney_input_nintendo_switch.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_SWITCH_CONTROLLER_CP      0xE000
-#define KENNEY_SWITCH_CONTROLLER         "\xEE\x80\x80"  // U+E000  controller_switch
+#define KENNEY_SWITCH_CONTROLLER_CP      0xE000  // controller_switch
+#define KENNEY_SWITCH_CONTROLLER         KENNEY_ICON_STR(KENNEY_SWITCH_CONTROLLER_CP)
 
-#define KENNEY_SWITCH_CONTROLLER_PRO_CP  0xE003
-#define KENNEY_SWITCH_CONTROLLER_PRO     "\xEE\x80\x83"  // U+E003  controller_switch_pro
+#define KENNEY_SWITCH_CONTROLLER_PRO_CP  0xE003  // controller_switch_pro
+#define KENNEY_SWITCH_CONTROLLER_PRO     KENNEY_ICON_STR(KENNEY_SWITCH_CONTROLLER_PRO_CP)
 
-#define KENNEY_SWITCH_JOYCON_DOWN_CP     0xE001
-#define KENNEY_SWITCH_JOYCON_DOWN        "\xEE\x80\x81"  // U+E001  controller_switch_joycon_down
+#define KENNEY_SWITCH_JOYCON_DOWN_CP     0xE001  // controller_switch_joycon_down
+#define KENNEY_SWITCH_JOYCON_DOWN        KENNEY_ICON_STR(KENNEY_SWITCH_JOYCON_DOWN_CP)
 
-#define KENNEY_SWITCH_JOYCON_UP_CP       0xE002
-#define KENNEY_SWITCH_JOYCON_UP          "\xEE\x80\x82"  // U+E002  controller_switch_joycon_up
+#define KENNEY_SWITCH_JOYCON_UP_CP       0xE002  // controller_switch_joycon_up
+#define KENNEY_SWITCH_JOYCON_UP          KENNEY_ICON_STR(KENNEY_SWITCH_JOYCON_UP_CP)
 
 // ---------------------------------------------------------------------------
 // Nintendo Wii icons  (kenney_input_nintendo_wii.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_WII_CONTROLLER_CLASSIC_CP  0xE000
-#define KENNEY_WII_CONTROLLER_CLASSIC     "\xEE\x80\x80"  // U+E000  controller_wii_classic
+#define KENNEY_WII_CONTROLLER_CLASSIC_CP  0xE000  // controller_wii_classic
+#define KENNEY_WII_CONTROLLER_CLASSIC     KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_CLASSIC_CP)
 
-#define KENNEY_WII_CONTROLLER_CP          0xE022
-#define KENNEY_WII_CONTROLLER             "\xEE\x80\xA2"  // U+E022  wii_controller
+#define KENNEY_WII_CONTROLLER_CP          0xE022  // wii_controller
+#define KENNEY_WII_CONTROLLER             KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_CP)
 
 // ---------------------------------------------------------------------------
 // Nintendo GameCube icons  (kenney_input_nintendo_gamecube.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_GC_CONTROLLER_CP  0xE014
-#define KENNEY_GC_CONTROLLER     "\xEE\x80\x94"  // U+E014  gamecube_controller
+#define KENNEY_GC_CONTROLLER_CP  0xE014  // gamecube_controller
+#define KENNEY_GC_CONTROLLER     KENNEY_ICON_STR(KENNEY_GC_CONTROLLER_CP)
 
 // ---------------------------------------------------------------------------
 // Keyboard & Mouse icons  (kenney_input_keyboard_&_mouse.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_KBM_KEYBOARD_CP  0xE000
-#define KENNEY_KBM_KEYBOARD     "\xEE\x80\x80"  // U+E000  keyboard
+#define KENNEY_KBM_KEYBOARD_CP  0xE000  // keyboard
+#define KENNEY_KBM_KEYBOARD     KENNEY_ICON_STR(KENNEY_KBM_KEYBOARD_CP)
 
-#define KENNEY_KBM_MOUSE_CP     0xE0E9
-#define KENNEY_KBM_MOUSE        "\xEE\x83\xA9"  // U+E0E9  mouse
+#define KENNEY_KBM_MOUSE_CP     0xE0E9  // mouse
+#define KENNEY_KBM_MOUSE        KENNEY_ICON_STR(KENNEY_KBM_MOUSE_CP)
 
 // ---------------------------------------------------------------------------
 // Steam Deck icons  (kenney_input_steam_deck.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_STEAMDECK_CONTROLLER_CP  0xE000
-#define KENNEY_STEAMDECK_CONTROLLER     "\xEE\x80\x80"  // U+E000  controller_steamdeck
+#define KENNEY_STEAMDECK_CONTROLLER_CP  0xE000  // controller_steamdeck
+#define KENNEY_STEAMDECK_CONTROLLER     KENNEY_ICON_STR(KENNEY_STEAMDECK_CONTROLLER_CP)
 
 // ---------------------------------------------------------------------------
 // Steam Controller icons  (kenney_input_steam_controller.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_STEAM_CONTROLLER_ICON_CP  0xE016
-#define KENNEY_STEAM_CONTROLLER_ICON     "\xEE\x80\x96"  // U+E016  controller_icon
+#define KENNEY_STEAM_CONTROLLER_ICON_CP  0xE016  // controller_icon
+#define KENNEY_STEAM_CONTROLLER_ICON     KENNEY_ICON_STR(KENNEY_STEAM_CONTROLLER_ICON_CP)
 
-#define KENNEY_STEAM_CONTROLLER_CP       0xE020
-#define KENNEY_STEAM_CONTROLLER          "\xEE\x80\xA0"  // U+E020  controller_steam
+#define KENNEY_STEAM_CONTROLLER_CP       0xE020  // controller_steam
+#define KENNEY_STEAM_CONTROLLER          KENNEY_ICON_STR(KENNEY_STEAM_CONTROLLER_CP)
 
 // ---------------------------------------------------------------------------
 // Generic icons  (kenney_input_generic.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_GENERIC_JOYSTICK_CP  0xE013
-#define KENNEY_GENERIC_JOYSTICK     "\xEE\x80\x93"  // U+E013  generic_joystick
+#define KENNEY_GENERIC_JOYSTICK_CP  0xE013  // generic_joystick
+#define KENNEY_GENERIC_JOYSTICK     KENNEY_ICON_STR(KENNEY_GENERIC_JOYSTICK_CP)
