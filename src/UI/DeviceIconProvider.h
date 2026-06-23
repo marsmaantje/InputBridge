@@ -63,11 +63,12 @@ struct KenneyFonts
 // ---------------------------------------------------------------------------
 struct DeviceIcon
 {
-    ImFont*     font  = nullptr;  ///< Kenney font containing the glyph (may be null)
-    const char* glyph = nullptr;  ///< UTF-8 encoded codepoint string   (may be null)
+    ImFont*     font      = nullptr;  ///< Kenney font containing the glyph (may be null)
+    const char* glyph     = nullptr;  ///< UTF-8 encoded codepoint string   (may be null)
+    ImWchar     codepoint = 0;        ///< Unicode codepoint — used to look up glyph metrics via ImFontBaked::FindGlyph()
 
-    /// Returns true when both fields are valid and the icon can be rendered.
-    bool IsValid() const { return font != nullptr && glyph != nullptr; }
+    /// Returns true when all fields are valid and the icon can be rendered.
+    bool IsValid() const { return font != nullptr && glyph != nullptr && codepoint != 0; }
 };
 
 class DeviceIconProvider

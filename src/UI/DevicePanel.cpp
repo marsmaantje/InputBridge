@@ -18,6 +18,7 @@
 #include "Visualizers/WiimoteVisualizer.h"
 #include "Visualizers/SensorVisualizer.h"
 #include <SDL3/SDL.h>
+#include <algorithm>
 
 #include <string>
 
@@ -352,34 +353,49 @@ void DrawDeviceItem(DeviceState&        dev,
 
         const float row_h   = rect_max.y - rect_min.y;
         const float pad_x   = ImGui::GetStyle().FramePadding.x;
-        const float arrow_w = font_sz; // ImGui's tree arrow occupies ~1 em
+        const float arrow_w = font_sz; // ImGui tree arrow occupies ~1 em
 
-        // In ImGui 1.92 GetFontSize() returns the size AFTER FontScaleMain and
-        // FontScaleDpi are applied — this is the correct value to pass to
-        // AddText so the icon respects the application's DPI/UI-scale setting.
-        //
-        // To get the Ascent/Size ratio we need ImFontBaked.  GetFontBaked()
-        // must be called with the UNSCALED base size (FontSizeBase), which is
-        // what the atlas was built from.  Passing GetFontSize() here would ask
-        // for a size the atlas doesn't have and cause a fallback/rescale.
-        const float scaled_sz   = ImGui::GetFontSize();             // post-scale
-        const float unscaled_sz = ImGui::GetStyle().FontSizeBase;   // pre-scale
+        // Kenney pictogram glyphs occupy only ~30-50% of their em square,
+        // with a large gap above (Y0) and below (Size-Y1).
+        // fill the row height minus a small inset, then position
+        // them precisely centred in the row.
+        const float unscaled_sz = ImGui::GetStyle().FontSizeBase;
+        const float scaled_sz   = ImGui::GetFontSize();
+        const float target_h    = row_h - ImGui::GetStyle().FramePadding.y * 2.0f;
 
-        // Compute how much we need to inflate the em-square so the *visible*
-        // glyph pixels end up exactly scaled_sz tall.
-        //   render_sz * (Ascent / Size) = scaled_sz
-        //   render_sz = scaled_sz * (Size / Ascent)
-        float render_sz = scaled_sz; // safe fallback
+        float render_sz      = scaled_sz; // fallback
+        float y0_scaled      = 0.0f;    // top gap inside em square at render_sz
+        float glyph_h_scaled = scaled_sz; // visible pixel height at render_sz
         if (ImFontBaked* baked = icon.font->GetFontBaked(unscaled_sz))
-            if (baked->Ascent > 0.0f)
-                render_sz = scaled_sz * (baked->Size / baked->Ascent);
+        {
+            const ImFontGlyph* g = baked->FindGlyphNoFallback(icon.codepoint);
+            if (g && baked->Size > 0.0f)
+            {
+                const float glyph_h = g->Y1 - g->Y0;
+                const float fill    = glyph_h / baked->Size;
+                if (fill > 0.01f)
+                {
+                    render_sz = std::min(target_h / fill, row_h); // never exceed row
+                    y0_scaled = (g->Y0 / baked->Size) * render_sz;
+                    // Store exact scaled glyph height for centring below.
+                    // (render_sz - y0_scaled would also include the descender
+                    // gap below Y1, pushing the icon upward — use exact value.)
+                    glyph_h_scaled = (glyph_h / baked->Size) * render_sz;
+                }
+            }
+        }
 
         // Horizontally: just after the tree-node arrow.
         const float glyph_x = rect_min.x + pad_x + arrow_w + 2.0f;
 
-        // Vertically: centre the inflated em-square in the row so the visible
-        // glyph lands perfectly centred.
-        const float glyph_y = rect_min.y + (row_h - render_sz) * 0.5f;
+        // Vertically: centre the VISIBLE pixels (not the em square) in the row.
+        //   row centre           = rect_min.y + row_h * 0.5
+        //   visible pixel centre = glyph_y + y0_scaled + glyph_h_scaled * 0.5
+        //   => glyph_y (top of em square) = row centre - y0_scaled - glyph_h_scaled/2
+        const float glyph_y = rect_min.y
+                              + (row_h * 0.5f)
+                              - y0_scaled
+                              - glyph_h_scaled * 0.5f;
 
         draw_list->AddText(icon.font, render_sz,
                            ImVec2(glyph_x, glyph_y),
