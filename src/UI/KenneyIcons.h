@@ -20,7 +20,6 @@
 
 #include "imgui.h"
 #include <array>
-#include <string_view>
 
 // ---------------------------------------------------------------------------
 // KenneyIconUTF8

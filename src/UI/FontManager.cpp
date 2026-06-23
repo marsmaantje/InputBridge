@@ -123,12 +123,16 @@ void RebuildFontAtlas()
         // Glyph range covering U+E000–U+F8FF (entire Kenney PUA block).
         static const ImWchar kenney_ranges[] = { 0xE000, 0xF8FF, 0 };
 
-        // Bake Kenney fonts at the same base size as the UI text font.
-        // In ImGui 1.92, FontScaleMain/FontScaleDpi are applied at render time
-        // by AddText, so the atlas only needs to contain the unscaled size.
-        // DevicePanel calls GetFontBaked(FontSizeBase) to retrieve metrics for
-        // this exact baked size.
-        const float kenney_size = themeFontSize > 0.0f ? themeFontSize : 16.0f;
+        // Kenney pictogram glyphs only occupy ~25-50% of their em square, so
+        // DevicePanel inflates render_sz by 1/fill to make the visible pixels
+        // match the text height.  The worst-case fill is ~0.25 (Steam Deck),
+        // meaning render_sz can reach themeFontSize / 0.25 = 4× themeFontSize.
+        // The atlas bake size must be >= the render_sz to avoid upscaling
+        // artefacts, so we bake at 4× to cover every font in the worst case.
+        // DevicePanel calls GetFontBaked(FontSizeBase) to retrieve glyph
+        // metrics; the bake at 4× FontSizeBase is what gets returned and used
+        // for the Y0/Y1 fill calculation.
+        const float kenney_size = (themeFontSize > 0.0f ? themeFontSize : 16.0f) * 4.0f;
 
         const std::string fontsDir = GetFontsDir();
 

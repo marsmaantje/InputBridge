@@ -359,14 +359,15 @@ void DrawDeviceItem(DeviceState&        dev,
         // with a large gap above (Y0) and below (Size-Y1).
         // fill the row height minus a small inset, then position
         // them precisely centred in the row.
-        const float unscaled_sz = ImGui::GetStyle().FontSizeBase;
+        const float unscaled_sz  = ImGui::GetStyle().FontSizeBase;
+        const float kenney_baked = unscaled_sz * 4.0f;
         const float scaled_sz   = ImGui::GetFontSize();
         const float target_h    = row_h - ImGui::GetStyle().FramePadding.y * 2.0f;
 
         float render_sz      = scaled_sz; // fallback
         float y0_scaled      = 0.0f;    // top gap inside em square at render_sz
         float glyph_h_scaled = scaled_sz; // visible pixel height at render_sz
-        if (ImFontBaked* baked = icon.font->GetFontBaked(unscaled_sz))
+        if (ImFontBaked* baked = icon.font->GetFontBaked(kenney_baked))
         {
             const ImFontGlyph* g = baked->FindGlyphNoFallback(icon.codepoint);
             if (g && baked->Size > 0.0f)
