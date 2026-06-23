@@ -22,9 +22,9 @@ KenneyFonts& KenneyFonts::Get()
 //
 // Matches well-known substrings in the lowercased device name.  The order of
 // checks matters: more specific brands/models are tested before generic ones.
-// Each return carries the ImFont*, the UTF-8 glyph string AND the raw Unicode
-// codepoint so DevicePanel can call ImFontBaked::FindGlyph() to read the
-// exact pixel bounds of the glyph and scale it correctly.
+// Each return carries { font, UTF-8 string, codepoint } — the string and
+// codepoint always come from the paired macros in KenneyIcons.h so they
+// can never drift out of sync.
 // ---------------------------------------------------------------------------
 
 DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
@@ -35,14 +35,14 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
     if (lower.find("steam deck") != std::string::npos
         || lower.find("steamdeck") != std::string::npos)
     {
-        return { fonts.steamDeck, KENNEY_STEAMDECK_CONTROLLER, 0xE000 };
+        return { fonts.steamDeck, KENNEY_STEAMDECK_CONTROLLER, KENNEY_STEAMDECK_CONTROLLER_CP };
     }
 
     // ── Steam Controller ───────────────────────────────────────────────────
     if (lower.find("steam controller") != std::string::npos
         || lower.find("steam ctrl") != std::string::npos)
     {
-        return { fonts.steamController, KENNEY_STEAM_CONTROLLER, 0xE020 };
+        return { fonts.steamController, KENNEY_STEAM_CONTROLLER, KENNEY_STEAM_CONTROLLER_CP };
     }
 
     // ── Xbox ───────────────────────────────────────────────────────────────
@@ -51,8 +51,8 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
         || lower.find("xinput") != std::string::npos)
     {
         if (lower.find("360") != std::string::npos)
-            return { fonts.xbox, KENNEY_XBOX_CONTROLLER_360,    0xE000 };
-        return     { fonts.xbox, KENNEY_XBOX_CONTROLLER_SERIES, 0xE003 };
+            return { fonts.xbox, KENNEY_XBOX_CONTROLLER_360,    KENNEY_XBOX_CONTROLLER_360_CP };
+        return     { fonts.xbox, KENNEY_XBOX_CONTROLLER_SERIES, KENNEY_XBOX_CONTROLLER_SERIES_CP };
     }
 
     // ── PlayStation / DualSense / DualShock ────────────────────────────────
@@ -64,8 +64,8 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
         || lower.find("ps5") != std::string::npos)
     {
         if (lower.find("dualsense") != std::string::npos || lower.find("ps5") != std::string::npos)
-            return { fonts.playstation, KENNEY_PS_CONTROLLER_PS5, 0xE004 };
-        return     { fonts.playstation, KENNEY_PS_CONTROLLER_PS4, 0xE003 };
+            return { fonts.playstation, KENNEY_PS_CONTROLLER_PS5, KENNEY_PS_CONTROLLER_PS5_CP };
+        return     { fonts.playstation, KENNEY_PS_CONTROLLER_PS4, KENNEY_PS_CONTROLLER_PS4_CP };
     }
 
     // ── Nintendo Switch (Joy-Con, Pro Controller) ──────────────────────────
@@ -76,8 +76,8 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
         || lower.find("pro controller") != std::string::npos)
     {
         if (lower.find("pro") != std::string::npos)
-            return { fonts.nintendoSwitch, KENNEY_SWITCH_CONTROLLER_PRO, 0xE003 };
-        return     { fonts.nintendoSwitch, KENNEY_SWITCH_CONTROLLER,     0xE000 };
+            return { fonts.nintendoSwitch, KENNEY_SWITCH_CONTROLLER_PRO, KENNEY_SWITCH_CONTROLLER_PRO_CP };
+        return     { fonts.nintendoSwitch, KENNEY_SWITCH_CONTROLLER,     KENNEY_SWITCH_CONTROLLER_CP };
     }
 
     // ── Nintendo Wii / Wiimote ─────────────────────────────────────────────
@@ -86,7 +86,7 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
         || lower.find("nintendo wii") != std::string::npos
         || lower.find("wii u") != std::string::npos)
     {
-        return { fonts.nintendoWii, KENNEY_WII_CONTROLLER, 0xE022 };
+        return { fonts.nintendoWii, KENNEY_WII_CONTROLLER, KENNEY_WII_CONTROLLER_CP };
     }
 
     // ── Nintendo GameCube ──────────────────────────────────────────────────
@@ -94,19 +94,19 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
         || lower.find("game cube") != std::string::npos
         || lower.find("ngc") != std::string::npos)
     {
-        return { fonts.nintendoGamecube, KENNEY_GC_CONTROLLER, 0xE014 };
+        return { fonts.nintendoGamecube, KENNEY_GC_CONTROLLER, KENNEY_GC_CONTROLLER_CP };
     }
 
     // ── Generic "Nintendo" fall-through → Switch icon ─────────────────────
     if (lower.find("nintendo") != std::string::npos)
     {
-        return { fonts.nintendoSwitch, KENNEY_SWITCH_CONTROLLER, 0xE000 };
+        return { fonts.nintendoSwitch, KENNEY_SWITCH_CONTROLLER, KENNEY_SWITCH_CONTROLLER_CP };
     }
 
     // ── Keyboard ───────────────────────────────────────────────────────────
     if (lower.find("keyboard") != std::string::npos)
     {
-        return { fonts.keyboardMouse, KENNEY_KBM_KEYBOARD, 0xE000 };
+        return { fonts.keyboardMouse, KENNEY_KBM_KEYBOARD, KENNEY_KBM_KEYBOARD_CP };
     }
 
     // ── Mouse ──────────────────────────────────────────────────────────────
@@ -114,11 +114,11 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
         || lower.find("trackpad") != std::string::npos
         || lower.find("touchpad") != std::string::npos)
     {
-        return { fonts.keyboardMouse, KENNEY_KBM_MOUSE, 0xE0E9 };
+        return { fonts.keyboardMouse, KENNEY_KBM_MOUSE, KENNEY_KBM_MOUSE_CP };
     }
 
     // ── Generic joystick / HOTAS / flight stick / steering wheel ──────────
-    return { fonts.generic, KENNEY_GENERIC_JOYSTICK, 0xE013 };
+    return { fonts.generic, KENNEY_GENERIC_JOYSTICK, KENNEY_GENERIC_JOYSTICK_CP };
 }
 
 // ---------------------------------------------------------------------------
