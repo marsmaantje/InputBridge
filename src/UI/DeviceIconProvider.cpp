@@ -39,9 +39,19 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
     }
 
     // ── Steam Controller ───────────────────────────────────────────────────
+    // Both glyph variants live in the same TTF; only the codepoint differs.
+    //   KENNEY_STEAM_CONTROLLER     (U+E020) — original oval-body design (V1 / D0G)
+    //   KENNEY_STEAM_CONTROLLER_NEW (U+E021) — redesigned rectangular body (V2 / HEADCRAB)
+    //
+    // SDL reports both generations with the same "Steam Controller" name string.
     if (lower.find("steam controller") != std::string::npos
         || lower.find("steam ctrl") != std::string::npos)
     {
+        // "steam controller v2" → canonical name set by DeviceFactory for V2 (HEADCRAB) hardware.
+        if (lower.find("v2") != std::string::npos)
+            return { fonts.steamController, KENNEY_STEAM_CONTROLLER_NEW, KENNEY_STEAM_CONTROLLER_NEW_CP };
+
+        // "steam controller v1", or any plain "steam controller" fallback → original design.
         return { fonts.steamController, KENNEY_STEAM_CONTROLLER, KENNEY_STEAM_CONTROLLER_CP };
     }
 

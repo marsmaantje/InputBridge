@@ -151,11 +151,11 @@ constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
 // ---------------------------------------------------------------------------
 // Steam Controller icons  (kenney_input_steam_controller.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_STEAM_CONTROLLER_ICON_CP  0xE016  // controller_icon
-#define KENNEY_STEAM_CONTROLLER_ICON     KENNEY_ICON_STR(KENNEY_STEAM_CONTROLLER_ICON_CP)
-
 #define KENNEY_STEAM_CONTROLLER_CP       0xE020  // controller_steam
 #define KENNEY_STEAM_CONTROLLER          KENNEY_ICON_STR(KENNEY_STEAM_CONTROLLER_CP)
+
+#define KENNEY_STEAM_CONTROLLER_NEW_CP   0xE021  // controller_steam_new
+#define KENNEY_STEAM_CONTROLLER_NEW      KENNEY_ICON_STR(KENNEY_STEAM_CONTROLLER_NEW_CP)
 
 // ---------------------------------------------------------------------------
 // Generic icons  (kenney_input_generic.ttf)

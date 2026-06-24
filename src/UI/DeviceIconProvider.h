@@ -33,15 +33,15 @@ struct DeviceState;
 // ---------------------------------------------------------------------------
 struct KenneyFonts
 {
-    ImFont* xbox          = nullptr;
-    ImFont* playstation   = nullptr;
-    ImFont* nintendoSwitch = nullptr;
-    ImFont* nintendoWii   = nullptr;
+    ImFont* xbox             = nullptr;
+    ImFont* playstation      = nullptr;
+    ImFont* nintendoSwitch   = nullptr;
+    ImFont* nintendoWii      = nullptr;
     ImFont* nintendoGamecube = nullptr;
-    ImFont* keyboardMouse = nullptr;
-    ImFont* steamDeck     = nullptr;
-    ImFont* steamController = nullptr;
-    ImFont* generic       = nullptr;
+    ImFont* keyboardMouse    = nullptr;
+    ImFont* steamDeck        = nullptr;
+    ImFont* steamController  = nullptr;
+    ImFont* generic          = nullptr;
 
     /// Invalidate all pointers (call before atlas rebuild).
     void Reset() { *this = KenneyFonts{}; }
