@@ -24,6 +24,7 @@
 //   ImGui::Text("%s", label.name.c_str());
 
 #include "UI/DeviceIconProvider.h"  // DeviceIcon
+#include <cstdint>
 #include <string>
 
 struct DeviceState;
@@ -49,6 +50,10 @@ public:
     /// Label for joystick button index `button`.
     static InputLabel GetButtonLabel(const DeviceState& dev, int button);
 
-    /// Label for joystick hat index `hat`.
-    static InputLabel GetHatLabel   (const DeviceState& dev, int hat);
+    /// Label for joystick hat index `hat`.  `hatValue` is the current
+    /// SDL_GetJoystickHat() bitmask (SDL_HAT_UP / DOWN / LEFT / RIGHT) — when
+    /// a direction is held, the icon is the matching device-specific D-Pad
+    /// glyph (reusing the same per-family set as GetButtonLabel) instead of a
+    /// static generic joystick icon.
+    static InputLabel GetHatLabel   (const DeviceState& dev, int hat, uint8_t hatValue);
 };

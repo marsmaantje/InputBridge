@@ -431,14 +431,30 @@ InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button
     return result;
 }
 
-InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat)
+InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint8_t hatValue)
 {
     InputLabel result;
     result.name = "Hat " + std::to_string(hat);
 
-    // Hats have no SDL gamepad binding equivalent (SDL maps them to dpad
-    // buttons internally); use the generic joystick icon.
-    (void)dev;
-    result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE013); // generic_joystick
+    // Hats have no SDL gamepad binding equivalent (SDL maps them to D-Pad
+    // buttons internally) — but we can still reuse the per-family D-Pad
+    // icon set from ButtonInfoFor() by translating the held direction(s)
+    // into the matching SDL_GAMEPAD_BUTTON_DPAD_* value.  Diagonals prefer
+    // the vertical component so e.g. UP+RIGHT shows the "Up" glyph.
+    SDL_GamepadButton dpad;
+    if      (hatValue & SDL_HAT_UP)    dpad = SDL_GAMEPAD_BUTTON_DPAD_UP;
+    else if (hatValue & SDL_HAT_DOWN)  dpad = SDL_GAMEPAD_BUTTON_DPAD_DOWN;
+    else if (hatValue & SDL_HAT_LEFT)  dpad = SDL_GAMEPAD_BUTTON_DPAD_LEFT;
+    else if (hatValue & SDL_HAT_RIGHT) dpad = SDL_GAMEPAD_BUTTON_DPAD_RIGHT;
+    else
+    {
+        // Centered — no direction held, fall back to the generic joystick glyph.
+        result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE013); // generic_joystick
+        return result;
+    }
+
+    const FontFamily fam  = GetFontFamily(dev);
+    ButtonInfo       info = ButtonInfoFor(dpad, fam);
+    result.icon = MakeIcon(InputFont(dev, info.fam), info.cp);
     return result;
 }

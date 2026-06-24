@@ -216,7 +216,7 @@ void GenericVisualizer::Draw(const DeviceState &dev) {
             else if (hat & SDL_HAT_RIGHT) dir = "RIGHT";
 
             if (m_showLabels) {
-                InputLabel lbl = InputLabelProvider::GetHatLabel(dev, i);
+                InputLabel lbl = InputLabelProvider::GetHatLabel(dev, i, hat);
                 DrawInlineIcon(lbl.icon);
                 ImGui::SameLine(0.0f, 4.0f);
                 ImGui::Text("%s: %s (%d)", lbl.name.c_str(), dir, hat);
