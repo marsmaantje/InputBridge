@@ -114,6 +114,11 @@ bool GamepadHaptics::IsSteamControllerV1() const {
     if (vid != VALVE_VENDOR_ID)
         return false;
 
+    // Exclude all V2 PIDs (HEADCRAB + TRITON) so this function is safe to
+    // call in any order.
+    if (IsSteamControllerV2())
+        return false;
+
     switch (pid)
     {
         case STEAM_CONTROLLER_USB_PID: // Wired D0G
@@ -131,18 +136,37 @@ bool GamepadHaptics::IsSteamControllerV2() const {
     const Uint16 vendor  = SDL_GetJoystickVendor(m_joystick);
     const Uint16 product = SDL_GetJoystickProduct(m_joystick);
 
-    // V2 (HEADCRAB / triton, 2026): matched by PID only.
-    // SDL 3.4.10 fixed SDL_RumbleGamepad for these via SDL_hidapi_steam_triton.c.
-    return (vendor == VALVE_VENDOR_ID &&
-            (product == STEAM_CONTROLLER_V2_USB_PID ||  // 0x1201 V2 wired
-             product == STEAM_CONTROLLER_V2_BT_PID));   // 0x1202 V2 Bluetooth
+    if (vendor != VALVE_VENDOR_ID)
+        return false;
+
+    // HEADCRAB hardware (SDL_hidapi_steam.c, present since SDL 3.x)
+    if (product == STEAM_CONTROLLER_V2_USB_PID ||
+        product == STEAM_CONTROLLER_V2_BT_PID)
+        return true;
+
+    // TRITON hardware (SDL_hidapi_steam_triton.c, added SDL 3.4.10).
+    // SDL reports all four Triton PIDs under the generic "Steam Controller"
+    // name (HIDAPI_SetDeviceName in InitDevice), so we must detect them by
+    // PID to produce the correct "Steam Controller V2" tab label.
+    if (product == STEAM_CONTROLLER_TRITON_USB_PID ||
+        product == STEAM_CONTROLLER_TRITON_BLE_PID ||
+        product == STEAM_CONTROLLER_PROTEUS_PID     ||
+        product == STEAM_CONTROLLER_NEREID_PID)
+        return true;
+
+    return false;
 }
 
 const char* GamepadHaptics::GetControllerTypeName() const {
     if (IsDualSense())          return "DualSense";
     if (IsXboxController())     return "Xbox";
-    if (IsSteamControllerV1())  return "Steam Controller V1";
+    // V2 must be checked before V1: IsSteamControllerV1() includes the
+    // undocumented 0x1105 PID which can overlap with certain V2 firmware
+    // revisions.  Checking V2 first guarantees the correct name is returned
+    // regardless of PID ordering, consistent with the PlayRumble guard
+    // (!IsSteamControllerV2() && IsSteamControllerV1()).
     if (IsSteamControllerV2())  return "Steam Controller V2";
+    if (IsSteamControllerV1())  return "Steam Controller V1";
     return "Generic Gamepad";
 }
 
