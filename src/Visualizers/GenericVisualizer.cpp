@@ -4,6 +4,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include <SDL3/SDL.h>
+#include <algorithm>
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -20,10 +21,15 @@ void DrawInlineIcon(const DeviceIcon& icon)
 
     const float textH = ImGui::GetTextLineHeight();
 
-    // Measure the visible pixel height of this glyph so we can scale it to
-    // match the text line height precisely.
+    // Kenney pictogram glyphs occupy only ~30-50% of their em square, with a
+    // large gap above and below, so we scale the *visible* pixel height up to
+    // match the text line — but never beyond it, or the icon cell ends up
+    // wider than the row is tall (this is the same approach DevicePanel.cpp
+    // uses for the device-header icon).
     const float bakeSize   = ImGui::GetStyle().FontSizeBase * 4.0f;
     float       renderSize = textH; // fallback: render at 1:1 em
+    float       y0_scaled  = 0.0f;
+    float       glyphH_scaled = textH;
 
     if (ImFontBaked* baked = icon.font->GetFontBaked(bakeSize))
     {
@@ -33,23 +39,31 @@ void DrawInlineIcon(const DeviceIcon& icon)
             const float glyphH = g->Y1 - g->Y0;
             const float fill   = glyphH / baked->Size;
             if (fill > 0.01f)
-                renderSize = textH / fill;
+            {
+                renderSize    = std::min(textH / fill, textH * 2.5f); // clamp: never balloon the cell
+                y0_scaled     = (g->Y0 / baked->Size) * renderSize;
+                glyphH_scaled = (glyphH / baked->Size) * renderSize;
+            }
         }
     }
 
-    // Vertically centre the em-square so the visible pixels sit on the
-    // text baseline band.
-    const float cursorY   = ImGui::GetCursorScreenPos().y;
-    const float offsetY   = (textH - renderSize) * 0.5f;
-    ImVec2      iconPos   = { ImGui::GetCursorScreenPos().x,
-                               cursorY + offsetY };
+    // Reserve a square cell exactly one text-line tall, regardless of the
+    // glyph's em-square size, so the icon column stays a consistent width
+    // and lines up with the row instead of overflowing it.
+    const float cellSize  = textH;
+    const float cursorPos0X = ImGui::GetCursorScreenPos().x;
+    const float cursorPos0Y = ImGui::GetCursorScreenPos().y;
 
-    // Reserve a square cursor-advance equal to the render size.
-    ImGui::Dummy(ImVec2(renderSize, textH));
-    ImGui::SameLine(0.0f, 0.0f);
+    // Centre the glyph's VISIBLE pixels (not its em square) within the cell,
+    // both horizontally and vertically.
+    const float iconX = cursorPos0X + (cellSize - renderSize) * 0.5f;
+    const float iconY = cursorPos0Y + (cellSize * 0.5f) - y0_scaled - glyphH_scaled * 0.5f;
+
+    ImGui::Dummy(ImVec2(cellSize, cellSize));
+    ImGui::SameLine(0.0f, 4.0f);
 
     ImGui::GetWindowDrawList()->AddText(
-        icon.font, renderSize, iconPos,
+        icon.font, renderSize, ImVec2(iconX, iconY),
         ImGui::GetColorU32(ImGuiCol_Text),
         icon.glyph);
 }
@@ -81,10 +95,17 @@ void GenericVisualizer::Draw(const DeviceState &dev) {
 
     // ── Axes ─────────────────────────────────────────────────────────────
     if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // Size the label column from real text metrics so values are never
+        // clipped — e.g. "Right Trigger: -32768" is the longest realistic
+        // "name: value" pairing (axis values range -32768..32767).
+        const float labelColWidth =
+            ImGui::CalcTextSize("Right Trigger: -32768").x
+            + ImGui::GetStyle().CellPadding.x * 2.0f;
+
         if (ImGui::BeginTable("AxesTable", 3,
                 ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("Icon",  ImGuiTableColumnFlags_WidthFixed,   28.0f);
-            ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,  150.0f);
+            ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,  labelColWidth);
             ImGui::TableSetupColumn("Bar",   ImGuiTableColumnFlags_WidthStretch);
 
             for (int i = 0; i < dev.num_axes; ++i) {
@@ -128,9 +149,14 @@ void GenericVisualizer::Draw(const DeviceState &dev) {
             // Named mode: one row per button with icon + name + active highlight
             if (ImGui::BeginTable("ButtonsTable", 3,
                     ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
+                // "PRESSED" is the widest string this column ever shows.
+                const float stateColWidth =
+                    ImGui::CalcTextSize("PRESSED").x
+                    + ImGui::GetStyle().CellPadding.x * 2.0f;
+
                 ImGui::TableSetupColumn("Icon",  ImGuiTableColumnFlags_WidthFixed,  28.0f);
                 ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed,  50.0f);
+                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed,  stateColWidth);
 
                 for (int i = 0; i < dev.num_buttons; ++i) {
                     const bool pressed = SDL_GetJoystickButton(dev.joystick, i) != 0;

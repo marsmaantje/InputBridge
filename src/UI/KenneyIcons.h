@@ -399,3 +399,9 @@ constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
 #define KENNEY_STEAM_STICK_HORIZONTAL         KENNEY_ICON_STR(KENNEY_STEAM_STICK_HORIZONTAL_CP)
 #define KENNEY_STEAM_STICK_VERTICAL_CP        0xE063  // steam_stick_vertical
 #define KENNEY_STEAM_STICK_VERTICAL           KENNEY_ICON_STR(KENNEY_STEAM_STICK_VERTICAL_CP)
+#define KENNEY_STEAM_STICK_L_PRESS_CP         0xE05E  // steam_stick_l_press
+#define KENNEY_STEAM_STICK_L_PRESS            KENNEY_ICON_STR(KENNEY_STEAM_STICK_L_PRESS_CP)
+#define KENNEY_STEAM_PAD_CP                   0xE04F  // steam_pad (right trackpad, swipe)
+#define KENNEY_STEAM_PAD                      KENNEY_ICON_STR(KENNEY_STEAM_PAD_CP)
+#define KENNEY_STEAM_PAD_CENTER_CP            0xE050  // steam_pad_center (right trackpad, click)
+#define KENNEY_STEAM_PAD_CENTER               KENNEY_ICON_STR(KENNEY_STEAM_PAD_CENTER_CP)

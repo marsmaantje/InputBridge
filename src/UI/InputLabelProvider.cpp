@@ -58,66 +58,79 @@ FontFamily GetFontFamily(const DeviceState& dev)
 // SDL_GamepadAxis → human name + codepoint for each supported font family.
 // Returns {name, codepoint} where codepoint==0 means no icon available.
 // ---------------------------------------------------------------------------
-struct AxisInfo { const char* name; ImWchar cp; };
+// `fam` records which font the codepoint belongs to (Unknown == the shared
+// generic font).  This lets the caller pick the matching ImFont* per-icon
+// instead of per-device, so a family-specific lookup that falls through to
+// the generic catch-all below never gets rendered with the wrong font (the
+// Kenney fonts share overlapping codepoints, so doing that draws whatever
+// unrelated glyph happens to live at that slot in the device's own font).
+struct AxisInfo { const char* name; ImWchar cp; FontFamily fam = FontFamily::Unknown; };
 
 AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
 {
+    // Tags a family-specific match with the font family it came from.
+    auto withFam = [fam](const char* name, ImWchar cp) -> AxisInfo { return { name, cp, fam }; };
+
     switch (fam)
     {
     case FontFamily::Xbox:
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE051 }; // xbox_stick_l_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE056 }; // xbox_stick_l_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Stick X",     0xE059 }; // xbox_stick_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE05E }; // xbox_stick_r_vertical
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return { "Left Trigger",      0xE047 }; // xbox_lt
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return { "Right Trigger",     0xE04D }; // xbox_rt
+        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE051); // xbox_stick_l_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE056); // xbox_stick_l_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE059); // xbox_stick_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE05E); // xbox_stick_r_vertical
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("Left Trigger",      0xE047); // xbox_lt
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("Right Trigger",     0xE04D); // xbox_rt
         default: break;
         }
         break;
 
     case FontFamily::PlayStation:
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE064 }; // playstation_stick_l_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE069 }; // playstation_stick_l_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Stick X",     0xE06C }; // playstation_stick_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE071 }; // playstation_stick_r_vertical
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return { "L2",                0xE07A }; // playstation_trigger_l2
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return { "R2",                0xE082 }; // playstation_trigger_r2
+        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE064); // playstation_stick_l_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE069); // playstation_stick_l_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE06C); // playstation_stick_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE071); // playstation_stick_r_vertical
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("L2",                0xE07A); // playstation_trigger_l2
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("R2",                0xE082); // playstation_trigger_r2
         default: break;
         }
         break;
 
     case FontFamily::Switch:
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE05C }; // switch_stick_l_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE061 }; // switch_stick_l_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Stick X",     0xE064 }; // switch_stick_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE069 }; // switch_stick_r_vertical
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return { "ZL",                0xE01C }; // switch_button_zl
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return { "ZR",                0xE01E }; // switch_button_zr
+        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE05C); // switch_stick_l_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE061); // switch_stick_l_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE064); // switch_stick_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE069); // switch_stick_r_vertical
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("ZL",                0xE01C); // switch_button_zl
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("ZR",                0xE01E); // switch_button_zr
         default: break;
         }
         break;
 
     case FontFamily::SteamDeck:
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE032 }; // steamdeck_stick_l_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE037 }; // steamdeck_stick_l_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Stick X",     0xE03A }; // steamdeck_stick_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE03F }; // steamdeck_stick_r_vertical
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return { "L2",                0xE009 }; // steamdeck_button_l2
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return { "R2",                0xE015 }; // steamdeck_button_r2
+        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE032); // steamdeck_stick_l_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE037); // steamdeck_stick_l_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE03A); // steamdeck_stick_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE03F); // steamdeck_stick_r_vertical
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("L2",                0xE009); // steamdeck_button_l2
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("R2",                0xE015); // steamdeck_button_r2
         default: break;
         }
         break;
 
     case FontFamily::SteamController:
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE05D }; // steam_stick_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE063 }; // steam_stick_vertical
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return { "Left Trigger",      0xE04D }; // steam_lt
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return { "Right Trigger",     0xE059 }; // steam_rt
+        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE05D); // steam_stick_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE063); // steam_stick_vertical
+        // The Steam Controller has no second analog stick — SDL maps the
+        // right trackpad's swipe to RIGHTX/RIGHTY for gamepad-API compatibility.
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Pad X",       0xE04F); // steam_pad
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Pad Y",       0xE04F); // steam_pad
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("Left Trigger",      0xE04D); // steam_lt
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("Right Trigger",     0xE059); // steam_rt
         default: break;
         }
         break;
@@ -126,7 +139,9 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
         break;
     }
 
-    // Generic fallback names (no icon for unnamed SDL axes)
+    // Generic fallback names (no icon for unnamed SDL axes).  Left untagged
+    // (fam defaults to Unknown) so InputFont() always resolves these to the
+    // shared generic font, regardless of which device this was requested for.
     switch (ga) {
     case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE01D }; // generic_stick_horizontal
     case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE023 }; // generic_stick_vertical
@@ -141,111 +156,118 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
 // ---------------------------------------------------------------------------
 // SDL_GamepadButton → human name + codepoint for each supported font family.
 // ---------------------------------------------------------------------------
-struct ButtonInfo { const char* name; ImWchar cp; };
+struct ButtonInfo { const char* name; ImWchar cp; FontFamily fam = FontFamily::Unknown; };
 
 ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
 {
+    // Tags a family-specific match with the font family it came from.
+    auto withFam = [fam](const char* name, ImWchar cp) -> ButtonInfo { return { name, cp, fam }; };
+
     switch (fam)
     {
     case FontFamily::Xbox:
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:           return { "A",             0xE004 }; // xbox_button_a
-        case SDL_GAMEPAD_BUTTON_EAST:            return { "B",             0xE006 }; // xbox_button_b
-        case SDL_GAMEPAD_BUTTON_WEST:            return { "X",             0xE01E }; // xbox_button_x
-        case SDL_GAMEPAD_BUTTON_NORTH:           return { "Y",             0xE020 }; // xbox_button_y
-        case SDL_GAMEPAD_BUTTON_BACK:            return { "View",          0xE01C }; // xbox_button_view
-        case SDL_GAMEPAD_BUTTON_GUIDE:           return { "Guide",         0xE041 }; // xbox_guide
-        case SDL_GAMEPAD_BUTTON_START:           return { "Menu",          0xE014 }; // xbox_button_menu
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return { "LS",            0xE045 }; // xbox_ls
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return { "RS",            0xE04B }; // xbox_rs
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return { "LB",            0xE043 }; // xbox_lb
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return { "RB",            0xE049 }; // xbox_rb
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return { "D-Pad Up",      0xE035 }; // xbox_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return { "D-Pad Down",    0xE024 }; // xbox_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return { "D-Pad Left",    0xE028 }; // xbox_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return { "D-Pad Right",   0xE02B }; // xbox_dpad_right
+        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("A",             0xE004); // xbox_button_a
+        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("B",             0xE006); // xbox_button_b
+        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("X",             0xE01E); // xbox_button_x
+        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Y",             0xE020); // xbox_button_y
+        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("View",          0xE01C); // xbox_button_view
+        case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("Guide",         0xE041); // xbox_guide
+        case SDL_GAMEPAD_BUTTON_START:           return withFam("Menu",          0xE014); // xbox_button_menu
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("LS",            0xE045); // xbox_ls
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("RS",            0xE04B); // xbox_rs
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("LB",            0xE043); // xbox_lb
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("RB",            0xE049); // xbox_rb
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE035); // xbox_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE024); // xbox_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE028); // xbox_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE02B); // xbox_dpad_right
         default: break;
         }
         break;
 
     case FontFamily::PlayStation:
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:           return { "Cross",         0xE049 }; // playstation_button_cross
-        case SDL_GAMEPAD_BUTTON_EAST:            return { "Circle",        0xE03F }; // playstation_button_circle
-        case SDL_GAMEPAD_BUTTON_WEST:            return { "Square",        0xE04F }; // playstation_button_square
-        case SDL_GAMEPAD_BUTTON_NORTH:           return { "Triangle",      0xE051 }; // playstation_button_triangle
-        case SDL_GAMEPAD_BUTTON_BACK:            return { "Share/Create",  0xE01C }; // playstation5_button_create (general)
-        case SDL_GAMEPAD_BUTTON_GUIDE:           return { "PS",            0xE03D }; // playstation_button_analog
-        case SDL_GAMEPAD_BUTTON_START:           return { "Options",       0xE022 }; // playstation5_button_options
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return { "L3",            0xE04B }; // playstation_button_l3
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return { "R3",            0xE04D }; // playstation_button_r3
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return { "L1",            0xE076 }; // playstation_trigger_l1
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return { "R1",            0xE07E }; // playstation_trigger_r1
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return { "D-Pad Up",      0xE05E }; // playstation_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return { "D-Pad Down",    0xE055 }; // playstation_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return { "D-Pad Left",    0xE059 }; // playstation_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return { "D-Pad Right",   0xE05C }; // playstation_dpad_right
+        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("Cross",         0xE049); // playstation_button_cross
+        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("Circle",        0xE03F); // playstation_button_circle
+        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("Square",        0xE04F); // playstation_button_square
+        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Triangle",      0xE051); // playstation_button_triangle
+        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Share/Create",  0xE01C); // playstation5_button_create (general)
+        case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("PS",            0xE03D); // playstation_button_analog
+        case SDL_GAMEPAD_BUTTON_START:           return withFam("Options",       0xE022); // playstation5_button_options
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L3",            0xE04B); // playstation_button_l3
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R3",            0xE04D); // playstation_button_r3
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("L1",            0xE076); // playstation_trigger_l1
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("R1",            0xE07E); // playstation_trigger_r1
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE05E); // playstation_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE055); // playstation_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE059); // playstation_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE05C); // playstation_dpad_right
         default: break;
         }
         break;
 
     case FontFamily::Switch:
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:           return { "B",             0xE006 }; // switch_button_b
-        case SDL_GAMEPAD_BUTTON_EAST:            return { "A",             0xE004 }; // switch_button_a
-        case SDL_GAMEPAD_BUTTON_WEST:            return { "Y",             0xE01A }; // switch_button_y
-        case SDL_GAMEPAD_BUTTON_NORTH:           return { "X",             0xE018 }; // switch_button_x
-        case SDL_GAMEPAD_BUTTON_BACK:            return { "Minus",         0xE00C }; // switch_button_minus
-        case SDL_GAMEPAD_BUTTON_GUIDE:           return { "Home",          0xE008 }; // switch_button_home
-        case SDL_GAMEPAD_BUTTON_START:           return { "Plus",          0xE00E }; // switch_button_plus
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return { "L Stick Press", 0xE05E }; // switch_stick_l_press
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return { "R Stick Press", 0xE066 }; // switch_stick_r_press
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return { "L",             0xE00A }; // switch_button_l
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return { "R",             0xE010 }; // switch_button_r
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return { "D-Pad Up",      0xE03C }; // switch_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return { "D-Pad Down",    0xE033 }; // switch_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return { "D-Pad Left",    0xE037 }; // switch_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return { "D-Pad Right",   0xE03A }; // switch_dpad_right
+        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("B",             0xE006); // switch_button_b
+        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("A",             0xE004); // switch_button_a
+        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("Y",             0xE01A); // switch_button_y
+        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("X",             0xE018); // switch_button_x
+        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Minus",         0xE00C); // switch_button_minus
+        case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("Home",          0xE008); // switch_button_home
+        case SDL_GAMEPAD_BUTTON_START:           return withFam("Plus",          0xE00E); // switch_button_plus
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L Stick Press", 0xE05E); // switch_stick_l_press
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R Stick Press", 0xE066); // switch_stick_r_press
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("L",             0xE00A); // switch_button_l
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("R",             0xE010); // switch_button_r
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE03C); // switch_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE033); // switch_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE037); // switch_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE03A); // switch_dpad_right
         default: break;
         }
         break;
 
     case FontFamily::SteamDeck:
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:           return { "A",             0xE001 }; // steamdeck_button_a
-        case SDL_GAMEPAD_BUTTON_EAST:            return { "B",             0xE003 }; // steamdeck_button_b
-        case SDL_GAMEPAD_BUTTON_WEST:            return { "X",             0xE01D }; // steamdeck_button_x
-        case SDL_GAMEPAD_BUTTON_NORTH:           return { "Y",             0xE01F }; // steamdeck_button_y
-        case SDL_GAMEPAD_BUTTON_BACK:            return { "View",          0xE01B }; // steamdeck_button_view
-        case SDL_GAMEPAD_BUTTON_GUIDE:           return { "Guide",         0xE005 }; // steamdeck_button_guide
-        case SDL_GAMEPAD_BUTTON_START:           return { "Options",       0xE00F }; // steamdeck_button_options
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return { "L Stick Press", 0xE034 }; // steamdeck_stick_l_press
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return { "R Stick Press", 0xE03C }; // steamdeck_stick_r_press
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return { "L1",            0xE007 }; // steamdeck_button_l1
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return { "R1",            0xE013 }; // steamdeck_button_r1
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return { "D-Pad Up",      0xE02C }; // steamdeck_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return { "D-Pad Down",    0xE023 }; // steamdeck_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return { "D-Pad Left",    0xE027 }; // steamdeck_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return { "D-Pad Right",   0xE02A }; // steamdeck_dpad_right
+        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("A",             0xE001); // steamdeck_button_a
+        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("B",             0xE003); // steamdeck_button_b
+        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("X",             0xE01D); // steamdeck_button_x
+        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Y",             0xE01F); // steamdeck_button_y
+        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("View",          0xE01B); // steamdeck_button_view
+        case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("Guide",         0xE005); // steamdeck_button_guide
+        case SDL_GAMEPAD_BUTTON_START:           return withFam("Options",       0xE00F); // steamdeck_button_options
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L Stick Press", 0xE034); // steamdeck_stick_l_press
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R Stick Press", 0xE03C); // steamdeck_stick_r_press
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("L1",            0xE007); // steamdeck_button_l1
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("R1",            0xE013); // steamdeck_button_r1
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE02C); // steamdeck_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE023); // steamdeck_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE027); // steamdeck_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE02A); // steamdeck_dpad_right
         default: break;
         }
         break;
 
     case FontFamily::SteamController:
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:           return { "A",             0xE022 }; // steam_button_a
-        case SDL_GAMEPAD_BUTTON_EAST:            return { "B",             0xE024 }; // steam_button_b
-        case SDL_GAMEPAD_BUTTON_WEST:            return { "X",             0xE036 }; // steam_button_x
-        case SDL_GAMEPAD_BUTTON_NORTH:           return { "Y",             0xE038 }; // steam_button_y
-        case SDL_GAMEPAD_BUTTON_BACK:            return { "Back",          0xE026 }; // steam_button_back_icon
-        case SDL_GAMEPAD_BUTTON_GUIDE:           return { "Steam",         0xE016 }; // controller_icon
-        case SDL_GAMEPAD_BUTTON_START:           return { "Start",         0xE034 }; // steam_button_start_icon
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return { "LB",            0xE049 }; // steam_lb
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return { "RB",            0xE055 }; // steam_rb
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return { "D-Pad Up",      0xE045 }; // steam_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return { "D-Pad Down",    0xE03C }; // steam_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return { "D-Pad Left",    0xE040 }; // steam_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return { "D-Pad Right",   0xE043 }; // steam_dpad_right
+        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("A",             0xE022); // steam_button_a
+        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("B",             0xE024); // steam_button_b
+        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("X",             0xE036); // steam_button_x
+        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Y",             0xE038); // steam_button_y
+        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Back",          0xE026); // steam_button_back_icon
+        case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("Steam",         0xE016); // controller_icon
+        case SDL_GAMEPAD_BUTTON_START:           return withFam("Start",         0xE034); // steam_button_start_icon
+        // Left stick click is a real analog stick press; the right side is the
+        // trackpad's click, which has its own dedicated glyph in this font.
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L Stick",       0xE05E); // steam_stick_l_press
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("Pad Click",     0xE050); // steam_pad_center
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("LB",            0xE049); // steam_lb
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("RB",            0xE055); // steam_rb
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE045); // steam_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE03C); // steam_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE040); // steam_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE043); // steam_dpad_right
         default: break;
         }
         break;
@@ -254,7 +276,9 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         break;
     }
 
-    // Generic fallback for unknown family
+    // Generic fallback for unknown family.  Left untagged (fam defaults to
+    // Unknown) so InputFont() always resolves these to the shared generic
+    // font, regardless of which device this was requested for.
     switch (gb) {
     case SDL_GAMEPAD_BUTTON_SOUTH:           return { "South",        0xE000 }; // generic_button
     case SDL_GAMEPAD_BUTTON_EAST:            return { "East",         0xE000 };
@@ -318,7 +342,6 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
         // Walk every SDL_GamepadAxis and check whether its binding maps to
         // this joystick axis.
         const FontFamily fam  = GetFontFamily(dev);
-        ImFont*          font = InputFont(dev, fam);
 
         int count = 0;
         SDL_GamepadBinding** bindings = SDL_GetGamepadBindings(dev.gamepad, &count);
@@ -333,7 +356,12 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
                     {
                         AxisInfo info = AxisInfoFor(bind->output.axis.axis, fam);
                         result.name = info.name;
-                        result.icon = MakeIcon(font, info.cp);
+                        // info.fam reflects which font this specific codepoint
+                        // belongs to (it may differ from the device's overall
+                        // family when no device-specific icon exists for this
+                        // particular axis) — always resolve the font from it,
+                        // never from the device's family directly.
+                        result.icon = MakeIcon(InputFont(dev, info.fam), info.cp);
                         SDL_free(bindings);
                         return result;
                     }
@@ -365,7 +393,6 @@ InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button
     if (dev.gamepad)
     {
         const FontFamily fam  = GetFontFamily(dev);
-        ImFont*          font = InputFont(dev, fam);
 
         int count = 0;
         SDL_GamepadBinding** bindings = SDL_GetGamepadBindings(dev.gamepad, &count);
@@ -380,7 +407,10 @@ InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button
                     {
                         ButtonInfo info = ButtonInfoFor(bind->output.button, fam);
                         result.name = info.name;
-                        result.icon = MakeIcon(font, info.cp);
+                        // See GetAxisLabel: resolve the font from info.fam, not
+                        // the device's family, so a fallthrough to the generic
+                        // table never gets drawn with the wrong font.
+                        result.icon = MakeIcon(InputFont(dev, info.fam), info.cp);
                         SDL_free(bindings);
                         return result;
                     }
