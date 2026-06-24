@@ -160,5 +160,242 @@ constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
 // ---------------------------------------------------------------------------
 // Generic icons  (kenney_input_generic.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_GENERIC_JOYSTICK_CP  0xE013  // generic_joystick
-#define KENNEY_GENERIC_JOYSTICK     KENNEY_ICON_STR(KENNEY_GENERIC_JOYSTICK_CP)
+#define KENNEY_GENERIC_BUTTON_CP              0xE000  // generic_button
+#define KENNEY_GENERIC_BUTTON                 KENNEY_ICON_STR(KENNEY_GENERIC_BUTTON_CP)
+
+#define KENNEY_GENERIC_JOYSTICK_CP            0xE013  // generic_joystick
+#define KENNEY_GENERIC_JOYSTICK               KENNEY_ICON_STR(KENNEY_GENERIC_JOYSTICK_CP)
+
+#define KENNEY_GENERIC_STICK_CP               0xE01B  // generic_stick
+#define KENNEY_GENERIC_STICK                  KENNEY_ICON_STR(KENNEY_GENERIC_STICK_CP)
+
+#define KENNEY_GENERIC_STICK_HORIZONTAL_CP    0xE01D  // generic_stick_horizontal
+#define KENNEY_GENERIC_STICK_HORIZONTAL       KENNEY_ICON_STR(KENNEY_GENERIC_STICK_HORIZONTAL_CP)
+
+#define KENNEY_GENERIC_STICK_PRESS_CP         0xE01F  // generic_stick_press
+#define KENNEY_GENERIC_STICK_PRESS            KENNEY_ICON_STR(KENNEY_GENERIC_STICK_PRESS_CP)
+
+#define KENNEY_GENERIC_STICK_VERTICAL_CP      0xE023  // generic_stick_vertical
+#define KENNEY_GENERIC_STICK_VERTICAL         KENNEY_ICON_STR(KENNEY_GENERIC_STICK_VERTICAL_CP)
+
+// ---------------------------------------------------------------------------
+// Xbox per-input icons  (kenney_input_xbox_series.ttf)
+// ---------------------------------------------------------------------------
+#define KENNEY_XBOX_BUTTON_A_CP               0xE004  // xbox_button_a
+#define KENNEY_XBOX_BUTTON_A                  KENNEY_ICON_STR(KENNEY_XBOX_BUTTON_A_CP)
+#define KENNEY_XBOX_BUTTON_B_CP               0xE006  // xbox_button_b
+#define KENNEY_XBOX_BUTTON_B                  KENNEY_ICON_STR(KENNEY_XBOX_BUTTON_B_CP)
+#define KENNEY_XBOX_BUTTON_X_CP               0xE01E  // xbox_button_x
+#define KENNEY_XBOX_BUTTON_X                  KENNEY_ICON_STR(KENNEY_XBOX_BUTTON_X_CP)
+#define KENNEY_XBOX_BUTTON_Y_CP               0xE020  // xbox_button_y
+#define KENNEY_XBOX_BUTTON_Y                  KENNEY_ICON_STR(KENNEY_XBOX_BUTTON_Y_CP)
+#define KENNEY_XBOX_BUTTON_VIEW_CP            0xE01C  // xbox_button_view
+#define KENNEY_XBOX_BUTTON_VIEW               KENNEY_ICON_STR(KENNEY_XBOX_BUTTON_VIEW_CP)
+#define KENNEY_XBOX_BUTTON_MENU_CP            0xE014  // xbox_button_menu
+#define KENNEY_XBOX_BUTTON_MENU               KENNEY_ICON_STR(KENNEY_XBOX_BUTTON_MENU_CP)
+#define KENNEY_XBOX_GUIDE_CP                  0xE041  // xbox_guide
+#define KENNEY_XBOX_GUIDE                     KENNEY_ICON_STR(KENNEY_XBOX_GUIDE_CP)
+#define KENNEY_XBOX_LB_CP                     0xE043  // xbox_lb
+#define KENNEY_XBOX_LB                        KENNEY_ICON_STR(KENNEY_XBOX_LB_CP)
+#define KENNEY_XBOX_RB_CP                     0xE049  // xbox_rb
+#define KENNEY_XBOX_RB                        KENNEY_ICON_STR(KENNEY_XBOX_RB_CP)
+#define KENNEY_XBOX_LT_CP                     0xE047  // xbox_lt
+#define KENNEY_XBOX_LT                        KENNEY_ICON_STR(KENNEY_XBOX_LT_CP)
+#define KENNEY_XBOX_RT_CP                     0xE04D  // xbox_rt
+#define KENNEY_XBOX_RT                        KENNEY_ICON_STR(KENNEY_XBOX_RT_CP)
+#define KENNEY_XBOX_LS_CP                     0xE045  // xbox_ls
+#define KENNEY_XBOX_LS                        KENNEY_ICON_STR(KENNEY_XBOX_LS_CP)
+#define KENNEY_XBOX_RS_CP                     0xE04B  // xbox_rs
+#define KENNEY_XBOX_RS                        KENNEY_ICON_STR(KENNEY_XBOX_RS_CP)
+#define KENNEY_XBOX_DPAD_UP_CP                0xE035  // xbox_dpad_up
+#define KENNEY_XBOX_DPAD_UP                   KENNEY_ICON_STR(KENNEY_XBOX_DPAD_UP_CP)
+#define KENNEY_XBOX_DPAD_DOWN_CP              0xE024  // xbox_dpad_down
+#define KENNEY_XBOX_DPAD_DOWN                 KENNEY_ICON_STR(KENNEY_XBOX_DPAD_DOWN_CP)
+#define KENNEY_XBOX_DPAD_LEFT_CP              0xE028  // xbox_dpad_left
+#define KENNEY_XBOX_DPAD_LEFT                 KENNEY_ICON_STR(KENNEY_XBOX_DPAD_LEFT_CP)
+#define KENNEY_XBOX_DPAD_RIGHT_CP             0xE02B  // xbox_dpad_right
+#define KENNEY_XBOX_DPAD_RIGHT                KENNEY_ICON_STR(KENNEY_XBOX_DPAD_RIGHT_CP)
+#define KENNEY_XBOX_STICK_L_HORIZONTAL_CP     0xE051  // xbox_stick_l_horizontal
+#define KENNEY_XBOX_STICK_L_HORIZONTAL        KENNEY_ICON_STR(KENNEY_XBOX_STICK_L_HORIZONTAL_CP)
+#define KENNEY_XBOX_STICK_L_VERTICAL_CP       0xE056  // xbox_stick_l_vertical
+#define KENNEY_XBOX_STICK_L_VERTICAL          KENNEY_ICON_STR(KENNEY_XBOX_STICK_L_VERTICAL_CP)
+#define KENNEY_XBOX_STICK_R_HORIZONTAL_CP     0xE059  // xbox_stick_r_horizontal
+#define KENNEY_XBOX_STICK_R_HORIZONTAL        KENNEY_ICON_STR(KENNEY_XBOX_STICK_R_HORIZONTAL_CP)
+#define KENNEY_XBOX_STICK_R_VERTICAL_CP       0xE05E  // xbox_stick_r_vertical
+#define KENNEY_XBOX_STICK_R_VERTICAL          KENNEY_ICON_STR(KENNEY_XBOX_STICK_R_VERTICAL_CP)
+
+// ---------------------------------------------------------------------------
+// PlayStation per-input icons  (kenney_input_playstation_series.ttf)
+// ---------------------------------------------------------------------------
+#define KENNEY_PS_BUTTON_CROSS_CP             0xE049  // playstation_button_cross
+#define KENNEY_PS_BUTTON_CROSS                KENNEY_ICON_STR(KENNEY_PS_BUTTON_CROSS_CP)
+#define KENNEY_PS_BUTTON_CIRCLE_CP            0xE03F  // playstation_button_circle
+#define KENNEY_PS_BUTTON_CIRCLE               KENNEY_ICON_STR(KENNEY_PS_BUTTON_CIRCLE_CP)
+#define KENNEY_PS_BUTTON_SQUARE_CP            0xE04F  // playstation_button_square
+#define KENNEY_PS_BUTTON_SQUARE               KENNEY_ICON_STR(KENNEY_PS_BUTTON_SQUARE_CP)
+#define KENNEY_PS_BUTTON_TRIANGLE_CP          0xE051  // playstation_button_triangle
+#define KENNEY_PS_BUTTON_TRIANGLE             KENNEY_ICON_STR(KENNEY_PS_BUTTON_TRIANGLE_CP)
+#define KENNEY_PS_BUTTON_L1_CP                0xE076  // playstation_trigger_l1
+#define KENNEY_PS_BUTTON_L1                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_L1_CP)
+#define KENNEY_PS_BUTTON_R1_CP                0xE07E  // playstation_trigger_r1
+#define KENNEY_PS_BUTTON_R1                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_R1_CP)
+#define KENNEY_PS_TRIGGER_L2_CP               0xE07A  // playstation_trigger_l2
+#define KENNEY_PS_TRIGGER_L2                  KENNEY_ICON_STR(KENNEY_PS_TRIGGER_L2_CP)
+#define KENNEY_PS_TRIGGER_R2_CP               0xE082  // playstation_trigger_r2
+#define KENNEY_PS_TRIGGER_R2                  KENNEY_ICON_STR(KENNEY_PS_TRIGGER_R2_CP)
+#define KENNEY_PS_BUTTON_L3_CP                0xE04B  // playstation_button_l3
+#define KENNEY_PS_BUTTON_L3                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_L3_CP)
+#define KENNEY_PS_BUTTON_R3_CP                0xE04D  // playstation_button_r3
+#define KENNEY_PS_BUTTON_R3                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_R3_CP)
+#define KENNEY_PS_BUTTON_OPTIONS_CP           0xE022  // playstation5_button_options
+#define KENNEY_PS_BUTTON_OPTIONS              KENNEY_ICON_STR(KENNEY_PS_BUTTON_OPTIONS_CP)
+#define KENNEY_PS_BUTTON_CREATE_CP            0xE01C  // playstation5_button_create
+#define KENNEY_PS_BUTTON_CREATE               KENNEY_ICON_STR(KENNEY_PS_BUTTON_CREATE_CP)
+#define KENNEY_PS_BUTTON_ANALOG_CP            0xE03D  // playstation_button_analog (PS logo)
+#define KENNEY_PS_BUTTON_ANALOG               KENNEY_ICON_STR(KENNEY_PS_BUTTON_ANALOG_CP)
+#define KENNEY_PS_DPAD_UP_CP                  0xE05E  // playstation_dpad_up
+#define KENNEY_PS_DPAD_UP                     KENNEY_ICON_STR(KENNEY_PS_DPAD_UP_CP)
+#define KENNEY_PS_DPAD_DOWN_CP                0xE055  // playstation_dpad_down
+#define KENNEY_PS_DPAD_DOWN                   KENNEY_ICON_STR(KENNEY_PS_DPAD_DOWN_CP)
+#define KENNEY_PS_DPAD_LEFT_CP                0xE059  // playstation_dpad_left
+#define KENNEY_PS_DPAD_LEFT                   KENNEY_ICON_STR(KENNEY_PS_DPAD_LEFT_CP)
+#define KENNEY_PS_DPAD_RIGHT_CP               0xE05C  // playstation_dpad_right
+#define KENNEY_PS_DPAD_RIGHT                  KENNEY_ICON_STR(KENNEY_PS_DPAD_RIGHT_CP)
+#define KENNEY_PS_STICK_L_HORIZONTAL_CP       0xE064  // playstation_stick_l_horizontal
+#define KENNEY_PS_STICK_L_HORIZONTAL          KENNEY_ICON_STR(KENNEY_PS_STICK_L_HORIZONTAL_CP)
+#define KENNEY_PS_STICK_L_VERTICAL_CP         0xE069  // playstation_stick_l_vertical
+#define KENNEY_PS_STICK_L_VERTICAL            KENNEY_ICON_STR(KENNEY_PS_STICK_L_VERTICAL_CP)
+#define KENNEY_PS_STICK_R_HORIZONTAL_CP       0xE06C  // playstation_stick_r_horizontal
+#define KENNEY_PS_STICK_R_HORIZONTAL          KENNEY_ICON_STR(KENNEY_PS_STICK_R_HORIZONTAL_CP)
+#define KENNEY_PS_STICK_R_VERTICAL_CP         0xE071  // playstation_stick_r_vertical
+#define KENNEY_PS_STICK_R_VERTICAL            KENNEY_ICON_STR(KENNEY_PS_STICK_R_VERTICAL_CP)
+
+// ---------------------------------------------------------------------------
+// Nintendo Switch per-input icons  (kenney_input_nintendo_switch.ttf)
+// ---------------------------------------------------------------------------
+#define KENNEY_SWITCH_BUTTON_A_CP             0xE004  // switch_button_a
+#define KENNEY_SWITCH_BUTTON_A                KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_A_CP)
+#define KENNEY_SWITCH_BUTTON_B_CP             0xE006  // switch_button_b
+#define KENNEY_SWITCH_BUTTON_B                KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_B_CP)
+#define KENNEY_SWITCH_BUTTON_X_CP             0xE018  // switch_button_x
+#define KENNEY_SWITCH_BUTTON_X                KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_X_CP)
+#define KENNEY_SWITCH_BUTTON_Y_CP             0xE01A  // switch_button_y
+#define KENNEY_SWITCH_BUTTON_Y                KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_Y_CP)
+#define KENNEY_SWITCH_BUTTON_HOME_CP          0xE008  // switch_button_home
+#define KENNEY_SWITCH_BUTTON_HOME             KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_HOME_CP)
+#define KENNEY_SWITCH_BUTTON_MINUS_CP         0xE00C  // switch_button_minus
+#define KENNEY_SWITCH_BUTTON_MINUS            KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_MINUS_CP)
+#define KENNEY_SWITCH_BUTTON_PLUS_CP          0xE00E  // switch_button_plus
+#define KENNEY_SWITCH_BUTTON_PLUS             KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_PLUS_CP)
+#define KENNEY_SWITCH_BUTTON_L_CP             0xE00A  // switch_button_l
+#define KENNEY_SWITCH_BUTTON_L                KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_L_CP)
+#define KENNEY_SWITCH_BUTTON_R_CP             0xE010  // switch_button_r
+#define KENNEY_SWITCH_BUTTON_R                KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_R_CP)
+#define KENNEY_SWITCH_BUTTON_ZL_CP            0xE01C  // switch_button_zl
+#define KENNEY_SWITCH_BUTTON_ZL               KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_ZL_CP)
+#define KENNEY_SWITCH_BUTTON_ZR_CP            0xE01E  // switch_button_zr
+#define KENNEY_SWITCH_BUTTON_ZR               KENNEY_ICON_STR(KENNEY_SWITCH_BUTTON_ZR_CP)
+#define KENNEY_SWITCH_STICK_L_PRESS_CP        0xE05E  // switch_stick_l_press
+#define KENNEY_SWITCH_STICK_L_PRESS           KENNEY_ICON_STR(KENNEY_SWITCH_STICK_L_PRESS_CP)
+#define KENNEY_SWITCH_STICK_R_PRESS_CP        0xE066  // switch_stick_r_press
+#define KENNEY_SWITCH_STICK_R_PRESS           KENNEY_ICON_STR(KENNEY_SWITCH_STICK_R_PRESS_CP)
+#define KENNEY_SWITCH_DPAD_UP_CP              0xE03C  // switch_dpad_up
+#define KENNEY_SWITCH_DPAD_UP                 KENNEY_ICON_STR(KENNEY_SWITCH_DPAD_UP_CP)
+#define KENNEY_SWITCH_DPAD_DOWN_CP            0xE033  // switch_dpad_down
+#define KENNEY_SWITCH_DPAD_DOWN               KENNEY_ICON_STR(KENNEY_SWITCH_DPAD_DOWN_CP)
+#define KENNEY_SWITCH_DPAD_LEFT_CP            0xE037  // switch_dpad_left
+#define KENNEY_SWITCH_DPAD_LEFT               KENNEY_ICON_STR(KENNEY_SWITCH_DPAD_LEFT_CP)
+#define KENNEY_SWITCH_DPAD_RIGHT_CP           0xE03A  // switch_dpad_right
+#define KENNEY_SWITCH_DPAD_RIGHT              KENNEY_ICON_STR(KENNEY_SWITCH_DPAD_RIGHT_CP)
+#define KENNEY_SWITCH_STICK_L_HORIZONTAL_CP   0xE05C  // switch_stick_l_horizontal
+#define KENNEY_SWITCH_STICK_L_HORIZONTAL      KENNEY_ICON_STR(KENNEY_SWITCH_STICK_L_HORIZONTAL_CP)
+#define KENNEY_SWITCH_STICK_L_VERTICAL_CP     0xE061  // switch_stick_l_vertical
+#define KENNEY_SWITCH_STICK_L_VERTICAL        KENNEY_ICON_STR(KENNEY_SWITCH_STICK_L_VERTICAL_CP)
+#define KENNEY_SWITCH_STICK_R_HORIZONTAL_CP   0xE064  // switch_stick_r_horizontal
+#define KENNEY_SWITCH_STICK_R_HORIZONTAL      KENNEY_ICON_STR(KENNEY_SWITCH_STICK_R_HORIZONTAL_CP)
+#define KENNEY_SWITCH_STICK_R_VERTICAL_CP     0xE069  // switch_stick_r_vertical
+#define KENNEY_SWITCH_STICK_R_VERTICAL        KENNEY_ICON_STR(KENNEY_SWITCH_STICK_R_VERTICAL_CP)
+
+// ---------------------------------------------------------------------------
+// Steam Deck per-input icons  (kenney_input_steam_deck.ttf)
+// ---------------------------------------------------------------------------
+#define KENNEY_STEAMDECK_BUTTON_A_CP          0xE001  // steamdeck_button_a
+#define KENNEY_STEAMDECK_BUTTON_A             KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_A_CP)
+#define KENNEY_STEAMDECK_BUTTON_B_CP          0xE003  // steamdeck_button_b
+#define KENNEY_STEAMDECK_BUTTON_B             KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_B_CP)
+#define KENNEY_STEAMDECK_BUTTON_X_CP          0xE01D  // steamdeck_button_x
+#define KENNEY_STEAMDECK_BUTTON_X             KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_X_CP)
+#define KENNEY_STEAMDECK_BUTTON_Y_CP          0xE01F  // steamdeck_button_y
+#define KENNEY_STEAMDECK_BUTTON_Y             KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_Y_CP)
+#define KENNEY_STEAMDECK_BUTTON_VIEW_CP       0xE01B  // steamdeck_button_view
+#define KENNEY_STEAMDECK_BUTTON_VIEW          KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_VIEW_CP)
+#define KENNEY_STEAMDECK_BUTTON_GUIDE_CP      0xE005  // steamdeck_button_guide
+#define KENNEY_STEAMDECK_BUTTON_GUIDE         KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_GUIDE_CP)
+#define KENNEY_STEAMDECK_BUTTON_OPTIONS_CP    0xE00F  // steamdeck_button_options
+#define KENNEY_STEAMDECK_BUTTON_OPTIONS       KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_OPTIONS_CP)
+#define KENNEY_STEAMDECK_BUTTON_L1_CP         0xE007  // steamdeck_button_l1
+#define KENNEY_STEAMDECK_BUTTON_L1            KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_L1_CP)
+#define KENNEY_STEAMDECK_BUTTON_R1_CP         0xE013  // steamdeck_button_r1
+#define KENNEY_STEAMDECK_BUTTON_R1            KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_R1_CP)
+#define KENNEY_STEAMDECK_BUTTON_L2_CP         0xE009  // steamdeck_button_l2
+#define KENNEY_STEAMDECK_BUTTON_L2            KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_L2_CP)
+#define KENNEY_STEAMDECK_BUTTON_R2_CP         0xE015  // steamdeck_button_r2
+#define KENNEY_STEAMDECK_BUTTON_R2            KENNEY_ICON_STR(KENNEY_STEAMDECK_BUTTON_R2_CP)
+#define KENNEY_STEAMDECK_STICK_L_PRESS_CP     0xE034  // steamdeck_stick_l_press
+#define KENNEY_STEAMDECK_STICK_L_PRESS        KENNEY_ICON_STR(KENNEY_STEAMDECK_STICK_L_PRESS_CP)
+#define KENNEY_STEAMDECK_STICK_R_PRESS_CP     0xE03C  // steamdeck_stick_r_press
+#define KENNEY_STEAMDECK_STICK_R_PRESS        KENNEY_ICON_STR(KENNEY_STEAMDECK_STICK_R_PRESS_CP)
+#define KENNEY_STEAMDECK_DPAD_UP_CP           0xE02C  // steamdeck_dpad_up
+#define KENNEY_STEAMDECK_DPAD_UP              KENNEY_ICON_STR(KENNEY_STEAMDECK_DPAD_UP_CP)
+#define KENNEY_STEAMDECK_DPAD_DOWN_CP         0xE023  // steamdeck_dpad_down
+#define KENNEY_STEAMDECK_DPAD_DOWN            KENNEY_ICON_STR(KENNEY_STEAMDECK_DPAD_DOWN_CP)
+#define KENNEY_STEAMDECK_DPAD_LEFT_CP         0xE027  // steamdeck_dpad_left
+#define KENNEY_STEAMDECK_DPAD_LEFT            KENNEY_ICON_STR(KENNEY_STEAMDECK_DPAD_LEFT_CP)
+#define KENNEY_STEAMDECK_DPAD_RIGHT_CP        0xE02A  // steamdeck_dpad_right
+#define KENNEY_STEAMDECK_DPAD_RIGHT           KENNEY_ICON_STR(KENNEY_STEAMDECK_DPAD_RIGHT_CP)
+#define KENNEY_STEAMDECK_STICK_L_HORIZONTAL_CP 0xE032 // steamdeck_stick_l_horizontal
+#define KENNEY_STEAMDECK_STICK_L_HORIZONTAL   KENNEY_ICON_STR(KENNEY_STEAMDECK_STICK_L_HORIZONTAL_CP)
+#define KENNEY_STEAMDECK_STICK_L_VERTICAL_CP  0xE037  // steamdeck_stick_l_vertical
+#define KENNEY_STEAMDECK_STICK_L_VERTICAL     KENNEY_ICON_STR(KENNEY_STEAMDECK_STICK_L_VERTICAL_CP)
+#define KENNEY_STEAMDECK_STICK_R_HORIZONTAL_CP 0xE03A // steamdeck_stick_r_horizontal
+#define KENNEY_STEAMDECK_STICK_R_HORIZONTAL   KENNEY_ICON_STR(KENNEY_STEAMDECK_STICK_R_HORIZONTAL_CP)
+#define KENNEY_STEAMDECK_STICK_R_VERTICAL_CP  0xE03F  // steamdeck_stick_r_vertical
+#define KENNEY_STEAMDECK_STICK_R_VERTICAL     KENNEY_ICON_STR(KENNEY_STEAMDECK_STICK_R_VERTICAL_CP)
+
+// ---------------------------------------------------------------------------
+// Steam Controller per-input icons  (kenney_input_steam_controller.ttf)
+// ---------------------------------------------------------------------------
+#define KENNEY_STEAM_BUTTON_A_CP              0xE022  // steam_button_a
+#define KENNEY_STEAM_BUTTON_A                 KENNEY_ICON_STR(KENNEY_STEAM_BUTTON_A_CP)
+#define KENNEY_STEAM_BUTTON_B_CP              0xE024  // steam_button_b
+#define KENNEY_STEAM_BUTTON_B                 KENNEY_ICON_STR(KENNEY_STEAM_BUTTON_B_CP)
+#define KENNEY_STEAM_BUTTON_X_CP              0xE036  // steam_button_x
+#define KENNEY_STEAM_BUTTON_X                 KENNEY_ICON_STR(KENNEY_STEAM_BUTTON_X_CP)
+#define KENNEY_STEAM_BUTTON_Y_CP              0xE038  // steam_button_y
+#define KENNEY_STEAM_BUTTON_Y                 KENNEY_ICON_STR(KENNEY_STEAM_BUTTON_Y_CP)
+#define KENNEY_STEAM_BUTTON_BACK_CP           0xE026  // steam_button_back_icon
+#define KENNEY_STEAM_BUTTON_BACK              KENNEY_ICON_STR(KENNEY_STEAM_BUTTON_BACK_CP)
+#define KENNEY_STEAM_BUTTON_START_CP          0xE034  // steam_button_start_icon
+#define KENNEY_STEAM_BUTTON_START             KENNEY_ICON_STR(KENNEY_STEAM_BUTTON_START_CP)
+#define KENNEY_STEAM_CONTROLLER_ICON_CP       0xE016  // controller_icon (Steam logo)
+#define KENNEY_STEAM_CONTROLLER_ICON          KENNEY_ICON_STR(KENNEY_STEAM_CONTROLLER_ICON_CP)
+#define KENNEY_STEAM_LB_CP                    0xE049  // steam_lb
+#define KENNEY_STEAM_LB                       KENNEY_ICON_STR(KENNEY_STEAM_LB_CP)
+#define KENNEY_STEAM_RB_CP                    0xE055  // steam_rb
+#define KENNEY_STEAM_RB                       KENNEY_ICON_STR(KENNEY_STEAM_RB_CP)
+#define KENNEY_STEAM_LT_CP                    0xE04D  // steam_lt
+#define KENNEY_STEAM_LT                       KENNEY_ICON_STR(KENNEY_STEAM_LT_CP)
+#define KENNEY_STEAM_RT_CP                    0xE059  // steam_rt
+#define KENNEY_STEAM_RT                       KENNEY_ICON_STR(KENNEY_STEAM_RT_CP)
+#define KENNEY_STEAM_DPAD_UP_CP               0xE045  // steam_dpad_up
+#define KENNEY_STEAM_DPAD_UP                  KENNEY_ICON_STR(KENNEY_STEAM_DPAD_UP_CP)
+#define KENNEY_STEAM_DPAD_DOWN_CP             0xE03C  // steam_dpad_down
+#define KENNEY_STEAM_DPAD_DOWN                KENNEY_ICON_STR(KENNEY_STEAM_DPAD_DOWN_CP)
+#define KENNEY_STEAM_DPAD_LEFT_CP             0xE040  // steam_dpad_left
+#define KENNEY_STEAM_DPAD_LEFT                KENNEY_ICON_STR(KENNEY_STEAM_DPAD_LEFT_CP)
+#define KENNEY_STEAM_DPAD_RIGHT_CP            0xE043  // steam_dpad_right
+#define KENNEY_STEAM_DPAD_RIGHT               KENNEY_ICON_STR(KENNEY_STEAM_DPAD_RIGHT_CP)
+#define KENNEY_STEAM_STICK_HORIZONTAL_CP      0xE05D  // steam_stick_horizontal
+#define KENNEY_STEAM_STICK_HORIZONTAL         KENNEY_ICON_STR(KENNEY_STEAM_STICK_HORIZONTAL_CP)
+#define KENNEY_STEAM_STICK_VERTICAL_CP        0xE063  // steam_stick_vertical
+#define KENNEY_STEAM_STICK_VERTICAL           KENNEY_ICON_STR(KENNEY_STEAM_STICK_VERTICAL_CP)
