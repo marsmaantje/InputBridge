@@ -14,14 +14,6 @@
 
 namespace {
 
-// Returns the KenneyFonts singleton font pointer that matches the device font
-// selected by DeviceIconProvider, so input icons always use the same family
-// as the device header icon.
-ImFont* DeviceFont(const DeviceState& dev)
-{
-    return DeviceIconProvider::GetIcon(dev).font;
-}
-
 // Identifies which Kenney font family the device uses so per-input codepoints
 // can be chosen from the same sheet.
 enum class FontFamily { Xbox, PlayStation, Switch, SteamDeck, SteamController, Generic, Unknown };
@@ -127,8 +119,11 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
         case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE063); // steam_stick_vertical
         // The Steam Controller has no second analog stick — SDL maps the
         // right trackpad's swipe to RIGHTX/RIGHTY for gamepad-API compatibility.
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Pad X",       0xE04F); // steam_pad
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Pad Y",       0xE04F); // steam_pad
+        // The Steam Controller font only has a plain (undirected) trackpad
+        // glyph; Steam Deck's trackpad icons include horizontal/vertical
+        // arrows, so borrow those for a clearer axis indicator.
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Pad X", 0xE063, FontFamily::SteamDeck }; // steamdeck_trackpad_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Pad Y", 0xE06C, FontFamily::SteamDeck }; // steamdeck_trackpad_r_vertical
         case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("Left Trigger",      0xE04D); // steam_lt
         case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("Right Trigger",     0xE059); // steam_rt
         default: break;
@@ -268,6 +263,20 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE03C); // steam_dpad_down
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE040); // steam_dpad_left
         case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE043); // steam_dpad_right
+        // V2 adds back-grip paddles, a touchpad-click, and a quick-access
+        // button. The Steam Controller font already has its own dedicated
+        // glyphs for the paddles and quick-access button (just discovered —
+        // they share the same codepoints used for other icons in the *Steam
+        // Deck* font, which is exactly why borrowing those Steam Deck
+        // codepoints rendered as garbage before InputFont() was fixed to
+        // resolve fonts by tag instead of by device). Only Touchpad has no
+        // Steam Controller equivalent, so that one still borrows Steam Deck's.
+        case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1:    return withFam("L4",           0xE004); // controller_button_l4
+        case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2:    return withFam("L5",           0xE006); // controller_button_l5
+        case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1:   return withFam("R4",           0xE010); // controller_button_r4
+        case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2:   return withFam("R5",           0xE012); // controller_button_r5
+        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return { "Touchpad",     0xE045, FontFamily::SteamDeck }; // steamdeck_trackpad_all
+        case SDL_GAMEPAD_BUTTON_MISC1:           return withFam("Quick Access", 0xE00A); // controller_button_quickaccess
         default: break;
         }
         break;
@@ -278,7 +287,10 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
 
     // Generic fallback for unknown family.  Left untagged (fam defaults to
     // Unknown) so InputFont() always resolves these to the shared generic
-    // font, regardless of which device this was requested for.
+    // font, regardless of which device this was requested for.  These newer
+    // SDL_GamepadButton values (paddles, touchpad, misc) have no glyph in the
+    // generic font, but still get a real name instead of falling through to
+    // the catch-all "Button" below.
     switch (gb) {
     case SDL_GAMEPAD_BUTTON_SOUTH:           return { "South",        0xE000 }; // generic_button
     case SDL_GAMEPAD_BUTTON_EAST:            return { "East",         0xE000 };
@@ -295,6 +307,17 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
     case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return { "D-Pad Down",   0 };
     case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return { "D-Pad Left",   0 };
     case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return { "D-Pad Right",  0 };
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1:    return { "L Paddle 1",   0 };
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2:    return { "L Paddle 2",   0 };
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1:   return { "R Paddle 1",   0 };
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2:   return { "R Paddle 2",   0 };
+    case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return { "Touchpad",     0 };
+    case SDL_GAMEPAD_BUTTON_MISC1:           return { "Misc 1",       0 };
+    case SDL_GAMEPAD_BUTTON_MISC2:           return { "Misc 2",       0 };
+    case SDL_GAMEPAD_BUTTON_MISC3:           return { "Misc 3",       0 };
+    case SDL_GAMEPAD_BUTTON_MISC4:           return { "Misc 4",       0 };
+    case SDL_GAMEPAD_BUTTON_MISC5:           return { "Misc 5",       0 };
+    case SDL_GAMEPAD_BUTTON_MISC6:           return { "Misc 6",       0 };
     default:                                 return { "Button",       0 };
     }
 }
@@ -317,14 +340,38 @@ DeviceIcon MakeIcon(ImFont* font, ImWchar cp)
     return icon;
 }
 
-// Chooses the correct icon font for generic-family input icons.
-// For known families the device font IS the right font.
-// For unknown families we fall back to the generic Kenney font.
+// Maps a font family directly to its ImFont* in the KenneyFonts registry.
+// This is the authoritative lookup for an icon's font: AxisInfoFor() and
+// ButtonInfoFor() tag every returned codepoint with the family it actually
+// belongs to, and that tag is not always the same as the device's own
+// detected family — e.g. the Steam Controller V2's back-grip paddles are
+// rendered using the Steam Deck font (steam_controller.ttf has no glyphs
+// for them), even though the device itself is FontFamily::SteamController.
+ImFont* FontForFamily(FontFamily fam)
+{
+    KenneyFonts& fonts = KenneyFonts::Get();
+    switch (fam)
+    {
+    case FontFamily::Xbox:            return fonts.xbox;
+    case FontFamily::PlayStation:     return fonts.playstation;
+    case FontFamily::Switch:          return fonts.nintendoSwitch;
+    case FontFamily::SteamDeck:       return fonts.steamDeck;
+    case FontFamily::SteamController: return fonts.steamController;
+    case FontFamily::Generic:
+    case FontFamily::Unknown:
+    default:                          return fonts.generic;
+    }
+}
+
+// Chooses the correct icon font for an input icon.  `fam` comes from
+// AxisInfo::fam / ButtonInfo::fam — the family the *codepoint* belongs to —
+// not necessarily the device's own family, so it is always resolved
+// directly rather than assumed to equal the device's font.
 ImFont* InputFont(const DeviceState& dev, FontFamily fam)
 {
-    ImFont* devFont = DeviceFont(dev);
-    if (fam != FontFamily::Unknown && devFont) return devFont;
-    return KenneyFonts::Get().generic;
+    (void)dev; // no longer needed now that every codepoint is tagged with its real family
+    ImFont* f = FontForFamily(fam);
+    return f ? f : KenneyFonts::Get().generic;
 }
 
 } // anonymous namespace
