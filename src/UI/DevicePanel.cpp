@@ -68,7 +68,8 @@ static void DrawDeviceSettingsTab(const DeviceState&  dev,
 
 void DrawDeviceVisualizer(const DeviceState&  dev,
                           DeviceManager&      deviceManager,
-                          PreferencesManager& prefs)
+                          PreferencesManager& prefs,
+                          bool                show_named_inputs)
 {
     static GamepadVisualizer              gamepad_viz;
     static GenericVisualizer              generic_viz;
@@ -124,9 +125,25 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
         }
     };
 
+    // Raw Inputs tab uses the generic visualizer which accepts the named-inputs flag.
+    auto RawInputsTab = [&]() {
+        const char*       label = "Raw Inputs";
+        ImGuiTabItemFlags flags = (apply_pref && preferred_viz == label)
+                                      ? ImGuiTabItemFlags_SetSelected : 0;
+
+        if (ImGui::BeginTabItem(label, nullptr, flags)) {
+            generic_viz.Draw(dev, show_named_inputs);
+            if (prefs.GetVisualizerPreference(guid) != label) {
+                prefs.SetVisualizerPreference(guid, label);
+                prefs.Save();
+            }
+            ImGui::EndTabItem();
+        }
+    };
+
     if (dev.is_gamepad) {
         if (ImGui::BeginTabBar("DeviceMode")) {
-            TabItem("Raw Inputs", generic_viz);
+            RawInputsTab();
             if (ImGui::BeginTabItem("Haptic Test")) {
                 gamepad_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                 ImGui::EndTabItem();
@@ -158,7 +175,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
         }
     } else {
         if (ImGui::BeginTabBar("DeviceMode")) {
-            TabItem("Raw Inputs", generic_viz);
+            RawInputsTab();
 
             const SDL_JoystickType type = SDL_GetJoystickType(dev.joystick);
 
@@ -318,7 +335,8 @@ static ImU32 GetBatteryColor(const DeviceState& dev)
 
 void DrawDeviceItem(DeviceState&        dev,
                     DeviceManager&      deviceManager,
-                    PreferencesManager& prefs)
+                    PreferencesManager& prefs,
+                    bool                show_named_inputs)
 {
     ImGui::PushID(static_cast<int>(dev.instance_id));
 
@@ -515,7 +533,7 @@ void DrawDeviceItem(DeviceState&        dev,
         ImGui::Spacing();
         */
 
-        DrawDeviceVisualizer(dev, deviceManager, prefs);
+        DrawDeviceVisualizer(dev, deviceManager, prefs, show_named_inputs);
         ImGui::Unindent();
     }
 

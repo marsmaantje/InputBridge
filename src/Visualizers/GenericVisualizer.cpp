@@ -74,24 +74,13 @@ void DrawInlineIcon(const DeviceIcon& icon)
 // GenericVisualizer::Draw
 // ---------------------------------------------------------------------------
 
-void GenericVisualizer::Draw(const DeviceState &dev) {
+void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
     ImGui::Text("Generic Device Visualizer");
 
     if (!dev.joystick)
         return;
 
     ImGui::Text("Name: %s", SDL_GetJoystickName(dev.joystick));
-
-    // ── Label toggle ─────────────────────────────────────────────────────
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
-    ImGui::Checkbox("Named Inputs", &m_showLabels);
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Show known input names (Left Stick X, A, D-Pad Up, …)\n"
-            "with matching controller icons where available.\n"
-            "Only applies to devices recognised as gamepads by SDL.");
-    }
 
     // ── Axes ─────────────────────────────────────────────────────────────
     if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {

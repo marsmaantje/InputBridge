@@ -505,7 +505,8 @@ void Application::RenderFrame(Uint64 frame_start_time)
         m_window,
         k_InitialWidth,
         k_InitialHeight,
-        m_running
+        m_running,
+        m_showNamedInputs
     };
     DrawSidebarLayout(ctx);
 

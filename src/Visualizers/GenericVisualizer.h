@@ -3,8 +3,11 @@
 
 class GenericVisualizer : public DeviceVisualizer {
   public:
-    void Draw(const DeviceState &dev) override;
+    /// @param showLabels  When true, named labels + Kenney icons replace "Axis N / B N / Hat N".
+    ///                    Controlled from the Settings panel; passed in each frame.
+    void Draw(const DeviceState& dev, bool showLabels);
 
-  private:
-    bool m_showLabels = false;  ///< When true, named labels + Kenney icons replace "Axis N / B N / Hat N"
+    // DeviceVisualizer interface — routes to Draw(dev, false) for callers that
+    // don't supply the flag (should not normally be used for GenericVisualizer).
+    void Draw(const DeviceState& dev) override { Draw(dev, false); }
 };

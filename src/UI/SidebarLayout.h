@@ -40,6 +40,9 @@ struct SidebarContext {
 
     // Set to true by the Exit button to signal the main loop to stop.
     bool& done;
+
+    // Generic visualizer option persisted in Settings
+    bool& show_named_inputs;
 };
 
 /// Renders the full sidebar navigation panel and the right-hand content area.

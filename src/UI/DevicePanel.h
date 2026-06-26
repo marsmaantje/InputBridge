@@ -10,7 +10,8 @@ class PreferencesManager;
 /// tab via PreferencesManager.
 void DrawDeviceVisualizer(const DeviceState&  dev,
                           DeviceManager&      deviceManager,
-                          PreferencesManager& prefs);
+                          PreferencesManager& prefs,
+                          bool                show_named_inputs);
 
 /// Draws a collapsible header for one connected device.  Includes a battery
 /// indicator, a "Device Visibility" section for the per-device hide toggle,
@@ -20,4 +21,5 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
 /// updates dev.hide_from_other_apps in place.
 void DrawDeviceItem(DeviceState&        dev,
                     DeviceManager&      deviceManager,
-                    PreferencesManager& prefs);
+                    PreferencesManager& prefs,
+                    bool                show_named_inputs);

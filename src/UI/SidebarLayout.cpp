@@ -34,6 +34,8 @@ static bool  s_GamepadNavLoaded  = false;
 static bool  s_DisableKeyboardNav = false;
 static bool  s_KeyboardNavLoaded  = false;
 static bool  s_BatteryIntervalLoaded = false;
+static bool  s_ShowNamedInputs   = false;
+static bool  s_ShowNamedInputsLoaded = false;
 
 // ---------------------------------------------------------------------------
 
@@ -268,9 +270,13 @@ void DrawSidebarLayout(SidebarContext& ctx)
     ImGui::Spacing();
 
     // Inner child provides scrolling for the section content below the profile bar.
+    // Note: we do NOT pass ImGuiWindowFlags_HorizontalScrollbar here — that flag
+    // permanently reserves scrollbar space even when content fits, so the bar
+    // never disappears after the window is widened.  Omitting it lets ImGui show
+    // the scrollbar only when content actually overflows.
     ImGui::BeginChild("##SectionScroll", { 0.0f, 0.0f },
                       ImGuiChildFlags_None,
-                      ImGuiWindowFlags_HorizontalScrollbar);
+                      ImGuiWindowFlags_None);
 
     switch (g_ActiveSection) {
 
@@ -404,7 +410,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
             ImGui::Separator();
             for (auto& dev : devices)
-                DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs);
+                DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs, s_ShowNamedInputs);
             break;
         }
 
@@ -433,6 +439,10 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 ctx.deviceManager.SetBatteryUpdateInterval(interval);
                 s_BatteryIntervalLoaded = true;
             }
+            if (!s_ShowNamedInputsLoaded) {
+                s_ShowNamedInputs       = ctx.prefs.GetBool("ShowNamedInputs", false);
+                s_ShowNamedInputsLoaded = true;
+            }
             DrawSettingsContent(
                 ctx.user_ui_scale, ctx.user_font_scale, ctx.scale_with_window,
                 ctx.window, ctx.initial_width, ctx.initial_height, ctx.prefs,
@@ -441,7 +451,8 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 s_EnableBatteryLED,
                 s_DisableGamepadNav,
                 s_DisableKeyboardNav,
-                ctx.deviceManager);
+                ctx.deviceManager,
+                s_ShowNamedInputs);
             break;
 
         case 6: // ── About ────────────────────────────────────────────────
