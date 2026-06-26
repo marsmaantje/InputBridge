@@ -246,6 +246,7 @@ void Application::RestorePreferences()
     m_uiScale         = m_prefs.GetFloat(PrefKeys::UIScale,           1.3f);
     m_fontScale       = m_prefs.GetFloat(PrefKeys::FontScale,         1.0f);
     m_scaleWithWindow = m_prefs.GetBool(PrefKeys::ScaleWithWindow,    false);
+    m_showNamedInputs = m_prefs.GetBool("ShowNamedInputs",           false);
     m_serverUpdateRate  = m_prefs.GetInt(PrefKeys::NetworkSection, PrefKeys::UpdateRate, 60);
     m_serverDynamicRate = m_prefs.GetBool(PrefKeys::NetworkSection, PrefKeys::DynamicRate, false);
 

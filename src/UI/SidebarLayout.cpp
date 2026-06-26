@@ -34,8 +34,6 @@ static bool  s_GamepadNavLoaded  = false;
 static bool  s_DisableKeyboardNav = false;
 static bool  s_KeyboardNavLoaded  = false;
 static bool  s_BatteryIntervalLoaded = false;
-static bool  s_ShowNamedInputs   = false;
-static bool  s_ShowNamedInputsLoaded = false;
 
 // ---------------------------------------------------------------------------
 
@@ -410,7 +408,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
             ImGui::Separator();
             for (auto& dev : devices)
-                DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs, s_ShowNamedInputs);
+                DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs, ctx.show_named_inputs);
             break;
         }
 
@@ -439,10 +437,6 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 ctx.deviceManager.SetBatteryUpdateInterval(interval);
                 s_BatteryIntervalLoaded = true;
             }
-            if (!s_ShowNamedInputsLoaded) {
-                s_ShowNamedInputs       = ctx.prefs.GetBool("ShowNamedInputs", false);
-                s_ShowNamedInputsLoaded = true;
-            }
             DrawSettingsContent(
                 ctx.user_ui_scale, ctx.user_font_scale, ctx.scale_with_window,
                 ctx.window, ctx.initial_width, ctx.initial_height, ctx.prefs,
@@ -452,7 +446,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 s_DisableGamepadNav,
                 s_DisableKeyboardNav,
                 ctx.deviceManager,
-                s_ShowNamedInputs);
+                ctx.show_named_inputs);
             break;
 
         case 6: // ── About ────────────────────────────────────────────────
