@@ -14,8 +14,8 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 | --------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Generic Gamepad             | Axes, buttons, gyro, accelerometer, touchpad                              | Rumble (low / high frequency)                                                      |
 | Steam Controller (V1 & V2)  | Axes, buttons, dual touchpads, gyro, accelerometer, capacitive grip/stick | Touchpad haptics (raw HID), rumble                                                 |
-| Nintendo Joy-Con (L/R pair) | Axes, buttons, independent per-side gyro & accelerometer                  | —                                                                                  |
-| Sony DualSense (PS5)        | Axes, buttons, touchpad (2-finger), gyro, accelerometer                   | rumble, LED control — USB & Bluetooth                                              |
+| Nintendo Joy-Con (L/R pair) | Axes, buttons, independent per-side gyro & accelerometer                  | Rumble                                                                             |
+| Sony DualSense (PS5)        | Axes, buttons, touchpad (2-finger), gyro, accelerometer                   | Rumble, LED control — USB & Bluetooth                                              |
 | Steering Wheel              | Axes, buttons                                                             | Constant force, periodic, condition effects (Spring / Damper / Inertia / Friction) |
 | Flight Stick / Throttle     | Axes, buttons                                                             | Constant force, periodic, condition on both pitch and roll axes                    |
 
