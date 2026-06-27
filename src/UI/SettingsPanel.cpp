@@ -28,7 +28,8 @@ void DrawSettingsContent(float&              user_ui_scale,
                          bool&               enable_battery_led,
                          bool&               disable_gamepad_nav,
                          bool&               disable_keyboard_nav,
-                         DeviceManager&      deviceManager)
+                         DeviceManager&      deviceManager,
+                         bool&               show_named_inputs)
 {
     // ── Performance ────────────────────────────────────────────────────────
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
@@ -94,24 +95,46 @@ void DrawSettingsContent(float&              user_ui_scale,
             "When enabled, keyboard arrow keys, Tab, and Enter\n"
             "no longer move focus or activate UI controls.\n"
             "Text input fields are unaffected.");
+
+    if (ImGui::Checkbox("Named Inputs", &show_named_inputs)) {
+        prefs.SetBool("ShowNamedInputs", show_named_inputs);
+        prefs.Save();
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Show known input names (Left Stick X, A, D-Pad Up, \xe2\x80\xa6)\n"
+            "with matching controller icons where available.\n"
+            "Applies to the Raw Inputs tab for devices recognised as gamepads by SDL.");
     ImGui::Separator();
 
     // ── UI Scale controls ──────────────────────────────────────────────────
     bool changed       = false;
     bool scale_changed = false;
 
+    // Helper: only SameLine if the next item (of estimated width nextW) fits.
+    // Falls through to a new line otherwise, so narrow sidebars wrap cleanly.
+    auto SameLineIfFits = [](float nextW) {
+        float spaceLeft = ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x;
+        if (nextW <= spaceLeft) ImGui::SameLine();
+    };
+
+    const float btnW      = ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2.0f; // approx square btn
+    const float textWUI   = ImGui::CalcTextSize("UI Scale: 3.00").x;
+    const float textWFont = ImGui::CalcTextSize("Font Scale: 3.00").x;
+    const float resetW    = ImGui::CalcTextSize("Reset UI").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+
     if (ImGui::Button("-##UI")) {
         user_ui_scale -= 0.1f;
         if (user_ui_scale < 0.5f) user_ui_scale = 0.5f;
         scale_changed = true;
     }
-    ImGui::SameLine();
+    SameLineIfFits(btnW);
     if (ImGui::Button("+##UI")) {
         user_ui_scale += 0.1f;
         if (user_ui_scale > 3.0f) user_ui_scale = 3.0f;
         scale_changed = true;
     }
-    ImGui::SameLine();
+    SameLineIfFits(textWUI);
     ImGui::Text("UI Scale: %.2f", user_ui_scale);
 
     // ── Font Scale controls ────────────────────────────────────────────────
@@ -122,13 +145,13 @@ void DrawSettingsContent(float&              user_ui_scale,
         if (user_font_scale < 0.5f) user_font_scale = 0.5f;
         font_scale_changed = true;
     }
-    ImGui::SameLine();
+    SameLineIfFits(btnW);
     if (ImGui::Button("+##Font")) {
         user_font_scale += 0.1f;
         if (user_font_scale > 3.0f) user_font_scale = 3.0f;
         font_scale_changed = true;
     }
-    ImGui::SameLine();
+    SameLineIfFits(textWFont);
     ImGui::Text("Font Scale: %.2f", user_font_scale);
 
     if (scale_changed) {

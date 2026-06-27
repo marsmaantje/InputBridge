@@ -65,6 +65,7 @@ private:
     float m_uiScale         = 1.3f;
     float m_fontScale       = 1.0f;
     bool  m_scaleWithWindow = false;
+    bool  m_showNamedInputs = false;
 
     // ── Render settings ───────────────────────────────────────────────────
     bool m_running        = true;

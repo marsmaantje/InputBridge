@@ -6,6 +6,7 @@
 
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
+#include "UI/DeviceIconProvider.h"
 #include "Visualizers/FlightStickVisualizer.h"
 #include "Visualizers/FlightStickHapticsVisualizer.h"
 #include "Visualizers/GamepadHapticsVisualizer.h"
@@ -17,6 +18,7 @@
 #include "Visualizers/WiimoteVisualizer.h"
 #include "Visualizers/SensorVisualizer.h"
 #include <SDL3/SDL.h>
+#include <algorithm>
 
 #include <string>
 
@@ -66,7 +68,8 @@ static void DrawDeviceSettingsTab(const DeviceState&  dev,
 
 void DrawDeviceVisualizer(const DeviceState&  dev,
                           DeviceManager&      deviceManager,
-                          PreferencesManager& prefs)
+                          PreferencesManager& prefs,
+                          bool                show_named_inputs)
 {
     static GamepadVisualizer              gamepad_viz;
     static GenericVisualizer              generic_viz;
@@ -122,9 +125,25 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
         }
     };
 
+    // Raw Inputs tab uses the generic visualizer which accepts the named-inputs flag.
+    auto RawInputsTab = [&]() {
+        const char*       label = "Raw Inputs";
+        ImGuiTabItemFlags flags = (apply_pref && preferred_viz == label)
+                                      ? ImGuiTabItemFlags_SetSelected : 0;
+
+        if (ImGui::BeginTabItem(label, nullptr, flags)) {
+            generic_viz.Draw(dev, show_named_inputs);
+            if (prefs.GetVisualizerPreference(guid) != label) {
+                prefs.SetVisualizerPreference(guid, label);
+                prefs.Save();
+            }
+            ImGui::EndTabItem();
+        }
+    };
+
     if (dev.is_gamepad) {
         if (ImGui::BeginTabBar("DeviceMode")) {
-            TabItem("Raw Inputs", generic_viz);
+            RawInputsTab();
             if (ImGui::BeginTabItem("Haptic Test")) {
                 gamepad_haptics_viz.Draw(dev, deviceManager, prefs, guid);
                 ImGui::EndTabItem();
@@ -156,7 +175,7 @@ void DrawDeviceVisualizer(const DeviceState&  dev,
         }
     } else {
         if (ImGui::BeginTabBar("DeviceMode")) {
-            TabItem("Raw Inputs", generic_viz);
+            RawInputsTab();
 
             const SDL_JoystickType type = SDL_GetJoystickType(dev.joystick);
 
@@ -316,17 +335,92 @@ static ImU32 GetBatteryColor(const DeviceState& dev)
 
 void DrawDeviceItem(DeviceState&        dev,
                     DeviceManager&      deviceManager,
-                    PreferencesManager& prefs)
+                    PreferencesManager& prefs,
+                    bool                show_named_inputs)
 {
     ImGui::PushID(static_cast<int>(dev.instance_id));
 
-    const std::string label = dev.name
+    // ── Device icon ───────────────────────────────────────────────────────
+    // Resolve the Kenney icon for this device before building the label so we
+    // know whether to reserve leading space for it.
+    const DeviceIcon icon = DeviceIconProvider::GetIcon(dev);
+    const float      font_sz  = ImGui::GetFontSize();
+
+    // When an icon is available we pad the label with a leading space wide
+    // enough to accommodate the glyph.  ImGui CollapsingHeader renders the
+    // text starting just after the tree arrow; we overlay the glyph there.
+    std::string label;
+    if (icon.IsValid()) {
+        // Reserve space: "\t" would collapse, so we use a fixed number of
+        // spaces.  We'll draw the actual glyph via ImDrawList afterwards.
+        label  = "      ";   // ~row-height icon width at default font sizes
+    }
+    label += dev.name
         + " [ID: " + std::to_string(dev.instance_id) + "]"
         + (dev.is_gamepad ? " (Gamepad)" : " (Joystick)")
         + (dev.hide_from_other_apps ? "  [HIDDEN]" : "");
 
     const bool header_open = ImGui::CollapsingHeader(
         label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+    // Overlay the Kenney icon glyph at the left of the header row.
+    if (icon.IsValid()) {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2      rect_min  = ImGui::GetItemRectMin();
+        ImVec2      rect_max  = ImGui::GetItemRectMax();
+
+        const float row_h   = rect_max.y - rect_min.y;
+        const float pad_x   = ImGui::GetStyle().FramePadding.x;
+        const float arrow_w = font_sz; // ImGui tree arrow occupies ~1 em
+
+        // Kenney pictogram glyphs occupy only ~30-50% of their em square,
+        // with a large gap above (Y0) and below (Size-Y1).
+        // fill the row height minus a small inset, then position
+        // them precisely centred in the row.
+        const float unscaled_sz  = ImGui::GetStyle().FontSizeBase;
+        const float kenney_baked = unscaled_sz * 4.0f;
+        const float scaled_sz   = ImGui::GetFontSize();
+        const float target_h    = row_h - ImGui::GetStyle().FramePadding.y * 2.0f;
+
+        float render_sz      = scaled_sz; // fallback
+        float y0_scaled      = 0.0f;    // top gap inside em square at render_sz
+        float glyph_h_scaled = scaled_sz; // visible pixel height at render_sz
+        if (ImFontBaked* baked = icon.font->GetFontBaked(kenney_baked))
+        {
+            const ImFontGlyph* g = baked->FindGlyphNoFallback(icon.codepoint);
+            if (g && baked->Size > 0.0f)
+            {
+                const float glyph_h = g->Y1 - g->Y0;
+                const float fill    = glyph_h / baked->Size;
+                if (fill > 0.01f)
+                {
+                    render_sz = std::min(target_h / fill, row_h); // never exceed row
+                    y0_scaled = (g->Y0 / baked->Size) * render_sz;
+                    // Store exact scaled glyph height for centring below.
+                    // (render_sz - y0_scaled would also include the descender
+                    // gap below Y1, pushing the icon upward — use exact value.)
+                    glyph_h_scaled = (glyph_h / baked->Size) * render_sz;
+                }
+            }
+        }
+
+        // Horizontally: just after the tree-node arrow.
+        const float glyph_x = rect_min.x + pad_x + arrow_w + 2.0f;
+
+        // Vertically: centre the VISIBLE pixels (not the em square) in the row.
+        //   row centre           = rect_min.y + row_h * 0.5
+        //   visible pixel centre = glyph_y + y0_scaled + glyph_h_scaled * 0.5
+        //   => glyph_y (top of em square) = row centre - y0_scaled - glyph_h_scaled/2
+        const float glyph_y = rect_min.y
+                              + (row_h * 0.5f)
+                              - y0_scaled
+                              - glyph_h_scaled * 0.5f;
+
+        draw_list->AddText(icon.font, render_sz,
+                           ImVec2(glyph_x, glyph_y),
+                           ImGui::GetColorU32(ImGuiCol_Text),
+                           icon.glyph);
+    }
 
     // ── Battery indicator ─────────────────────────────────────────────────
     const bool hasBattery = (dev.battery_state != SDL_POWERSTATE_UNKNOWN
@@ -439,7 +533,7 @@ void DrawDeviceItem(DeviceState&        dev,
         ImGui::Spacing();
         */
 
-        DrawDeviceVisualizer(dev, deviceManager, prefs);
+        DrawDeviceVisualizer(dev, deviceManager, prefs, show_named_inputs);
         ImGui::Unindent();
     }
 

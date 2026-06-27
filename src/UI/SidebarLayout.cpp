@@ -268,9 +268,13 @@ void DrawSidebarLayout(SidebarContext& ctx)
     ImGui::Spacing();
 
     // Inner child provides scrolling for the section content below the profile bar.
+    // Note: we do NOT pass ImGuiWindowFlags_HorizontalScrollbar here — that flag
+    // permanently reserves scrollbar space even when content fits, so the bar
+    // never disappears after the window is widened.  Omitting it lets ImGui show
+    // the scrollbar only when content actually overflows.
     ImGui::BeginChild("##SectionScroll", { 0.0f, 0.0f },
                       ImGuiChildFlags_None,
-                      ImGuiWindowFlags_HorizontalScrollbar);
+                      ImGuiWindowFlags_None);
 
     switch (g_ActiveSection) {
 
@@ -404,7 +408,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
             ImGui::Separator();
             for (auto& dev : devices)
-                DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs);
+                DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs, ctx.show_named_inputs);
             break;
         }
 
@@ -441,7 +445,8 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 s_EnableBatteryLED,
                 s_DisableGamepadNav,
                 s_DisableKeyboardNav,
-                ctx.deviceManager);
+                ctx.deviceManager,
+                ctx.show_named_inputs);
             break;
 
         case 6: // ── About ────────────────────────────────────────────────
