@@ -1,30 +1,23 @@
 #pragma once
-/**
- * @file Log.h
- * @brief Levelled logging macros for InputBridge.
- *
- * Replace all bare SDL_Log(), fprintf(stderr,...), printf(), std::cerr and
- * std::cout logging with these macros.  Every call is routed through SDL's
- * logging system so AppLog captures it automatically with the correct level.
- *
- * Usage — tag may be a string literal or any const char* (e.g. kTag):
- *   static constexpr const char* kTag = "OSCServer";
- *   LOG_INFO (kTag, "Listening on port %d", port);
- *   LOG_WARN (kTag, "Rumble init failed: %s", SDL_GetError());
- *   LOG_ERROR(kTag, "Cannot write %s", path.c_str());
- *
- * The category string appears as a "[tag] " prefix inside the message so the
- * AppLog UI text-filter can match on it (e.g. filter "OSCServer").
- *
- * SDL log categories used:
- *   SDL_LOG_CATEGORY_APPLICATION  — general / UI / protocol / mapper
- *   SDL_LOG_CATEGORY_INPUT        — devices, haptics, sensors
- *   SDL_LOG_CATEGORY_SYSTEM       — network (OSC / WebSocket)
- *
- * If you need finer per-category SDL filtering you can switch the category
- * argument of SDL_LogMessage to any SDL_LOG_CATEGORY_* constant; the text
- * prefix makes it identifiable in the AppLog UI regardless.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// @file Log.h 
+// @brief provides a unified logging interface for the application.
+//
+// Features:
+// • Consistent logging macros for verbose, debug, info, warning,
+//   error, and critical messages.
+// • Automatic routing through SDL's logging system for centralized
+//   capture and display.
+// • Tag-based message categorization for easy filtering and debugging.
+// • Runtime-compatible tags using string literals or const char*
+//   variables.
+// • Standardized message formatting across all subsystems.
+// • Integration with AppLog and SDL log-priority filtering.
+//
+// All log messages are emitted through SDL_LogMessage, ensuring
+// consistent formatting, severity handling, and log capture
+// throughout the application.
+// ─────────────────────────────────────────────────────────────────────────────
 
 #include <SDL3/SDL_log.h>
 

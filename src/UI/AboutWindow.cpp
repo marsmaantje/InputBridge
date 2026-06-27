@@ -117,21 +117,22 @@ void AboutWindow::DrawContent() {
 
     // ── Libraries ────────────────────────────────────────────────────────────
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
-    ImGui::Text("Open-Source Libraries");
+    ImGui::Text("Open-Source Libraries and Resources used");
     ImGui::PopStyleColor();
     ImGui::Spacing();
 
     struct Lib { const char* name; const char* description; const char* license; };
     constexpr Lib libs[] = {
-        { "SDL3",              "Cross-platform hardware abstraction (input, audio, video)", "zlib License"   },
-        { "Dear ImGui",        "Immediate-mode graphical user interface library",           "MIT License"    },
-        { "liblo",             "Lightweight OSC (Open Sound Control) implementation",      "LGPL 2.1"       },
-        { "nlohmann/json",     "Single-header JSON parser and serialiser for C++",         "MIT License"    },
-        { "uWebSockets",       "High-performance WebSocket server library",                "Apache 2.0"     },
-        { "uSockets",          "Low-level async networking (used by uWebSockets)",         "Apache 2.0"     },
-        { "wheel-rpm-lib",     "Steering wheel RPM LED control via HID",                  "Internal"       },
-        { "Google Fonts",      "Used for the Resonite and VRChat color themes",            "Apache 2.0 / OFL 1.1"   },
-        { "Font Awesome 6",    "Icon font used throughout the user interface",             "SIL OFL 1.1"    },
+        { "SDL3",                 "Cross-platform hardware abstraction (input, audio, video)", "zlib License"         },
+        { "Dear ImGui",           "Immediate-mode graphical user interface library",           "MIT License"          },
+        { "liblo",                "Lightweight OSC (Open Sound Control) implementation",       "LGPL 2.1"             },
+        { "nlohmann/json",        "Single-header JSON parser and serialiser for C++",          "MIT License"          },
+        { "uWebSockets",          "High-performance WebSocket server library",                 "Apache 2.0"           },
+        { "uSockets",             "Low-level async networking (used by uWebSockets)",          "Apache 2.0"           },
+        { "wheel-rpm-lib",        "Steering wheel RPM LED control via HID",                    "Internal"             },
+        { "Google Fonts",         "Used for the Resonite and VRChat color themes",             "Apache 2.0 / OFL 1.1" },
+        { "Font Awesome 6",       "Icon font used throughout the user interface",              "SIL OFL 1.1"          },
+        { "Kenney Input Prompts", "Icon fonts for game controller and device glyphs",          "CC0 1.0"              },
     };
 
     if (ImGui::BeginTable("##libs", 3,

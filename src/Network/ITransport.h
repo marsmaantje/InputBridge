@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <functional>
 #include "Mappers/OutputMapper.h"
 
 /**
@@ -13,15 +12,6 @@
  * MIDI, raw TCP, or serial).  The application code only depends on this
  * interface; protocol-specific details are hidden inside each concrete
  * implementation.
- *
- * Implementing a new transport
- * ----------------------------
- * 1. Create a class that inherits ITransport (e.g. MidiTransport).
- * 2. Implement all pure-virtual methods.
- * 3. Register the transport in Application::RegisterProtocols() alongside
- *    OSCServer and WebSocketServer.
- * 4. Add a CMake option (ENABLE_MIDI, etc.) if the transport has optional
- *    dependencies; guard only the registration call, not the interface.
  *
  * Thread-safety contract
  * ----------------------

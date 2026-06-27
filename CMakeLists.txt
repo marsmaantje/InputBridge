@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.9.2)
+project(InputBridge VERSION 0.10.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -261,6 +261,12 @@ add_executable(InputBridge
     # Device input and protocol output mappings
     src/Mappers/ButtonBinder.cpp
     src/Mappers/InputMapper.cpp
+    src/Mappers/InputMapping/MappingProfileStore.cpp
+    src/Mappers/InputMapping/InputBindingListener.cpp
+    src/Mappers/InputMapping/OutputRuntimeUpdater.cpp
+    src/Mappers/InputMapping/InputMapperUI.cpp
+    src/Mappers/InputMapping/InputSignalProcessing.cpp
+    src/Mappers/InputMapping/ProtocolFieldUtils.cpp
     src/Mappers/OutputMapper.cpp
     # WebSocket and OSC protocols
     src/Protocols/OSCValidation.h
@@ -277,14 +283,17 @@ add_executable(InputBridge
     src/Protocols/ProtocolRegistry.cpp
     # Utilities
     src/Utils/FileDialog.cpp
+    src/Utils/OpenFolder.cpp
     # UI helpers
     src/UI/ThemeManager.cpp
     src/UI/AboutWindow.cpp
     src/UI/DebugLogPanel.cpp
     src/UI/FontManager.cpp
+    src/UI/DeviceIconProvider.cpp
     src/UI/DevicePanel.cpp
     src/UI/SettingsPanel.cpp
     src/UI/SidebarLayout.cpp
+    src/UI/InputLabelProvider.cpp
     # Steering wheel RPM LED support (formerly lib/wheel-rpm-lib)
     src/WheelRpm/src/core/sdl_transport.cpp
     src/WheelRpm/src/core/wheel_manager.cpp
@@ -325,10 +334,10 @@ target_include_directories(InputBridge PRIVATE
 
 if(ENABLE_EXCLUSIVE_INPUT)
     target_sources(InputBridge PRIVATE
-        src/Mappers/InputExclusiveMode.cpp
-        src/Mappers/LinuxExclusiveMode.cpp
-        src/Mappers/MacOSExclusiveMode.cpp
-        src/Mappers/WindowsExclusiveMode.cpp
+        src/ExclusiveMode/InputExclusiveMode.cpp
+        src/ExclusiveMode/LinuxExclusiveMode.cpp
+        src/ExclusiveMode/MacOSExclusiveMode.cpp
+        src/ExclusiveMode/WindowsExclusiveMode.cpp
     )
 endif()
 
@@ -456,11 +465,19 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/themes"
 
 # Copy the fonts/ folder next to the executable at build time so the
 # program can find its fonts in the development build layout.
+# Map files (*.txt) are excluded — they are only needed to look up codepoints
+# when editing KenneyIcons.h and serve no purpose at runtime.
 add_custom_command(TARGET InputBridge POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
     "$<TARGET_FILE_DIR:InputBridge>/fonts"
     COMMENT "Copying fonts/ to build output directory"
+)
+add_custom_command(TARGET InputBridge POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        -DFONT_DIR="$<TARGET_FILE_DIR:InputBridge>/fonts"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RemoveFontMapFiles.cmake"
+    COMMENT "Removing font map files from build output directory"
 )
 
 # Install the fonts/ folder alongside the binary.

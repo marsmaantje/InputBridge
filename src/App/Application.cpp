@@ -117,7 +117,7 @@ void Application::SetupImGui()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // imgui.ini stores UI layout state — it is written at runtime so it must
+    // imgui.ini stores UI layout state - it is written at runtime so it must
     // live in the writable XDG config directory, not next to the executable
     // (which is read-only inside an AppImage squashfs mount).
     m_iniFilename = XdgDirs::configDir() + "imgui.ini";
@@ -159,7 +159,7 @@ void Application::InitialDeviceScan()
 // already exist at the destination so a partial or repeated migration is safe.
 // The old directory is intentionally left intact so a downgrade still works.
 //
-// Only runs on Linux/FreeBSD — on Windows and macOS SDL_GetPrefPath was never
+// Only runs on Linux/FreeBSD - on Windows and macOS SDL_GetPrefPath was never
 // changed, so there is nothing to migrate on those platforms.
 
 void Application::MigrateUserData()
@@ -175,7 +175,7 @@ void Application::MigrateUserData()
     if (!home || home[0] == '\0') return;
 
     const fs::path oldRoot = fs::path(home) / ".local/share/InputBridge/InputBridge";
-    if (!fs::exists(oldRoot)) return; // Fresh install — nothing to do.
+    if (!fs::exists(oldRoot)) return; // Fresh install - nothing to do.
 
     const fs::path newConfig = XdgDirs::configDir(); // ~/.config/InputBridge/
     const fs::path newData   = XdgDirs::dataDir();   // ~/.local/share/InputBridge/
@@ -246,6 +246,7 @@ void Application::RestorePreferences()
     m_uiScale         = m_prefs.GetFloat(PrefKeys::UIScale,           1.3f);
     m_fontScale       = m_prefs.GetFloat(PrefKeys::FontScale,         1.0f);
     m_scaleWithWindow = m_prefs.GetBool(PrefKeys::ScaleWithWindow,    false);
+    m_showNamedInputs = m_prefs.GetBool("ShowNamedInputs",           false);
     m_serverUpdateRate  = m_prefs.GetInt(PrefKeys::NetworkSection, PrefKeys::UpdateRate, 60);
     m_serverDynamicRate = m_prefs.GetBool(PrefKeys::NetworkSection, PrefKeys::DynamicRate, false);
 
@@ -360,7 +361,7 @@ void Application::ProcessEvents()
         // SDL_Joystick layer has already settled, so SDL_EVENT_GAMEPAD_ADDED
         // fires once the fully-remapped gamepad handle is ready.  At that
         // point sensor-enabled state has been reset to false by SDL internally,
-        // so we must re-enable it here — HandleDeviceAdded already does this
+        // so we must re-enable it here - HandleDeviceAdded already does this
         // for the initial connection, but not for a mid-session re-presentation.
         if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
             for (auto& dev : dm.GetDevices()) {
@@ -374,7 +375,7 @@ void Application::ProcessEvents()
         // Re-enable IMU sensors on all gamepads whenever the window regains
         // focus.  Steam Input (and other overlays) can silently reset
         // SDL_SetGamepadSensorEnabled to false when they take control of the
-        // device — even without triggering a remove/add cycle.  Re-enabling
+        // device - even without triggering a remove/add cycle.  Re-enabling
         // here ensures gyro and accel readings resume as soon as the user
         // returns to InputBridge (e.g. after dismissing the Steam overlay).
         if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
@@ -402,7 +403,7 @@ void Application::UpdateLogic(Uint64 frame_start_time)
     const bool isMinimized = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED) != 0;
     DeviceManager::GetInstance().Update(isMinimized);
 
-    // Periodic sensor re-enable (every 2 s) — safety net for Steam Input
+    // Periodic sensor re-enable (every 2 s) - safety net for Steam Input
     // silently resetting SDL_SetGamepadSensorEnabled mid-session without any
     // device remove/add or focus event.  Only calls SDL_SetGamepadSensorEnabled
     // when a sensor is confirmed present but currently disabled, so the cost on
@@ -505,7 +506,8 @@ void Application::RenderFrame(Uint64 frame_start_time)
         m_window,
         k_InitialWidth,
         k_InitialHeight,
-        m_running
+        m_running,
+        m_showNamedInputs
     };
     DrawSidebarLayout(ctx);
 
@@ -555,7 +557,7 @@ void Application::Shutdown()
     // would be destroyed AFTER OSCServer during normal static teardown.
     // Protocol destructors (e.g. OSCProtocol::~OSCProtocol) call back into
     // OSCServer::GetInstance(), which would be a use-after-destruction crash.
-    // Clearing the protocol map now — while all singletons are still alive —
+    // Clearing the protocol map now - while all singletons are still alive -
     // prevents that entire class of ordering bugs.
     ProtocolManager::GetInstance().Clear();
 
@@ -564,8 +566,8 @@ void Application::Shutdown()
     // m_OutputMapper->StopAllHapticEffects() synchronously via their stored raw
     // pointer.  If OutputMapper::Shutdown() runs first it frees the OutputMapper
     // object, turning those calls into use-after-free crashes (segfault at
-    // OutputMapper.cpp StopAllHapticEffects).  Stopping the servers here —
-    // while OutputMapper is still alive — prevents that entirely.
+    // OutputMapper.cpp StopAllHapticEffects).  Stopping the servers here -
+    // while OutputMapper is still alive - prevents that entirely.
     OSCServer::GetInstance().SaveConfig(m_prefs);
     WebSocketServer::GetInstance().SaveConfig(m_prefs);
     OSCServer::GetInstance().Stop();
@@ -592,7 +594,7 @@ void Application::Shutdown()
 
     // Close haptic and joystick devices before SDL_Quit().  DeviceManager is a
     // static singleton; its destructor (which calls CloseAllDevices) runs after
-    // main() returns and therefore after SDL_Quit() — too late.  Calling it
+    // main() returns and therefore after SDL_Quit() - too late.  Calling it
     // explicitly here keeps all SDL API calls within SDL's lifetime.
     DeviceManager::GetInstance().CloseAllDevices();
 

@@ -1,5 +1,23 @@
 #pragma once
 
+// ─────────────────────────────────────────────────────────────────────────────
+// OutputMapper provides the central interface for output-device haptics.
+//
+// Features:
+// • Manages active haptic output targets and device lifecycle events.
+// • Processes and dispatches queued haptic commands from external threads.
+// • Supports multiple force-feedback effect types, including rumble,
+//   constant force, periodic effects, condition effects, and gain control.
+// • Provides DualSense adaptive trigger effect support.
+// • Exposes a thread-safe API for servers and background systems to
+//   generate haptic feedback.
+// • Tracks haptic activity state and offers runtime controls for
+//   stopping effects and monitoring output status.
+//
+// All haptic effects are queued from external callers and executed on
+// the main thread to ensure safe interaction with underlying devices.
+// ─────────────────────────────────────────────────────────────────────────────
+
 #include <vector>
 #include <memory>
 #include <mutex>

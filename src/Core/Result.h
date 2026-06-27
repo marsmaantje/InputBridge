@@ -3,7 +3,7 @@
 #include <utility>
 #include <type_traits>
 #include <stdexcept>
-#include "Core/Errors.h"
+#include "Errors.h"
 
 namespace InputBridge
 {

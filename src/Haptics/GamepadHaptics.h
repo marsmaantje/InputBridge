@@ -1,5 +1,5 @@
 /**
- * @file GamepadHaptics.h (Refactored)
+ * @file GamepadHaptics.h
  * @brief Unified haptic interface for game controllers
  * 
  * This class provides a high-level interface that automatically delegates to
@@ -205,11 +205,16 @@ private:
 
     // ==================== Steam Controller Constants ====================
 
-    static constexpr uint16_t VALVE_VENDOR_ID              = 0x28DE;
-    static constexpr uint16_t STEAM_CONTROLLER_USB_PID      = 0x1102; ///< V1 wired USB (D0G)
-    static constexpr uint16_t STEAM_CONTROLLER_WIRELESS_PID = 0x1106; ///< V1 wireless dongle (D0G)
-    static constexpr uint16_t STEAM_CONTROLLER_V2_USB_PID   = 0x1201; ///< V2 wired USB (HEADCRAB)
-    static constexpr uint16_t STEAM_CONTROLLER_V2_BT_PID    = 0x1202; ///< V2 Bluetooth (HEADCRAB)
+    static constexpr uint16_t VALVE_VENDOR_ID                   = 0x28DE;
+    static constexpr uint16_t STEAM_CONTROLLER_USB_PID          = 0x1102; ///< V1 wired USB (D0G)
+    static constexpr uint16_t STEAM_CONTROLLER_WIRELESS_PID     = 0x1106; ///< V1 wireless dongle (D0G)
+    static constexpr uint16_t STEAM_CONTROLLER_V2_USB_PID       = 0x1201; ///< V2 wired USB (HEADCRAB)
+    static constexpr uint16_t STEAM_CONTROLLER_V2_BT_PID        = 0x1202; ///< V2 Bluetooth (HEADCRAB)
+    // SDL 3.4.10+ (SDL_hidapi_steam_triton.c): third-generation Steam Controller
+    static constexpr uint16_t STEAM_CONTROLLER_TRITON_USB_PID   = 0x1302; ///< V2 wired USB (TRITON)
+    static constexpr uint16_t STEAM_CONTROLLER_TRITON_BLE_PID   = 0x1303; ///< V2 Bluetooth LE (TRITON)
+    static constexpr uint16_t STEAM_CONTROLLER_PROTEUS_PID      = 0x1304; ///< V2 Proteus dongle (TRITON)
+    static constexpr uint16_t STEAM_CONTROLLER_NEREID_PID       = 0x1305; ///< V2 Nereid dongle (TRITON)
 
     /// ID_TRIGGER_HAPTIC_PULSE command byte, per Valve controller_constants.h
     static constexpr uint8_t  STEAM_HAPTIC_PULSE_MSG_ID     = 0x8F;

@@ -81,6 +81,11 @@ public:
      */
     bool IsBackupDirectoryValid() const;
 
+    /**
+     * Get the directory backups are stored in, as configured at construction.
+     */
+    const std::string& GetBackupDir() const { return m_backupDir; }
+
 private:
     std::string m_backupDir;
     size_t m_maxBackups;
