@@ -1,6 +1,7 @@
 #include "InputLabelProvider.h"
 
 #include "Devices/DeviceState.h"
+#include "SDL3/SDL_gamepad.h"
 #include "UI/DeviceIconProvider.h"
 #include "UI/KenneyIcons.h"
 
@@ -206,7 +207,7 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         case SDL_GAMEPAD_BUTTON_WEST:            return withFam("Square",        0xE04F); // playstation_button_square
         case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Triangle",      0xE051); // playstation_button_triangle
         case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Share/Create",  0xE01C); // playstation5_button_create (general)
-        case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("PS",            0xE03D); // playstation_button_analog
+        //case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("PS",            0xE03D); // playstation5_button_create
         case SDL_GAMEPAD_BUTTON_START:           return withFam("Options",       0xE022); // playstation5_button_options
         case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L3",            0xE04B); // playstation_button_l3
         case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R3",            0xE04D); // playstation_button_r3
@@ -216,6 +217,8 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE055); // playstation_dpad_down
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE059); // playstation_dpad_left
         case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE05C); // playstation_dpad_right
+        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return withFam("Touchpad",      0xE00F); // playstation_button_analog
+        case SDL_GAMEPAD_BUTTON_MISC1:           return withFam("Mute",          0xE020); // playstation5_button_mute
         default: break;
         }
         break;
