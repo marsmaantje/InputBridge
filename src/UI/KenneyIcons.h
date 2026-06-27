@@ -387,6 +387,10 @@ constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
 #define KENNEY_STEAMDECK_TRACKPAD_L_ALL       KENNEY_ICON_STR(KENNEY_STEAMDECK_TRACKPAD_L_ALL_CP)
 #define KENNEY_STEAMDECK_TRACKPAD_R_ALL_CP    0xE05F  // steamdeck_trackpad_r_all (click anywhere)
 #define KENNEY_STEAMDECK_TRACKPAD_R_ALL       KENNEY_ICON_STR(KENNEY_STEAMDECK_TRACKPAD_R_ALL_CP)
+#define KENNEY_STEAMDECK_TRACKPAD_L_CP        0xE04B  // steamdeck_trackpad_l
+#define KENNEY_STEAMDECK_TRACKPAD_L           KENNEY_ICON_STR(KENNEY_STEAMDECK_TRACKPAD_L_CP)
+#define KENNEY_STEAMDECK_TRACKPAD_R_CP        0xE05E  // steamdeck_trackpad_r
+#define KENNEY_STEAMDECK_TRACKPAD_R           KENNEY_ICON_STR(KENNEY_STEAMDECK_TRACKPAD_R_CP)
 
 // ---------------------------------------------------------------------------
 // Steam Controller per-input icons  (kenney_input_steam_controller.ttf)

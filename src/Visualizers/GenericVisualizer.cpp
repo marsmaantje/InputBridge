@@ -135,46 +135,83 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
     // ── Buttons ──────────────────────────────────────────────────────────
     if (ImGui::CollapsingHeader("Buttons", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (m_showLabels) {
-            // Named mode: one row per button with icon + name + active highlight
-            if (ImGui::BeginTable("ButtonsTable", 3,
-                    ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
-                // "PRESSED" is the widest string this column ever shows.
-                const float stateColWidth =
-                    ImGui::CalcTextSize("PRESSED").x
-                    + ImGui::GetStyle().CellPadding.x * 2.0f;
+            // Named mode: icons flow inline just like the numbered compact
+            // layout, but each slot renders the Kenney glyph (or the button
+            // name as a fallback) and tints green when pressed.
+            const float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
+            const float availW      = ImGui::GetContentRegionAvail().x;
+            const float cellSize    = ImGui::GetTextLineHeight(); // minimum slot width
 
-                ImGui::TableSetupColumn("Icon",  ImGuiTableColumnFlags_WidthFixed,  28.0f);
-                ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed,  stateColWidth);
+            for (int i = 0; i < dev.num_buttons; ++i) {
+                const bool pressed = SDL_GetJoystickButton(dev.joystick, i) != 0;
+                InputLabel lbl     = InputLabelProvider::GetButtonLabel(dev, i);
 
-                for (int i = 0; i < dev.num_buttons; ++i) {
-                    const bool pressed = SDL_GetJoystickButton(dev.joystick, i) != 0;
-                    InputLabel lbl     = InputLabelProvider::GetButtonLabel(dev, i);
+                // ── Per-glyph size probe ──────────────────────────────────
+                // We must know the slot width *before* the wrap/SameLine
+                // decision, so probe the glyph metrics up front and reuse
+                // the results when drawing.
+                const float textH    = ImGui::GetTextLineHeight();
+                const float bakeSize = ImGui::GetStyle().FontSizeBase * 4.0f;
+                float renderSize     = textH;
+                float y0_scaled      = 0.0f;
+                float glyphH_scaled  = textH;
 
-                    ImGui::TableNextRow();
-
-                    // Highlight the whole row when pressed
-                    if (pressed) {
-                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                            ImGui::GetColorU32(ImVec4(0.0f, 0.55f, 0.0f, 0.35f)));
+                if (lbl.icon.IsValid()) {
+                    if (ImFontBaked* baked = lbl.icon.font->GetFontBaked(bakeSize)) {
+                        const ImFontGlyph* g = baked->FindGlyphNoFallback(lbl.icon.codepoint);
+                        if (g && baked->Size > 0.0f) {
+                            const float glyphH = g->Y1 - g->Y0;
+                            const float fill   = glyphH / baked->Size;
+                            if (fill > 0.01f) {
+                                renderSize    = std::min(textH / fill, textH * 2.5f);
+                                y0_scaled     = (g->Y0 / baked->Size) * renderSize;
+                                glyphH_scaled = (glyphH / baked->Size) * renderSize;
+                            }
+                        }
                     }
-
-                    ImGui::TableSetColumnIndex(0);
-                    DrawInlineIcon(lbl.icon);
-
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TextColored(
-                        pressed ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f)
-                                : ImGui::GetStyle().Colors[ImGuiCol_Text],
-                        "%s", lbl.name.c_str());
-
-                    ImGui::TableSetColumnIndex(2);
-                    if (pressed)
-                        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "PRESSED");
-                    else
-                        ImGui::TextDisabled("--");
                 }
-                ImGui::EndTable();
+
+                // The slot must be at least as wide as the glyph we will draw.
+                // Using a fixed cellSize (= textH) was the bug: glyphs with a
+                // low fill ratio get a large renderSize and bleed into the next
+                // slot when only textH of Dummy space was reserved.
+                const float slotSizeActual = std::max(renderSize, cellSize);
+                const float slotW          = slotSizeActual + itemSpacing;
+
+                // ── Wrap / SameLine ───────────────────────────────────────
+                if (i > 0) {
+                    float curX = ImGui::GetCursorScreenPos().x
+                                 - ImGui::GetWindowPos().x
+                                 - ImGui::GetScrollX();
+                    if (curX + slotW <= availW)
+                        ImGui::SameLine(0.0f, itemSpacing);
+                }
+
+                // Choose tint: bright green when pressed, dim when released.
+                const ImVec4 tint = pressed
+                    ? ImVec4(0.2f, 1.0f, 0.2f, 1.0f)
+                    : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+
+                // ── Draw ─────────────────────────────────────────────────
+                if (lbl.icon.IsValid()) {
+                    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+                    const float  iconX  = cursor.x + (slotSizeActual - renderSize) * 0.5f;
+                    // Height is always cellSize — only the width varies per glyph.
+                    // Centering vertically within cellSize, same as DrawInlineIcon.
+                    const float  iconY  = cursor.y + (cellSize * 0.5f)
+                                          - y0_scaled - glyphH_scaled * 0.5f;
+
+                    // Width = slotSizeActual so wide glyphs don't bleed into
+                    // the next slot. Height = cellSize so rows stay flush.
+                    ImGui::Dummy(ImVec2(slotSizeActual, cellSize));
+                    ImGui::GetWindowDrawList()->AddText(
+                        lbl.icon.font, renderSize, ImVec2(iconX, iconY),
+                        ImGui::GetColorU32(tint),
+                        lbl.icon.glyph);
+                } else {
+                    // No icon — fall back to the short button name.
+                    ImGui::TextColored(tint, "%s", lbl.name.c_str());
+                }
             }
         } else {
             // Numbered compact mode (original layout)

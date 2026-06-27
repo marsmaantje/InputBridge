@@ -140,11 +140,6 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
         switch (ga) {
         case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE05D); // steam_stick_horizontal
         case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE063); // steam_stick_vertical
-        // The Steam Controller has no second analog stick — SDL maps the
-        // right trackpad's swipe to RIGHTX/RIGHTY for gamepad-API compatibility.
-        // The Steam Controller font only has a plain (undirected) trackpad
-        // glyph; Steam Deck's trackpad icons include horizontal/vertical
-        // arrows, so borrow those for a clearer axis indicator.
         case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Pad X", 0xE063, FontFamily::SteamDeck }; // steamdeck_trackpad_r_horizontal
         case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Pad Y", 0xE06C, FontFamily::SteamDeck }; // steamdeck_trackpad_r_vertical
         case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("Left Trigger",      0xE04D); // steam_lt
@@ -275,8 +270,10 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         switch (gb) {
         case SDL_GAMEPAD_BUTTON_LEFT_STICK:   return { "L Stick",     0xE034, FontFamily::SteamDeck }; // steamdeck_stick_l_press
         case SDL_GAMEPAD_BUTTON_RIGHT_STICK:  return { "R Stick",     0xE03C, FontFamily::SteamDeck }; // steamdeck_stick_r_press
-        case SDL_GAMEPAD_BUTTON_TOUCHPAD:     return { "L Touchpad",  0xE04C, FontFamily::SteamDeck }; // steamdeck_trackpad_l_all
-        case SDL_GAMEPAD_BUTTON_MISC2:        return { "R Touchpad",  0xE05F, FontFamily::SteamDeck }; // steamdeck_trackpad_r_all
+        case SDL_GAMEPAD_BUTTON_TOUCHPAD:     return { "L Touchpad",  0xE04B, FontFamily::SteamDeck }; // steamdeck_trackpad_l
+        case SDL_GAMEPAD_BUTTON_MISC2:        return { "R Touchpad",  0xE05E, FontFamily::SteamDeck }; // steamdeck_trackpad_r
+        case SDL_GAMEPAD_BUTTON_BACK:         return { "Back",        0xE01B, FontFamily::SteamDeck }; // steamdeck_button_view
+        case SDL_GAMEPAD_BUTTON_START:        return { "Start",       0xE00F, FontFamily::SteamDeck }; // steamdeck_button_options
         case SDL_GAMEPAD_BUTTON_DPAD_UP:      return { "D-Pad Up",    0xE02C, FontFamily::SteamDeck }; // steamdeck_dpad_up
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN:    return { "D-Pad Down",  0xE023, FontFamily::SteamDeck }; // steamdeck_dpad_down
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT:    return { "D-Pad Left",  0xE027, FontFamily::SteamDeck }; // steamdeck_dpad_left
@@ -305,14 +302,7 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE03C); // steam_dpad_down
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE040); // steam_dpad_left
         case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE043); // steam_dpad_right
-        // V2 adds back-grip paddles, a touchpad-click, and a quick-access
-        // button. The Steam Controller font already has its own dedicated
-        // glyphs for the paddles and quick-access button (just discovered —
-        // they share the same codepoints used for other icons in the *Steam
-        // Deck* font, which is exactly why borrowing those Steam Deck
-        // codepoints rendered as garbage before InputFont() was fixed to
-        // resolve fonts by tag instead of by device). These are shared by
-        // both V1 and V2 (V2 only overrides TOUCHPAD/MISC2/sticks above).
+        // V2 adds back-grip paddles, a touchpad-click, and a quick-access button.
         case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1:    return withFam("L4",           0xE004); // controller_button_l4
         case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2:    return withFam("L5",           0xE006); // controller_button_l5
         case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1:   return withFam("R4",           0xE010); // controller_button_r4
@@ -543,7 +533,9 @@ InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint
         // Centered — no direction held. Steam Controller V2 has a dedicated
         // neutral D-Pad glyph in the Steam Deck font; everyone else falls
         // back to the generic joystick glyph.
-        if (fam == FontFamily::SteamControllerV2)
+        if (fam == FontFamily::SteamController)
+            result.icon = MakeIcon(InputFont(dev, FontFamily::SteamController), 0xE03A); // steam_dpad
+        else if (fam == FontFamily::SteamControllerV2)
             result.icon = MakeIcon(InputFont(dev, FontFamily::SteamDeck), 0xE021); // steamdeck_dpad
         else
             result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE013); // generic_joystick
