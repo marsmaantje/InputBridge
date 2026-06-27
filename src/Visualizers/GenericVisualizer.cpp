@@ -68,6 +68,21 @@ void DrawInlineIcon(const DeviceIcon& icon)
         icon.glyph);
 }
 
+// Draws the progress bar + center tick for one axis row in whichever is the
+// current (last) table column. Shared by both the labeled and unlabeled
+// Axes table layouts below.
+void DrawAxisBar(float norm)
+{
+    ImGui::ProgressBar((norm + 1.0f) * 0.5f, ImVec2(-1, 0), "");
+
+    ImVec2 p_min = ImGui::GetItemRectMin();
+    ImVec2 p_max = ImGui::GetItemRectMax();
+    float  cx    = (p_min.x + p_max.x) * 0.5f;
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(cx, p_min.y), ImVec2(cx, p_max.y),
+        IM_COL32(255, 255, 255, 200), 2.0f);
+}
+
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -84,51 +99,65 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
 
     // ── Axes ─────────────────────────────────────────────────────────────
     if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {
-        // Size the label column from real text metrics so values are never
-        // clipped — e.g. "Right Trigger: -32768" is the longest realistic
-        // "name: value" pairing (axis values range -32768..32767).
-        const float labelColWidth =
-            ImGui::CalcTextSize("Right Trigger: -32768").x
-            + ImGui::GetStyle().CellPadding.x * 2.0f;
+        if (m_showLabels) {
+            // Size the label column from real text metrics so values are never
+            // clipped — e.g. "Right Trigger: -32768" is the longest realistic
+            // "name: value" pairing (axis values range -32768..32767).
+            const float labelColWidth =
+                ImGui::CalcTextSize("Right Trigger: -32768").x
+                + ImGui::GetStyle().CellPadding.x * 2.0f;
 
-        if (ImGui::BeginTable("AxesTable", 3,
-                ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("Icon",  ImGuiTableColumnFlags_WidthFixed,   28.0f);
-            ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,  labelColWidth);
-            ImGui::TableSetupColumn("Bar",   ImGuiTableColumnFlags_WidthStretch);
+            if (ImGui::BeginTable("AxesTable", 3,
+                    ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("Icon",  ImGuiTableColumnFlags_WidthFixed,   28.0f);
+                ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,  labelColWidth);
+                ImGui::TableSetupColumn("Bar",   ImGuiTableColumnFlags_WidthStretch);
 
-            for (int i = 0; i < dev.num_axes; ++i) {
-                Sint16 val  = SDL_GetJoystickAxis(dev.joystick, i);
-                float  norm = static_cast<float>(val) / 32767.0f;
+                for (int i = 0; i < dev.num_axes; ++i) {
+                    Sint16 val  = SDL_GetJoystickAxis(dev.joystick, i);
+                    float  norm = static_cast<float>(val) / 32767.0f;
 
-                ImGui::TableNextRow();
+                    ImGui::TableNextRow();
 
-                // Icon column
-                ImGui::TableSetColumnIndex(0);
-                if (m_showLabels) {
+                    ImGui::TableSetColumnIndex(0);
                     InputLabel lbl = InputLabelProvider::GetAxisLabel(dev, i);
                     DrawInlineIcon(lbl.icon);
 
-                    // Label column
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Text("%s: %d", lbl.name.c_str(), val);
-                } else {
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("Axis %d: %d", i, val);
+
+                    ImGui::TableSetColumnIndex(2);
+                    DrawAxisBar(norm);
                 }
-
-                // Bar column
-                ImGui::TableSetColumnIndex(2);
-                ImGui::ProgressBar((norm + 1.0f) * 0.5f, ImVec2(-1, 0), "");
-
-                ImVec2 p_min = ImGui::GetItemRectMin();
-                ImVec2 p_max = ImGui::GetItemRectMax();
-                float  cx    = (p_min.x + p_max.x) * 0.5f;
-                ImGui::GetWindowDrawList()->AddLine(
-                    ImVec2(cx, p_min.y), ImVec2(cx, p_max.y),
-                    IM_COL32(255, 255, 255, 200), 2.0f);
+                ImGui::EndTable();
             }
-            ImGui::EndTable();
+        } else {
+            // Numbered compact mode: no icon column at all (there is no icon
+            // to show), so the table is genuinely 2 columns rather than a
+            // 3-column table with an unused, empty icon cell.
+            const float labelColWidth =
+                ImGui::CalcTextSize("Axis 99: -32768").x
+                + ImGui::GetStyle().CellPadding.x * 2.0f;
+
+            if (ImGui::BeginTable("AxesTable", 2,
+                    ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, labelColWidth);
+                ImGui::TableSetupColumn("Bar",   ImGuiTableColumnFlags_WidthStretch);
+
+                for (int i = 0; i < dev.num_axes; ++i) {
+                    Sint16 val  = SDL_GetJoystickAxis(dev.joystick, i);
+                    float  norm = static_cast<float>(val) / 32767.0f;
+
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Axis %d: %d", i, val);
+
+                    ImGui::TableSetColumnIndex(1);
+                    DrawAxisBar(norm);
+                }
+                ImGui::EndTable();
+            }
         }
     }
 
