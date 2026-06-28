@@ -809,7 +809,10 @@ void InputMapperUI::DrawButtonToAnalogSection(MappingProfile& profile, const Pro
                                                bool& changed) {
     ImGui::Spacing();
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.f, 1.f), "Button to Analog Mappings  (%s)", outDef->name.c_str());
+    if (outDef)
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.f, 1.f), "Button to Analog Mappings  (%s)", outDef->name.c_str());
+    else
+        ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.4f, 1.f), "Button to Analog Mappings  (legacy - no protocol selected)");
     ImGui::TextWrapped("Override an analog output with a fixed value when a button is held.");
     if (ImGui::Button("Add Mapping")) {
         profile.buttonMappings.push_back({});

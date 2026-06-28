@@ -343,11 +343,16 @@ void SeedBundledPresets(const std::filesystem::path& dir) {
 }
 
 // Resolves the live ProtocolDefinition currently driving OSC output when no
-// id has been explicitly selected. SteamLink/Project Babble now ship as
-// plain JSON definitions (see protocols/definitions/), so they're already
-// covered by the id → registry lookup in GetActiveOutputDefinition and no
-// longer need a class-based fallback here.
+// id has been explicitly selected. Profiles created before per-profile
+// protocol-definition ids existed have an empty oscOutputProtocolId and
+// instead rely on OSCServer's older protocol-name selector, so that name
+// still needs to map onto something. SteamLink/Project Babble now ship as
+// plain JSON definitions (see protocols/definitions/) rather than C++
+// classes, so resolve by their stable ids instead of constructing a
+// class-based default.
 const ProtocolDefinition* ResolveOscFallbackDefinition(const std::string& protocol) {
+    if (protocol == "SteamLink OSC") return ProtocolRegistry::GetInstance().FindById("steamlink");
+    if (protocol == "Project Babble OSC") return ProtocolRegistry::GetInstance().FindById("projectbabble");
     return nullptr;
 }
 
