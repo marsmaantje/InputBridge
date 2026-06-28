@@ -6,8 +6,6 @@
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
 #include "Preferences/Preferences.h"
-#include "Protocols/OSCProjectBabbleProtocol.h"
-#include "Protocols/OSCSteamLinkProtocol.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 #include "Utils/XdgDirs.h"
@@ -344,22 +342,12 @@ void SeedBundledPresets(const std::filesystem::path& dir) {
     }
 }
 
-// Resolves the live ProtocolDefinition currently driving OSC output,
-// following the same id → registry lookup → SteamLink/ProjectBabble
-// built-in-fallback chain used by GetActiveOutputDefinition. Recomputed on
-// every call (not cached past the first) because CreateDefaultDefinition()
-// pulls in whatever custom fields are currently in the field catalog.
+// Resolves the live ProtocolDefinition currently driving OSC output when no
+// id has been explicitly selected. SteamLink/Project Babble now ship as
+// plain JSON definitions (see protocols/definitions/), so they're already
+// covered by the id → registry lookup in GetActiveOutputDefinition and no
+// longer need a class-based fallback here.
 const ProtocolDefinition* ResolveOscFallbackDefinition(const std::string& protocol) {
-    if (protocol == "SteamLink OSC") {
-        static ProtocolDefinition s_steamLinkDef;
-        s_steamLinkDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
-        return &s_steamLinkDef;
-    }
-    if (protocol == "Project Babble OSC") {
-        static ProtocolDefinition s_projectBabbleDef;
-        s_projectBabbleDef = OSCProjectBabbleProtocol::CreateDefaultDefinition();
-        return &s_projectBabbleDef;
-    }
     return nullptr;
 }
 

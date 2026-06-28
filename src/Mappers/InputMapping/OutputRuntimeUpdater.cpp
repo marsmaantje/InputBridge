@@ -5,8 +5,6 @@
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
 #include "ProtocolFieldUtils.h"
-#include "Protocols/OSCProjectBabbleProtocol.h"
-#include "Protocols/OSCSteamLinkProtocol.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 
@@ -217,30 +215,17 @@ bool HasDigitalFieldSource(const MappingProfile& profile, const std::string& fie
 }
 
 // ── Live OSC output-definition resolution ──────────────────────────────────
-// Resolves the OSC server's *actual current* output definition: its
-// explicitly-selected id if set, falling back to the SteamLink/Project
-// Babble built-ins if the server is running one of those legacy protocol
-// names. This one block was duplicated three times across the original
-// Update() and GetOutputPreview() (the "oscDef2" digital-field-enumeration
-// resolution, the "oscDef" broadcast resolution, and the preview's mirror of
-// it) — callers compose it differently (see BroadcastValues and
-// AppendOscPreview) but all three start from this same resolution.
+// Resolves the OSC server's *actual current* output definition via its
+// explicitly-selected id. This one block was duplicated three times across
+// the original Update() and GetOutputPreview() (the "oscDef2"
+// digital-field-enumeration resolution, the "oscDef" broadcast resolution,
+// and the preview's mirror of it) — callers compose it differently (see
+// BroadcastValues and AppendOscPreview) but all three start from this same
+// resolution.
 const ProtocolDefinition* ResolveLiveOscOutputDefinition() {
     auto& osc = OSCServer::GetInstance();
     std::string oscId = osc.GetOutputDefinitionId();
     if (!oscId.empty()) return ProtocolRegistry::GetInstance().FindById(oscId);
-
-    std::string protocol = osc.GetProtocol();
-    if (protocol == "SteamLink OSC") {
-        static ProtocolDefinition s_steamLinkDef;
-        s_steamLinkDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
-        return &s_steamLinkDef;
-    }
-    if (protocol == "Project Babble OSC") {
-        static ProtocolDefinition s_projectBabbleDef;
-        s_projectBabbleDef = OSCProjectBabbleProtocol::CreateDefaultDefinition();
-        return &s_projectBabbleDef;
-    }
     return nullptr;
 }
 

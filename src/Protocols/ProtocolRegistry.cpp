@@ -626,6 +626,35 @@ void ProtocolRegistry::LoadDefinitionFiles() {
             def.name = j.value("name", "Unnamed");
             if (def.id.empty()) continue;
 
+            // Guard against two files on disk carrying the same "id" (e.g. a
+            // stray manual copy of a definition file). Loading both would give
+            // the editor list two rows with an identical ImGui id, which trips
+            // a "conflicting ID" assertion. Keep whichever file is encountered
+            // first and skip the rest.
+            if (FindById(def.id)) {
+                LOG_ERROR(kTag, "Skipping %s: duplicate protocol id '%s' already loaded",
+                          entry.path().string().c_str(), def.id.c_str());
+                continue;
+            }
+
+            // Guard against two files carrying *different* ids but the same
+            // display name (e.g. a leftover auto-generated definition from an
+            // older build, sitting alongside its replacement). The id-only
+            // check above doesn't catch this, but the editor list row's
+            // ImGui id is still derived from "name##id" and renders two
+            // visually-identical rows, which is just as confusing and can
+            // still trip the same conflicting-ID assertion in edge cases.
+            // Keep whichever file is encountered first and skip the rest.
+            bool nameAlreadyLoaded = false;
+            for (const auto& loaded : m_definitions) {
+                if (loaded.name == def.name) { nameAlreadyLoaded = true; break; }
+            }
+            if (nameAlreadyLoaded) {
+                LOG_ERROR(kTag, "Skipping %s: duplicate protocol name '%s' (id '%s') already loaded",
+                          entry.path().string().c_str(), def.name.c_str(), def.id.c_str());
+                continue;
+            }
+
             std::string ts = j.value("transport", "osc");
             def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
 

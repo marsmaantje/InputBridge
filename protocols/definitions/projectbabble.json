@@ -1,0 +1,584 @@
+{
+    "fields": [
+        {
+            "fieldId": "pb_jaw_open",
+            "oscPath": "/avatar/parameters/JawOpen",
+            "wsKey": "JawOpen",
+            "enabled": true,
+            "label": "Jaw Open",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_left",
+            "oscPath": "/avatar/parameters/JawLeft",
+            "wsKey": "JawLeft",
+            "enabled": true,
+            "label": "Jaw Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_right",
+            "oscPath": "/avatar/parameters/JawRight",
+            "wsKey": "JawRight",
+            "enabled": true,
+            "label": "Jaw Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_fwd",
+            "oscPath": "/avatar/parameters/JawForward",
+            "wsKey": "JawForward",
+            "enabled": true,
+            "label": "Jaw Forward",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_funnel",
+            "oscPath": "/avatar/parameters/MouthFunnel",
+            "wsKey": "MouthFunnel",
+            "enabled": true,
+            "label": "Mouth Funnel",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_pucker",
+            "oscPath": "/avatar/parameters/MouthPucker",
+            "wsKey": "MouthPucker",
+            "enabled": true,
+            "label": "Mouth Pucker",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_close",
+            "oscPath": "/avatar/parameters/MouthClose",
+            "wsKey": "MouthClose",
+            "enabled": true,
+            "label": "Mouth Close",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_left",
+            "oscPath": "/avatar/parameters/MouthLeft",
+            "wsKey": "MouthLeft",
+            "enabled": true,
+            "label": "Mouth Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_right",
+            "oscPath": "/avatar/parameters/MouthRight",
+            "wsKey": "MouthRight",
+            "enabled": true,
+            "label": "Mouth Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_smile_l",
+            "oscPath": "/avatar/parameters/MouthSmileLeft",
+            "wsKey": "MouthSmileLeft",
+            "enabled": true,
+            "label": "Mouth Smile Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_smile_r",
+            "oscPath": "/avatar/parameters/MouthSmileRight",
+            "wsKey": "MouthSmileRight",
+            "enabled": true,
+            "label": "Mouth Smile Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_frown_l",
+            "oscPath": "/avatar/parameters/MouthFrownLeft",
+            "wsKey": "MouthFrownLeft",
+            "enabled": true,
+            "label": "Mouth Frown Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_frown_r",
+            "oscPath": "/avatar/parameters/MouthFrownRight",
+            "wsKey": "MouthFrownRight",
+            "enabled": true,
+            "label": "Mouth Frown Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_dimple_l",
+            "oscPath": "/avatar/parameters/MouthDimpleLeft",
+            "wsKey": "MouthDimpleLeft",
+            "enabled": true,
+            "label": "Mouth Dimple Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_dimple_r",
+            "oscPath": "/avatar/parameters/MouthDimpleRight",
+            "wsKey": "MouthDimpleRight",
+            "enabled": true,
+            "label": "Mouth Dimple Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_stretch_l",
+            "oscPath": "/avatar/parameters/MouthStretchLeft",
+            "wsKey": "MouthStretchLeft",
+            "enabled": true,
+            "label": "Mouth Stretch Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_stretch_r",
+            "oscPath": "/avatar/parameters/MouthStretchRight",
+            "wsKey": "MouthStretchRight",
+            "enabled": true,
+            "label": "Mouth Stretch Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_roll_upper",
+            "oscPath": "/avatar/parameters/MouthRollUpper",
+            "wsKey": "MouthRollUpper",
+            "enabled": true,
+            "label": "Mouth Roll Upper",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_roll_lower",
+            "oscPath": "/avatar/parameters/MouthRollLower",
+            "wsKey": "MouthRollLower",
+            "enabled": true,
+            "label": "Mouth Roll Lower",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_shrug_upper",
+            "oscPath": "/avatar/parameters/MouthShrugUpper",
+            "wsKey": "MouthShrugUpper",
+            "enabled": true,
+            "label": "Mouth Shrug Upper",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_shrug_lower",
+            "oscPath": "/avatar/parameters/MouthShrugLower",
+            "wsKey": "MouthShrugLower",
+            "enabled": true,
+            "label": "Mouth Shrug Lower",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_press_l",
+            "oscPath": "/avatar/parameters/MouthPressLeft",
+            "wsKey": "MouthPressLeft",
+            "enabled": true,
+            "label": "Mouth Press Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_press_r",
+            "oscPath": "/avatar/parameters/MouthPressRight",
+            "wsKey": "MouthPressRight",
+            "enabled": true,
+            "label": "Mouth Press Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_lower_down_l",
+            "oscPath": "/avatar/parameters/MouthLowerDownLeft",
+            "wsKey": "MouthLowerDownLeft",
+            "enabled": true,
+            "label": "Mouth Lower Down Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_lower_down_r",
+            "oscPath": "/avatar/parameters/MouthLowerDownRight",
+            "wsKey": "MouthLowerDownRight",
+            "enabled": true,
+            "label": "Mouth Lower Down Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_upper_up_l",
+            "oscPath": "/avatar/parameters/MouthUpperUpLeft",
+            "wsKey": "MouthUpperUpLeft",
+            "enabled": true,
+            "label": "Mouth Upper Up Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_upper_up_r",
+            "oscPath": "/avatar/parameters/MouthUpperUpRight",
+            "wsKey": "MouthUpperUpRight",
+            "enabled": true,
+            "label": "Mouth Upper Up Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_out",
+            "oscPath": "/avatar/parameters/TongueOut",
+            "wsKey": "TongueOut",
+            "enabled": true,
+            "label": "Tongue Out",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_up",
+            "oscPath": "/avatar/parameters/TongueUp",
+            "wsKey": "TongueUp",
+            "enabled": true,
+            "label": "Tongue Up",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_down",
+            "oscPath": "/avatar/parameters/TongueDown",
+            "wsKey": "TongueDown",
+            "enabled": true,
+            "label": "Tongue Down",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_left",
+            "oscPath": "/avatar/parameters/TongueLeft",
+            "wsKey": "TongueLeft",
+            "enabled": true,
+            "label": "Tongue Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_right",
+            "oscPath": "/avatar/parameters/TongueRight",
+            "wsKey": "TongueRight",
+            "enabled": true,
+            "label": "Tongue Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_roll",
+            "oscPath": "/avatar/parameters/TongueRoll",
+            "wsKey": "TongueRoll",
+            "enabled": true,
+            "label": "Tongue Roll",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_puff",
+            "oscPath": "/avatar/parameters/CheekPuff",
+            "wsKey": "CheekPuff",
+            "enabled": true,
+            "label": "Cheek Puff",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_squint_l",
+            "oscPath": "/avatar/parameters/CheekSquintLeft",
+            "wsKey": "CheekSquintLeft",
+            "enabled": true,
+            "label": "Cheek Squint Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_squint_r",
+            "oscPath": "/avatar/parameters/CheekSquintRight",
+            "wsKey": "CheekSquintRight",
+            "enabled": true,
+            "label": "Cheek Squint Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_nose_sneer_l",
+            "oscPath": "/avatar/parameters/NoseSneerLeft",
+            "wsKey": "NoseSneerLeft",
+            "enabled": true,
+            "label": "Nose Sneer Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_nose_sneer_r",
+            "oscPath": "/avatar/parameters/NoseSneerRight",
+            "wsKey": "NoseSneerRight",
+            "enabled": true,
+            "label": "Nose Sneer Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_down_l",
+            "oscPath": "/avatar/parameters/BrowDownLeft",
+            "wsKey": "BrowDownLeft",
+            "enabled": true,
+            "label": "Brow Down Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_down_r",
+            "oscPath": "/avatar/parameters/BrowDownRight",
+            "wsKey": "BrowDownRight",
+            "enabled": true,
+            "label": "Brow Down Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_inner_up",
+            "oscPath": "/avatar/parameters/BrowInnerUp",
+            "wsKey": "BrowInnerUp",
+            "enabled": true,
+            "label": "Brow Inner Up",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_outer_up_l",
+            "oscPath": "/avatar/parameters/BrowOuterUpLeft",
+            "wsKey": "BrowOuterUpLeft",
+            "enabled": true,
+            "label": "Brow Outer Up Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_outer_up_r",
+            "oscPath": "/avatar/parameters/BrowOuterUpRight",
+            "wsKey": "BrowOuterUpRight",
+            "enabled": true,
+            "label": "Brow Outer Up Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_blink_l",
+            "oscPath": "/avatar/parameters/EyeBlinkLeft",
+            "wsKey": "EyeBlinkLeft",
+            "enabled": true,
+            "label": "Eye Blink Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_blink_r",
+            "oscPath": "/avatar/parameters/EyeBlinkRight",
+            "wsKey": "EyeBlinkRight",
+            "enabled": true,
+            "label": "Eye Blink Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_squint_l",
+            "oscPath": "/avatar/parameters/EyeSquintLeft",
+            "wsKey": "EyeSquintLeft",
+            "enabled": true,
+            "label": "Eye Squint Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_squint_r",
+            "oscPath": "/avatar/parameters/EyeSquintRight",
+            "wsKey": "EyeSquintRight",
+            "enabled": true,
+            "label": "Eye Squint Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_wide_l",
+            "oscPath": "/avatar/parameters/EyeWideLeft",
+            "wsKey": "EyeWideLeft",
+            "enabled": true,
+            "label": "Eye Wide Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_wide_r",
+            "oscPath": "/avatar/parameters/EyeWideRight",
+            "wsKey": "EyeWideRight",
+            "enabled": true,
+            "label": "Eye Wide Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_up_l",
+            "oscPath": "/avatar/parameters/EyeLookUpLeft",
+            "wsKey": "EyeLookUpLeft",
+            "enabled": true,
+            "label": "Eye Look Up Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_up_r",
+            "oscPath": "/avatar/parameters/EyeLookUpRight",
+            "wsKey": "EyeLookUpRight",
+            "enabled": true,
+            "label": "Eye Look Up Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_down_l",
+            "oscPath": "/avatar/parameters/EyeLookDownLeft",
+            "wsKey": "EyeLookDownLeft",
+            "enabled": true,
+            "label": "Eye Look Down Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_down_r",
+            "oscPath": "/avatar/parameters/EyeLookDownRight",
+            "wsKey": "EyeLookDownRight",
+            "enabled": true,
+            "label": "Eye Look Down Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_in_l",
+            "oscPath": "/avatar/parameters/EyeLookInLeft",
+            "wsKey": "EyeLookInLeft",
+            "enabled": true,
+            "label": "Eye Look In Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_in_r",
+            "oscPath": "/avatar/parameters/EyeLookInRight",
+            "wsKey": "EyeLookInRight",
+            "enabled": true,
+            "label": "Eye Look In Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_out_l",
+            "oscPath": "/avatar/parameters/EyeLookOutLeft",
+            "wsKey": "EyeLookOutLeft",
+            "enabled": true,
+            "label": "Eye Look Out Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_out_r",
+            "oscPath": "/avatar/parameters/EyeLookOutRight",
+            "wsKey": "EyeLookOutRight",
+            "enabled": true,
+            "label": "Eye Look Out Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_left_x",
+            "oscPath": "/avatar/parameters/EyeLeftX",
+            "wsKey": "EyeLeftX",
+            "enabled": true,
+            "label": "Eye Left X",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_left_y",
+            "oscPath": "/avatar/parameters/EyeLeftY",
+            "wsKey": "EyeLeftY",
+            "enabled": true,
+            "label": "Eye Left Y",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_right_x",
+            "oscPath": "/avatar/parameters/EyeRightX",
+            "wsKey": "EyeRightX",
+            "enabled": true,
+            "label": "Eye Right X",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_right_y",
+            "oscPath": "/avatar/parameters/EyeRightY",
+            "wsKey": "EyeRightY",
+            "enabled": true,
+            "label": "Eye Right Y",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_lid_left",
+            "oscPath": "/avatar/parameters/EyeLidLeft",
+            "wsKey": "EyeLidLeft",
+            "enabled": true,
+            "label": "Eye Lid Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_lid_right",
+            "oscPath": "/avatar/parameters/EyeLidRight",
+            "wsKey": "EyeLidRight",
+            "enabled": true,
+            "label": "Eye Lid Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        }
+    ],
+    "id": "projectbabble",
+    "name": "Project Babble OSC",
+    "transport": "osc",
+    "direction": "output",
+    "active": false,
+    "osc": {
+        "host": "127.0.0.1",
+        "sendPort": 9000,
+        "recvPort": 9001
+    },
+    "ws": {
+        "port": 4269
+    }
+}
