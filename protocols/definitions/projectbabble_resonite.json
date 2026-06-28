@@ -1,0 +1,476 @@
+{
+    "fields": [
+        {
+            "fieldId": "pb_jaw_open",
+            "oscPath": "/jawOpen",
+            "wsKey": "jawOpen",
+            "enabled": true,
+            "label": "Jaw Open",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_left",
+            "oscPath": "/jawLeft",
+            "wsKey": "jawLeft",
+            "enabled": true,
+            "label": "Jaw Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_right",
+            "oscPath": "/jawRight",
+            "wsKey": "jawRight",
+            "enabled": true,
+            "label": "Jaw Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_fwd",
+            "oscPath": "/jawForward",
+            "wsKey": "jawForward",
+            "enabled": true,
+            "label": "Jaw Forward",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_funnel",
+            "oscPath": "/mouthFunnel",
+            "wsKey": "mouthFunnel",
+            "enabled": true,
+            "label": "Mouth Funnel",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_pucker",
+            "oscPath": "/mouthPucker",
+            "wsKey": "mouthPucker",
+            "enabled": true,
+            "label": "Mouth Pucker",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_close",
+            "oscPath": "/mouthClose",
+            "wsKey": "mouthClose",
+            "enabled": true,
+            "label": "Mouth Close",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_left",
+            "oscPath": "/mouthLeft",
+            "wsKey": "mouthLeft",
+            "enabled": true,
+            "label": "Mouth Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_right",
+            "oscPath": "/mouthRight",
+            "wsKey": "mouthRight",
+            "enabled": true,
+            "label": "Mouth Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_smile_l",
+            "oscPath": "/mouthSmileLeft",
+            "wsKey": "mouthSmileLeft",
+            "enabled": true,
+            "label": "Mouth Smile Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_smile_r",
+            "oscPath": "/mouthSmileRight",
+            "wsKey": "mouthSmileRight",
+            "enabled": true,
+            "label": "Mouth Smile Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_frown_l",
+            "oscPath": "/mouthFrownLeft",
+            "wsKey": "mouthFrownLeft",
+            "enabled": true,
+            "label": "Mouth Frown Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_frown_r",
+            "oscPath": "/mouthFrownRight",
+            "wsKey": "mouthFrownRight",
+            "enabled": true,
+            "label": "Mouth Frown Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_dimple_l",
+            "oscPath": "/mouthDimpleLeft",
+            "wsKey": "mouthDimpleLeft",
+            "enabled": true,
+            "label": "Mouth Dimple Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_dimple_r",
+            "oscPath": "/mouthDimpleRight",
+            "wsKey": "mouthDimpleRight",
+            "enabled": true,
+            "label": "Mouth Dimple Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_stretch_l",
+            "oscPath": "/mouthStretchLeft",
+            "wsKey": "mouthStretchLeft",
+            "enabled": true,
+            "label": "Mouth Stretch Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_stretch_r",
+            "oscPath": "/mouthStretchRight",
+            "wsKey": "mouthStretchRight",
+            "enabled": true,
+            "label": "Mouth Stretch Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_roll_upper",
+            "oscPath": "/mouthRollUpper",
+            "wsKey": "mouthRollUpper",
+            "enabled": true,
+            "label": "Mouth Roll Upper",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_roll_lower",
+            "oscPath": "/mouthRollLower",
+            "wsKey": "mouthRollLower",
+            "enabled": true,
+            "label": "Mouth Roll Lower",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_shrug_upper",
+            "oscPath": "/mouthShrugUpper",
+            "wsKey": "mouthShrugUpper",
+            "enabled": true,
+            "label": "Mouth Shrug Upper",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_shrug_lower",
+            "oscPath": "/mouthShrugLower",
+            "wsKey": "mouthShrugLower",
+            "enabled": true,
+            "label": "Mouth Shrug Lower",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_press_l",
+            "oscPath": "/mouthPressLeft",
+            "wsKey": "mouthPressLeft",
+            "enabled": true,
+            "label": "Mouth Press Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_press_r",
+            "oscPath": "/mouthPressRight",
+            "wsKey": "mouthPressRight",
+            "enabled": true,
+            "label": "Mouth Press Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_lower_down_l",
+            "oscPath": "/mouthLowerDownLeft",
+            "wsKey": "mouthLowerDownLeft",
+            "enabled": true,
+            "label": "Mouth Lower Down Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_lower_down_r",
+            "oscPath": "/mouthLowerDownRight",
+            "wsKey": "mouthLowerDownRight",
+            "enabled": true,
+            "label": "Mouth Lower Down Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_upper_up_l",
+            "oscPath": "/mouthUpperUpLeft",
+            "wsKey": "mouthUpperUpLeft",
+            "enabled": true,
+            "label": "Mouth Upper Up Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_upper_up_r",
+            "oscPath": "/mouthUpperUpRight",
+            "wsKey": "mouthUpperUpRight",
+            "enabled": true,
+            "label": "Mouth Upper Up Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_nose_sneer_l",
+            "oscPath": "/noseSneerLeft",
+            "wsKey": "noseSneerLeft",
+            "enabled": true,
+            "label": "Nose Sneer Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_nose_sneer_r",
+            "oscPath": "/noseSneerRight",
+            "wsKey": "noseSneerRight",
+            "enabled": true,
+            "label": "Nose Sneer Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_puff_l",
+            "oscPath": "/cheekPuffLeft",
+            "wsKey": "cheekPuffLeft",
+            "enabled": true,
+            "label": "Cheek Puff Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_puff_r",
+            "oscPath": "/cheekPuffRight",
+            "wsKey": "cheekPuffRight",
+            "enabled": true,
+            "label": "Cheek Puff Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_suck_l",
+            "oscPath": "/cheekSuckLeft",
+            "wsKey": "cheekSuckLeft",
+            "enabled": true,
+            "label": "Cheek Suck Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_suck_r",
+            "oscPath": "/cheekSuckRight",
+            "wsKey": "cheekSuckRight",
+            "enabled": true,
+            "label": "Cheek Suck Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_out",
+            "oscPath": "/tongueOut",
+            "wsKey": "tongueOut",
+            "enabled": true,
+            "label": "Tongue Out",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_up",
+            "oscPath": "/tongueUp",
+            "wsKey": "tongueUp",
+            "enabled": true,
+            "label": "Tongue Up",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_down",
+            "oscPath": "/tongueDown",
+            "wsKey": "tongueDown",
+            "enabled": true,
+            "label": "Tongue Down",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_left",
+            "oscPath": "/tongueLeft",
+            "wsKey": "tongueLeft",
+            "enabled": true,
+            "label": "Tongue Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_right",
+            "oscPath": "/tongueRight",
+            "wsKey": "tongueRight",
+            "enabled": true,
+            "label": "Tongue Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_roll",
+            "oscPath": "/tongueRoll",
+            "wsKey": "tongueRoll",
+            "enabled": true,
+            "label": "Tongue Roll",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_twist_l",
+            "oscPath": "/tongueTwistLeft",
+            "wsKey": "tongueTwistLeft",
+            "enabled": true,
+            "label": "Tongue Twist Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_twist_r",
+            "oscPath": "/tongueTwistRight",
+            "wsKey": "tongueTwistRight",
+            "enabled": true,
+            "label": "Tongue Twist Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_bend_down",
+            "oscPath": "/tongueBendDown",
+            "wsKey": "tongueBendDown",
+            "enabled": true,
+            "label": "Tongue Bend Down",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_curl_up",
+            "oscPath": "/tongueCurlUp",
+            "wsKey": "tongueCurlUp",
+            "enabled": true,
+            "label": "Tongue Curl Up",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_flat",
+            "oscPath": "/tongueFlat",
+            "wsKey": "tongueFlat",
+            "enabled": true,
+            "label": "Tongue Flat",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_squish",
+            "oscPath": "/tongueSquish",
+            "wsKey": "tongueSquish",
+            "enabled": true,
+            "label": "Tongue Squish",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_left_x",
+            "oscPath": "/LeftEyeX",
+            "wsKey": "LeftEyeX",
+            "enabled": true,
+            "label": "Eye Left X",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_left_y",
+            "oscPath": "/LeftEyeY",
+            "wsKey": "LeftEyeY",
+            "enabled": true,
+            "label": "Eye Left Y",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_lid_left",
+            "oscPath": "/LeftEyeLid",
+            "wsKey": "LeftEyeLid",
+            "enabled": true,
+            "label": "Eye Lid Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_right_x",
+            "oscPath": "/RightEyeX",
+            "wsKey": "RightEyeX",
+            "enabled": true,
+            "label": "Eye Right X",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_right_y",
+            "oscPath": "/RightEyeY",
+            "wsKey": "RightEyeY",
+            "enabled": true,
+            "label": "Eye Right Y",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_lid_right",
+            "oscPath": "/RightEyeLid",
+            "wsKey": "RightEyeLid",
+            "enabled": true,
+            "label": "Eye Lid Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        }
+    ],
+    "id": "projectbabble_resonite",
+    "name": "Project Babble OSC (Resonite)",
+    "transport": "osc",
+    "direction": "output",
+    "active": false,
+    "osc": {
+        "host": "127.0.0.1",
+        "sendPort": 9000,
+        "recvPort": 9001
+    },
+    "ws": {
+        "port": 4269
+    }
+}
