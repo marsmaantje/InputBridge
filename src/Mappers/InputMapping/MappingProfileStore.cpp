@@ -550,11 +550,25 @@ void MappingProfileStore::UpdateActiveProtocols() {
     osc.SetOutputDefinition(p.oscOutputProtocolId);
     osc.SetInputDefinition(p.oscInputProtocolId);
 
-    // Apply enable flags and port settings.  Ports only take effect after a
-    // restart, so we write them to the UI fields without restarting.
+    // Apply enable flags and port settings.  If the server is already running
+    // and the new profile specifies different ports/host, restart it
+    // automatically so the caller never observes a running server on the wrong
+    // port after a profile switch.
     osc.SetOutputEnabled(p.oscOutputEnabled);
     osc.SetInputEnabled(p.oscInputEnabled);
-    osc.SetPortsFromProfile(p.oscSendHost, p.oscSendPort, p.oscRecvPort);
+    const bool portChanged = (osc.GetSendPort()    != p.oscSendPort  ||
+                              osc.GetReceivePort() != p.oscRecvPort  ||
+                              osc.GetSendHost()    != p.oscSendHost);
+    if (osc.IsRunning() && portChanged) {
+        osc.Stop();
+        // Block until the detached liblo cleanup thread releases the old port
+        // before we try to bind the new one.
+        osc.WaitStopped();
+        osc.SetPortsFromProfile(p.oscSendHost, p.oscSendPort, p.oscRecvPort);
+        osc.Start(p.oscSendHost, p.oscSendPort, p.oscRecvPort);
+    } else {
+        osc.SetPortsFromProfile(p.oscSendHost, p.oscSendPort, p.oscRecvPort);
+    }
 
 #ifdef ENABLE_WEBSOCKETS
     // ── WebSocket server ──────────────────────────────────────────────────────

@@ -901,6 +901,12 @@ void OSCServer::DrawContent() {
         if (settingsChanged) {
             if (ImGui::Button("Restart to apply")) {
                 Stop();
+                // Wait for the detached liblo cleanup thread to fully release
+                // the old port before binding the new one.  Without this join,
+                // lo_server_thread_new_with_proto() races against the teardown
+                // and fails because the UDP port is still in use, leaving the
+                // server stopped after the button press.
+                WaitStopped();
                 Start(m_send_host, m_send_port, m_recv_port);
                 InputMapper::GetInstance().SaveCurrentProfile();
             }
