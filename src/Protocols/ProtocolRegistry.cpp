@@ -118,26 +118,23 @@ const std::vector<FieldPreset>& ProtocolRegistry::GetPresets() const {
     return m_presets;
 }
 
-void ProtocolRegistry::SavePreset(const std::string& name, const std::vector<std::string>& fieldIds) {
-    for (auto& p : m_presets) {
-        if (p.name == name) {
-            p.fieldIds = fieldIds;
-            SavePresets();
-            return;
-        }
-    }
-    FieldPreset p;
-    p.name = name;
-    p.fieldIds = fieldIds;
-    m_presets.push_back(p);
-    SavePresets();
-}
+
 
 void ProtocolRegistry::DeletePreset(const std::string& name) {
-    m_presets.erase(std::remove_if(m_presets.begin(), m_presets.end(),
-                                   [&](const FieldPreset& p) { return p.name == name; }),
-                    m_presets.end());
-    SavePresets();
+    // Remove the backing template file and the in-memory entry.
+    m_presets.erase(
+        std::remove_if(m_presets.begin(), m_presets.end(),
+                       [&](const FieldPreset& p) {
+                           if (p.name != name) return false;
+                           std::error_code ec;
+                           fs::remove(p.filePath, ec);
+                           return true;
+                       }),
+        m_presets.end());
+}
+
+void ProtocolRegistry::SavePreset(const std::string&, const std::vector<std::string>&) {
+    // Superseded by SaveTemplate; kept so existing call sites still compile.
 }
 
 std::vector<ProtocolDefinition>& ProtocolRegistry::GetDefinitions() {
@@ -574,39 +571,38 @@ void ProtocolRegistry::LoadFieldCatalog() {
 }
 
 void ProtocolRegistry::LoadPresets() {
+    // Presets and templates are the same thing: every .json file in the
+    // templates/ directory is a saved protocol export.  We scan that folder
+    // here so that the "New Protocol" template combo always reflects whatever
+    // the user has saved via "Save as Template".
     m_presets.clear();
-    std::string path = GetProtocolsDir() + "presets.json";
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) return;
+    std::string templatesDir = GetProtocolsDir() + "templates";
+    std::error_code ec;
+    if (!fs::is_directory(templatesDir, ec)) return;
 
-    try {
-        json j = json::parse(ifs);
-        if (j.contains("presets") && j["presets"].is_array()) {
-            for (const auto& item : j["presets"]) {
-                FieldPreset p;
-                p.name = item.value("name", "Unnamed");
-                if (item.contains("fields") && item["fields"].is_array()) {
-                    for (const auto& f : item["fields"]) p.fieldIds.push_back(f.get<std::string>());
-                }
-                m_presets.push_back(p);
+    for (const auto& entry : fs::directory_iterator(templatesDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".json") continue;
+        try {
+            std::ifstream f(entry.path());
+            json j;
+            f >> j;
+
+            FieldPreset p;
+            p.name     = j.value("template_name", entry.path().stem().string());
+            p.filePath = entry.path().string();
+
+            for (const auto& fj : j.value("fields", json::array())) {
+                FieldPreset::Entry e;
+                e.fieldId = fj.value("fieldId", "");
+                e.oscPath = fj.value("oscPath", "");
+                e.wsKey   = fj.value("wsKey",   "");
+                if (!e.fieldId.empty())
+                    p.entries.push_back(std::move(e));
             }
-        }
-    } catch (...) {}
-}
-
-void ProtocolRegistry::SavePresets() {
-    json j;
-    json arr = json::array();
-    for (const auto& p : m_presets) {
-        json item;
-        item["name"] = p.name;
-        item["fields"] = p.fieldIds;
-        arr.push_back(item);
+            m_presets.push_back(std::move(p));
+        } catch (...) {}
     }
-    j["presets"] = arr;
-    std::string path = GetProtocolsDir() + "presets.json";
-    std::ofstream ofs(path);
-    if (ofs) ofs << j.dump(4);
 }
 
 void ProtocolRegistry::LoadDefinitionFiles() {

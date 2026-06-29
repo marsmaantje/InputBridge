@@ -749,8 +749,7 @@ void ProtocolEditorWindow::DrawContent() {
     DrawDeleteProtocolModal();
     DrawDuplicateProtocolModal();
     DrawCreateFieldModal();
-    DrawSavePresetModal();
-    DrawLoadPresetModal();
+
     DrawExportProtocolModal();
     DrawImportProtocolModal();
     DrawRenameCategoryModal();
@@ -758,7 +757,6 @@ void ProtocolEditorWindow::DrawContent() {
     DrawMergeCategoryModal();
     DrawHideCategoryModal();
     DrawSaveTemplateModal();
-    DrawLoadTemplateModal();
     DrawValidationResultModal();
     DrawBackupManagerModal();
 }
@@ -994,11 +992,6 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
         s_cfLabelManuallyModified = false;
         s_cfOscManuallyModified   = false;
         s_cfWsManuallyModified    = false;
-    }
-
-    if (WrapButton("Save as Preset")) {
-        s_showSavePresetModal = true;
-        std::strncpy(s_presetName, "New Preset", sizeof(s_presetName));
     }
 
     if (WrapButton("Rename Category")) {
@@ -1366,13 +1359,14 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
         const char* directions[] = {"Output", "Input"};
         ImGui::Combo("Direction", &s_newDirection, directions, 2);
 
-        // Preset selection
+        // Template selection — templates and presets are the same thing.
+        // GetPresets() scans protocols/templates/ so this list always reflects
+        // whatever the user has saved via "Save as Template".
         auto& presets = ProtocolRegistry::GetInstance().GetPresets();
         std::vector<const char*> presetNames = {"None"};
-        for (const auto& preset : presets) {
+        for (const auto& preset : presets)
             presetNames.push_back(preset.name.c_str());
-        }
-        ImGui::Combo("Preset", &s_newPresetIdx, presetNames.data(), (int)presetNames.size());
+        ImGui::Combo("Template", &s_newPresetIdx, presetNames.data(), (int)presetNames.size());
 
         ImGui::Separator();
 
@@ -1385,33 +1379,20 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
             std::string newId = ProtocolRegistry::GetInstance().CreateDefinition(
                 s_newName, transport, direction);
 
-            // Apply preset if selected
+            // Apply template if selected.  Templates carry concrete oscPath /
+            // wsKey values so we use them directly rather than re-resolving
+            // from the catalog (which may have different defaults).
             if (s_newPresetIdx > 0 && s_newPresetIdx <= (int)presets.size()) {
                 auto* newDef = ProtocolRegistry::GetInstance().FindById(newId);
                 if (newDef) {
                     const auto& preset = presets[s_newPresetIdx - 1];
-                    const auto& catalog = (direction == ProtocolDirection::Output) ?
-                        ProtocolRegistry::GetInstance().GetOutputFields() :
-                        ProtocolRegistry::GetInstance().GetInputFields();
-
-                    for (const auto& fieldId : preset.fieldIds) {
-                        // Find field descriptor
-                        const FieldDescriptor* fd = nullptr;
-                        for (const auto& desc : catalog) {
-                            if (desc.id == fieldId) {
-                                fd = &desc;
-                                break;
-                            }
-                        }
-
-                        if (fd) {
-                            ProtocolField pf;
-                            pf.fieldId = fd->id;
-                            pf.oscPath = fd->defaultOscPath;
-                            pf.wsKey = fd->defaultWsKey;
-                            pf.enabled = true;
-                            newDef->fields.push_back(pf);
-                        }
+                    for (const auto& e : preset.entries) {
+                        ProtocolField pf;
+                        pf.fieldId = e.fieldId;
+                        pf.oscPath = e.oscPath;
+                        pf.wsKey   = e.wsKey;
+                        pf.enabled = true;
+                        newDef->fields.push_back(pf);
                     }
                     ProtocolRegistry::GetInstance().SaveDefinition(*newDef);
                 }
@@ -2006,49 +1987,6 @@ void ProtocolEditorWindow::DrawImportProtocolModal() {
     }
 }
 
-void ProtocolEditorWindow::DrawSavePresetModal() {
-    if (s_showSavePresetModal) {
-        ImGui::OpenPopup("Save Preset##modal");
-        s_showSavePresetModal = false;
-    }
-
-    bool open = true;
-    if (ImGui::BeginPopupModal("Save Preset##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        CloseModalOnEscape();
-        ImGui::Text("Save current enabled fields as a preset");
-        ImGui::InputText("Preset Name", s_presetName, sizeof(s_presetName));
-
-        ImGui::Separator();
-
-        if (ImGui::Button("Save", ImVec2(120, 0))) {
-            auto& registry = ProtocolRegistry::GetInstance();
-            auto& definitions = registry.GetDefinitions();
-
-            if (s_selectedIndex >= 0 && s_selectedIndex < (int)definitions.size()) {
-                const auto& definition = definitions[s_selectedIndex];
-                std::vector<std::string> fields;
-
-                for (const auto& field : definition.fields) {
-                    if (field.enabled) {
-                        fields.push_back(field.fieldId);
-                    }
-                }
-
-                registry.SavePreset(s_presetName, fields);
-            }
-
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Helper Functions for Category Management
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2240,80 +2178,6 @@ void ProtocolEditorWindow::ExecuteMergeCategories(const std::string& srcCat, con
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Modal: Load Preset
-// ═══════════════════════════════════════════════════════════════════════════
-
-void ProtocolEditorWindow::DrawLoadPresetModal() {
-    if (s_showLoadPresetModal) {
-        ImGui::OpenPopup("Load Preset##modal");
-        s_showLoadPresetModal = false;
-        s_loadPresetIdx = -1;
-    }
-
-    bool open = true;
-    if (ImGui::BeginPopupModal("Load Preset##modal", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        CloseModalOnEscape();
-        ImGui::Text("Apply a preset to the current protocol");
-        ImGui::Separator();
-
-        const auto& presets = ProtocolRegistry::GetInstance().GetPresets();
-        if (presets.empty()) {
-            ImGui::TextDisabled("No presets saved yet. Use \"Save as Preset\" to create one.");
-        } else {
-            for (int i = 0; i < (int)presets.size(); ++i) {
-                bool selected = (s_loadPresetIdx == i);
-                if (ImGui::Selectable(presets[i].name.c_str(), selected))
-                    s_loadPresetIdx = i;
-            }
-        }
-
-        ImGui::Separator();
-        bool canLoad = (s_loadPresetIdx >= 0 && s_loadPresetIdx < (int)presets.size());
-        if (!canLoad) ImGui::BeginDisabled();
-
-        if (ImGui::Button("Apply", ImVec2(120, 0))) {
-            auto& registry    = ProtocolRegistry::GetInstance();
-            auto& definitions = registry.GetDefinitions();
-            if (s_selectedIndex >= 0 && s_selectedIndex < (int)definitions.size()) {
-                auto& def          = definitions[s_selectedIndex];
-                const auto& preset = presets[s_loadPresetIdx];
-                bool isOsc         = (def.transport == ProtocolTransport::OSC);
-                const auto& catalog = (def.direction == ProtocolDirection::Output)
-                                      ? registry.GetOutputFields()
-                                      : registry.GetInputFields();
-
-                for (const auto& fieldId : preset.fieldIds) {
-                    // Only add if not already present
-                    bool already = false;
-                    for (const auto& pf : def.fields)
-                        if (pf.fieldId == fieldId) { already = true; break; }
-                    if (already) continue;
-
-                    for (const auto& fd : catalog) {
-                        if (fd.id == fieldId) {
-                            ProtocolField pf;
-                            pf.fieldId = fd.id;
-                            pf.oscPath = fd.defaultOscPath;
-                            pf.wsKey   = fd.defaultWsKey;
-                            pf.enabled = true;
-                            def.fields.push_back(pf);
-                            break;
-                        }
-                    }
-                }
-                registry.SaveDefinition(def);
-            }
-            ImGui::CloseCurrentPopup();
-        }
-
-        if (!canLoad) ImGui::EndDisabled();
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Modal: Merge Categories
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2423,6 +2287,7 @@ void ProtocolEditorWindow::DrawHideCategoryModal() {
 
             bool changed = false;
             for (const auto& cat : cats) {
+                // checked = visible (not in excludedCategories)
                 bool visible = std::find(def.excludedCategories.begin(),
                                          def.excludedCategories.end(),
                                          cat) == def.excludedCategories.end();
@@ -2515,6 +2380,9 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
                     std::ofstream out(templatePath);
                     out << j.dump(4);
                     LOG_INFO(kTag, "Saved template: %s", templatePath.c_str());
+                    // Refresh the in-memory preset list so the "New Protocol"
+                    // template combo reflects the newly saved file immediately.
+                    ProtocolRegistry::GetInstance().LoadPresets();
                 } catch (const std::exception& e) {
                     LOG_ERROR(kTag, "Failed to save template: %s", e.what());
                 }
@@ -2523,116 +2391,6 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
         }
 
         if (!canSave) ImGui::EndDisabled();
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Modal: Load Template
-// ═══════════════════════════════════════════════════════════════════════════
-
-void ProtocolEditorWindow::DrawLoadTemplateModal() {
-    if (s_showLoadTemplateModal) {
-        ImGui::OpenPopup("Load Template##modal");
-        s_showLoadTemplateModal = false;
-        s_loadTemplateIdx = -1;
-    }
-
-    bool open = true;
-    ImGui::SetNextWindowSize(ImVec2(500, 340), ImGuiCond_FirstUseEver);
-    if (ImGui::BeginPopupModal("Load Template##modal", &open)) {
-        CloseModalOnEscape();
-        // Enumerate template files
-        std::string templatesDir = ProtocolRegistry::GetProtocolsDir() + "/templates";
-        std::vector<std::string> templatePaths;
-        std::vector<std::string> templateNames;
-        std::vector<std::string> templateDescs;
-
-        std::error_code ec;
-        if (fs::is_directory(templatesDir, ec)) {
-            for (const auto& entry : fs::directory_iterator(templatesDir, ec)) {
-                if (!entry.is_regular_file()) continue;
-                if (entry.path().extension() != ".json") continue;
-                try {
-                    std::ifstream f(entry.path());
-                    json j;
-                    f >> j;
-                    templatePaths.push_back(entry.path().string());
-                    templateNames.push_back(j.value("template_name", entry.path().stem().string()));
-                    templateDescs.push_back(j.value("template_desc", ""));
-                } catch (...) {}
-            }
-        }
-
-        if (templateNames.empty()) {
-            ImGui::TextDisabled("No templates found. Use \"Save Template\" to create one.");
-        } else {
-            ImGui::BeginChild("##tpl_list", ImVec2(0, -70), true);
-            for (int i = 0; i < (int)templateNames.size(); ++i) {
-                bool sel = (s_loadTemplateIdx == i);
-                if (ImGui::Selectable(templateNames[i].c_str(), sel))
-                    s_loadTemplateIdx = i;
-                if (sel && !templateDescs[i].empty()) {
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("  %s", templateDescs[i].c_str());
-                }
-            }
-            ImGui::EndChild();
-        }
-
-        ImGui::Separator();
-        bool canLoad = s_loadTemplateIdx >= 0 && s_loadTemplateIdx < (int)templatePaths.size();
-        if (!canLoad) ImGui::BeginDisabled();
-
-        if (ImGui::Button("Apply", ImVec2(120, 0))) {
-            try {
-                std::ifstream f(templatePaths[s_loadTemplateIdx]);
-                json j;
-                f >> j;
-
-                auto& registry    = ProtocolRegistry::GetInstance();
-                auto& definitions = registry.GetDefinitions();
-                if (s_selectedIndex >= 0 && s_selectedIndex < (int)definitions.size()) {
-                    auto& def           = definitions[s_selectedIndex];
-                    const auto& catalog = (def.direction == ProtocolDirection::Output)
-                                          ? registry.GetOutputFields()
-                                          : registry.GetInputFields();
-
-                    for (const auto& fj : j.value("fields", json::array())) {
-                        std::string fieldId = fj.value("fieldId", "");
-                        if (fieldId.empty()) continue;
-
-                        bool already = false;
-                        for (const auto& pf : def.fields)
-                            if (pf.fieldId == fieldId) { already = true; break; }
-                        if (already) continue;
-
-                        // Find in catalog for defaults, fall back to template values
-                        ProtocolField pf;
-                        pf.fieldId = fieldId;
-                        pf.oscPath = fj.value("oscPath", "");
-                        pf.wsKey   = fj.value("wsKey", "");
-                        pf.enabled = true;
-                        for (const auto& fd : catalog) {
-                            if (fd.id == fieldId) {
-                                if (pf.oscPath.empty()) pf.oscPath = fd.defaultOscPath;
-                                if (pf.wsKey.empty())   pf.wsKey   = fd.defaultWsKey;
-                                break;
-                            }
-                        }
-                        def.fields.push_back(pf);
-                    }
-                    registry.SaveDefinition(def);
-                }
-            } catch (const std::exception& e) {
-                LOG_ERROR(kTag, "Failed to load template: %s", e.what());
-            }
-            ImGui::CloseCurrentPopup();
-        }
-
-        if (!canLoad) ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();

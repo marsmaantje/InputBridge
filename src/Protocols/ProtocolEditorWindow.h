@@ -81,7 +81,6 @@ private:
     static void DrawDeleteProtocolModal();
     static void DrawDuplicateProtocolModal();
     static void DrawCreateFieldModal();
-    static void DrawSavePresetModal();
     static void DrawExportProtocolModal();
     static void DrawImportProtocolModal();
     static void DrawRenameCategoryModal();
@@ -89,8 +88,6 @@ private:
     static void DrawMergeCategoryModal();
     static void DrawHideCategoryModal();
     static void DrawSaveTemplateModal();
-    static void DrawLoadPresetModal();
-    static void DrawLoadTemplateModal();
     static void DrawValidationResultModal();
     static void DrawBackupManagerModal();
 
@@ -183,19 +180,13 @@ private:
     static inline bool s_showBackupModal = false;
 
     // Save preset modal state
-    static inline bool  s_showSavePresetModal = false;
-    static inline char  s_presetName[128] = "New Preset";
 
     // Load preset modal state
-    static inline bool  s_showLoadPresetModal = false;
-    static inline int   s_loadPresetIdx       = -1;
 
     // Save/Load template modal state
     static inline bool  s_showSaveTemplateModal = false;
-    static inline bool  s_showLoadTemplateModal = false;
     static inline char  s_templateName[128]     = "New Template";
     static inline char  s_templateDesc[256]     = "";
-    static inline int   s_loadTemplateIdx       = -1;
 
     // Export protocol modal state
     static inline bool  s_showExportModal = false;
