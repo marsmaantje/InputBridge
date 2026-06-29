@@ -660,15 +660,33 @@ void InputMapperUI::DrawAnalogOutputSection(MappingProfile& profile, const Proto
             ImGui::TextDisabled("No enabled analog fields in this protocol.");
             return;
         }
-        if (ImGui::BeginTable("t_analog", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+        if (ImGui::BeginTable("t_analog", 2,
+                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_Resizable)) {
             ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed, 170.f);
             ImGui::TableSetupColumn("Device Axis", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableHeadersRow();
+            std::string currentCategory;
             for (auto& [pf, fd] : analogFields) {
+                // Emit a full-width category header row whenever the category changes.
+                if (fd->category != currentCategory) {
+                    currentCategory = fd->category;
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                          ImGui::GetColorU32(ImVec4(0.2f, 0.2f, 0.2f, 1.f)));
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1,
+                                          ImGui::GetColorU32(ImVec4(0.2f, 0.2f, 0.2f, 1.f)));
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.f), "%s", currentCategory.c_str());
+                    // Leave column 1 blank — the category label spans visually via the row colour.
+                }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
+                ImGui::PushTextWrapPos(0.0f); // wrap at the right edge of this column
                 ImGui::Text("%s", fd->label.c_str());
-                ImGui::SetItemTooltip("OSC: %s   WS: %s", pf->oscPath.c_str(), pf->wsKey.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::SetItemTooltip("OSC: %s\nWS:  %s", pf->oscPath.c_str(), pf->wsKey.c_str());
                 ImGui::TableSetColumnIndex(1);
                 ImGui::PushID(("a_" + pf->fieldId).c_str());
                 DrawAxisCombo(pf->fieldId, profile.outputToInput[pf->fieldId], "##ax",
@@ -681,14 +699,18 @@ void InputMapperUI::DrawAnalogOutputSection(MappingProfile& profile, const Proto
     }
 
     ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.4f, 1.f), "Analog Output Channels  (legacy – no protocol selected)");
-    if (ImGui::BeginTable("t_legacy", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+    if (ImGui::BeginTable("t_legacy", 2,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                          ImGuiTableFlags_Resizable)) {
         ImGui::TableSetupColumn("Output", ImGuiTableColumnFlags_WidthFixed, 120.f);
         ImGui::TableSetupColumn("Device Axis", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
         for (const auto& name : kGenericOutputs) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::PushTextWrapPos(0.0f);
             ImGui::Text("%s", name.c_str());
+            ImGui::PopTextWrapPos();
             ImGui::TableSetColumnIndex(1);
             ImGui::PushID(name.c_str());
             DrawAxisCombo(name, profile.outputToInput[name], "##ax", ImGui::GetContentRegionAvail().x, changed);
