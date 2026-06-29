@@ -2407,7 +2407,7 @@ void ProtocolEditorWindow::DrawHideCategoryModal() {
             ProtocolDefinition& def = definitions[s_selectedIndex];
 
             ImGui::TextWrapped(
-                "Tick the categories you want to hide from this protocol's field list.\n"
+                "Tick the categories you want to show in this protocol's field list.\n"
                 "Hidden categories are still available to all other protocols.");
             ImGui::Separator();
 
@@ -2423,17 +2423,17 @@ void ProtocolEditorWindow::DrawHideCategoryModal() {
 
             bool changed = false;
             for (const auto& cat : cats) {
-                bool hidden = std::find(def.excludedCategories.begin(),
-                                        def.excludedCategories.end(),
-                                        cat) != def.excludedCategories.end();
-                if (ImGui::Checkbox(cat.c_str(), &hidden)) {
-                    if (hidden) {
-                        def.excludedCategories.push_back(cat);
-                    } else {
+                bool visible = std::find(def.excludedCategories.begin(),
+                                         def.excludedCategories.end(),
+                                         cat) == def.excludedCategories.end();
+                if (ImGui::Checkbox(cat.c_str(), &visible)) {
+                    if (visible) {
                         def.excludedCategories.erase(
                             std::remove(def.excludedCategories.begin(),
                                         def.excludedCategories.end(), cat),
                             def.excludedCategories.end());
+                    } else {
+                        def.excludedCategories.push_back(cat);
                     }
                     changed = true;
                 }
