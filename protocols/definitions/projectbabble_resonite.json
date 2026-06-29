@@ -467,8 +467,8 @@
     "active": false,
     "osc": {
         "host": "127.0.0.1",
-        "sendPort": 9000,
-        "recvPort": 9001
+        "sendPort": 8888,
+        "recvPort": 8889
     },
     "ws": {
         "port": 4269
