@@ -121,7 +121,7 @@ jobs:
                   # Exit code 0   = app exited cleanly on its own -> also fine.
                   # Any other code indicates a crash (SIGABRT=134, SIGSEGV=139, etc.).
                   set +e
-                  timeout 5s "$APP_BIN"
+                  gtimeout 5s "$APP_BIN"
                   CODE=$?
                   set -e
 
