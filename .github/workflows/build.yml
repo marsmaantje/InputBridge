@@ -116,21 +116,28 @@ jobs:
                   echo "Binary: $APP_BIN"
                   test -f "$APP_BIN" || { echo "Binary not found"; exit 1; }
 
-                  # Run for up to 5 seconds.
-                  # Exit code 124 = still running after timeout -> good (app started fine).
-                  # Exit code 0   = app exited cleanly on its own -> also fine.
-                  # Any other code indicates a crash (SIGABRT=134, SIGSEGV=139, etc.).
-                  set +e
-                  gtimeout 5s "$APP_BIN"
-                  CODE=$?
-                  set -e
+                  # Launch in the background, wait 5 s, then check whether it
+                  # crashed before we had a chance to kill it.  We avoid any
+                  # external timeout command (not reliably available on macOS).
+                  "$APP_BIN" &
+                  APP_PID=$!
+                  sleep 5
 
-                  echo "Exit code: $CODE"
-                  if [ "$CODE" -eq 124 ] || [ "$CODE" -eq 0 ]; then
+                  if kill -0 "$APP_PID" 2>/dev/null; then
+                      # Process is still alive after 5 s — that's a pass.
+                      kill "$APP_PID"
+                      wait "$APP_PID" 2>/dev/null || true
                       echo "Smoke test passed."
                   else
-                      echo "Smoke test FAILED — binary crashed with exit code $CODE."
-                      exit 1
+                      # Process exited on its own; retrieve its exit code.
+                      wait "$APP_PID"
+                      CODE=$?
+                      if [ "$CODE" -eq 0 ]; then
+                          echo "Smoke test passed (app exited cleanly)."
+                      else
+                          echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                          exit 1
+                      fi
                   fi
 
             - name: Upload Artifact
