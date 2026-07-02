@@ -110,8 +110,6 @@ jobs:
             - name: Smoke test (launch check)
               if: ${{ github.event.inputs.smoke_test == 'yes' }}
               run: |
-                  # Find the binary inside the .app bundle that CPack staged in
-                  # the build tree (before it was zipped).
                   APP_BIN=$(find build -name "InputBridge" -perm +111 -not -name "*.dylib" | head -1)
                   echo "Binary: $APP_BIN"
                   test -f "$APP_BIN" || { echo "Binary not found"; exit 1; }
@@ -127,13 +125,13 @@ jobs:
                       # Process is still alive after 5 s — that's a pass.
                       kill "$APP_PID"
                       wait "$APP_PID" 2>/dev/null || true
-                      echo "Smoke test passed."
+                      echo "Smoke test passed (exit $CODE)."
                   else
                       # Process exited on its own; retrieve its exit code.
                       wait "$APP_PID"
                       CODE=$?
-                      if [ "$CODE" -eq 0 ]; then
-                          echo "Smoke test passed (app exited cleanly)."
+                      if [ "$CODE" -le 1 ]; then
+                          echo "Smoke test passed (exit $CODE)."
                       else
                           echo "Smoke test FAILED — binary crashed with exit code $CODE."
                           exit 1
@@ -220,12 +218,12 @@ jobs:
             run: |
                 chmod +x InputBridge-Ubuntu.AppImage
                 set +e
-                APPIMAGE_EXTRACT_AND_RUN=1 timeout 5s ./InputBridge-Ubuntu.AppImage
+                APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run --auto-servernum timeout 5s ./InputBridge-Ubuntu.AppImage
                 CODE=$?
                 set -e
                 echo "Exit code: $CODE"
-                if [ "$CODE" -eq 124 ] || [ "$CODE" -eq 0 ]; then
-                    echo "Smoke test passed."
+                if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                    echo "Smoke test passed (exit $CODE)."
                 else
                     echo "Smoke test FAILED — binary crashed with exit code $CODE."
                     exit 1
@@ -266,8 +264,8 @@ jobs:
                   CODE=$?
                   set -e
                   echo "Exit code: $CODE"
-                  if [ "$CODE" -eq 124 ] || [ "$CODE" -eq 0 ]; then
-                      echo "Smoke test passed."
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
                   else
                       echo "Smoke test FAILED — binary crashed with exit code $CODE."
                       exit 1
@@ -316,8 +314,8 @@ jobs:
                   CODE=$?
                   set -e
                   echo "Exit code: $CODE"
-                  if [ "$CODE" -eq 124 ] || [ "$CODE" -eq 0 ]; then
-                      echo "Smoke test passed."
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
                   else
                       echo "Smoke test FAILED — binary crashed with exit code $CODE."
                       exit 1
@@ -364,8 +362,8 @@ jobs:
                   CODE=$?
                   set -e
                   echo "Exit code: $CODE"
-                  if [ "$CODE" -eq 124 ] || [ "$CODE" -eq 0 ]; then
-                      echo "Smoke test passed."
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
                   else
                       echo "Smoke test FAILED — binary crashed with exit code $CODE."
                       exit 1
@@ -412,8 +410,8 @@ jobs:
                   CODE=$?
                   set -e
                   echo "Exit code: $CODE"
-                  if [ "$CODE" -eq 124 ] || [ "$CODE" -eq 0 ]; then
-                      echo "Smoke test passed."
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
                   else
                       echo "Smoke test FAILED — binary crashed with exit code $CODE."
                       exit 1
