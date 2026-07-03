@@ -690,7 +690,7 @@ void ProtocolEditorWindow::DrawContent() {
     if (WrapButton("Export...")) {
         ShowExportDialog();
     }
-    
+
     const char* modName = ImGui::GetIO().ConfigMacOSXBehaviors ? "Cmd" : "Ctrl";
 
     const bool canUndo = s_undoManager.CanUndo();
@@ -970,6 +970,7 @@ void ProtocolEditorWindow::DrawEditor() {
 void ProtocolEditorWindow::DrawOutputFieldPicker() {
     auto& registry = ProtocolRegistry::GetInstance();
     auto& definitions = registry.GetDefinitions();
+    if (s_selectedIndex < 0 || s_selectedIndex >= (int)definitions.size()) return;
     auto& definition = definitions[s_selectedIndex];
 
     const auto& catalog = registry.GetOutputFields();
@@ -1035,6 +1036,7 @@ void ProtocolEditorWindow::DrawOutputFieldPicker() {
 void ProtocolEditorWindow::DrawInputFieldPicker() {
     auto& registry = ProtocolRegistry::GetInstance();
     auto& definitions = registry.GetDefinitions();
+    if (s_selectedIndex < 0 || s_selectedIndex >= (int)definitions.size()) return;
     auto& definition = definitions[s_selectedIndex];
 
     const auto& catalog = registry.GetInputFields();
