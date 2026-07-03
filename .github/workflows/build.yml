@@ -30,6 +30,14 @@ on:
                     - "no"
                     - "yes"
                     - "only"
+            smoke_test:
+                description: "Run smoke test (launch check) on each platform"
+                required: false
+                type: choice
+                default: "no"
+                options:
+                    - "no"
+                    - "yes"
 
 permissions:
   checks: write    # for dorny/test-reporter to publish test reports
@@ -58,6 +66,22 @@ jobs:
                   cmake -E make_directory package/bin/licenses
                   if (Test-Path "C:/Program Files/OpenSSL/license.txt") { copy "C:/Program Files/OpenSSL/license.txt" package/bin/licenses/OPENSSL_LICENSE.txt }
 
+            - name: Smoke test (launch check)
+              if: ${{ github.event.inputs.smoke_test == 'yes' }}
+              shell: pwsh
+              run: |
+                  $bin = "package\bin\InputBridge.exe"
+                  if (-not (Test-Path $bin)) { Write-Error "Binary not found: $bin"; exit 1 }
+                  Write-Host "Launching $bin"
+                  $proc = Start-Process -FilePath $bin -PassThru
+                  Start-Sleep -Seconds 5
+                  if ($proc.HasExited -and $proc.ExitCode -notin @(0)) {
+                      Write-Error "Smoke test FAILED — process exited with code $($proc.ExitCode)"
+                      exit 1
+                  }
+                  if (-not $proc.HasExited) { $proc.Kill() }
+                  Write-Host "Smoke test passed."
+
             - name: Upload Artifact
               uses: actions/upload-artifact@v6
               with:
@@ -82,6 +106,37 @@ jobs:
               run: |
                   cd build
                   cpack -C Release -G ZIP
+
+            - name: Smoke test (launch check)
+              if: ${{ github.event.inputs.smoke_test == 'yes' }}
+              run: |
+                  APP_BIN=$(find build -name "InputBridge" -perm +111 -not -name "*.dylib" | head -1)
+                  echo "Binary: $APP_BIN"
+                  test -f "$APP_BIN" || { echo "Binary not found"; exit 1; }
+
+                  # Launch in the background, wait 5 s, then check whether it
+                  # crashed before we had a chance to kill it.  We avoid any
+                  # external timeout command (not reliably available on macOS).
+                  "$APP_BIN" &
+                  APP_PID=$!
+                  sleep 5
+
+                  if kill -0 "$APP_PID" 2>/dev/null; then
+                      # Process is still alive after 5 s — that's a pass.
+                      kill "$APP_PID"
+                      wait "$APP_PID" 2>/dev/null || true
+                      echo "Smoke test passed (exit $CODE)."
+                  else
+                      # Process exited on its own; retrieve its exit code.
+                      wait "$APP_PID"
+                      CODE=$?
+                      if [ "$CODE" -le 1 ]; then
+                          echo "Smoke test passed (exit $CODE)."
+                      else
+                          echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                          exit 1
+                      fi
+                  fi
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v6
@@ -158,6 +213,30 @@ jobs:
 
                 mv InputBridge*.AppImage InputBridge-Ubuntu.AppImage
 
+          - name: Smoke test (launch check)
+            if: ${{ github.event.inputs.smoke_test == 'yes' }}
+            run: |
+                chmod +x InputBridge-Ubuntu.AppImage
+                set +e
+                APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run --auto-servernum timeout 5s ./InputBridge-Ubuntu.AppImage
+                CODE=$?
+                set -e
+                echo "Exit code: $CODE"
+                # 124 = timeout (still running) — pass.
+                # 0/1 = clean or handled exit — pass.
+                # >128 = 128+signal (SIGABRT=134, SIGSEGV=139 etc.) — crash, fail.
+                # Anything else (e.g. 127 missing lib) is a setup/env issue,
+                # not a crash of the binary itself — fail with a clear message.
+                if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                    echo "Smoke test passed (exit $CODE)."
+                elif [ "$CODE" -gt 128 ]; then
+                    echo "Smoke test FAILED — binary killed by signal $((CODE - 128))."
+                    exit 1
+                else
+                    echo "Smoke test FAILED — unexpected exit code $CODE."
+                    exit 1
+                fi
+
           - name: Upload Artifact
             uses: actions/upload-artifact@v6
             with:
@@ -184,6 +263,30 @@ jobs:
                   flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --repo=repo --force-clean build-dir org.inputbridge.InputBridge.yml
                   flatpak build-bundle repo InputBridge-Ubuntu.flatpak org.inputbridge.InputBridge
 
+            - name: Smoke test (launch check)
+              if: ${{ github.event.inputs.smoke_test == 'yes' }}
+              run: |
+                  flatpak install --user -y InputBridge-Ubuntu.flatpak
+                  set +e
+                  timeout 5s flatpak run org.inputbridge.InputBridge
+                  CODE=$?
+                  set -e
+                  echo "Exit code: $CODE"
+                  # 124 = timeout (still running after 5 s) — pass.
+                  # 0/1 = clean or gracefully handled exit — pass.
+                  # >128 = 128+signal (SIGABRT=134, SIGSEGV=139 etc.) — crash, fail.
+                  # 127 = missing shared library or command not found — env/packaging
+                  #       issue, not a binary crash; fail with a clear message.
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
+                  elif [ "$CODE" -gt 128 ]; then
+                      echo "Smoke test FAILED — binary killed by signal $((CODE - 128))."
+                      exit 1
+                  else
+                      echo "Smoke test FAILED — unexpected exit code $CODE (missing library or env issue?)."
+                      exit 1
+                  fi
+
             - name: Upload Artifact
               uses: actions/upload-artifact@v6
               with:
@@ -201,7 +304,7 @@ jobs:
             - name: Install Dependencies
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y build-essential git pkg-config cmake ninja-build libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libxinerama-dev libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev
+                  sudo apt-get install -y build-essential git pkg-config cmake ninja-build libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libxinerama-dev libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev xvfb
 
             - name: Configure CMake
               run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
@@ -217,6 +320,23 @@ jobs:
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Ubuntu.tar.gz -C package/bin .
 
+            - name: Smoke test (launch check)
+              if: ${{ github.event.inputs.smoke_test == 'yes' }}
+              run: |
+                  BIN="package/bin/InputBridge"
+                  test -f "$BIN" || { echo "Binary not found: $BIN"; exit 1; }
+                  set +e
+                  xvfb-run --auto-servernum timeout 5s "$BIN"
+                  CODE=$?
+                  set -e
+                  echo "Exit code: $CODE"
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
+                  else
+                      echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                      exit 1
+                  fi
+
             - name: Upload Artifact
               uses: actions/upload-artifact@v6
               with:
@@ -229,7 +349,7 @@ jobs:
         container: fedora:latest
         steps:
             - name: Install Dependencies
-              run: dnf install -y git gcc-c++ make cmake libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel libxkbcommon-devel wayland-devel systemd-devel alsa-lib-devel pulseaudio-libs-devel libXScrnSaver-devel libXext-devel libXfixes-devel libXinerama-devel libXxf86vm-devel dbus-devel libdrm-devel mesa-libgbm-devel libusb1-devel libsamplerate-devel libdecor-devel libXtst-devel openssl-devel zlib-devel libuv-devel
+              run: dnf install -y git gcc-c++ make cmake libX11-devel libXrandr-devel libXcursor-devel libXi-devel mesa-libGL-devel libxkbcommon-devel wayland-devel systemd-devel alsa-lib-devel pulseaudio-libs-devel libXScrnSaver-devel libXext-devel libXfixes-devel libXinerama-devel libXxf86vm-devel dbus-devel libdrm-devel mesa-libgbm-devel libusb1-devel libsamplerate-devel libdecor-devel libXtst-devel openssl-devel zlib-devel libuv-devel xorg-x11-server-Xvfb
 
             - uses: actions/checkout@v6
               with: { submodules: recursive }
@@ -248,6 +368,23 @@ jobs:
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Fedora.tar.gz -C package/bin .
 
+            - name: Smoke test (launch check)
+              if: ${{ github.event.inputs.smoke_test == 'yes' }}
+              run: |
+                  BIN="package/bin/InputBridge"
+                  test -f "$BIN" || { echo "Binary not found: $BIN"; exit 1; }
+                  set +e
+                  xvfb-run --auto-servernum timeout 5s "$BIN"
+                  CODE=$?
+                  set -e
+                  echo "Exit code: $CODE"
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
+                  else
+                      echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                      exit 1
+                  fi
+
             - name: Upload Artifact
               uses: actions/upload-artifact@v6
               with:
@@ -260,7 +397,7 @@ jobs:
         container: archlinux:latest
         steps:
             - name: Install Dependencies
-              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv
+              run: pacman -Syu --noconfirm git base-devel cmake libx11 libxrandr libxcursor libxi mesa libxkbcommon wayland systemd-libs alsa-lib pulseaudio libxss libxext libxfixes libxinerama libxxf86vm dbus libdrm libusb libsamplerate libdecor libxtst openssl zlib libuv xorg-server-xvfb
 
             - uses: actions/checkout@v6
               with: { submodules: recursive }
@@ -278,6 +415,23 @@ jobs:
                   if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Arch.tar.gz -C package/bin .
+
+            - name: Smoke test (launch check)
+              if: ${{ github.event.inputs.smoke_test == 'yes' }}
+              run: |
+                  BIN="package/bin/InputBridge"
+                  test -f "$BIN" || { echo "Binary not found: $BIN"; exit 1; }
+                  set +e
+                  xvfb-run --auto-servernum timeout 5s "$BIN"
+                  CODE=$?
+                  set -e
+                  echo "Exit code: $CODE"
+                  if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+                      echo "Smoke test passed (exit $CODE)."
+                  else
+                      echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                      exit 1
+                  fi
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v6
