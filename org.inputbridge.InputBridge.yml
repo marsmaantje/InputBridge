@@ -10,30 +10,14 @@ finish-args:
     - --share=network
     - --share=ipc
 modules:
-    # SDL3 is not part of the freedesktop runtime so it must be bundled.
-    # We build it from the same submodule the rest of the project uses
-    # (checked out by actions/checkout with submodules: recursive).
-    - name: SDL3
-      buildsystem: cmake-ninja
-      builddir: true
-      config-opts:
-          - -DCMAKE_BUILD_TYPE=Release
-          - -DSDL_SHARED=ON
-          - -DSDL_STATIC=OFF
-          - -DSDL_TEST_LIBRARY=OFF
-          - -DSDL_TESTS=OFF
-      sources:
-          - type: dir
-            path: lib/sdl
-
     - name: InputBridge
       buildsystem: cmake-ninja
       builddir: true
       config-opts:
           - -DCMAKE_BUILD_TYPE=Release
           - -DENABLE_WEBSOCKETS=ON
-          - -DSDL_SHARED=ON
-          - -DSDL_STATIC=OFF
+          - -DSDL_SHARED=OFF
+          - -DSDL_STATIC=ON
       sources:
           - type: dir
             path: .
