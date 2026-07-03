@@ -12,10 +12,12 @@
 //        0 → [-1, +1]  (pass-through)
 //        1 → [ 0, +1]  ((r+1)/2)
 //        2 → [-1,  0]  ((r-1)/2)
+//        5 → [customMin, customMax]  (user-defined span, linear remap)
 //
 // Because this pipeline is a pure function of (raw, invert, deadzone,
-// outputRange), we replicate it here as a free function and test it in
-// isolation — no SDL, no DeviceManager, no InputMapper instantiation required.
+// outputRange, customMin, customMax), we replicate it here as a free
+// function and test it in isolation — no SDL, no DeviceManager, no
+// InputMapper instantiation required.
 //
 // We also test the SensorChannel enum ordering and default-value invariants
 // that the serialisation code relies on.
@@ -30,7 +32,9 @@
 static float ApplyInputSourcePostProcess(float raw,
                                           bool  invert,
                                           float deadzone,
-                                          int   outputRange)
+                                          int   outputRange,
+                                          float customMin = -1.f,
+                                          float customMax = 1.f)
 {
     if (invert) raw = -raw;
     float norm = raw;
@@ -42,6 +46,9 @@ static float ApplyInputSourcePostProcess(float raw,
     float r = std::clamp(norm, -1.f, 1.f);
     if      (outputRange == 1) r = (r + 1.f) * 0.5f;
     else if (outputRange == 2) r = (r - 1.f) * 0.5f;
+    else if (outputRange == 3) r = std::max(r, 0.f);
+    else if (outputRange == 4) r = std::max(-r, 0.f);
+    else if (outputRange == 5) r = customMin + (r + 1.f) * 0.5f * (customMax - customMin);
     return r;
 }
 
@@ -287,6 +294,45 @@ TEST(PostProcess, Range2MidPosBecomesMinus0_25) {
 
 TEST(PostProcess, Range2MidNegBecomesMinus0_75) {
     EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(-0.5f, false, 0.f, 2), -0.75f);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Post-processing — output range 5  (custom [customMin, customMax])
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST(PostProcess, Range5MinusOneBecomesCustomMin) {
+    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(-1.f, false, 0.f, 5, -10.f, 10.f), -10.f);
+}
+
+TEST(PostProcess, Range5PlusOneBecomesCustomMax) {
+    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(1.f, false, 0.f, 5, -10.f, 10.f), 10.f);
+}
+
+TEST(PostProcess, Range5ZeroBecomesMidpoint) {
+    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(0.f, false, 0.f, 5, -10.f, 10.f), 0.f);
+}
+
+TEST(PostProcess, Range5AsymmetricBounds) {
+    // customMin=0, customMax=100: raw=0.5 -> r=0.5 -> 0 + (0.5+1)/2*100 = 75
+    EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(0.5f, false, 0.f, 5, 0.f, 100.f), 75.f);
+}
+
+TEST(PostProcess, Range5MatchesDefaultRangeWhenBoundsAreMinusOneToOne) {
+    // customMin=-1, customMax=1 should behave identically to outputRange 0.
+    for (float raw : {-1.f, -0.5f, 0.f, 0.5f, 1.f}) {
+        EXPECT_FLOAT_EQ(ApplyInputSourcePostProcess(raw, false, 0.f, 5, -1.f, 1.f),
+                         ApplyInputSourcePostProcess(raw, false, 0.f, 0));
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// InputSource — custom range field defaults
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST(InputSource, CustomRangeDefaultsMatchLegacyMinusOneToOne) {
+    InputMapper::InputSource s;
+    EXPECT_FLOAT_EQ(s.customRangeMin, -1.f);
+    EXPECT_FLOAT_EQ(s.customRangeMax, 1.f);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

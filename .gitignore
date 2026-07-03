@@ -48,7 +48,7 @@
 .cache/
 
 # IDE specific folders
-.vscode/settings.json
+#.vscode/settings.json
 .idea/
 .vs/
 
