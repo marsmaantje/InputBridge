@@ -12,12 +12,13 @@ namespace {
 // range. Shared by the axis pipeline and the non-IMU sensor pipeline below —
 // the two pipelines differ in how they apply the deadzone (see
 // ApplyAxisDeadzone's comment) but converge on this final remap.
-float ApplyOutputRange(float r, int outputRange) {
+float ApplyOutputRange(float r, int outputRange, float customMin, float customMax) {
     switch (outputRange) {
         case 1: return (r + 1.f) * 0.5f;        // 0..1
         case 2: return (r - 1.f) * 0.5f;        // -1..0
         case 3: return std::max(r, 0.f);        // +half: 0 at centre, 1 at max positive
         case 4: return std::max(-r, 0.f);       // -half: 0 at centre, 1 at max negative
+        case 5: return customMin + (r + 1.f) * 0.5f * (customMax - customMin); // custom
         default: return r;                      // -1..1
     }
 }
@@ -142,7 +143,7 @@ float ProcessAxis(const InputSource& cfg, const DeviceManager& dm) {
     if (cfg.invert) norm = -norm;
     norm = ApplyAxisDeadzone(norm, cfg.deadzone);
     float r = std::clamp(norm, -1.f, 1.f);
-    return ApplyOutputRange(r, cfg.outputRange);
+    return ApplyOutputRange(r, cfg.outputRange, cfg.customRangeMin, cfg.customRangeMax);
 }
 
 float ProcessSensor(const InputSource& cfg, const DeviceManager& dm) {
@@ -176,7 +177,7 @@ float ProcessSensor(const InputSource& cfg, const DeviceManager& dm) {
 
     if (std::abs(raw) < cfg.deadzone) raw = 0.f;
     float r = std::clamp(raw, -1.f, 1.f);
-    return ApplyOutputRange(r, cfg.outputRange);
+    return ApplyOutputRange(r, cfg.outputRange, cfg.customRangeMin, cfg.customRangeMax);
 }
 
 } // namespace InputMapping

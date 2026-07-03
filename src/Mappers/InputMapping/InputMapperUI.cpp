@@ -17,6 +17,7 @@
 #include <cstring>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 
 namespace InputMapping {
 
@@ -275,6 +276,23 @@ void InputMapperUI::DrawInputProtocolSelector() {
     if (changed) m_Store.SaveProfile(*profile);
 }
 
+// Returns the [lo, hi] output bounds for a source's configured range, used
+// only to scale the live value bar display — the actual remap math lives in
+// InputSignalProcessing.cpp's ApplyOutputRange and must be kept in sync.
+namespace {
+std::pair<float, float> GetOutputRangeBounds(const InputSource& src) {
+    switch (src.outputRange) {
+        case 1: return {0.f, 1.f};                                   // 0..1
+        case 2: return {-1.f, 0.f};                                  // -1..0
+        case 3: return {0.f, 1.f};                                   // +half
+        case 4: return {0.f, 1.f};                                   // -half
+        case 5: return {std::min(src.customRangeMin, src.customRangeMax),
+                         std::max(src.customRangeMin, src.customRangeMax)}; // custom
+        default: return {-1.f, 1.f};                                 // -1..1
+    }
+}
+} // namespace
+
 // Draws a dual-direction live value bar (centred at zero) for an analog
 // source. Shows the post-deadzone, post-range processed output value.
 void InputMapperUI::DrawAnalogLiveBar(const InputSource& src) {
@@ -294,8 +312,12 @@ void InputMapperUI::DrawAnalogLiveBar(const InputSource& src) {
     float cx = bPos.x + barW * 0.5f;
     dl->AddLine(ImVec2(cx, bPos.y), ImVec2(cx, bPos.y + bH), IM_COL32(120, 120, 120, 180), 1.f);
 
-    // Fill from centre to current value
-    float frac = std::clamp((val + 1.f) * 0.5f, 0.f, 1.f);
+    // Fill from centre to current value. `val` is scaled into [0, 1] using
+    // the source's configured output bounds (not a hardcoded -1..1) so
+    // custom ranges — including ones well outside -1..1 — still render
+    // sensibly instead of clipping to the bar's edges.
+    auto [lo, hi] = GetOutputRangeBounds(src);
+    float frac = (hi > lo) ? std::clamp((val - lo) / (hi - lo), 0.f, 1.f) : 0.5f;
     float fillX = bPos.x + barW * frac;
     ImU32 fillCol = IM_COL32(60, 180, 100, 200);
     if (fillX > cx) dl->AddRectFilled(ImVec2(cx, bPos.y + 1), ImVec2(fillX, bPos.y + bH - 1), fillCol, 2.f);
@@ -463,8 +485,31 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
                                "value bar show the deadzone boundary on each side of centre.");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(rw);
-        const char* ranges[] = {"-1..1", "0..1", "-1..0", "+half (0..1)", "-half (0..1)"};
+        const char* ranges[] = {"-1..1", "0..1", "-1..0", "+half (0..1)", "-half (0..1)", "Custom..."};
         if (ImGui::Combo("Range", &src.outputRange, ranges, IM_ARRAYSIZE(ranges))) changed = true;
+        ImGui::SetItemTooltip("Output range: remaps the processed -1..1 signal onto this span.\nChoose \"Custom...\" "
+                               "to enter your own minimum and maximum output values.");
+
+        if (src.outputRange == 5) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(dw * 0.5f);
+            bool minChanged = ImGui::DragFloat("##rangeMin", &src.customRangeMin, 0.01f, -1000.f, 1000.f, "Min %.3f");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(dw * 0.5f);
+            bool maxChanged = ImGui::DragFloat("##rangeMax", &src.customRangeMax, 0.01f, -1000.f, 1000.f, "Max %.3f");
+            if (minChanged || maxChanged) {
+                // Keep min <= max so the linear remap in ApplyOutputRange
+                // never inverts unexpectedly from a stray drag.
+                if (src.customRangeMin > src.customRangeMax) {
+                    if (minChanged) src.customRangeMax = src.customRangeMin;
+                    else src.customRangeMin = src.customRangeMax;
+                }
+                changed = true;
+            }
+            ImGui::SetItemTooltip("Custom output range bounds. The processed input always spans this range "
+                                   "linearly, with the low end at minimum input and the high end at maximum "
+                                   "input.");
+        }
     }
 }
 

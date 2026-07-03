@@ -59,6 +59,8 @@ InputSource ParseInputSource(const json& val) {
     src.invert = val.value("invert", false);
     src.deadzone = val.value("deadzone", 0.05f);
     src.outputRange = val.value("range", 0);
+    src.customRangeMin = val.value("range_min", -1.f);
+    src.customRangeMax = val.value("range_max", 1.f);
     src.sensorChannel = static_cast<InputSource::SensorChannel>(
         val.value("sensor_channel", static_cast<int>(InputSource::SensorChannel::None)));
     return src;
@@ -71,6 +73,8 @@ json SerializeInputSource(const InputSource& src) {
         {"invert",         src.invert},
         {"deadzone",       src.deadzone},
         {"range",          src.outputRange},
+        {"range_min",      src.customRangeMin},
+        {"range_max",      src.customRangeMax},
         {"sensor_channel", static_cast<int>(src.sensorChannel)},
     };
 }
