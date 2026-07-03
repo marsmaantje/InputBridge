@@ -12,7 +12,7 @@
 
 // HapticTarget describes a virtual-device-id → physical-haptic-device binding.
 // It stays at global scope (not in InputMapping) because OutputMapper.h
-// forward-declares and uses it as a bare global type — moving it into a
+// forward-declares and uses it as a bare global type - moving it into a
 // namespace would be a breaking change for that consumer.
 struct HapticTarget {
     int virtual_id = 0;

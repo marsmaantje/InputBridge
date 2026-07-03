@@ -51,7 +51,7 @@ public:
     static InputLabel GetButtonLabel(const DeviceState& dev, int button);
 
     /// Label for joystick hat index `hat`.  `hatValue` is the current
-    /// SDL_GetJoystickHat() bitmask (SDL_HAT_UP / DOWN / LEFT / RIGHT) — when
+    /// SDL_GetJoystickHat() bitmask (SDL_HAT_UP / DOWN / LEFT / RIGHT) - when
     /// a direction is held, the icon is the matching device-specific D-Pad
     /// glyph (reusing the same per-family set as GetButtonLabel) instead of a
     /// static generic joystick icon.

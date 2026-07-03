@@ -49,7 +49,7 @@ WindowsExclusiveMode::WindowsExclusiveMode() {
 }
 
 WindowsExclusiveMode::~WindowsExclusiveMode() {
-    // Nothing to release — HidHide state persists in the driver until we
+    // Nothing to release - HidHide state persists in the driver until we
     // explicitly remove entries, which we do in UnhideDevice().
 }
 
@@ -197,7 +197,7 @@ bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick *joystick) {
 HANDLE WindowsExclusiveMode::OpenControlDevice() const {
     HANDLE h = CreateFileW(kHidHideDevice, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) {
-        // Driver not installed — this is expected on systems without HidHide.
+        // Driver not installed - this is expected on systems without HidHide.
         LOG_WARN(kTag, "HidHide: control device not found (driver not installed?).");
     }
     return h;

@@ -305,7 +305,7 @@ std::optional<bool> InputBindingListener::TryResolveSensorChange(MappingProfile&
             return true;
         };
 
-        // Cap-sense (stick/grip touch) inputs are boolean — they are intentionally
+        // Cap-sense (stick/grip touch) inputs are boolean - they are intentionally
         // excluded here so the Bind button never resolves them as analog sources.
         // They are handled exclusively in the Digital listening branch (TryResolveCapSenseChange).
 

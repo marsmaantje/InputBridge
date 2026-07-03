@@ -41,7 +41,7 @@ std::unique_ptr<OutputMapper> OutputMapper::s_Instance;
 
 // ── Queue methods: record calls instead of dispatching to SDL ─────────────────
 // These are the only methods actually invoked by HapticParser::Parse().
-// They do NOT access 'this' — see the stub header for why this is safe.
+// They do NOT access 'this' - see the stub header for why this is safe.
 
 void OutputMapper::QueueRumble(int id, int slot, float low, float high, int dur) {
     HapticStub::rumbleCalls.push_back({id, slot, low, high, dur});
@@ -93,7 +93,7 @@ void OutputMapper::QueueDualSenseTrigger(int device, const char* trigger, const 
     });
 }
 
-// Private helpers — never called from outside; stubs prevent link errors.
+// Private helpers - never called from outside; stubs prevent link errors.
 void OutputMapper::QueueCommand(HapticCommand&&)                       {}
 void OutputMapper::GetTargets(int, std::vector<HapticTarget*>&)        {}
 void OutputMapper::UpdateHapticDevice(HapticTarget&)                   {}

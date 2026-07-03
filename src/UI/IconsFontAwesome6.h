@@ -15,7 +15,7 @@
 #define FONT_ICON_FILE_NAME_FAS "fa-solid-900.ttf"
 
 // ── Icons used in the sidebar ────────────────────────────────────────────────
-// Raw UTF-8 byte sequences (plain const char*) — avoids the C++20 char8_t
+// Raw UTF-8 byte sequences (plain const char*) - avoids the C++20 char8_t
 // incompatibility that u8"" literals introduced.
 //
 // Each codepoint is in the Private Use Area (U+F000–U+F8FF), encoded as

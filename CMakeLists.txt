@@ -478,7 +478,7 @@ endif()
 
 # Copy the fonts/ folder next to the executable at build time so the
 # program can find its fonts in the development build layout.
-# Map files (*.txt) are excluded — they are only needed to look up codepoints
+# Map files (*.txt) are excluded - they are only needed to look up codepoints
 # when editing KenneyIcons.h and serve no purpose at runtime.
 if(APPLE)
     add_custom_command(TARGET InputBridge POST_BUILD

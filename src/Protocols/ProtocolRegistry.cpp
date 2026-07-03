@@ -91,7 +91,7 @@ void ProtocolRegistry::SaveFieldCatalog() {
     json arr = json::array();
     for (const auto& fd : m_outputFields) {
         if (fd.isBuiltIn) continue;
-        // Skip entries whose ID is already registered in the input catalog —
+        // Skip entries whose ID is already registered in the input catalog -
         // those were misplaced by an older code path and should not be
         // persisted regardless of which category name they carry.
         bool duplicateInOtherCatalog = false;
@@ -227,7 +227,7 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
             fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
         } else if (!desc && f.hasInlineDef) {
             // Catalog entry absent (e.g. field not yet persisted) but the
-            // ProtocolField still carries its own inline metadata — use it so
+            // ProtocolField still carries its own inline metadata - use it so
             // the exported file stays self-describing.
             fj["label"]    = f.inlineLabel;
             fj["category"] = f.inlineCategory;
@@ -321,7 +321,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                         fd.category       = f.inlineCategory;
                         fd.type           = f.inlineType;
                     } else {
-                        // No inline metadata — synthesise sensible defaults so
+                        // No inline metadata - synthesise sensible defaults so
                         // the field at least appears in the editor.
                         fd.label    = f.fieldId;
                         fd.category = "Custom (imported)";
@@ -400,7 +400,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     }
     j["fields"] = fieldsArr;
 
-    // Per-protocol exclusions — only write the keys when non-empty so that
+    // Per-protocol exclusions - only write the keys when non-empty so that
     // the vast majority of definition files stay clean.
     if (!def.excludedFieldIds.empty()) {
         json arr = json::array();
@@ -424,7 +424,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 std::string ProtocolRegistry::GetProtocolsDir() {
-    // Protocol definitions, field catalogs, and templates are user data —
+    // Protocol definitions, field catalogs, and templates are user data -
     // they belong in $XDG_DATA_HOME/InputBridge/protocols/ per the XDG Base
     // Directory Specification (fallback: ~/.local/share/InputBridge/protocols/).
     // AppImage Portable Mode remaps $XDG_DATA_HOME automatically when the user
@@ -491,7 +491,7 @@ static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
     // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
     seedDir(srcDir, prefProtocolsDir);
 
-    // Seed built-in protocol definitions — these populate the OSC/WS output
+    // Seed built-in protocol definitions - these populate the OSC/WS output
     // dropdown via LoadDefinitionFiles(). This was the missing step that caused
     // the dropdown to appear empty on first run under AppImage.
     seedDir(srcDefs, dstDefs);
@@ -530,7 +530,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
                 fd.defaultWsKey   = item.value("wsKey",    fd.id);
                 fd.isBuiltIn      = false;
 
-                // Skip if already present in either catalog — a field that
+                // Skip if already present in either catalog - a field that
                 // belongs in m_inputFields (e.g. a built-in sensor or button)
                 // must not be duplicated into m_outputFields regardless of
                 // what was written to input_fields.json by an older code path.
@@ -714,7 +714,7 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                         for (const auto& fd : m_inputFields)  if (fd.id == f.fieldId) count++;
 
                         if (count > 1) {
-                            // More than one entry for this ID — keep only the
+                            // More than one entry for this ID - keep only the
                             // first real (non-stale) one and remove the rest.
                             bool kept = false;
                             auto dedup = [&](std::vector<FieldDescriptor>& cat) {

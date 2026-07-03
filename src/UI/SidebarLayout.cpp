@@ -268,7 +268,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
     ImGui::Spacing();
 
     // Inner child provides scrolling for the section content below the profile bar.
-    // Note: we do NOT pass ImGuiWindowFlags_HorizontalScrollbar here — that flag
+    // Note: we do NOT pass ImGuiWindowFlags_HorizontalScrollbar here - that flag
     // permanently reserves scrollbar space even when content fits, so the bar
     // never disappears after the window is widened.  Omitting it lets ImGui show
     // the scrollbar only when content actually overflows.
@@ -394,7 +394,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
                                 const SDL_JoystickID toRemove = vs->joystick_id;
                                 vdm.RemoveDevice(toRemove);
                                 ImGui::PopID();
-                                break; // iterator invalidated — redraw next frame
+                                break; // iterator invalidated - redraw next frame
                             }
                             ImGui::PopID();
                         }

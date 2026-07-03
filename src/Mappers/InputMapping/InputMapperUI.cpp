@@ -277,7 +277,7 @@ void InputMapperUI::DrawInputProtocolSelector() {
 }
 
 // Returns the [lo, hi] output bounds for a source's configured range, used
-// only to scale the live value bar display — the actual remap math lives in
+// only to scale the live value bar display - the actual remap math lives in
 // InputSignalProcessing.cpp's ApplyOutputRange and must be kept in sync.
 namespace {
 std::pair<float, float> GetOutputRangeBounds(const InputSource& src) {
@@ -314,7 +314,7 @@ void InputMapperUI::DrawAnalogLiveBar(const InputSource& src) {
 
     // Fill from centre to current value. `val` is scaled into [0, 1] using
     // the source's configured output bounds (not a hardcoded -1..1) so
-    // custom ranges — including ones well outside -1..1 — still render
+    // custom ranges - including ones well outside -1..1 - still render
     // sensibly instead of clipping to the bar's edges.
     auto [lo, hi] = GetOutputRangeBounds(src);
     float frac = (hi > lo) ? std::clamp((val - lo) / (hi - lo), 0.f, 1.f) : 0.5f;
@@ -411,7 +411,7 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
 
             for (const auto& entry : kSensorEntries) {
                 // Cap-sense (stick/grip touch) and BatteryCharging are boolean
-                // signals — they belong in the digital combo only, not here.
+                // signals - they belong in the digital combo only, not here.
                 bool isCap = (entry.channel == SC::LeftStickTouch || entry.channel == SC::RightStickTouch ||
                               entry.channel == SC::LeftGripTouch || entry.channel == SC::RightGripTouch);
                 if (isCap || entry.channel == SC::BatteryCharging) continue;
@@ -463,7 +463,7 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
         }
     }
 
-    // Live value bar — drawn after the device/axis dropdown and Bind button,
+    // Live value bar - drawn after the device/axis dropdown and Bind button,
     // before the Inv/DZ/Range options row.
     DrawAnalogLiveBar(src);
 
@@ -724,7 +724,7 @@ void InputMapperUI::DrawAnalogOutputSection(MappingProfile& profile, const Proto
                                           ImGui::GetColorU32(ImVec4(0.2f, 0.2f, 0.2f, 1.f)));
                     ImGui::TableSetColumnIndex(0);
                     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.f), "%s", currentCategory.c_str());
-                    // Leave column 1 blank — the category label spans visually via the row colour.
+                    // Leave column 1 blank - the category label spans visually via the row colour.
                 }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);

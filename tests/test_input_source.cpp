@@ -16,7 +16,7 @@
 //
 // Because this pipeline is a pure function of (raw, invert, deadzone,
 // outputRange, customMin, customMax), we replicate it here as a free
-// function and test it in isolation — no SDL, no DeviceManager, no
+// function and test it in isolation - no SDL, no DeviceManager, no
 // InputMapper instantiation required.
 //
 // We also test the SensorChannel enum ordering and default-value invariants
@@ -83,7 +83,7 @@ TEST(InputSource, DefaultDeadzoneIsSmallPositive) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// SensorChannel enum — ordering and None sentinel
+// SensorChannel enum - ordering and None sentinel
 // ═════════════════════════════════════════════════════════════════════════════
 
 using SC = InputMapper::InputSource::SensorChannel;
@@ -152,7 +152,7 @@ TEST(SensorChannel, CapSenseSeparateFromGyro) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — no invert, no deadzone, range 0 (identity path)
+// Post-processing - no invert, no deadzone, range 0 (identity path)
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, PassThroughMidValue) {
@@ -176,7 +176,7 @@ TEST(PostProcess, PassThroughMinusOne) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — clamp behaviour
+// Post-processing - clamp behaviour
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, ClampAbovePlusOne) {
@@ -196,7 +196,7 @@ TEST(PostProcess, ClampLargeNegative) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — invert flag
+// Post-processing - invert flag
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, InvertFlipsSign) {
@@ -216,7 +216,7 @@ TEST(PostProcess, InvertPlusOneGivesMinusOne) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — deadzone
+// Post-processing - deadzone
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, DeadzoneZeroesSmallPositiveValue) {
@@ -249,7 +249,7 @@ TEST(PostProcess, InvertAppliedBeforeDeadzone) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — output range 1  ([-1,+1] → [0,+1])
+// Post-processing - output range 1  ([-1,+1] → [0,+1])
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, Range1MinusOneBecomesZero) {
@@ -273,7 +273,7 @@ TEST(PostProcess, Range1MidPosBecomes0_75) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — output range 2  ([-1,+1] → [-1, 0])
+// Post-processing - output range 2  ([-1,+1] → [-1, 0])
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, Range2MinusOneBecomesMinusOne) {
@@ -297,7 +297,7 @@ TEST(PostProcess, Range2MidNegBecomesMinus0_75) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — output range 5  (custom [customMin, customMax])
+// Post-processing - output range 5  (custom [customMin, customMax])
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, Range5MinusOneBecomesCustomMin) {
@@ -326,7 +326,7 @@ TEST(PostProcess, Range5MatchesDefaultRangeWhenBoundsAreMinusOneToOne) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// InputSource — custom range field defaults
+// InputSource - custom range field defaults
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(InputSource, CustomRangeDefaultsMatchLegacyMinusOneToOne) {
@@ -336,7 +336,7 @@ TEST(InputSource, CustomRangeDefaultsMatchLegacyMinusOneToOne) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Post-processing — combined invert + range
+// Post-processing - combined invert + range
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(PostProcess, InvertWithRange1) {
@@ -355,7 +355,7 @@ TEST(PostProcess, DeadzoneWithRange1_ValueAtBoundaryIsZeroThenMapped) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ButtonToDigitalMapping — default construction
+// ButtonToDigitalMapping - default construction
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ButtonToDigitalMapping, DefaultMode) {
@@ -385,7 +385,7 @@ TEST(ButtonToDigitalMapping, DefaultLastPhysicalStateIsFalse) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ButtonToAnalogMapping — default construction
+// ButtonToAnalogMapping - default construction
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ButtonToAnalogMapping, DefaultOnOffValues) {

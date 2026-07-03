@@ -28,7 +28,7 @@ namespace InputMapping {
 // Declaring them at global scope (as before) made them invisible to ADL
 // for InputMapping::ButtonToDigitalMapping::Mode /
 // InputMapping::AnalogToDigitalMapping::Mode, silently falling back to
-// nlohmann's default "treat enum as its underlying int" handling — which
+// nlohmann's default "treat enum as its underlying int" handling - which
 // throws type_error.302 the moment it hits a "mode": "momentary" string.
 NLOHMANN_JSON_SERIALIZE_ENUM(ButtonToDigitalMapping::Mode, {
     {ButtonToDigitalMapping::Mode::Momentary, "momentary"},
@@ -366,7 +366,7 @@ MappingProfileStore::MappingProfileStore(const DeviceManager& deviceManager)
     : m_DeviceManager(deviceManager) {}
 
 std::filesystem::path MappingProfileStore::GetMappingsDirectory() {
-    // Mapping profiles are user data — they belong in
+    // Mapping profiles are user data - they belong in
     // $XDG_DATA_HOME/InputBridge/mappings/ per the XDG Base Directory
     // Specification (fallback: ~/.local/share/InputBridge/mappings/).
     return std::filesystem::path(XdgDirs::dataDir()) / "mappings";
@@ -498,7 +498,7 @@ void MappingProfileStore::ActivateProfile(int index) {
     // All subsystems are updated together so no frame can observe a mixed state
     // (e.g. haptic targets from profile A with axis mappings from profile B).
     //
-    // 1. Hand the new haptic targets to OutputMapper immediately — it may be
+    // 1. Hand the new haptic targets to OutputMapper immediately - it may be
     //    playing effects from the old profile and must stop them before the
     //    pointer changes.
     OutputMapper::GetInstance().SetActiveHapticTargets(

@@ -163,11 +163,11 @@ private:
     // from the UI does not silently disable all haptic effects.
     OutputMapper* m_savedOutputMapper = nullptr;
 
-    // Direction enable flags — persisted to prefs.
+    // Direction enable flags - persisted to prefs.
     bool m_outputEnabled = true;  // send OSC messages to clients
     bool m_inputEnabled  = true;  // receive OSC messages from clients
 
-    // Inactivity timeout — persisted to prefs.
+    // Inactivity timeout - persisted to prefs.
     bool     m_inactivityTimeoutEnabled = true;
     uint64_t m_inactivityTimeoutMs      = 5000;
 

@@ -9,7 +9,7 @@ namespace InputMapping {
 namespace {
 
 // Remaps `r` (already clamped to [-1, 1]) into the field's configured output
-// range. Shared by the axis pipeline and the non-IMU sensor pipeline below —
+// range. Shared by the axis pipeline and the non-IMU sensor pipeline below -
 // the two pipelines differ in how they apply the deadzone (see
 // ApplyAxisDeadzone's comment) but converge on this final remap.
 float ApplyOutputRange(float r, int outputRange, float customMin, float customMax) {
@@ -73,7 +73,7 @@ float ReadCapSenseChannel(InputSource::SensorChannel ch, SDL_Gamepad* gamepad) {
 float ReadGamepadSensorChannel(InputSource::SensorChannel ch, SDL_Gamepad* gamepad) {
     using SC = InputSource::SensorChannel;
 
-    // Enable sensors each frame — SDL ignores redundant calls, cost is negligible.
+    // Enable sensors each frame - SDL ignores redundant calls, cost is negligible.
     SensorReader::EnableAll(gamepad);
 
     switch (ch) {

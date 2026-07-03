@@ -119,7 +119,7 @@ void ProtocolEditorWindow::SaveSettings() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// File Browser (ImGui Fallback) — Windows Explorer-style
+// File Browser (ImGui Fallback) - Windows Explorer-style
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -1361,7 +1361,7 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
         const char* directions[] = {"Output", "Input"};
         ImGui::Combo("Direction", &s_newDirection, directions, 2);
 
-        // Template selection — templates and presets are the same thing.
+        // Template selection - templates and presets are the same thing.
         // GetPresets() scans protocols/templates/ so this list always reflects
         // whatever the user has saved via "Save as Template".
         auto& presets = ProtocolRegistry::GetInstance().GetPresets();
@@ -1683,7 +1683,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
     if (s_showCreateFieldModal) {
         ImGui::OpenPopup("Create/Edit Field##modal");
         s_showCreateFieldModal = false;
-        // New field — clear everything when not pre-filled by edit/dup buttons.
+        // New field - clear everything when not pre-filled by edit/dup buttons.
         if (!s_cfIsEditing && !s_cfIsDuplicate) {
             s_cfId[0] = '\0';
             s_cfLabel[0] = '\0';

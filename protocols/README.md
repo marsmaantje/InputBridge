@@ -16,7 +16,7 @@ protocols/
 
 ---
 
-## `input_fields.json` — Custom Output Fields
+## `input_fields.json` - Custom Output Fields
 
 Add your own analog axes or digital buttons here. They will appear in the
 Protocol Editor field picker alongside the built-in fields.
@@ -42,7 +42,7 @@ Reload the catalog at runtime via **Network Server → Protocols → Reload Fiel
 
 ---
 
-## `definitions/<id>.json` — Protocol Definition Files
+## `definitions/<id>.json` - Protocol Definition Files
 
 These are managed by the Protocol Editor UI. Each file represents one
 named protocol configuration.

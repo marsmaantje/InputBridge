@@ -8,7 +8,7 @@ namespace {
     const std::string KEY_NAME = "name";
     const std::string KEY_TRANSPORT = "transport";
     const std::string KEY_DIRECTION = "direction";
-    // Nested transport blocks — the actual on-disk format uses
+    // Nested transport blocks - the actual on-disk format uses
     //   "osc": { "host": "...", "sendPort": N, "recvPort": N }
     //   "ws":  { "port": N }
     const std::string KEY_OSC_BLOCK = "osc";

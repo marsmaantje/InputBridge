@@ -13,7 +13,7 @@ class ProtocolManager {
     std::vector<std::string> GetAvailableProtocols() const;
 
     // Release all registered protocol instances explicitly.  Call this during
-    // Application::Shutdown() — before any of the singletons that protocols
+    // Application::Shutdown() - before any of the singletons that protocols
     // reference (OSCServer, DeviceManager, …) are torn down.  Without this
     // the ProtocolManager static singleton outlives OSCServer (because it was
     // constructed first) and protocol destructors touch dead objects.

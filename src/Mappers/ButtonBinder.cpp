@@ -62,7 +62,7 @@ std::optional<BoundButtonInfo> ButtonBinder::Update(const std::vector<DeviceStat
         }
 
         // Elite-style controllers expose paddle buttons through the gamepad
-        // abstraction layer only — they are not visible as raw joystick buttons.
+        // abstraction layer only - they are not visible as raw joystick buttons.
         // Scan them explicitly so they can be bound in the mapper.
         // We encode gamepad-only buttons as a negative sentinel:
         //   stored index = -(SDL_GamepadButton + 1)

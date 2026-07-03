@@ -509,7 +509,7 @@ void OutputMapper::TriggerRumble(int virtual_id, int slot, float low_freq, float
             continue;
         }
 
-        // Generic fallback for non-managed devices (slot ignored — single motor pair).
+        // Generic fallback for non-managed devices (slot ignored - single motor pair).
         if (target->haptic_device) {
             if (SDL_GetHapticFeatures(target->haptic_device) & SDL_HAPTIC_LEFTRIGHT) {
                 SDL_HapticEffect effect;
@@ -563,7 +563,7 @@ void OutputMapper::TriggerConstantForce(int virtual_id, int slot, float strength
             continue;
         }
 
-        // Generic fallback (slot ignored — single effect slot on unmanaged devices).
+        // Generic fallback (slot ignored - single effect slot on unmanaged devices).
         if (!target->haptic_device) continue;
 
         SDL_HapticEffect effect;
@@ -602,7 +602,7 @@ void OutputMapper::TriggerPeriodic(int virtual_id, int slot, HapticPeriodicType 
             continue;
         }
 
-        // Generic fallback (slot ignored — single effect slot on unmanaged devices).
+        // Generic fallback (slot ignored - single effect slot on unmanaged devices).
         if (!target->haptic_device) continue;
 
         SDL_HapticEffect effect;

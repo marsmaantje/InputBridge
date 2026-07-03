@@ -147,11 +147,11 @@ private:
     // Editing vs creating
     static inline bool  s_cfIsEditing = false;       // true when opened from an existing field
     static inline char  s_cfEditingId[64] = "";      // original ID so we can look up & update
-    // OSC/WS override tracking — if the user has typed a custom value,
+    // OSC/WS override tracking - if the user has typed a custom value,
     // label/category changes should not overwrite it.
     static inline bool  s_cfOscManuallyModified = false;
     static inline bool  s_cfWsManuallyModified  = false;
-    // Duplicate — set before opening the modal to pre-fill from an existing field
+    // Duplicate - set before opening the modal to pre-fill from an existing field
     static inline bool  s_cfIsDuplicate = false;
 
     // Rename category modal state
@@ -200,7 +200,7 @@ private:
     static inline std::string s_importCurrentDir = ".";
 
     // Export protocol modal state (also used by async native dialog)
-    // Native dialog async state — the Win32 dialog runs on a worker thread so
+    // Native dialog async state - the Win32 dialog runs on a worker thread so
     // Filter / search state
     static inline char  s_fieldFilter[128] = {};
 

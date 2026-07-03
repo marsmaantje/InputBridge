@@ -4,7 +4,7 @@
 // PreferencesManager::Load() / Save() call SDL_GetBasePath() which needs SDL
 // initialized.  All in-memory accessors (Set*/Get*, IsPreferenceApplied, etc.)
 // work entirely on std::map state and need no SDL calls, so we test those
-// directly — which is the real value anyway: correct key/section routing,
+// directly - which is the real value anyway: correct key/section routing,
 // type coercion, defaults, and deletion.
 
 // ═════════════════════════════════════════════════════════════════════════════

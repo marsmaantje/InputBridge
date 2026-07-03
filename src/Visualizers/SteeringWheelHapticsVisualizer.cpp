@@ -133,7 +133,7 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             }
 
             if (slot_is_active)
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active — editing live", m_constant_slot);
+                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active - editing live", m_constant_slot);
 
             if (ImGui::Button("Play Constant")) {
                 wheelHaptics->PlayConstant(m_constant_slot, m_constant_strength,
@@ -189,7 +189,7 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             }
 
             if (slot_is_active)
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active — editing live", m_periodic_slot);
+                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active - editing live", m_periodic_slot);
 
             if (ImGui::Button("Play Periodic")) {
                 wheelHaptics->PlayPeriodic(m_periodic_slot,
@@ -256,7 +256,7 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             }
 
             if (slot_is_active)
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active — editing live", m_condition_slot);
+                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active - editing live", m_condition_slot);
 
             if (ImGui::Button("Play Condition")) {
                 wheelHaptics->PlayCondition(m_condition_slot,
