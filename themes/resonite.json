@@ -25,7 +25,7 @@
     "ChildBg":               [0.094, 0.102, 0.149, 1.00],
     "PopupBg":               [0.071, 0.078, 0.118, 0.98],
 
-    "Border":                [0.188, 0.196, 0.282, 0.80],
+    "Border":                [0.300, 0.320, 0.420, 1.00],
     "BorderShadow":          [0.000, 0.000, 0.000, 0.00],
 
     "FrameBg":               [0.110, 0.118, 0.173, 1.00],
@@ -100,6 +100,6 @@
     "GrabRounding":      6.0,
     "TabRounding":       6.0,
     "WindowBorderSize":  1.0,
-    "FrameBorderSize":   0.0
+    "FrameBorderSize":   1.0
   }
 }

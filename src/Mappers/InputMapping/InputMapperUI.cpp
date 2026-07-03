@@ -368,7 +368,7 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
     bool hasSrc = (src.axisIndex != -1) || (src.sensorChannel != SC::None);
     if (hasSrc) {
         dw = 180.f;
-        rw = 80.f;
+        rw = 110.f;
     }
 
     ImGui::SetNextItemWidth(std::max(1.0f, colW - sp - (showBind ? bindW + sp : 0.f)));
