@@ -31,7 +31,7 @@ struct AppLogEntry {
  * Usage:
  * @code
  *   AppLog::Install();          // once, early in Application::Init()
- *   AppLog::Get().Clear();      // optional — clear startup noise
+ *   AppLog::Get().Clear();      // optional - clear startup noise
  *   // ... later in the UI:
  *   const auto& entries = AppLog::Get().Entries();
  * @endcode

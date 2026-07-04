@@ -3,7 +3,7 @@
 #include "Devices/VirtualDeviceManager.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ProtocolDefinition — default values
+// ProtocolDefinition - default values
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ProtocolDefinition, DefaultTransportIsOSC) {
@@ -53,7 +53,7 @@ TEST(ProtocolDefinition, DefaultIdAndNameAreEmpty) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ProtocolDefinition — mutation
+// ProtocolDefinition - mutation
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ProtocolDefinition, CanSetTransportToWebSocket) {
@@ -86,7 +86,7 @@ TEST(ProtocolDefinition, CanActivate) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ProtocolField — defaults
+// ProtocolField - defaults
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ProtocolField, DefaultEnabledIsTrue) {
@@ -108,7 +108,7 @@ TEST(ProtocolField, CanDisable) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FieldDescriptor — defaults and mutation
+// FieldDescriptor - defaults and mutation
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(FieldDescriptor, DefaultIsBuiltInIsFalse) {
@@ -171,7 +171,7 @@ TEST(VirtualDeviceTypeName, GenericLabel) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ProtocolDefinition — copy semantics (field vector is deep-copied)
+// ProtocolDefinition - copy semantics (field vector is deep-copied)
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ProtocolDefinition, CopyHasIndependentFieldVector) {

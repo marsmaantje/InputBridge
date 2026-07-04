@@ -15,7 +15,7 @@
  * @param path      Any path (relative or absolute) to a directory.
  * @param outError  If non-null and this call fails, set to a human-readable
  *                  error message (from SDL_GetError() or std::filesystem).
- * @return true on success (SDL believes it launched a file browser — this is
+ * @return true on success (SDL believes it launched a file browser - this is
  *         not a guarantee the window became visible), false on failure.
  */
 bool OpenFolderInFileBrowser(const std::string& path, std::string* outError = nullptr);

@@ -54,7 +54,7 @@ struct KenneyFonts
             || steamController || generic;
     }
 
-    /// Singleton accessor — shared between FontManager and DeviceIconProvider.
+    /// Singleton accessor - shared between FontManager and DeviceIconProvider.
     static KenneyFonts& Get();
 };
 
@@ -65,7 +65,7 @@ struct DeviceIcon
 {
     ImFont*     font      = nullptr;  ///< Kenney font containing the glyph (may be null)
     const char* glyph     = nullptr;  ///< UTF-8 encoded codepoint string   (may be null)
-    ImWchar     codepoint = 0;        ///< Unicode codepoint — used to look up glyph metrics via ImFontBaked::FindGlyph()
+    ImWchar     codepoint = 0;        ///< Unicode codepoint - used to look up glyph metrics via ImFontBaked::FindGlyph()
 
     /// Returns true when all fields are valid and the icon can be rendered.
     bool IsValid() const { return font != nullptr && glyph != nullptr && codepoint != 0; }
@@ -76,7 +76,7 @@ class DeviceIconProvider
 public:
     /// Returns the best matching Kenney icon for the given device.
     /// If the Kenney fonts have not been loaded (e.g. TTF files absent) the
-    /// returned DeviceIcon will have IsValid() == false — callers must check.
+    /// returned DeviceIcon will have IsValid() == false - callers must check.
     static DeviceIcon GetIcon(const DeviceState& dev);
 
 private:

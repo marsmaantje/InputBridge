@@ -258,7 +258,7 @@ DetectedEffect HapticParser::AutoDetect(std::string_view message) {
             if (out.kind == DetectedEffect::Kind::Unknown)
                 out.kind = sniff(json, out);
         } else {
-            // Kind was resolved from the "effect" string — still populate params.
+            // Kind was resolved from the "effect" string - still populate params.
             sniff(data.empty() ? json : data, out);
         }
 
@@ -267,7 +267,7 @@ DetectedEffect HapticParser::AutoDetect(std::string_view message) {
         if (out.duration_ms == 0) out.duration_ms = get_duration(data.empty() ? json : data);
 
     } catch (...) {
-        // Malformed JSON — return Kind::Unknown.
+        // Malformed JSON - return Kind::Unknown.
     }
 
     return out;
@@ -297,7 +297,7 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
             // helper since they use QueueDualSenseTrigger, not the generic effects.
             // For now we fall through to the standard JSON path when a DualSense
             // trigger is auto-detected (the caller must still set "type" explicitly
-            // for DualSense — auto-detect only covers the four SDL effect classes).
+            // for DualSense - auto-detect only covers the four SDL effect classes).
             if (det.kind != DetectedEffect::Kind::DualSenseTrigger) {
                 dispatch(json, data.empty() ? json : data,
                          kind_to_effect_string(det.kind), det.device, mapper);

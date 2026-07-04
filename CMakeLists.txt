@@ -277,8 +277,6 @@ add_executable(InputBridge
     src/Protocols/MarsmaantjeNewProtocol.cpp
     src/Protocols/OSCBaseProtocol.cpp
     src/Protocols/OSCBackAlleyRacingProtocol.cpp
-    src/Protocols/OSCSteamLinkProtocol.cpp
-    src/Protocols/OSCProjectBabbleProtocol.cpp
     src/Protocols/ProtocolEditorWindow.cpp
     src/Protocols/ProtocolRegistry.cpp
     # Utilities
@@ -450,70 +448,130 @@ install(TARGETS InputBridge
 
 # Copy the themes/ folder next to the executable at build time so the
 # program can find its themes in the development build layout.
-add_custom_command(TARGET InputBridge POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_CURRENT_SOURCE_DIR}/themes"
-    "$<TARGET_FILE_DIR:InputBridge>/themes"
-    COMMENT "Copying themes/ to build output directory"
-)
+# On macOS the app bundle keeps resources in Contents/Resources/, not next to
+# the binary in Contents/MacOS/, so we redirect the destination accordingly.
+if(APPLE)
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+        "$<TARGET_BUNDLE_CONTENT_DIR:InputBridge>/Resources/themes"
+        COMMENT "Copying themes/ into app bundle Resources"
+    )
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+        DESTINATION "InputBridge.app/Contents/Resources/themes"
+        FILES_MATCHING PATTERN "*.json"
+    )
+else()
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+        "$<TARGET_FILE_DIR:InputBridge>/themes"
+        COMMENT "Copying themes/ to build output directory"
+    )
 
-# Install the themes/ folder alongside the binary.
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/themes"
-    DESTINATION bin
-    FILES_MATCHING PATTERN "*.json"
-)
+    # Install the themes/ folder alongside the binary.
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+        DESTINATION bin
+        FILES_MATCHING PATTERN "*.json"
+    )
+endif()
 
 # Copy the fonts/ folder next to the executable at build time so the
 # program can find its fonts in the development build layout.
-# Map files (*.txt) are excluded — they are only needed to look up codepoints
+# Map files (*.txt) are excluded - they are only needed to look up codepoints
 # when editing KenneyIcons.h and serve no purpose at runtime.
-add_custom_command(TARGET InputBridge POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
-    "$<TARGET_FILE_DIR:InputBridge>/fonts"
-    COMMENT "Copying fonts/ to build output directory"
-)
-add_custom_command(TARGET InputBridge POST_BUILD
-    COMMAND ${CMAKE_COMMAND}
-        -DFONT_DIR="$<TARGET_FILE_DIR:InputBridge>/fonts"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RemoveFontMapFiles.cmake"
-    COMMENT "Removing font map files from build output directory"
-)
-
-# Install the fonts/ folder alongside the binary.
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
-    DESTINATION bin
-    FILES_MATCHING PATTERN "*.ttf" PATTERN "*.otf"
-)
+if(APPLE)
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+        "$<TARGET_BUNDLE_CONTENT_DIR:InputBridge>/Resources/fonts"
+        COMMENT "Copying fonts/ into app bundle Resources"
+    )
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DFONT_DIR="$<TARGET_BUNDLE_CONTENT_DIR:InputBridge>/Resources/fonts"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RemoveFontMapFiles.cmake"
+        COMMENT "Removing font map files from bundle Resources/fonts"
+    )
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+        DESTINATION "InputBridge.app/Contents/Resources/fonts"
+        FILES_MATCHING PATTERN "*.ttf" PATTERN "*.otf"
+    )
+else()
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+        "$<TARGET_FILE_DIR:InputBridge>/fonts"
+        COMMENT "Copying fonts/ to build output directory"
+    )
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DFONT_DIR="$<TARGET_FILE_DIR:InputBridge>/fonts"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RemoveFontMapFiles.cmake"
+        COMMENT "Removing font map files from build output directory"
+    )
+    
+    # Install the fonts/ folder alongside the binary.
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+        DESTINATION bin
+        FILES_MATCHING PATTERN "*.ttf" PATTERN "*.otf"
+    )
+endif()
 
 # Copy the protocols/ folder next to the executable at build time so the
 # program can find its presets and templates in the development build layout.
-add_custom_command(TARGET InputBridge POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
-    "$<TARGET_FILE_DIR:InputBridge>/protocols"
-    COMMENT "Copying protocols/ to build output directory"
-)
+if(APPLE)
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
+        "$<TARGET_BUNDLE_CONTENT_DIR:InputBridge>/Resources/protocols"
+        COMMENT "Copying protocols/ into app bundle Resources"
+    )
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
+        DESTINATION "InputBridge.app/Contents/Resources/protocols"
+        FILES_MATCHING PATTERN "*.json"
+    )
+else()
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
+        "$<TARGET_FILE_DIR:InputBridge>/protocols"
+        COMMENT "Copying protocols/ to build output directory"
+    )
 
-# Install the protocols/ folder alongside the binary.
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
-    DESTINATION bin
-    FILES_MATCHING PATTERN "*.json"
-)
+    # Install the protocols/ folder alongside the binary.
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/protocols"
+        DESTINATION bin
+        FILES_MATCHING PATTERN "*.json"
+    )
+endif()
 
-# Copy the mappings/ folder next to the executable at build time.
-add_custom_command(TARGET InputBridge POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
-    "$<TARGET_FILE_DIR:InputBridge>/mappings"
-    COMMENT "Copying mappings/ to build output directory"
-)
+# Copy the mappings/ folder at build time.
+if(APPLE)
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
+        "$<TARGET_BUNDLE_CONTENT_DIR:InputBridge>/Resources/mappings"
+        COMMENT "Copying mappings/ into app bundle Resources"
+    )
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
+        DESTINATION "InputBridge.app/Contents/Resources/mappings"
+        FILES_MATCHING PATTERN "*.json"
+    )
+else()
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
+        "$<TARGET_FILE_DIR:InputBridge>/mappings"
+        COMMENT "Copying mappings/ to build output directory"
+    )
 
-# Install the mappings/ folder alongside the binary.
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
-    DESTINATION bin
-    FILES_MATCHING PATTERN "*.json"
-)
+    # Install the mappings/ folder alongside the binary.
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mappings"
+        DESTINATION bin
+        FILES_MATCHING PATTERN "*.json"
+    )
+endif()
 
 if(UNIX AND NOT APPLE)
     # Generate basic desktop file and icon for packaging (Required for AppImage/Flatpak)

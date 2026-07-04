@@ -25,11 +25,11 @@ void UpdateUIScale(SDL_Window*         window,
 ///
 /// Kenney Input Prompt fonts (fonts/Kenney/<SubFolder>/<name>.ttf) are loaded
 /// as separate, non-merged ImFont* instances and registered in KenneyFonts::Get().
-/// Missing TTF files are silently skipped — DeviceIconProvider gracefully
+/// Missing TTF files are silently skipped - DeviceIconProvider gracefully
 /// degrades to no icon when a font was not found.
 ///
 /// The SDL3 renderer backend manages the GPU texture automatically; calling
-/// this function is sufficient — no manual Create/Destroy is required.
+/// this function is sufficient - no manual Create/Destroy is required.
 void RebuildFontAtlas();
 
 /// Full path to the fonts/ folder next to the executable

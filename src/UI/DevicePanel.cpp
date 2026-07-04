@@ -398,7 +398,7 @@ void DrawDeviceItem(DeviceState&        dev,
                     y0_scaled = (g->Y0 / baked->Size) * render_sz;
                     // Store exact scaled glyph height for centring below.
                     // (render_sz - y0_scaled would also include the descender
-                    // gap below Y1, pushing the icon upward — use exact value.)
+                    // gap below Y1, pushing the icon upward - use exact value.)
                     glyph_h_scaled = (glyph_h / baked->Size) * render_sz;
                 }
             }
@@ -445,7 +445,7 @@ void DrawDeviceItem(DeviceState&        dev,
             rect_max.x - total_w - pad,
             rect_min.y + (rect_max.y - rect_min.y - icon_h) * 0.5f);
 
-        // Helper lambda — draws one battery icon at `pos`.
+        // Helper lambda - draws one battery icon at `pos`.
         auto DrawBatteryIcon = [&](ImVec2 pos, SDL_PowerState state, int pct) {
             ImU32 col = GetBatteryColorFor(state, pct);
 

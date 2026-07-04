@@ -14,8 +14,14 @@
  * Call LoadAll() once at startup and SaveAll() / SaveDefinition() as needed.
  */
 struct FieldPreset {
+    struct Entry {
+        std::string fieldId;
+        std::string oscPath;
+        std::string wsKey;
+    };
     std::string name;
-    std::vector<std::string> fieldIds;
+    std::string        filePath;
+    std::vector<Entry> entries;
 };
 
 class ProtocolRegistry {
@@ -38,6 +44,9 @@ public:
 
     // ── Presets ──────────────────────────────────────────────────────────────
     const std::vector<FieldPreset>& GetPresets() const;
+    // Re-scans protocols/templates/ and rebuilds m_presets.  Call after saving
+    // a new template so the "New Protocol" combo reflects it immediately.
+    void LoadPresets();
     void SavePreset(const std::string& name, const std::vector<std::string>& fieldIds);
     void DeletePreset(const std::string& name);
 
@@ -79,8 +88,7 @@ private:
 
     void LoadFieldCatalog();
     void LoadDefinitionFiles();
-    void LoadPresets();
-    void SavePresets();
+
     void EnsureDirectories();
     void WriteDefaultFieldCatalog();
     void LoadBuiltinCatalog();

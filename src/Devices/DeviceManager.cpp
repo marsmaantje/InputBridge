@@ -254,7 +254,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
                 SDL_free(joystick_ids);
             }
         } else {
-            // Not a combined pair — clear the left-side fields.
+            // Not a combined pair - clear the left-side fields.
             dev.battery_state_L   = SDL_POWERSTATE_UNKNOWN;
             dev.battery_percent_L = -1;
         }

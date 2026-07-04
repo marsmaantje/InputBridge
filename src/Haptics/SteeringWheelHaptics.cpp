@@ -140,7 +140,7 @@ int SteeringWheelHaptics::PlayRumble(int slot, float large_magnitude, float smal
     if (strength <= 0.0f) {
         return StopPeriodic(slot);
     }
-    // 50 ms period = 20 Hz — a recognisable vibration feel.
+    // 50 ms period = 20 Hz - a recognisable vibration feel.
     return PlayPeriodic(slot, HapticPeriodicType::Sine, strength, 50, strength, 0.0f, 0, duration_ms);
 }
 

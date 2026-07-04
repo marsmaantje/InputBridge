@@ -84,11 +84,11 @@ inline const char* ConditionTypeName(HapticConditionType t) {
 //                           (for all types except Square).
 
 enum class HapticPeriodicType : int {
-    Sine         = 0,  // SDL_HAPTIC_SINE        — smooth sinusoidal wave
-    Square       = 1,  // SDL_HAPTIC_CUSTOM (synthesised) — instant high/low
-    Triangle     = 2,  // SDL_HAPTIC_TRIANGLE    — linear ramp up/down
-    SawtoothUp   = 3,  // SDL_HAPTIC_SAWTOOTHUP  — fast rise, instant drop
-    SawtoothDown = 4,  // SDL_HAPTIC_SAWTOOTHDOWN — instant rise, fast drop
+    Sine         = 0,  // SDL_HAPTIC_SINE        - smooth sinusoidal wave
+    Square       = 1,  // SDL_HAPTIC_CUSTOM (synthesised) - instant high/low
+    Triangle     = 2,  // SDL_HAPTIC_TRIANGLE    - linear ramp up/down
+    SawtoothUp   = 3,  // SDL_HAPTIC_SAWTOOTHUP  - fast rise, instant drop
+    SawtoothDown = 4,  // SDL_HAPTIC_SAWTOOTHDOWN - instant rise, fast drop
 };
 
 inline Uint16 ToSDLPeriodicType(HapticPeriodicType t) {
@@ -285,7 +285,7 @@ protected:
     SDL_Joystick* m_joystick = nullptr;  // Non-owning pointer
     InputBridge::HapticHandle m_haptic;  // RAII ownership of haptic device
 
-    // State for active effects UI — all keyed by slot for uniformity.
+    // State for active effects UI - all keyed by slot for uniformity.
     std::mutex m_activeEffectsMutex;
     std::map<int, ActiveConstantInfo>  m_activeConstants;
     std::map<int, ActivePeriodicInfo>  m_activePeriodicEffects;

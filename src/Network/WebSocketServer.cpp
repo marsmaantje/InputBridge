@@ -56,16 +56,16 @@ struct WebSocketServer::Impl {
     uWS::App *app = nullptr;
     uWS::Loop *loop = nullptr;
     struct us_listen_socket_t *listen_socket = nullptr;
-    // Preserved across Stop()/Start() cycles — mirrors OSCServer::m_savedOutputMapper.
+    // Preserved across Stop()/Start() cycles - mirrors OSCServer::m_savedOutputMapper.
     OutputMapper* savedOutputMapper = nullptr;
 
-    // Inactivity timeout — updated on every received message.
+    // Inactivity timeout - updated on every received message.
     uint64_t lastMessageTime = 0;
 
     // Direction enable flags.
     bool outputEnabled = true;
     bool inputEnabled  = true;
-    // Inactivity timeout — persisted to prefs.
+    // Inactivity timeout - persisted to prefs.
     bool     inactivityTimeoutEnabled = true;
     uint64_t inactivityTimeoutMs      = 5000;
 };
@@ -157,7 +157,7 @@ void WebSocketServer::Start(int port) {
                                        mapperCopy   = m_OutputMapper;
                                        inputEnabled = m_Impl->inputEnabled;
                                    }
-                                   // Mutex is released — do slow work now.
+                                   // Mutex is released - do slow work now.
 
                                    // Skip dispatch when input is disabled.
                                    if (!inputEnabled) return;
@@ -193,7 +193,7 @@ void WebSocketServer::Start(int port) {
                                            if (m_Impl->clients.empty()) {
                                                doStopHaptics = true;
                                                // m_OutputMapper is nulled by Stop() before deferred
-                                               // close callbacks run — fall back to the saved copy so
+                                               // close callbacks run - fall back to the saved copy so
                                                // haptics are always stopped on last-client-disconnect.
                                                mapperCopy = m_OutputMapper
                                                                 ? m_OutputMapper
@@ -242,8 +242,8 @@ void WebSocketServer::Stop() {
         // Capture and immediately null m_OutputMapper while holding the lock.
         // The .close lambda (which fires on the uWS thread when clients are
         // disconnected) snapshots m_OutputMapper under this same mutex.  By
-        // clearing it here — before the deferred client-close callbacks are
-        // queued — we guarantee those callbacks see nullptr and will not call
+        // clearing it here - before the deferred client-close callbacks are
+        // queued - we guarantee those callbacks see nullptr and will not call
         // StopAllHapticEffects() on an object that may have been freed by the
         // time the uWS thread processes the deferred work.
         // We also save a copy so that a subsequent Start() can restore it,
@@ -607,7 +607,7 @@ void WebSocketServer::DrawContent() {
         std::string definitionId; // user-defined
     };
 
-    // Collect built-in WebSocket protocols (named community protocols only —
+    // Collect built-in WebSocket protocols (named community protocols only -
     // exclude the generic "WebSocket" fallback which has no real behaviour).
     std::vector<std::string> builtins;
     for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols())

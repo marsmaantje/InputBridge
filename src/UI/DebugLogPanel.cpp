@@ -120,7 +120,7 @@ void DrawDebugLogContent() {
 
     const bool hasFilter = (s_filterBuf[0] != '\0');
 
-    // Take a snapshot reference — entries only grow or get cleared, never
+    // Take a snapshot reference - entries only grow or get cleared, never
     // individually removed, so iterating without the lock is safe on the
     // render thread (Push holds the lock only during the write).
     const auto& entries = log.Entries();
@@ -151,7 +151,7 @@ void DrawDebugLogContent() {
             const ImVec2 rowScreenMin = ImGui::GetCursorScreenPos();
             const float  rowWidth     = ImGui::GetContentRegionAvail().x;
 
-            // 1. Render the coloured text first — this advances the cursor naturally
+            // 1. Render the coloured text first - this advances the cursor naturally
             //    so no rewinding is needed and row height is always correct.
             ImGui::PushStyleColor(ImGuiCol_Text, LevelColour(e.level));
             if (s_wordWrap)

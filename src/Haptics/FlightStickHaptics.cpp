@@ -167,7 +167,7 @@ int FlightStickHaptics::StopPeriodic(int slot) {
 }
 
 // ---------------------------------------------------------------------------
-// PlayRumble — simulated via a low-frequency periodic (no dedicated motors)
+// PlayRumble - simulated via a low-frequency periodic (no dedicated motors)
 // ---------------------------------------------------------------------------
 
 int FlightStickHaptics::PlayRumble(int slot, float large_magnitude,
@@ -176,7 +176,7 @@ int FlightStickHaptics::PlayRumble(int slot, float large_magnitude,
     if (strength <= 0.0f) {
         return StopPeriodic(slot);
     }
-    // ~33 Hz square-ish vibration — a noticeable impact feel on force-feedback sticks.
+    // ~33 Hz square-ish vibration - a noticeable impact feel on force-feedback sticks.
     return PlayPeriodic(slot, HapticPeriodicType::Sine, strength, /*period_ms=*/30, strength, 0.0f, 0, duration_ms);
 }
 

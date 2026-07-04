@@ -14,7 +14,7 @@ class IProtocol;
  *
  * WebSocketServer satisfies the ITransport contract (see Network/ITransport.h).
  * Incoming haptic JSON messages are forwarded to HapticParser::Parse(), which
- * then calls OutputMapper::Queue*() — no parsing logic lives here.
+ * then calls OutputMapper::Queue*() - no parsing logic lives here.
  *
  * @see ITransport       Abstract transport interface documenting the full contract.
  * @see OSCServer        Parallel implementation for OSC/UDP.
@@ -69,7 +69,7 @@ class WebSocketServer {
 
     void SetOutputMapper(OutputMapper* mapper);
 
-    // Call once per frame from the main loop — fires StopAllHapticEffects when
+    // Call once per frame from the main loop - fires StopAllHapticEffects when
     // connected clients go silent for longer than the inactivity timeout.
     // Write port field from a profile without restarting the server.
     void SetPortFromProfile(int port);

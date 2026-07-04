@@ -22,7 +22,7 @@ KenneyFonts& KenneyFonts::Get()
 //
 // Matches well-known substrings in the lowercased device name.  The order of
 // checks matters: more specific brands/models are tested before generic ones.
-// Each return carries { font, UTF-8 string, codepoint } — the string and
+// Each return carries { font, UTF-8 string, codepoint } - the string and
 // codepoint always come from the paired macros in KenneyIcons.h so they
 // can never drift out of sync.
 // ---------------------------------------------------------------------------
@@ -40,8 +40,8 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
 
     // ── Steam Controller ───────────────────────────────────────────────────
     // Both glyph variants live in the same TTF; only the codepoint differs.
-    //   KENNEY_STEAM_CONTROLLER     (U+E020) — original oval-body design (V1 / D0G)
-    //   KENNEY_STEAM_CONTROLLER_NEW (U+E021) — redesigned rectangular body (V2 / HEADCRAB)
+    //   KENNEY_STEAM_CONTROLLER     (U+E020) - original oval-body design (V1 / D0G)
+    //   KENNEY_STEAM_CONTROLLER_NEW (U+E021) - redesigned rectangular body (V2 / HEADCRAB)
     //
     // SDL reports both generations with the same "Steam Controller" name string.
     if (lower.find("steam controller") != std::string::npos

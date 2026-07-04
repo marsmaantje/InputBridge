@@ -9,7 +9,7 @@
 //
 // The stub's Queue* methods ignore 'this' entirely and record every call into
 // the global vectors declared below.  The tests use any non-null pointer as the
-// "mapper" — conventionally the address of a small static char buffer — because
+// "mapper" - conventionally the address of a small static char buffer - because
 // the methods never dereference it.
 //
 // Call HapticStub::Reset() in SetUp() to clear state between tests.

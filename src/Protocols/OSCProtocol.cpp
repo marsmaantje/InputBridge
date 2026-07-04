@@ -32,7 +32,7 @@ OSCProtocol::~OSCProtocol() {
     // OSCServer is a static singleton constructed after ProtocolManager and
     // therefore destroyed before it.  If ProtocolManager::Clear() was not
     // called during Shutdown(), our destructor could run after OSCServer's
-    // destructor has already finished — calling SetHandler on a dead object.
+    // destructor has already finished - calling SetHandler on a dead object.
     // IsDestroyed() guards against that scenario.
     if (!OSCServer::IsDestroyed()) {
         OSCServer::GetInstance().SetHandler(nullptr);
@@ -110,7 +110,7 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
                 (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
-    // Legacy periodic — no wave_type, defaults to Sine.
+    // Legacy periodic - no wave_type, defaults to Sine.
     else if (path_sv == "/inputbridge/haptics/periodic" && std::strcmp(types, "iififfii") == 0 && argc == 8) {
         handled = true;
         int   slot         = argv[1]->i;
@@ -270,7 +270,7 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
                 (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
         });
     }
-    // Legacy: /inputbridge/haptics/periodic/N  ififfii  — no wave_type, defaults to Sine
+    // Legacy: /inputbridge/haptics/periodic/N  ififfii  - no wave_type, defaults to Sine
     else if (base == "/inputbridge/haptics/periodic" && std::strcmp(types, "ififfii") == 0 && argc == 7) {
         handled = true;
         float strength      = ClampNorm(argv[1]->f,    "strength",  path_sv);
@@ -302,7 +302,7 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
                 (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
         });
     }
-    // Note: /inputbridge/haptics/gain has no slot dimension — no subchannel variant is defined.
+    // Note: /inputbridge/haptics/gain has no slot dimension - no subchannel variant is defined.
 
     return handled;
 }

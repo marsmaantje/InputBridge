@@ -156,7 +156,7 @@ public:
     /**
      * @brief Check if connected controller is a Steam Controller V1 (D0G)
      *
-     * V1 has no traditional rumble motors — haptic feedback requires the
+     * V1 has no traditional rumble motors - haptic feedback requires the
      * vendor HID trackpad-pulse path via SDL_SendGamepadEffect.
      *
      * @return true if Steam Controller V1 (USB 0x1102 or wireless dongle 0x1106)

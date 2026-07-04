@@ -20,7 +20,7 @@ InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
     // Resolve and cache the SDL_Gamepad* handle once.  SDL_GetGamepadFromID
     // may return null later for some controller/driver combinations (e.g. the
     // V2 Steam Controller via SDL_hidapi_steam_triton.c), so caching here at
-    // open time — when DeviceFactory has just called SDL_OpenGamepad — is the
+    // open time - when DeviceFactory has just called SDL_OpenGamepad - is the
     // only reliable way to obtain it.
     SDL_JoystickID id = SDL_GetJoystickID(m_joystick);
     m_gamepad = SDL_GetGamepadFromID(id);
@@ -43,7 +43,7 @@ InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
     }
     else if (IsSteamControllerV2()) {
         // V2 supports SDL_RumbleGamepad natively since SDL 3.4.10.
-        // No special initialization required — the standard rumble path is used.
+        // No special initialization required - the standard rumble path is used.
         LOG_INFO(kTag, "Initialized as Steam Controller V2 (SDL_RumbleGamepad)");
     }
     else {
@@ -240,11 +240,11 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
  * or SDL_SendJoystickEffect (whichever handle is available).
  *
  * SDL's HIDAPI Steam driver (SDL_hidapi_steam.c) implements SendJoystickEffect for
- * exactly 65-byte payloads — it calls SDL_hid_send_feature_report on its
+ * exactly 65-byte payloads - it calls SDL_hid_send_feature_report on its
  * already-open device handle.  We build a FeatureReportMsg (from Valve's
  * controller_structs.h) with command ID_TRIGGER_HAPTIC_PULSE (0x8F):
  *
- *   Byte  0   : reserved / report ID (0x00 — SDL prepends this)
+ *   Byte  0   : reserved / report ID (0x00 - SDL prepends this)
  *   Byte  1   : command = ID_TRIGGER_HAPTIC_PULSE (0x8F)
  *   Byte  2   : payload length = sizeof(MsgFireHapticPulse) = 9
  *   Byte  3   : which_pad (0 = left trackpad, 1 = right trackpad)
@@ -287,7 +287,7 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
     // Bytes 3–11 are the MsgFireHapticPulse fields.
     // Remaining bytes are zero-padded.
     uint8_t report[STEAM_FEATURE_REPORT_SIZE] = {};
-    report[1] = STEAM_HAPTIC_PULSE_MSG_ID;   // 0x8F — ID_TRIGGER_HAPTIC_PULSE
+    report[1] = STEAM_HAPTIC_PULSE_MSG_ID;   // 0x8F - ID_TRIGGER_HAPTIC_PULSE
     report[2] = 9;                           // payload length = sizeof(MsgFireHapticPulse)
     report[3] = pad;                         // which_pad: 0 = left, 1 = right
     report[4] = static_cast<uint8_t>(durationUs & 0xFF);          // pulse_duration lo
@@ -296,8 +296,8 @@ void GamepadHaptics::SendSteamControllerHaptic(uint8_t pad, float magnitude, uin
     report[7] = static_cast<uint8_t>((periodUs >> 8) & 0xFF);     // pulse_interval hi
     report[8] = static_cast<uint8_t>(pulseCount & 0xFF);          // pulse_count lo
     report[9] = static_cast<uint8_t>((pulseCount >> 8) & 0xFF);   // pulse_count hi
-    // report[10–11] = dBgain (Sint16) — 0 = default gain
-    // report[12]    = priority flags — 0 = HAPTIC_PULSE_NORMAL
+    // report[10–11] = dBgain (Sint16) - 0 = default gain
+    // report[12]    = priority flags - 0 = HAPTIC_PULSE_NORMAL
 
     LOG_DEBUG(kTag, "SendSteamControllerHaptic - pad=%u magnitude=%.2f durationUs=%u periodUs=%u pulseCount=%u",
             pad, magnitude, durationUs, periodUs, pulseCount);

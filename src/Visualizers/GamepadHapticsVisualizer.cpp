@@ -78,7 +78,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
         auto active_rumbles = gamepadHaptics->GetActiveRumbles();
         auto it = active_rumbles.find(m_rumble_slot);
         if (it != active_rumbles.end() && it->second.active)
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active — editing live", m_rumble_slot);
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● Slot %d active - editing live", m_rumble_slot);
     }
 
     if (ImGui::Button("Play Rumble")) {

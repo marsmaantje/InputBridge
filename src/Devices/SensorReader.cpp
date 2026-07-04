@@ -78,7 +78,7 @@ void SensorReader::Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps) 
     // Only enable sensors the device actually has.  SDL does not guarantee that
     // sensor-enabled state survives a device re-presentation (e.g. Steam Input
     // taking/releasing control), so this must be called again after any such
-    // event — see the SDL_EVENT_WINDOW_FOCUS_GAINED handler in Application.
+    // event - see the SDL_EVENT_WINDOW_FOCUS_GAINED handler in Application.
     static constexpr struct { bool SensorCapabilities::*flag; SDL_SensorType type; } kMotionSensors[] = {
         { &SensorCapabilities::gyro,   SDL_SENSOR_GYRO    },
         { &SensorCapabilities::accel,  SDL_SENSOR_ACCEL   },
@@ -103,7 +103,7 @@ SensorCapabilities SensorReader::EnableAll(SDL_Gamepad* gamepad) {
     return caps;
 }
 
-// ── Public read interface — delegates to shared helpers ───────────────────────
+// ── Public read interface - delegates to shared helpers ───────────────────────
 
 GyroState  SensorReader::ReadGyro (SDL_Gamepad* g) { return ReadGyroSensor (g, SDL_SENSOR_GYRO);    }
 AccelState SensorReader::ReadAccel(SDL_Gamepad* g) { return ReadAccelSensor(g, SDL_SENSOR_ACCEL);   }
