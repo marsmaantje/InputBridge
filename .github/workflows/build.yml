@@ -444,16 +444,17 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                # macos-26 added temporarily to validate the build ahead of
-                # GitHub's automatic macos-latest migration (rolling out
-                # 2026-06-15 through 2026-07-15, see actions/runner-images#14167).
-                # Once confirmed green, drop macos-latest (or macos-26,
-                # whichever you decide to standardize on) and remove this comment.
-                os: [ubuntu-latest, windows-latest, macos-latest, macos-26]
+                os: [ubuntu-latest, windows-latest, macos-latest]
         runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v6
               with: { submodules: recursive }
+
+            - name: Prepare apt cache directory
+              if: runner.os == 'Linux'
+              run: |
+                  sudo mkdir -p /var/cache/apt/archives/partial
+                  sudo chmod -R 777 /var/cache/apt/archives
 
             - name: Cache apt packages
               if: runner.os == 'Linux'
@@ -473,11 +474,11 @@ jobs:
 
             - name: Fix apt cache permissions
               if: runner.os == 'Linux'
-              # apt creates /var/cache/apt/archives/partial with 700 root-only
-              # permissions. actions/cache tars this directory as the runner
-              # user during its post-job save step, and a permission-denied
-              # read on partial/ makes tar exit 2 and the save fail. Opening
-              # read/list permissions here lets the cache save succeed.
+              # apt-get install runs via sudo (root), so newly downloaded
+              # .deb files land back with restrictive root ownership even
+              # though the directory itself is now world-writable. Re-open
+              # read/list permissions here so the cache's post-job save step
+              # (running as the non-root runner user) can read everything.
               run: sudo chmod -R o+rX /var/cache/apt/archives
 
             - name: Add OpenSSL to PATH (Windows)
