@@ -444,7 +444,12 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-latest, windows-latest, macos-latest]
+                # macos-26 added temporarily to validate the build ahead of
+                # GitHub's automatic macos-latest migration (rolling out
+                # 2026-06-15 through 2026-07-15, see actions/runner-images#14167).
+                # Once confirmed green, drop macos-latest (or macos-26,
+                # whichever you decide to standardize on) and remove this comment.
+                os: [ubuntu-latest, windows-latest, macos-latest, macos-26]
         runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v6
