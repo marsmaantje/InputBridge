@@ -46,7 +46,7 @@ class InputMapperUI {
     // DrawMappingContent. Returns true if the selection changed; calls
     // UpdateActiveProtocols() itself on a non-"None" selection, matching all
     // three original copies. `width` matches DrawOutputProtocolSelector's
-    // original copy, which fixed the combo to 200px — the other two copies
+    // original copy, which fixed the combo to 200px - the other two copies
     // left it unset (auto-width), so default `width` to 0 (= don't set it).
     bool DrawProtocolDefinitionCombo(const char* label, std::string& currentId, ProtocolTransport transport,
                                       ProtocolDirection dir, float width = 0.f);

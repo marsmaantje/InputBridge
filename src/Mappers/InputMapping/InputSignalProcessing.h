@@ -20,7 +20,7 @@ SDL_Gamepad*  FindGamepad(SDL_JoystickID id, const DeviceManager& dm);
 
 // Reads a button, decoding ButtonBinder's gamepad-only-button sentinel
 // (negative indices encode an SDL_GamepadButton instead of a joystick button
-// index — see ButtonBinder.cpp for the encoding).
+// index - see ButtonBinder.cpp for the encoding).
 bool ReadButtonState(SDL_JoystickID instance_id, int button_index, const DeviceManager& dm);
 
 // Reads a regular joystick axis through `cfg`'s invert/deadzone/range options.

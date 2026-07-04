@@ -29,7 +29,7 @@
 // SDL_LogXxx helpers so the format string can embed the tag at runtime via
 // "[%s] " without requiring compile-time string concatenation.
 
-/// Noisy per-frame or repeated diagnostic messages — hidden by default in the UI.
+/// Noisy per-frame or repeated diagnostic messages - hidden by default in the UI.
 #define LOG_VERBOSE(tag, fmt, ...) \
     SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_VERBOSE,  "[%s] " fmt, tag, ##__VA_ARGS__)
 
@@ -49,7 +49,7 @@
 #define LOG_ERROR(tag, fmt, ...) \
     SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_ERROR,    "[%s] " fmt, tag, ##__VA_ARGS__)
 
-/// Unrecoverable errors — application integrity may be compromised.
+/// Unrecoverable errors - application integrity may be compromised.
 #define LOG_CRITICAL(tag, fmt, ...) \
     SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_CRITICAL, "[%s] " fmt, tag, ##__VA_ARGS__)
 

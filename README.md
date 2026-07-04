@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml/badge.svg)](https://github.com/marsmaantje/InputBridge/actions/workflows/build.yml)
 
-InputBridge reads joystick, gamepad, steering wheel, and flight stick input and streams it over **OSC** and **WebSocket** to any receiving application. It also accepts haptic commands back — rumble, force feedback, adaptive triggers — and dispatches them to connected devices in real time.
+InputBridge reads joystick, gamepad, steering wheel, and flight stick input and streams it over **OSC** and **WebSocket** to any receiving application. It also accepts haptic commands back - rumble, force feedback, adaptive triggers - and dispatches them to connected devices in real time.
 
 ![InputBridge screenshot](docs/0.10.0_InputBridge_device_screen.png)
 
@@ -15,7 +15,7 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 | Generic Gamepad             | Axes, buttons, gyro, accelerometer, touchpad                              | Rumble (low / high frequency)                                                      |
 | Steam Controller (V1 & V2)  | Axes, buttons, dual touchpads, gyro, accelerometer, capacitive grip/stick | Touchpad haptics (raw HID), rumble                                                 |
 | Nintendo Joy-Con (L/R pair) | Axes, buttons, independent per-side gyro & accelerometer                  | Rumble                                                                             |
-| Sony DualSense (PS5)        | Axes, buttons, touchpad (2-finger), gyro, accelerometer                   | Rumble, LED control — USB & Bluetooth                                              |
+| Sony DualSense (PS5)        | Axes, buttons, touchpad (2-finger), gyro, accelerometer                   | Rumble, LED control - USB & Bluetooth                                              |
 | Steering Wheel              | Axes, buttons                                                             | Constant force, periodic, condition effects (Spring / Damper / Inertia / Friction) |
 | Flight Stick / Throttle     | Axes, buttons                                                             | Constant force, periodic, condition on both pitch and roll axes                    |
 
@@ -24,9 +24,9 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 ## Quick Start
 
 1. **Download** the latest build for your platform from [Releases](../../releases).
-2. **Connect** your controller — it appears in the **Devices** tab automatically with matching hardware icons and optional controller-specific input labels.
+2. **Connect** your controller - it appears in the **Devices** tab automatically with matching hardware icons and optional controller-specific input labels.
 3. **Create a protocol** in the **Protocols** tab (or import a template from `protocols/templates/`).
-4. **Configure inputs** in the **Input** tab — map analog, digital, sensor, analog-to-digital, and channel-mixed inputs to protocol fields.
+4. **Configure inputs** in the **Input** tab - map analog, digital, sensor, analog-to-digital, and channel-mixed inputs to protocol fields.
 5. **Start the server** in the **Network** tab and select your output protocol.
 
 See the [Wiki](../../wiki) for a full step-by-step guide and reference documentation.
@@ -35,19 +35,19 @@ See the [Wiki](../../wiki) for a full step-by-step guide and reference documenta
 
 ## Features
 
-* **Analog-to-Digital Mapping** — Experimental mapping editor allows converting analog inputs into digital button outputs using configurable thresholds. Includes live threshold progress previews, protocol integration, OSC output support, field usage validation, and profile persistence.
-* **Advanced Channel Mixing** — Experimental analog channel mixing system supporting full-range and half-range inputs, live output previews, protocol preview integration, and real-time value visualization.
-* **Enhanced Deadzone Controls** — Deadzone limit expanded to `1.0` with dedicated deadzone indicator markers, improved analog value visualization, and separate dual-direction and single-direction value bars where appropriate.
-* **Kenney Input Prompts Integration** — Integrated Kenney Input Prompts icon font (v1.5) provides controller-aware device, button, axis, and input icons throughout the UI. Includes configurable toggles for device icons and icon-based input labels.
-* **Gyro, Accelerometer & Touchpad Mapping** — map gyroscope rates, accelerometer axes, and touchpad position/pressure directly to output protocol fields, just like regular axes. Split L/R sensors on Joy-Con and Steam Controller are each independently mappable.
-* **Battery Level Output** — battery percentage and charging state are available as mappable analog sources for any connected device, including separate Left Joy-Con battery for split pairs.
-* **Protocol Editor** — define exactly which fields to send, with custom OSC paths and WebSocket keys. Import, export, duplicate, and version-control protocol files.
-* **Mapping Profiles** — multiple named profiles, each with independent analog mappings, digital mappings, analog-to-digital mappings, channel mixes, server settings, and protocol selections.
-* **Virtual Devices** — create simulated joysticks to test protocols without real hardware.
-* **Undo / Redo** — 50-step history for all protocol editing operations.
-* **Backup Manager** — automatic timestamped backups before every destructive change.
-* **Debug Log** — built-in SDL log viewer with level filtering and auto-scroll, accessible from the sidebar.
-* **Themes** — VRChat, Resonite, Cyberpunk 2077, and custom JSON themes.
+* **Analog-to-Digital Mapping** - Experimental mapping editor allows converting analog inputs into digital button outputs using configurable thresholds. Includes live threshold progress previews, protocol integration, OSC output support, field usage validation, and profile persistence.
+* **Advanced Channel Mixing** - Experimental analog channel mixing system supporting full-range and half-range inputs, live output previews, protocol preview integration, and real-time value visualization.
+* **Enhanced Deadzone Controls** - Deadzone limit expanded to `1.0` with dedicated deadzone indicator markers, improved analog value visualization, and separate dual-direction and single-direction value bars where appropriate.
+* **Kenney Input Prompts Integration** - Integrated Kenney Input Prompts icon font (v1.5) provides controller-aware device, button, axis, and input icons throughout the UI. Includes configurable toggles for device icons and icon-based input labels.
+* **Gyro, Accelerometer & Touchpad Mapping** - map gyroscope rates, accelerometer axes, and touchpad position/pressure directly to output protocol fields, just like regular axes. Split L/R sensors on Joy-Con and Steam Controller are each independently mappable.
+* **Battery Level Output** - battery percentage and charging state are available as mappable analog sources for any connected device, including separate Left Joy-Con battery for split pairs.
+* **Protocol Editor** - define exactly which fields to send, with custom OSC paths and WebSocket keys. Import, export, duplicate, and version-control protocol files.
+* **Mapping Profiles** - multiple named profiles, each with independent analog mappings, digital mappings, analog-to-digital mappings, channel mixes, server settings, and protocol selections.
+* **Virtual Devices** - create simulated joysticks to test protocols without real hardware.
+* **Undo / Redo** - 50-step history for all protocol editing operations.
+* **Backup Manager** - automatic timestamped backups before every destructive change.
+* **Debug Log** - built-in SDL log viewer with level filtering and auto-scroll, accessible from the sidebar.
+* **Themes** - VRChat, Resonite, Cyberpunk 2077, and custom JSON themes.
 
 ---
 
@@ -57,7 +57,7 @@ See the [Wiki](../../wiki) for a full step-by-step guide and reference documenta
 
 Sends analog, digital, sensor, battery, analog-to-digital, and channel-mixed data over UDP. Defaults: send `127.0.0.1:9066`, receive `9068`.
 
-Incoming haptic paths — both short and long forms are always active:
+Incoming haptic paths - both short and long forms are always active:
 
 ```text
 /haptic/rumble          iiffi   deviceId, slot, low_freq, high_freq, duration_ms

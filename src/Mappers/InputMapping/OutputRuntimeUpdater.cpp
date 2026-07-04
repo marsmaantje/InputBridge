@@ -90,7 +90,7 @@ std::map<std::string, float> ComputeAnalogValues(const MappingProfile& profile, 
 
 // Mutates last_physical_state / last_state and digitalToggleStates: rising
 // edges on a Toggle/SetOn/SetOff mapping flip the field's persistent toggle
-// state. Runs unconditionally — processes profile mappings, not protocol
+// state. Runs unconditionally - processes profile mappings, not protocol
 // fields, so must NOT be gated on outDef. GetActiveOutputDefinition() only
 // returns the definition for the currently-viewed UI tab; gating here would
 // mean the OSC state stops updating whenever the WebSocket tab is active (or
@@ -136,7 +136,7 @@ void UpdateDigitalEdgeState(MappingProfile& profile, const DeviceManager& dm) {
 }
 
 // True if `fieldId` has any mapping configured in a state-managing mode
-// (Toggle/SetOn/SetOff) — meaning its current value should come from
+// (Toggle/SetOn/SetOff) - meaning its current value should come from
 // digitalToggleStates rather than defaulting to false.
 bool HasStateManagedMapping(const MappingProfile& profile, const std::string& fieldId) {
     for (const auto& dm : profile.digitalMappings)
@@ -148,7 +148,7 @@ bool HasStateManagedMapping(const MappingProfile& profile, const std::string& fi
 
 // Resolves one digital field's current boolean value: the toggle state (if
 // any mapping manages it via Toggle/SetOn/SetOff) OR'd with any Momentary
-// mapping currently being held. Read-only — does not mutate edge state, so
+// mapping currently being held. Read-only - does not mutate edge state, so
 // it's safe to call from both Update() (after UpdateDigitalEdgeState) and
 // GetOutputPreview() (standalone): within a single synchronous frame, a
 // fresh press-read here gives the same answer last_physical_state/last_state
@@ -222,7 +222,7 @@ bool HasDigitalFieldSource(const MappingProfile& profile, const std::string& fie
 // definition ids). This one block was duplicated three times across the
 // original Update() and GetOutputPreview() (the "oscDef2"
 // digital-field-enumeration resolution, the "oscDef" broadcast resolution,
-// and the preview's mirror of it) — callers compose it differently (see
+// and the preview's mirror of it) - callers compose it differently (see
 // BroadcastValues and AppendOscPreview) but all three start from this same
 // resolution.
 const ProtocolDefinition* ResolveLiveOscOutputDefinition() {
@@ -339,7 +339,7 @@ void AppendOscPreview(std::stringstream& ss, const MappingProfile& profile, cons
         ss << "  " << op->oscPath << " " << (digitalValues.at(pf->fieldId) ? "T" : "F") << "\n";
         ++sentCount;
     }
-    if (sentCount == 0) ss << "  (No mapped fields — assign device inputs on this page)\n";
+    if (sentCount == 0) ss << "  (No mapped fields - assign device inputs on this page)\n";
 }
 
 void AppendWsPreview(std::stringstream& ss, const MappingProfile& profile, const ProtocolDefinition& outDef,
@@ -380,11 +380,11 @@ void AppendWsPreview(std::stringstream& ss, const MappingProfile& profile, const
             ss << "  " << protocol->format(wp->wsKey, digitalValues.at(pf->fieldId) ? 1 : 0) << "\n";
             ++sentCount;
         }
-        if (sentCount == 0) ss << "  (No mapped fields — assign device inputs on this page)\n";
+        if (sentCount == 0) ss << "  (No mapped fields - assign device inputs on this page)\n";
     } else if (!protocol) {
         ss << "  (Unknown Protocol)\n";
     } else {
-        ss << "  (No WS definition — select one in the Network tab)\n";
+        ss << "  (No WS definition - select one in the Network tab)\n";
     }
 #else
     (void)profile; (void)outDef; (void)analogValues; (void)digitalValues;

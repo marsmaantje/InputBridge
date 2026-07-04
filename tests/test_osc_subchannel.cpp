@@ -38,7 +38,7 @@ TEST(ParseSubchannelPath, ExactBasePaths_NoSlot) {
 }
 
 TEST(ParseSubchannelPath, TrailingSlashNoSlot) {
-    // "/haptic/rumble/" — tail is empty, must be rejected.
+    // "/haptic/rumble/" - tail is empty, must be rejected.
     EXPECT_FALSE(ParseSubchannelPath("/haptic/rumble/").valid);
 }
 
@@ -215,7 +215,7 @@ TEST(ParseSubchannelPath, MultipleRumbleSlotsHaveDistinctPaths) {
 }
 
 TEST(ParseSubchannelPath, MultiplePeriodicsInSameFrame) {
-    // Verifies that periodic slots 0-3 all parse correctly — simulating four
+    // Verifies that periodic slots 0-3 all parse correctly - simulating four
     // distinct sine waves sent in the same frame from Resonite.
     for (int i = 0; i < 4; ++i) {
         std::string path = "/haptic/periodic/" + std::to_string(i);
@@ -227,7 +227,7 @@ TEST(ParseSubchannelPath, MultiplePeriodicsInSameFrame) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Gain has no subchannel variant — explicitly rejected
+// Gain has no subchannel variant - explicitly rejected
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ParseSubchannelPath, GainHasNoSubchannel) {
@@ -245,7 +245,7 @@ TEST(ParseSubchannelPath, LooksLikeSubchannelButIsnt) {
     // Extra path components beyond /haptic/<effect>/<slot>/<extra> are invalid.
     EXPECT_FALSE(ParseSubchannelPath("/haptic/rumble/0/extra").valid);
 
-    // Leading zeros are still digits — these ARE valid integers.
+    // Leading zeros are still digits - these ARE valid integers.
     auto r = ParseSubchannelPath("/haptic/rumble/007");
     EXPECT_TRUE(r.valid);
     EXPECT_EQ(r.slot, 7);  // leading zeros are fine; value is still 7

@@ -25,7 +25,7 @@
  *       "FrameRounding":  3.0,
  *       ...
  *     },
- *     "font": {                      // optional — omit to keep the ImGui default
+ *     "font": {                      // optional - omit to keep the ImGui default
  *       "file": "fonts/MyFont.ttf",  // path relative to the executable directory
  *       "size": 16.0                 // size in pixels (before UI scale)
  *     }
@@ -115,7 +115,7 @@ public:
     /**
      * Re-apply colours and style to the live ImGuiStyle without re-reading disk.
      * Call after any code that resets ImGuiStyle (e.g. UpdateUIScale).
-     * Does NOT touch fonts — handle those via HasPendingFontChange().
+     * Does NOT touch fonts - handle those via HasPendingFontChange().
      */
     void Reapply();
 
@@ -218,7 +218,7 @@ private:
 
     // Font state
     // Initialised to true so that RebuildFontAtlas() is always called once at
-    // startup — even when no custom theme is saved and LoadFromPreferences()
+    // startup - even when no custom theme is saved and LoadFromPreferences()
     // returns early without setting the flag.  Without this the FA6 icon font
     // is never merged into the ImGui atlas and all icon glyphs render as '?'.
     bool        m_pendingFontChange = true;

@@ -4,7 +4,7 @@
 
 // ─── Fake mapper pointer ──────────────────────────────────────────────────────
 // HapticParser::Parse() only requires a non-null OutputMapper*.
-// The stub's Queue methods never dereference 'this' — they only write to the
+// The stub's Queue methods never dereference 'this' - they only write to the
 // HapticStub global vectors.  We pass the address of a static intptr_t as
 // the sentinel; no OutputMapper is ever constructed.
 // A non-null sentinel address; the stub Queue* methods never dereference 'this'.
@@ -52,7 +52,7 @@ TEST_F(HapticParserTest, UnknownTypeIsIgnored) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Rumble — all three accepted type strings
+// Rumble - all three accepted type strings
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST_F(HapticParserTest, TypeHapticRumbleCallsQueueRumble) {
@@ -80,7 +80,7 @@ TEST_F(HapticParserTest, TypeSteeringWheelRumbleIsAccepted) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Rumble — field values
+// Rumble - field values
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST_F(HapticParserTest, RumbleLowHighDurationParsedCorrectly) {
@@ -214,7 +214,7 @@ TEST_F(HapticParserTest, PeriodicWaveTypeOutOfRangeDefaultsToSine) {
 }
 
 TEST_F(HapticParserTest, PeriodicWaveTypeSquarePassedThrough) {
-    // wave_type 1 = Square — must reach the mapper as Square, not fall back to Sine.
+    // wave_type 1 = Square - must reach the mapper as Square, not fall back to Sine.
     HapticParser::Parse(
         R"({"type":"haptic","effect":"periodic","device":0,
             "params":{"strength":0.8,"period":200,"magnitude":0.7,
@@ -307,7 +307,7 @@ TEST_F(HapticParserTest, ParamsContainerTakesPriorityOverData) {
 }
 
 TEST_F(HapticParserTest, AbsentContainerUsesDefaultValues) {
-    // Neither "params" nor "data" — all fields should default.
+    // Neither "params" nor "data" - all fields should default.
     HapticParser::Parse(
         R"({"type":"haptic","effect":"constant","device":0})",
         FakeMapper());
@@ -338,7 +338,7 @@ TEST_F(HapticParserTest, MissingDeviceDefaultsToZero) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Slot passthrough — rumble, constant, periodic
+// Slot passthrough - rumble, constant, periodic
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST_F(HapticParserTest, RumbleSlotPassedThrough) {
@@ -426,7 +426,7 @@ TEST_F(HapticParserTest, TypeFlightStickConditionIsAccepted) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// AutoDetect — DetectedEffect kind inference
+// AutoDetect - DetectedEffect kind inference
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST_F(HapticParserTest, AutoDetectUnknownOnEmptyObject) {
@@ -570,7 +570,7 @@ TEST_F(HapticParserTest, TypeAutoDispatchesCondition) {
     EXPECT_FLOAT_EQ(HapticStub::conditionCalls[0].right_sat, 0.9f);
 }
 
-// "type" absent — treated the same as "auto"
+// "type" absent - treated the same as "auto"
 TEST_F(HapticParserTest, MissingTypeAlsoAutoDetects) {
     HapticParser::Parse(
         R"({"device":3,"params":{"low":1.0,"high":0.5,"duration":150}})",

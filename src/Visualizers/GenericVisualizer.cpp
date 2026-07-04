@@ -23,7 +23,7 @@ void DrawInlineIcon(const DeviceIcon& icon)
 
     // Kenney pictogram glyphs occupy only ~30-50% of their em square, with a
     // large gap above and below, so we scale the *visible* pixel height up to
-    // match the text line — but never beyond it, or the icon cell ends up
+    // match the text line - but never beyond it, or the icon cell ends up
     // wider than the row is tall (this is the same approach DevicePanel.cpp
     // uses for the device-header icon).
     const float bakeSize   = ImGui::GetStyle().FontSizeBase * 4.0f;
@@ -101,7 +101,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
     if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (m_showLabels) {
             // Size the label column from real text metrics so values are never
-            // clipped — e.g. "Right Trigger: -32768" is the longest realistic
+            // clipped - e.g. "Right Trigger: -32768" is the longest realistic
             // "name: value" pairing (axis values range -32768..32767).
             const float labelColWidth =
                 ImGui::CalcTextSize("Right Trigger: -32768").x
@@ -225,7 +225,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                 if (lbl.icon.IsValid()) {
                     const ImVec2 cursor = ImGui::GetCursorScreenPos();
                     const float  iconX  = cursor.x + (slotSizeActual - renderSize) * 0.5f;
-                    // Height is always cellSize — only the width varies per glyph.
+                    // Height is always cellSize - only the width varies per glyph.
                     // Centering vertically within cellSize, same as DrawInlineIcon.
                     const float  iconY  = cursor.y + (cellSize * 0.5f)
                                           - y0_scaled - glyphH_scaled * 0.5f;
@@ -238,7 +238,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                         ImGui::GetColorU32(tint),
                         lbl.icon.glyph);
                 } else {
-                    // No icon — fall back to the short button name.
+                    // No icon - fall back to the short button name.
                     ImGui::TextColored(tint, "%s", lbl.name.c_str());
                 }
             }

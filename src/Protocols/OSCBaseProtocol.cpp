@@ -108,7 +108,7 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
                 (duration_int < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration_int);
         });
     }
-    // Legacy periodic — no wave_type, defaults to Sine.
+    // Legacy periodic - no wave_type, defaults to Sine.
     else if (match("/inputbridge/haptics/periodic", "haptic_periodic") && std::strcmp(types, "iififfii") == 0 && argc == 8) {
         handled = true;
         int   slot         = argv[1]->i;
@@ -288,7 +288,7 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
                 (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
         });
     }
-    // Legacy: /inputbridge/haptics/periodic/N  ififfii  — no wave_type, defaults to Sine
+    // Legacy: /inputbridge/haptics/periodic/N  ififfii  - no wave_type, defaults to Sine
     else if (matchBase("/inputbridge/haptics/periodic", "haptic_periodic")
         && std::strcmp(types, "ififfii") == 0 && argc == 7) {
         handled = true;
@@ -322,7 +322,7 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
                 (duration < 0) ? SDL_HAPTIC_INFINITY : (uint32_t)duration);
         });
     }
-    // Note: /haptic/gain has no slot dimension — no subchannel variant is defined.
+    // Note: /haptic/gain has no slot dimension - no subchannel variant is defined.
 
     return handled;
 }

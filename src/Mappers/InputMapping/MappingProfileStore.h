@@ -80,7 +80,7 @@ class MappingProfileStore {
     const ProtocolDefinition* GetActiveOutputDefinition() const;
 
     // The folder mapping profile .json files are stored in
-    // ($XDG_DATA_HOME/InputBridge/mappings/, with platform fallbacks — see
+    // ($XDG_DATA_HOME/InputBridge/mappings/, with platform fallbacks - see
     // XdgDirs). Exposed publicly so other code (e.g. the Settings page's
     // "open folder" buttons) doesn't need to duplicate this path logic.
     static std::filesystem::path GetMappingsDirectory();

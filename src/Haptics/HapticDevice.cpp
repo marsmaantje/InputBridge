@@ -260,7 +260,7 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
 
     if (existingId != -1) {
         if (SDL_UpdateHapticEffect(m_haptic.Get(), existingId, &effect)) {
-            // Updated in-place — effect is already running, no restart needed.
+            // Updated in-place - effect is already running, no restart needed.
             if (outCreated) *outCreated = false;
             return existingId;
         } else {
@@ -277,7 +277,7 @@ SDL_HapticEffectID HapticDevice::UploadEffect(const SDL_HapticEffect& effect, SD
     return newId;
 }
 
-// --- Play Methods (base stubs — subclasses override for real hardware) ---
+// --- Play Methods (base stubs - subclasses override for real hardware) ---
 
 int HapticDevice::PlayConstant(int slot, float strength, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayPeriodic(int slot, HapticPeriodicType wave_type, float strength, uint32_t period, float magnitude, float offset, uint32_t phase, uint32_t duration_ms) { return -1; }

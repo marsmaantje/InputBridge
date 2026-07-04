@@ -76,7 +76,7 @@ jobs:
                   $proc = Start-Process -FilePath $bin -PassThru
                   Start-Sleep -Seconds 5
                   if ($proc.HasExited -and $proc.ExitCode -notin @(0)) {
-                      Write-Error "Smoke test FAILED — process exited with code $($proc.ExitCode)"
+                      Write-Error "Smoke test FAILED - process exited with code $($proc.ExitCode)"
                       exit 1
                   }
                   if (-not $proc.HasExited) { $proc.Kill() }
@@ -122,7 +122,7 @@ jobs:
                   sleep 5
 
                   if kill -0 "$APP_PID" 2>/dev/null; then
-                      # Process is still alive after 5 s — that's a pass.
+                      # Process is still alive after 5 s - that's a pass.
                       kill "$APP_PID"
                       wait "$APP_PID" 2>/dev/null || true
                       echo "Smoke test passed (exit $CODE)."
@@ -133,7 +133,7 @@ jobs:
                       if [ "$CODE" -le 1 ]; then
                           echo "Smoke test passed (exit $CODE)."
                       else
-                          echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                          echo "Smoke test FAILED - binary crashed with exit code $CODE."
                           exit 1
                       fi
                   fi
@@ -222,18 +222,18 @@ jobs:
                 CODE=$?
                 set -e
                 echo "Exit code: $CODE"
-                # 124 = timeout (still running) — pass.
-                # 0/1 = clean or handled exit — pass.
-                # >128 = 128+signal (SIGABRT=134, SIGSEGV=139 etc.) — crash, fail.
+                # 124 = timeout (still running) - pass.
+                # 0/1 = clean or handled exit - pass.
+                # >128 = 128+signal (SIGABRT=134, SIGSEGV=139 etc.) - crash, fail.
                 # Anything else (e.g. 127 missing lib) is a setup/env issue,
-                # not a crash of the binary itself — fail with a clear message.
+                # not a crash of the binary itself - fail with a clear message.
                 if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
                     echo "Smoke test passed (exit $CODE)."
                 elif [ "$CODE" -gt 128 ]; then
-                    echo "Smoke test FAILED — binary killed by signal $((CODE - 128))."
+                    echo "Smoke test FAILED - binary killed by signal $((CODE - 128))."
                     exit 1
                 else
-                    echo "Smoke test FAILED — unexpected exit code $CODE."
+                    echo "Smoke test FAILED - unexpected exit code $CODE."
                     exit 1
                 fi
 
@@ -272,18 +272,18 @@ jobs:
                   CODE=$?
                   set -e
                   echo "Exit code: $CODE"
-                  # 124 = timeout (still running after 5 s) — pass.
-                  # 0/1 = clean or gracefully handled exit — pass.
-                  # >128 = 128+signal (SIGABRT=134, SIGSEGV=139 etc.) — crash, fail.
-                  # 127 = missing shared library or command not found — env/packaging
+                  # 124 = timeout (still running after 5 s) - pass.
+                  # 0/1 = clean or gracefully handled exit - pass.
+                  # >128 = 128+signal (SIGABRT=134, SIGSEGV=139 etc.) - crash, fail.
+                  # 127 = missing shared library or command not found - env/packaging
                   #       issue, not a binary crash; fail with a clear message.
                   if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
                       echo "Smoke test passed (exit $CODE)."
                   elif [ "$CODE" -gt 128 ]; then
-                      echo "Smoke test FAILED — binary killed by signal $((CODE - 128))."
+                      echo "Smoke test FAILED - binary killed by signal $((CODE - 128))."
                       exit 1
                   else
-                      echo "Smoke test FAILED — unexpected exit code $CODE (missing library or env issue?)."
+                      echo "Smoke test FAILED - unexpected exit code $CODE (missing library or env issue?)."
                       exit 1
                   fi
 
@@ -333,7 +333,7 @@ jobs:
                   if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
                       echo "Smoke test passed (exit $CODE)."
                   else
-                      echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                      echo "Smoke test FAILED - binary crashed with exit code $CODE."
                       exit 1
                   fi
 
@@ -381,7 +381,7 @@ jobs:
                   if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
                       echo "Smoke test passed (exit $CODE)."
                   else
-                      echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                      echo "Smoke test FAILED - binary crashed with exit code $CODE."
                       exit 1
                   fi
 
@@ -429,7 +429,7 @@ jobs:
                   if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
                       echo "Smoke test passed (exit $CODE)."
                   else
-                      echo "Smoke test FAILED — binary crashed with exit code $CODE."
+                      echo "Smoke test FAILED - binary crashed with exit code $CODE."
                       exit 1
                   fi
 
@@ -540,12 +540,12 @@ jobs:
               run: |
                   mkdir release-assets
 
-                  # Windows — folder of files → zip
+                  # Windows - folder of files → zip
                   cd artifacts/InputBridge-Windows
                   zip -r ../../release-assets/InputBridge-Windows-${{ github.ref_name }}.zip .
                   cd ../..
 
-                  # macOS — already a zip from cpack
+                  # macOS - already a zip from cpack
                   cp artifacts/InputBridge-macOS/*.zip \
                      release-assets/InputBridge-macOS-${{ github.ref_name }}.zip
 

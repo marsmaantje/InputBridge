@@ -35,7 +35,7 @@ bool LinuxExclusiveMode::IsAvailable() const {
 //
 // Why both?
 //   EVIOCGRAB on an eventN fd only blocks other *evdev* readers.  The joydev
-//   kernel driver (/dev/input/jsN) is a completely separate input handler —
+//   kernel driver (/dev/input/jsN) is a completely separate input handler -
 //   it registers directly with the input core and is unaffected by an evdev
 //   EVIOCGRAB.  SDL (and therefore Resonite) will happily fall back to jsN if
 //   the event node appears busy, so we must grab both.
@@ -196,18 +196,18 @@ bool LinuxExclusiveMode::HideDevice(SDL_Joystick* joystick) {
         }
 
         // EVIOCGRAB works on event* nodes.  For js* nodes the ioctl will return
-        // ENOTTY/EINVAL because joydev doesn't implement it — that's fine, we
+        // ENOTTY/EINVAL because joydev doesn't implement it - that's fine, we
         // still hold the fd which prevents the node from going away and signals
         // the kernel that someone is already using it (some apps check for this).
         if (ioctl(fd, EVIOCGRAB, 1) < 0) {
             if (errno != ENOTTY && errno != EINVAL) {
-                // Real error (e.g. EBUSY — another process already has an
+                // Real error (e.g. EBUSY - another process already has an
                 // exclusive grab).
                 LOG_ERROR(kTag, "LinuxExclusiveMode: EVIOCGRAB on %s failed: %s",
                         devPath.c_str(), strerror(errno));
             } else {
                 LOG_INFO(kTag, "LinuxExclusiveMode: EVIOCGRAB not supported on %s "
-                        "(joydev node — fd held open).", devPath.c_str());
+                        "(joydev node - fd held open).", devPath.c_str());
             }
             // Keep the fd open regardless so we at least hold a reference.
         }

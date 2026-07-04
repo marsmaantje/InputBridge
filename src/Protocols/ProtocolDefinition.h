@@ -27,7 +27,7 @@ struct ProtocolField {
     std::string wsKey;     // WebSocket: JSON key to use
     bool        enabled = true;
 
-    // Optional inline field definition — present only for fields that are not
+    // Optional inline field definition - present only for fields that are not
     // in the built-in catalog.  When set, ImportDefinition auto-registers them
     // as custom FieldDescriptors so they appear in the editor without requiring
     // a pre-existing entry in input_fields.json.

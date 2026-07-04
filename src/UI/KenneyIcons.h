@@ -12,11 +12,11 @@
 // The map .txt files next to each font list every glyph name and its
 // codepoint.  Use them to look up the U+XXXX value when adding a new icon,
 // then define a _CP constant here.  The UTF-8 string is derived automatically
-// by KenneyIconUTF8() below — no manual byte calculation needed.
+// by KenneyIconUTF8() below - no manual byte calculation needed.
 //
 // Every icon is defined as a pair:
-//   KENNEY_<NAME>_CP  — raw Unicode codepoint (ImWchar), hand-picked from the map file
-//   KENNEY_<NAME>     — UTF-8 string literal,            computed by KenneyIconUTF8()
+//   KENNEY_<NAME>_CP  - raw Unicode codepoint (ImWchar), hand-picked from the map file
+//   KENNEY_<NAME>     - UTF-8 string literal,            computed by KenneyIconUTF8()
 
 #include "imgui.h"
 #include <array>
@@ -29,10 +29,10 @@
 // be passed directly to ImDrawList::AddText().
 //
 // All codepoints in this range encode as:
-//   byte 0 = 0xE0 | (cp >> 12)        — always 0xEE for U+E000-U+EFFF
+//   byte 0 = 0xE0 | (cp >> 12)        - always 0xEE for U+E000-U+EFFF
 //   byte 1 = 0x80 | ((cp >> 6) & 0x3F)
 //   byte 2 = 0x80 | (cp & 0x3F)
-//   byte 3 = 0x00                      — null terminator
+//   byte 3 = 0x00                      - null terminator
 //
 // Usage:
 //   static constexpr auto buf = KenneyIconUTF8(KENNEY_STEAM_CONTROLLER_CP);

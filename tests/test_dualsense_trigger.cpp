@@ -51,7 +51,7 @@ TEST(DualSenseTrigger, OffRespectsDestinationIndex) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Feedback — input validation
+// Feedback - input validation
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(DualSenseTrigger, FeedbackReturnsTrueForValidParams) {
@@ -87,7 +87,7 @@ TEST(DualSenseTrigger, FeedbackAtMaxValidPosition) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Weapon — input validation
+// Weapon - input validation
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(DualSenseTrigger, WeaponReturnsTrueForValidParams) {
@@ -239,7 +239,7 @@ TEST(DualSenseTrigger, SimpleVibrationWritesSimpleVibrationTypeOrOff) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ReWASD adapter effects — just verify they return true and write a type byte
+// ReWASD adapter effects - just verify they return true and write a type byte
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(DualSenseTriggerReWASD, FullPressReturnsTrue) {

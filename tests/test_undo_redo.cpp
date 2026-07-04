@@ -268,7 +268,7 @@ TEST(LambdaCommand, GetDescriptionReturnsSuppliedString) {
 }
 
 TEST(LambdaCommand, NullFunctorsDoNotCrash) {
-    // Passing null std::function objects — Execute/Undo must guard against them.
+    // Passing null std::function objects - Execute/Undo must guard against them.
     LambdaCommand cmd("safe", nullptr, nullptr);
     EXPECT_NO_THROW(cmd.Execute());
     EXPECT_NO_THROW(cmd.Undo());

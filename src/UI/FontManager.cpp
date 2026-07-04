@@ -69,7 +69,7 @@ void RebuildFontAtlas()
         base_font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), themeFontSize);
         loaded_theme_font = (base_font != nullptr);
         if (!loaded_theme_font)
-            LOG_WARN(kTag, "Font: Failed to load '%s' — falling back to default.",
+            LOG_WARN(kTag, "Font: Failed to load '%s' - falling back to default.",
                     fontPath.c_str());
     }
     if (!loaded_theme_font)
@@ -104,7 +104,7 @@ void RebuildFontAtlas()
             iconFontPath.c_str(), merge_size, &cfg, icon_ranges);
 
         if (!icons)
-            LOG_WARN(kTag, "Font: FA6 not found at '%s' — icon glyphs will be missing.",
+            LOG_WARN(kTag, "Font: FA6 not found at '%s' - icon glyphs will be missing.",
                     iconFontPath.c_str());
     }
 
@@ -146,7 +146,7 @@ void RebuildFontAtlas()
                 path.c_str(), kenney_size, &cfg, kenney_ranges);
             if (!f)
                 LOG_WARN(kTag,
-                    "Kenney font not found at '%s' — device icons may be missing.",
+                    "Kenney font not found at '%s' - device icons may be missing.",
                     path.c_str());
             return f;
         };

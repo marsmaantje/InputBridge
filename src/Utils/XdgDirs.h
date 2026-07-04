@@ -60,7 +60,7 @@ inline std::string configDir() {
         return dir;
     }
 #endif
-    // Non-Linux fallback (Windows, macOS) — use SDL.
+    // Non-Linux fallback (Windows, macOS) - use SDL.
     const char* p = SDL_GetPrefPath("InputBridge", "config");
     if (p) {
         std::string dir(p);
@@ -82,7 +82,7 @@ inline std::string dataDir() {
         return dir;
     }
 #endif
-    // Non-Linux fallback (Windows, macOS) — use SDL.
+    // Non-Linux fallback (Windows, macOS) - use SDL.
     const char* p = SDL_GetPrefPath("InputBridge", "InputBridge");
     if (p) {
         std::string dir(p);

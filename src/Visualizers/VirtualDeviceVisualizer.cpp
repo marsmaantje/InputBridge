@@ -10,7 +10,7 @@ static const struct { const char* label; Uint8 mask; } kHatDirs[] = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hat widget — a 3x3 grid of buttons for 8 directions + centred.
+// Hat widget - a 3x3 grid of buttons for 8 directions + centred.
 // Returns true if the hat value changed.
 // ─────────────────────────────────────────────────────────────────────────────
 static bool DrawHatWidget(Uint8& hat) {
