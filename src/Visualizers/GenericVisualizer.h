@@ -7,7 +7,7 @@ class GenericVisualizer : public DeviceVisualizer {
     ///                    Controlled from the Settings panel; passed in each frame.
     void Draw(const DeviceState& dev, bool showLabels);
 
-    // DeviceVisualizer interface — routes to Draw(dev, false) for callers that
+    // DeviceVisualizer interface - routes to Draw(dev, false) for callers that
     // don't supply the flag (should not normally be used for GenericVisualizer).
     void Draw(const DeviceState& dev) override { Draw(dev, false); }
 };

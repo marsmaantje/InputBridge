@@ -5,8 +5,6 @@
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
 #include "ProtocolFieldUtils.h"
-#include "Protocols/OSCProjectBabbleProtocol.h"
-#include "Protocols/OSCSteamLinkProtocol.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
 
@@ -92,7 +90,7 @@ std::map<std::string, float> ComputeAnalogValues(const MappingProfile& profile, 
 
 // Mutates last_physical_state / last_state and digitalToggleStates: rising
 // edges on a Toggle/SetOn/SetOff mapping flip the field's persistent toggle
-// state. Runs unconditionally — processes profile mappings, not protocol
+// state. Runs unconditionally - processes profile mappings, not protocol
 // fields, so must NOT be gated on outDef. GetActiveOutputDefinition() only
 // returns the definition for the currently-viewed UI tab; gating here would
 // mean the OSC state stops updating whenever the WebSocket tab is active (or
@@ -138,7 +136,7 @@ void UpdateDigitalEdgeState(MappingProfile& profile, const DeviceManager& dm) {
 }
 
 // True if `fieldId` has any mapping configured in a state-managing mode
-// (Toggle/SetOn/SetOff) — meaning its current value should come from
+// (Toggle/SetOn/SetOff) - meaning its current value should come from
 // digitalToggleStates rather than defaulting to false.
 bool HasStateManagedMapping(const MappingProfile& profile, const std::string& fieldId) {
     for (const auto& dm : profile.digitalMappings)
@@ -150,7 +148,7 @@ bool HasStateManagedMapping(const MappingProfile& profile, const std::string& fi
 
 // Resolves one digital field's current boolean value: the toggle state (if
 // any mapping manages it via Toggle/SetOn/SetOff) OR'd with any Momentary
-// mapping currently being held. Read-only — does not mutate edge state, so
+// mapping currently being held. Read-only - does not mutate edge state, so
 // it's safe to call from both Update() (after UpdateDigitalEdgeState) and
 // GetOutputPreview() (standalone): within a single synchronous frame, a
 // fresh press-read here gives the same answer last_physical_state/last_state
@@ -218,29 +216,23 @@ bool HasDigitalFieldSource(const MappingProfile& profile, const std::string& fie
 
 // ── Live OSC output-definition resolution ──────────────────────────────────
 // Resolves the OSC server's *actual current* output definition: its
-// explicitly-selected id if set, falling back to the SteamLink/Project
-// Babble built-ins if the server is running one of those legacy protocol
-// names. This one block was duplicated three times across the original
-// Update() and GetOutputPreview() (the "oscDef2" digital-field-enumeration
-// resolution, the "oscDef" broadcast resolution, and the preview's mirror of
-// it) — callers compose it differently (see BroadcastValues and
-// AppendOscPreview) but all three start from this same resolution.
+// explicitly-selected id if set, falling back to mapping OSCServer's older
+// protocol-name selector onto the now-JSON-backed SteamLink/Project Babble
+// definitions by their stable ids (for profiles that predate per-profile
+// definition ids). This one block was duplicated three times across the
+// original Update() and GetOutputPreview() (the "oscDef2"
+// digital-field-enumeration resolution, the "oscDef" broadcast resolution,
+// and the preview's mirror of it) - callers compose it differently (see
+// BroadcastValues and AppendOscPreview) but all three start from this same
+// resolution.
 const ProtocolDefinition* ResolveLiveOscOutputDefinition() {
     auto& osc = OSCServer::GetInstance();
     std::string oscId = osc.GetOutputDefinitionId();
     if (!oscId.empty()) return ProtocolRegistry::GetInstance().FindById(oscId);
 
     std::string protocol = osc.GetProtocol();
-    if (protocol == "SteamLink OSC") {
-        static ProtocolDefinition s_steamLinkDef;
-        s_steamLinkDef = OSCSteamLinkProtocol::CreateDefaultDefinition();
-        return &s_steamLinkDef;
-    }
-    if (protocol == "Project Babble OSC") {
-        static ProtocolDefinition s_projectBabbleDef;
-        s_projectBabbleDef = OSCProjectBabbleProtocol::CreateDefaultDefinition();
-        return &s_projectBabbleDef;
-    }
+    if (protocol == "SteamLink OSC") return ProtocolRegistry::GetInstance().FindById("steamlink");
+    if (protocol == "Project Babble OSC") return ProtocolRegistry::GetInstance().FindById("projectbabble");
     return nullptr;
 }
 
@@ -347,7 +339,7 @@ void AppendOscPreview(std::stringstream& ss, const MappingProfile& profile, cons
         ss << "  " << op->oscPath << " " << (digitalValues.at(pf->fieldId) ? "T" : "F") << "\n";
         ++sentCount;
     }
-    if (sentCount == 0) ss << "  (No mapped fields — assign device inputs on this page)\n";
+    if (sentCount == 0) ss << "  (No mapped fields - assign device inputs on this page)\n";
 }
 
 void AppendWsPreview(std::stringstream& ss, const MappingProfile& profile, const ProtocolDefinition& outDef,
@@ -388,11 +380,11 @@ void AppendWsPreview(std::stringstream& ss, const MappingProfile& profile, const
             ss << "  " << protocol->format(wp->wsKey, digitalValues.at(pf->fieldId) ? 1 : 0) << "\n";
             ++sentCount;
         }
-        if (sentCount == 0) ss << "  (No mapped fields — assign device inputs on this page)\n";
+        if (sentCount == 0) ss << "  (No mapped fields - assign device inputs on this page)\n";
     } else if (!protocol) {
         ss << "  (Unknown Protocol)\n";
     } else {
-        ss << "  (No WS definition — select one in the Network tab)\n";
+        ss << "  (No WS definition - select one in the Network tab)\n";
     }
 #else
     (void)profile; (void)outDef; (void)analogValues; (void)digitalValues;

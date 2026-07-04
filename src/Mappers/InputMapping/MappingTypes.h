@@ -12,7 +12,7 @@
 
 // HapticTarget describes a virtual-device-id → physical-haptic-device binding.
 // It stays at global scope (not in InputMapping) because OutputMapper.h
-// forward-declares and uses it as a bare global type — moving it into a
+// forward-declares and uses it as a bare global type - moving it into a
 // namespace would be a breaking change for that consumer.
 struct HapticTarget {
     int virtual_id = 0;
@@ -46,7 +46,11 @@ struct InputSource {
     int axisIndex = -1;
     bool invert = false;
     float deadzone = 0.05f;
-    int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0
+    int outputRange = 0; // 0: -1..1, 1: 0..1, 2: -1..0, 3: +half, 4: -half, 5: custom
+    // Only used when outputRange == 5 (Custom). Defines the output span that
+    // the processed [-1, 1] signal is linearly remapped onto.
+    float customRangeMin = -1.f;
+    float customRangeMax = 1.f;
 
     // ── Sensor source ─────────────────────────────────────────────────
     // When sensorChannel is not None, this source reads from the device

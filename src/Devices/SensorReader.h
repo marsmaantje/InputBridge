@@ -33,10 +33,10 @@ struct SensorCapabilities {
     bool gyroR  = false;  ///< Right-side gyroscope
     bool accelR = false;  ///< Right-side accelerometer
     bool touch  = false;  ///< At least one touchpad
-    bool capSenseLeftStick  = false;  ///< Capacitive touch — left stick
-    bool capSenseRightStick = false;  ///< Capacitive touch — right stick
-    bool capSenseLeftGrip   = false;  ///< Capacitive touch — left grip
-    bool capSenseRightGrip  = false;  ///< Capacitive touch — right grip
+    bool capSenseLeftStick  = false;  ///< Capacitive touch - left stick
+    bool capSenseRightStick = false;  ///< Capacitive touch - right stick
+    bool capSenseLeftGrip   = false;  ///< Capacitive touch - left grip
+    bool capSenseRightGrip  = false;  ///< Capacitive touch - right grip
 
     /// Returns true if any sensor or touch input is available.
     bool HasAny() const {
@@ -60,7 +60,7 @@ public:
     /**
      * @brief Enable all sensors reported present in @p caps.
      *
-     * Safe to call every frame — SDL ignores redundant enable calls.
+     * Safe to call every frame - SDL ignores redundant enable calls.
      */
     static void Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps);
 

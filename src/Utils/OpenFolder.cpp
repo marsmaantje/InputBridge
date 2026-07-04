@@ -12,7 +12,7 @@ namespace {
 // Percent-encodes everything except the small set of characters that are
 // always safe unescaped in a file:// URI path (RFC 3986 unreserved set,
 // plus '/' as the path separator and ':' for a Windows drive letter).
-// Without this, paths containing spaces (very common — "Program Files",
+// Without this, paths containing spaces (very common - "Program Files",
 // "John Doe", OneDrive-synced folders, …) would produce a malformed URI.
 std::string PercentEncodePathForUri(const std::string& path) {
     static constexpr char hex[] = "0123456789ABCDEF";
@@ -53,7 +53,7 @@ bool OpenFolderInFileBrowser(const std::string& path, std::string* outError) {
     }
 
     // generic_string() always uses forward slashes, which is what a file://
-    // URI needs on every platform — including Windows, which accepts forward
+    // URI needs on every platform - including Windows, which accepts forward
     // slashes in file:// URIs even though native paths use backslashes.
     const std::string generic = absPath.generic_string();
 

@@ -91,7 +91,7 @@ void ProtocolRegistry::SaveFieldCatalog() {
     json arr = json::array();
     for (const auto& fd : m_outputFields) {
         if (fd.isBuiltIn) continue;
-        // Skip entries whose ID is already registered in the input catalog —
+        // Skip entries whose ID is already registered in the input catalog -
         // those were misplaced by an older code path and should not be
         // persisted regardless of which category name they carry.
         bool duplicateInOtherCatalog = false;
@@ -118,26 +118,23 @@ const std::vector<FieldPreset>& ProtocolRegistry::GetPresets() const {
     return m_presets;
 }
 
-void ProtocolRegistry::SavePreset(const std::string& name, const std::vector<std::string>& fieldIds) {
-    for (auto& p : m_presets) {
-        if (p.name == name) {
-            p.fieldIds = fieldIds;
-            SavePresets();
-            return;
-        }
-    }
-    FieldPreset p;
-    p.name = name;
-    p.fieldIds = fieldIds;
-    m_presets.push_back(p);
-    SavePresets();
-}
+
 
 void ProtocolRegistry::DeletePreset(const std::string& name) {
-    m_presets.erase(std::remove_if(m_presets.begin(), m_presets.end(),
-                                   [&](const FieldPreset& p) { return p.name == name; }),
-                    m_presets.end());
-    SavePresets();
+    // Remove the backing template file and the in-memory entry.
+    m_presets.erase(
+        std::remove_if(m_presets.begin(), m_presets.end(),
+                       [&](const FieldPreset& p) {
+                           if (p.name != name) return false;
+                           std::error_code ec;
+                           fs::remove(p.filePath, ec);
+                           return true;
+                       }),
+        m_presets.end());
+}
+
+void ProtocolRegistry::SavePreset(const std::string&, const std::vector<std::string>&) {
+    // Superseded by SaveTemplate; kept so existing call sites still compile.
 }
 
 std::vector<ProtocolDefinition>& ProtocolRegistry::GetDefinitions() {
@@ -230,7 +227,7 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
             fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
         } else if (!desc && f.hasInlineDef) {
             // Catalog entry absent (e.g. field not yet persisted) but the
-            // ProtocolField still carries its own inline metadata — use it so
+            // ProtocolField still carries its own inline metadata - use it so
             // the exported file stays self-describing.
             fj["label"]    = f.inlineLabel;
             fj["category"] = f.inlineCategory;
@@ -324,7 +321,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                         fd.category       = f.inlineCategory;
                         fd.type           = f.inlineType;
                     } else {
-                        // No inline metadata — synthesise sensible defaults so
+                        // No inline metadata - synthesise sensible defaults so
                         // the field at least appears in the editor.
                         fd.label    = f.fieldId;
                         fd.category = "Custom (imported)";
@@ -403,7 +400,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     }
     j["fields"] = fieldsArr;
 
-    // Per-protocol exclusions — only write the keys when non-empty so that
+    // Per-protocol exclusions - only write the keys when non-empty so that
     // the vast majority of definition files stay clean.
     if (!def.excludedFieldIds.empty()) {
         json arr = json::array();
@@ -427,7 +424,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 std::string ProtocolRegistry::GetProtocolsDir() {
-    // Protocol definitions, field catalogs, and templates are user data —
+    // Protocol definitions, field catalogs, and templates are user data -
     // they belong in $XDG_DATA_HOME/InputBridge/protocols/ per the XDG Base
     // Directory Specification (fallback: ~/.local/share/InputBridge/protocols/).
     // AppImage Portable Mode remaps $XDG_DATA_HOME automatically when the user
@@ -494,7 +491,7 @@ static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
     // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
     seedDir(srcDir, prefProtocolsDir);
 
-    // Seed built-in protocol definitions — these populate the OSC/WS output
+    // Seed built-in protocol definitions - these populate the OSC/WS output
     // dropdown via LoadDefinitionFiles(). This was the missing step that caused
     // the dropdown to appear empty on first run under AppImage.
     seedDir(srcDefs, dstDefs);
@@ -533,7 +530,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
                 fd.defaultWsKey   = item.value("wsKey",    fd.id);
                 fd.isBuiltIn      = false;
 
-                // Skip if already present in either catalog — a field that
+                // Skip if already present in either catalog - a field that
                 // belongs in m_inputFields (e.g. a built-in sensor or button)
                 // must not be duplicated into m_outputFields regardless of
                 // what was written to input_fields.json by an older code path.
@@ -574,39 +571,38 @@ void ProtocolRegistry::LoadFieldCatalog() {
 }
 
 void ProtocolRegistry::LoadPresets() {
+    // Presets and templates are the same thing: every .json file in the
+    // templates/ directory is a saved protocol export.  We scan that folder
+    // here so that the "New Protocol" template combo always reflects whatever
+    // the user has saved via "Save as Template".
     m_presets.clear();
-    std::string path = GetProtocolsDir() + "presets.json";
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) return;
+    std::string templatesDir = GetProtocolsDir() + "templates";
+    std::error_code ec;
+    if (!fs::is_directory(templatesDir, ec)) return;
 
-    try {
-        json j = json::parse(ifs);
-        if (j.contains("presets") && j["presets"].is_array()) {
-            for (const auto& item : j["presets"]) {
-                FieldPreset p;
-                p.name = item.value("name", "Unnamed");
-                if (item.contains("fields") && item["fields"].is_array()) {
-                    for (const auto& f : item["fields"]) p.fieldIds.push_back(f.get<std::string>());
-                }
-                m_presets.push_back(p);
+    for (const auto& entry : fs::directory_iterator(templatesDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".json") continue;
+        try {
+            std::ifstream f(entry.path());
+            json j;
+            f >> j;
+
+            FieldPreset p;
+            p.name     = j.value("template_name", entry.path().stem().string());
+            p.filePath = entry.path().string();
+
+            for (const auto& fj : j.value("fields", json::array())) {
+                FieldPreset::Entry e;
+                e.fieldId = fj.value("fieldId", "");
+                e.oscPath = fj.value("oscPath", "");
+                e.wsKey   = fj.value("wsKey",   "");
+                if (!e.fieldId.empty())
+                    p.entries.push_back(std::move(e));
             }
-        }
-    } catch (...) {}
-}
-
-void ProtocolRegistry::SavePresets() {
-    json j;
-    json arr = json::array();
-    for (const auto& p : m_presets) {
-        json item;
-        item["name"] = p.name;
-        item["fields"] = p.fieldIds;
-        arr.push_back(item);
+            m_presets.push_back(std::move(p));
+        } catch (...) {}
     }
-    j["presets"] = arr;
-    std::string path = GetProtocolsDir() + "presets.json";
-    std::ofstream ofs(path);
-    if (ofs) ofs << j.dump(4);
 }
 
 void ProtocolRegistry::LoadDefinitionFiles() {
@@ -625,6 +621,35 @@ void ProtocolRegistry::LoadDefinitionFiles() {
             def.id   = j.value("id",   "");
             def.name = j.value("name", "Unnamed");
             if (def.id.empty()) continue;
+
+            // Guard against two files on disk carrying the same "id" (e.g. a
+            // stray manual copy of a definition file). Loading both would give
+            // the editor list two rows with an identical ImGui id, which trips
+            // a "conflicting ID" assertion. Keep whichever file is encountered
+            // first and skip the rest.
+            if (FindById(def.id)) {
+                LOG_ERROR(kTag, "Skipping %s: duplicate protocol id '%s' already loaded",
+                          entry.path().string().c_str(), def.id.c_str());
+                continue;
+            }
+
+            // Guard against two files carrying *different* ids but the same
+            // display name (e.g. a leftover auto-generated definition from an
+            // older build, sitting alongside its replacement). The id-only
+            // check above doesn't catch this, but the editor list row's
+            // ImGui id is still derived from "name##id" and renders two
+            // visually-identical rows, which is just as confusing and can
+            // still trip the same conflicting-ID assertion in edge cases.
+            // Keep whichever file is encountered first and skip the rest.
+            bool nameAlreadyLoaded = false;
+            for (const auto& loaded : m_definitions) {
+                if (loaded.name == def.name) { nameAlreadyLoaded = true; break; }
+            }
+            if (nameAlreadyLoaded) {
+                LOG_ERROR(kTag, "Skipping %s: duplicate protocol name '%s' (id '%s') already loaded",
+                          entry.path().string().c_str(), def.name.c_str(), def.id.c_str());
+                continue;
+            }
 
             std::string ts = j.value("transport", "osc");
             def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
@@ -689,7 +714,7 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                         for (const auto& fd : m_inputFields)  if (fd.id == f.fieldId) count++;
 
                         if (count > 1) {
-                            // More than one entry for this ID — keep only the
+                            // More than one entry for this ID - keep only the
                             // first real (non-stale) one and remove the rest.
                             bool kept = false;
                             auto dedup = [&](std::vector<FieldDescriptor>& cat) {

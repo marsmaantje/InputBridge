@@ -14,7 +14,7 @@ class OutputMapper;
  * Constant  iifi    id, slot, strength, duration_ms
  * Periodic  iiififfii  id, slot, wave_type, strength, period, magnitude,
  *                      offset, phase, duration_ms
- *           iififfii   (legacy — no wave_type, defaults to Sine)
+ *           iififfii   (legacy - no wave_type, defaults to Sine)
  * Condition iiiffffffi id, slot, ctype, right_sat, left_sat, right_coeff,
  *                      left_coeff, deadband, center, duration_ms
  * Gain      ii      id, gain
@@ -44,9 +44,9 @@ public:
      * @brief Parse a periodic message and queue it.
      *
      * Accepted formats:
-     *   iiififfii  — new (id, slot, wave_type, strength, period,
+     *   iiififfii  - new (id, slot, wave_type, strength, period,
      *                     magnitude, offset, phase, duration_ms)
-     *   iififfii   — legacy (no wave_type, defaults to Sine)
+     *   iififfii   - legacy (no wave_type, defaults to Sine)
      */
     static void DispatchPeriodic(lo_arg** argv, int argc, OutputMapper* mapper);
 

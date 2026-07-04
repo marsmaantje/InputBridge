@@ -8,7 +8,7 @@ SubchannelPath ParseSubchannelPath(std::string_view path) noexcept {
     if (!path.starts_with(kHapticPrefix)) return result;
 
     // ── 2. Must have a slash *after* the prefix (i.e. at least one '/' beyond
-    //       the fixed prefix — that is the separator between effect and slot). ──
+    //       the fixed prefix - that is the separator between effect and slot). ──
     const auto last_slash = path.rfind('/');
     if (last_slash == std::string_view::npos
             || last_slash < kHapticPrefix.size() - 1)
@@ -33,7 +33,7 @@ SubchannelPath ParseSubchannelPath(std::string_view path) noexcept {
     else if (base == "/haptic/constant")  result.effect = SubchannelPath::Effect::Constant;
     else if (base == "/haptic/periodic")  result.effect = SubchannelPath::Effect::Periodic;
     else if (base == "/haptic/condition") result.effect = SubchannelPath::Effect::Condition;
-    else return result;  // unknown effect — not a recognised subchannel path
+    else return result;  // unknown effect - not a recognised subchannel path
 
     result.slot  = slot;
     result.valid = true;

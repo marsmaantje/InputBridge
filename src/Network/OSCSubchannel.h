@@ -22,11 +22,11 @@
  * Because each slot gets a distinct OSC path, a host that limits messages to
  * one per path per frame can still address multiple slots simultaneously.
  *
- * Message formats (slot in both path AND arguments — path for routing, arg is authoritative)
+ * Message formats (slot in both path AND arguments - path for routing, arg is authoritative)
  * ----------------------------------------------------------------
  * The argument layout is identical to the fixed paths; only the path differs.
  * This means senders can share the same message-building code for both path
- * styles — just change the path string to select a different routing channel.
+ * styles - just change the path string to select a different routing channel.
  *
  *   /haptic/rumble/<N>       iiffi   id, slot, low_freq, high_freq, duration_ms
  *   /haptic/constant/<N>     iifi    id, slot, strength, duration_ms
@@ -36,7 +36,7 @@
  *                                       3=SawtoothUp 4=SawtoothDown
  *   /haptic/periodic/<N>     iififfii   id, slot, strength, period, magnitude,
  *                                       offset, phase, duration_ms
- *                                       (legacy — no wave_type, defaults Sine)
+ *                                       (legacy - no wave_type, defaults Sine)
  *   /haptic/condition/<N>    iiiffffffi id, slot, ctype, right_sat, left_sat,
  *                                       right_coeff, left_coeff, deadband,
  *                                       center, duration_ms

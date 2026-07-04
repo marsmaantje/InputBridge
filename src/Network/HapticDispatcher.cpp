@@ -42,7 +42,7 @@ void HapticDispatcher::DispatchPeriodic(lo_arg** argv, int argc, OutputMapper* m
         const int   duration  = argv[8]->i;
         mapper->QueuePeriodic(id, slot, wave_type, strength, period, magnitude, offset, phase, duration);
     } else if (argc >= 8) {
-        // Legacy format: i i f i f f i i  (no wave_type — defaults to Sine)
+        // Legacy format: i i f i f f i i  (no wave_type - defaults to Sine)
         const int   id        = argv[0]->i;
         const int   slot      = argv[1]->i;
         const float strength  = argv[2]->f;

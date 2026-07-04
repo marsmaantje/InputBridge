@@ -3,12 +3,12 @@
   "_comment": [
     "Accurately sampled from the Resonite Dash menu screenshots.",
     "Background: near-black navy (#0D0F16).",
-    "Panel/frame bg: dark slate navy (#181A26 / #1C1E2C) — distinct from",
+    "Panel/frame bg: dark slate navy (#181A26 / #1C1E2C) - distinct from",
     "  the window bg, keeping rows and widgets clearly readable.",
     "Text: near-white (#E2E4E8).",
     "Primary accent: purple (#5C2E8C) for active sidebar items, tabs,",
     "  selected headers, and slider fills.",
-    "Section header text: cyan (#00B8C8) — used sparingly.",
+    "Section header text: cyan (#00B8C8) - used sparingly.",
     "Toggles ON: bright green (#22CC44).",
     "Error/warning rows: deep crimson (#5A1520).",
     "Rounding: moderate (6-8px) matching the soft-rounded panel style."
@@ -25,7 +25,7 @@
     "ChildBg":               [0.094, 0.102, 0.149, 1.00],
     "PopupBg":               [0.071, 0.078, 0.118, 0.98],
 
-    "Border":                [0.188, 0.196, 0.282, 0.80],
+    "Border":                [0.300, 0.320, 0.420, 1.00],
     "BorderShadow":          [0.000, 0.000, 0.000, 0.00],
 
     "FrameBg":               [0.110, 0.118, 0.173, 1.00],
@@ -100,6 +100,6 @@
     "GrabRounding":      6.0,
     "TabRounding":       6.0,
     "WindowBorderSize":  1.0,
-    "FrameBorderSize":   0.0
+    "FrameBorderSize":   1.0
   }
 }

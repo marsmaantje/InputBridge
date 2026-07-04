@@ -241,7 +241,7 @@ void DrawSettingsContent(float&              user_ui_scale,
 
     if (entries.empty())
         ImGui::TextDisabled(
-            "No themes found — place .json files in the themes/ folder");
+            "No themes found - place .json files in the themes/ folder");
 
     if (!theme.GetLastError().empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
@@ -270,7 +270,7 @@ void DrawSettingsContent(float&              user_ui_scale,
         {"Protocols",        ProtocolRegistry::GetProtocolsDir(),
          "Protocol definitions and field-catalog templates"},
         {"Themes",           ThemeManager::GetInstance().GetThemesDir(),
-         "Colour theme files (.json) — drop new ones here, then hit Refresh above"},
+         "Colour theme files (.json) - drop new ones here, then hit Refresh above"},
         {"Fonts",            GetFontsDir(),
          "Bundled fonts, including the Font Awesome icon set"},
         {"Backups",          ProtocolEditorWindow::GetBackupDir(),

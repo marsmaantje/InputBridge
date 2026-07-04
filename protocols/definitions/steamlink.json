@@ -1,0 +1,215 @@
+{
+    "fields": [
+        {
+            "fieldId": "ft_jaw_open",
+            "oscPath": "/avatar/parameters/JawOpen",
+            "wsKey": "JawOpen",
+            "enabled": true,
+            "label": "Jaw Open",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_mouth_pout",
+            "oscPath": "/avatar/parameters/MouthPout",
+            "wsKey": "MouthPout",
+            "enabled": true,
+            "label": "Mouth Pout",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_tongue_out",
+            "oscPath": "/avatar/parameters/TongueOut",
+            "wsKey": "TongueOut",
+            "enabled": true,
+            "label": "Tongue Out",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_cheeks_puff",
+            "oscPath": "/avatar/parameters/CheeksPuff",
+            "wsKey": "CheeksPuff",
+            "enabled": true,
+            "label": "Cheeks Puff",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_mouth_smile",
+            "oscPath": "/avatar/parameters/MouthSmile",
+            "wsKey": "MouthSmile",
+            "enabled": true,
+            "label": "Mouth Smile",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_mouth_frown",
+            "oscPath": "/avatar/parameters/MouthFrown",
+            "wsKey": "MouthFrown",
+            "enabled": true,
+            "label": "Mouth Frown",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_mouth_left",
+            "oscPath": "/avatar/parameters/MouthLeft",
+            "wsKey": "MouthLeft",
+            "enabled": true,
+            "label": "Mouth Left",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_mouth_right",
+            "oscPath": "/avatar/parameters/MouthRight",
+            "wsKey": "MouthRight",
+            "enabled": true,
+            "label": "Mouth Right",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_jaw_left",
+            "oscPath": "/avatar/parameters/JawLeft",
+            "wsKey": "JawLeft",
+            "enabled": true,
+            "label": "Jaw Left",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_jaw_right",
+            "oscPath": "/avatar/parameters/JawRight",
+            "wsKey": "JawRight",
+            "enabled": true,
+            "label": "Jaw Right",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_mouth_upper_up",
+            "oscPath": "/avatar/parameters/MouthUpperUp",
+            "wsKey": "MouthUpperUp",
+            "enabled": true,
+            "label": "Mouth Upper Up",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_mouth_lower_down",
+            "oscPath": "/avatar/parameters/MouthLowerDown",
+            "wsKey": "MouthLowerDown",
+            "enabled": true,
+            "label": "Mouth Lower Down",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_tongue_up",
+            "oscPath": "/avatar/parameters/TongueUp",
+            "wsKey": "TongueUp",
+            "enabled": true,
+            "label": "Tongue Up",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_tongue_left",
+            "oscPath": "/avatar/parameters/TongueLeft",
+            "wsKey": "TongueLeft",
+            "enabled": true,
+            "label": "Tongue Left",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_tongue_right",
+            "oscPath": "/avatar/parameters/TongueRight",
+            "wsKey": "TongueRight",
+            "enabled": true,
+            "label": "Tongue Right",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_tongue_roll",
+            "oscPath": "/avatar/parameters/TongueRoll",
+            "wsKey": "TongueRoll",
+            "enabled": true,
+            "label": "Tongue Roll",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_eye_left_x",
+            "oscPath": "/avatar/parameters/EyeLeftX",
+            "wsKey": "EyeLeftX",
+            "enabled": true,
+            "label": "Eye Left X",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_eye_left_y",
+            "oscPath": "/avatar/parameters/EyeLeftY",
+            "wsKey": "EyeLeftY",
+            "enabled": true,
+            "label": "Eye Left Y",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_eye_right_x",
+            "oscPath": "/avatar/parameters/EyeRightX",
+            "wsKey": "EyeRightX",
+            "enabled": true,
+            "label": "Eye Right X",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_eye_right_y",
+            "oscPath": "/avatar/parameters/EyeRightY",
+            "wsKey": "EyeRightY",
+            "enabled": true,
+            "label": "Eye Right Y",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_eyelid_left",
+            "oscPath": "/avatar/parameters/EyeLidLeft",
+            "wsKey": "EyeLidLeft",
+            "enabled": true,
+            "label": "Eye Lid Left",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_eyelid_right",
+            "oscPath": "/avatar/parameters/EyeLidRight",
+            "wsKey": "EyeLidRight",
+            "enabled": true,
+            "label": "Eye Lid Right",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        }
+    ],
+    "id": "steamlink",
+    "name": "Steam Link OSC",
+    "transport": "osc",
+    "direction": "output",
+    "active": false,
+    "osc": {
+        "host": "127.0.0.1",
+        "sendPort": 9000,
+        "recvPort": 9001
+    },
+    "ws": {
+        "port": 4269
+    }
+}

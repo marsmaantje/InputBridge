@@ -168,7 +168,7 @@ void VirtualDeviceManager::RemoveDevice(SDL_JoystickID id) {
     // Close the open handle first, then detach.
     // SDL_DetachVirtualJoystick fires SDL_EVENT_JOYSTICK_REMOVED which causes
     // DeviceManager::HandleDeviceRemoved() to call SDL_CloseJoystick on the
-    // same handle — so we must NOT close it ourselves here.
+    // same handle - so we must NOT close it ourselves here.
     SDL_DetachVirtualJoystick(id);
 
     m_Devices.erase(it);

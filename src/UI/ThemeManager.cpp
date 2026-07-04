@@ -99,8 +99,8 @@ void ThemeManager::ResolveFontPath(const ThemeData& data) {
         LOG_INFO(kTag, "Font resolved: %s @ %.1fpx",
                 m_resolvedFontPath.c_str(), m_fontSize);
     } else {
-        // File not found — fall back to ImGui default silently.
-        LOG_WARN(kTag, "Font file not found (%s) — using default font.",
+        // File not found - fall back to ImGui default silently.
+        LOG_WARN(kTag, "Font file not found (%s) - using default font.",
                 resolved.string().c_str());
         m_resolvedFontPath.clear();
         m_fontSize = 16.f;
@@ -183,7 +183,7 @@ void ThemeManager::ApplyBaseColors() {
 void ThemeManager::Reapply() {
     if (m_hasCustomTheme)
         ApplyData(m_current);
-    // Default variants: nothing to overlay — StyleColorsDark/Light() from caller is enough.
+    // Default variants: nothing to overlay - StyleColorsDark/Light() from caller is enough.
 }
 
 // ============================================================================
@@ -236,7 +236,7 @@ void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
             if (fs::exists(resonitePath)) {
                 auto result = LoadFromFile(resonitePath.string());
                 if (result.IsOk()) {
-                    LOG_INFO(kTag, "No saved theme — applied Resonite as default.");
+                    LOG_INFO(kTag, "No saved theme - applied Resonite as default.");
                     return;
                 }
             }
@@ -251,7 +251,7 @@ void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
 
     auto result = LoadFromFile(path);
     if (result.IsErr()) {
-        LOG_WARN(kTag, "Saved theme could not be restored: %s — using default.",
+        LOG_WARN(kTag, "Saved theme could not be restored: %s - using default.",
                 result.Error().c_str());
         prefs.DeleteKey("Theme", "ThemePath");
     }
@@ -398,7 +398,7 @@ ThemeManager::ParseFile(const std::string& path) const {
         const json& val = it.value();
 
         int idx = ColorNameToIndex(colorName);
-        if (idx < 0) continue; // unknown key — forward-compat
+        if (idx < 0) continue; // unknown key - forward-compat
 
         if (!val.is_array() || val.size() != 4)
             return Result<ThemeData, std::string>::Err(
@@ -444,7 +444,7 @@ ThemeManager::ParseFile(const std::string& path) const {
         if (!(err = rf("ChildRounding",     data.hasChildRounding,     data.childRounding)).empty())     return Result<ThemeData,std::string>::Err(err);
     }
 
-    // Optional font spec — no error if missing or file doesn't exist (fallback handled in ResolveFontPath)
+    // Optional font spec - no error if missing or file doesn't exist (fallback handled in ResolveFontPath)
     if (doc.contains("font") && doc["font"].is_object()) {
         const auto& f = doc["font"];
         if (f.contains("file") && f["file"].is_string()) {

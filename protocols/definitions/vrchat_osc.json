@@ -1,0 +1,1277 @@
+{
+    "fields": [
+        {
+            "fieldId": "pb_jaw_open",
+            "oscPath": "/avatar/parameters/JawOpen",
+            "wsKey": "avatar_parameters_JawOpen",
+            "enabled": true,
+            "label": "Jaw Open",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_left",
+            "oscPath": "/avatar/parameters/JawLeft",
+            "wsKey": "avatar_parameters_JawLeft",
+            "enabled": true,
+            "label": "Jaw Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_right",
+            "oscPath": "/avatar/parameters/JawRight",
+            "wsKey": "avatar_parameters_JawRight",
+            "enabled": true,
+            "label": "Jaw Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_jaw_fwd",
+            "oscPath": "/avatar/parameters/JawForward",
+            "wsKey": "avatar_parameters_JawForward",
+            "enabled": true,
+            "label": "Jaw Forward",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_funnel",
+            "oscPath": "/avatar/parameters/MouthFunnel",
+            "wsKey": "avatar_parameters_MouthFunnel",
+            "enabled": true,
+            "label": "Mouth Funnel",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_pucker",
+            "oscPath": "/avatar/parameters/MouthPucker",
+            "wsKey": "avatar_parameters_MouthPucker",
+            "enabled": true,
+            "label": "Mouth Pucker",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_close",
+            "oscPath": "/avatar/parameters/MouthClose",
+            "wsKey": "avatar_parameters_MouthClose",
+            "enabled": true,
+            "label": "Mouth Close",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_left",
+            "oscPath": "/avatar/parameters/MouthLeft",
+            "wsKey": "avatar_parameters_MouthLeft",
+            "enabled": true,
+            "label": "Mouth Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_right",
+            "oscPath": "/avatar/parameters/MouthRight",
+            "wsKey": "avatar_parameters_MouthRight",
+            "enabled": true,
+            "label": "Mouth Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_smile_l",
+            "oscPath": "/avatar/parameters/MouthSmileLeft",
+            "wsKey": "avatar_parameters_MouthSmileLeft",
+            "enabled": true,
+            "label": "Mouth Smile Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_smile_r",
+            "oscPath": "/avatar/parameters/MouthSmileRight",
+            "wsKey": "avatar_parameters_MouthSmileRight",
+            "enabled": true,
+            "label": "Mouth Smile Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_frown_l",
+            "oscPath": "/avatar/parameters/MouthFrownLeft",
+            "wsKey": "avatar_parameters_MouthFrownLeft",
+            "enabled": true,
+            "label": "Mouth Frown Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_frown_r",
+            "oscPath": "/avatar/parameters/MouthFrownRight",
+            "wsKey": "avatar_parameters_MouthFrownRight",
+            "enabled": true,
+            "label": "Mouth Frown Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_dimple_l",
+            "oscPath": "/avatar/parameters/MouthDimpleLeft",
+            "wsKey": "avatar_parameters_MouthDimpleLeft",
+            "enabled": true,
+            "label": "Mouth Dimple Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_dimple_r",
+            "oscPath": "/avatar/parameters/MouthDimpleRight",
+            "wsKey": "avatar_parameters_MouthDimpleRight",
+            "enabled": true,
+            "label": "Mouth Dimple Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_stretch_l",
+            "oscPath": "/avatar/parameters/MouthStretchLeft",
+            "wsKey": "avatar_parameters_MouthStretchLeft",
+            "enabled": true,
+            "label": "Mouth Stretch Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_stretch_r",
+            "oscPath": "/avatar/parameters/MouthStretchRight",
+            "wsKey": "avatar_parameters_MouthStretchRight",
+            "enabled": true,
+            "label": "Mouth Stretch Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_roll_upper",
+            "oscPath": "/avatar/parameters/MouthRollUpper",
+            "wsKey": "avatar_parameters_MouthRollUpper",
+            "enabled": true,
+            "label": "Mouth Roll Upper",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_roll_lower",
+            "oscPath": "/avatar/parameters/MouthRollLower",
+            "wsKey": "avatar_parameters_MouthRollLower",
+            "enabled": true,
+            "label": "Mouth Roll Lower",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_shrug_upper",
+            "oscPath": "/avatar/parameters/MouthShrugUpper",
+            "wsKey": "avatar_parameters_MouthShrugUpper",
+            "enabled": true,
+            "label": "Mouth Shrug Upper",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_shrug_lower",
+            "oscPath": "/avatar/parameters/MouthShrugLower",
+            "wsKey": "avatar_parameters_MouthShrugLower",
+            "enabled": true,
+            "label": "Mouth Shrug Lower",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_press_l",
+            "oscPath": "/avatar/parameters/MouthPressLeft",
+            "wsKey": "avatar_parameters_MouthPressLeft",
+            "enabled": true,
+            "label": "Mouth Press Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_press_r",
+            "oscPath": "/avatar/parameters/MouthPressRight",
+            "wsKey": "avatar_parameters_MouthPressRight",
+            "enabled": true,
+            "label": "Mouth Press Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_lower_down_l",
+            "oscPath": "/avatar/parameters/MouthLowerDownLeft",
+            "wsKey": "avatar_parameters_MouthLowerDownLeft",
+            "enabled": true,
+            "label": "Mouth Lower Down Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_lower_down_r",
+            "oscPath": "/avatar/parameters/MouthLowerDownRight",
+            "wsKey": "avatar_parameters_MouthLowerDownRight",
+            "enabled": true,
+            "label": "Mouth Lower Down Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_upper_up_l",
+            "oscPath": "/avatar/parameters/MouthUpperUpLeft",
+            "wsKey": "avatar_parameters_MouthUpperUpLeft",
+            "enabled": true,
+            "label": "Mouth Upper Up Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_mouth_upper_up_r",
+            "oscPath": "/avatar/parameters/MouthUpperUpRight",
+            "wsKey": "avatar_parameters_MouthUpperUpRight",
+            "enabled": true,
+            "label": "Mouth Upper Up Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_puff_l",
+            "oscPath": "/avatar/parameters/CheekPuffLeft",
+            "wsKey": "avatar_parameters_CheekPuffLeft",
+            "enabled": true,
+            "label": "Cheek Puff Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_puff_r",
+            "oscPath": "/avatar/parameters/CheekPuffRight",
+            "wsKey": "avatar_parameters_CheekPuffRight",
+            "enabled": true,
+            "label": "Cheek Puff Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_suck_l",
+            "oscPath": "/avatar/parameters/CheekSuckLeft",
+            "wsKey": "avatar_parameters_CheekSuckLeft",
+            "enabled": true,
+            "label": "Cheek Suck Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_suck_r",
+            "oscPath": "/avatar/parameters/CheekSuckRight",
+            "wsKey": "avatar_parameters_CheekSuckRight",
+            "enabled": true,
+            "label": "Cheek Suck Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_squint_l",
+            "oscPath": "/avatar/parameters/CheekSquintLeft",
+            "wsKey": "avatar_parameters_CheekSquintLeft",
+            "enabled": true,
+            "label": "Cheek Squint Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_cheek_squint_r",
+            "oscPath": "/avatar/parameters/CheekSquintRight",
+            "wsKey": "avatar_parameters_CheekSquintRight",
+            "enabled": true,
+            "label": "Cheek Squint Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_nose_sneer_l",
+            "oscPath": "/avatar/parameters/NoseSneerLeft",
+            "wsKey": "avatar_parameters_NoseSneerLeft",
+            "enabled": true,
+            "label": "Nose Sneer Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_nose_sneer_r",
+            "oscPath": "/avatar/parameters/NoseSneerRight",
+            "wsKey": "avatar_parameters_NoseSneerRight",
+            "enabled": true,
+            "label": "Nose Sneer Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_out",
+            "oscPath": "/avatar/parameters/TongueOut",
+            "wsKey": "avatar_parameters_TongueOut",
+            "enabled": true,
+            "label": "Tongue Out",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_up",
+            "oscPath": "/avatar/parameters/TongueUp",
+            "wsKey": "avatar_parameters_TongueUp",
+            "enabled": true,
+            "label": "Tongue Up",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_down",
+            "oscPath": "/avatar/parameters/TongueDown",
+            "wsKey": "avatar_parameters_TongueDown",
+            "enabled": true,
+            "label": "Tongue Down",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_left",
+            "oscPath": "/avatar/parameters/TongueLeft",
+            "wsKey": "avatar_parameters_TongueLeft",
+            "enabled": true,
+            "label": "Tongue Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_right",
+            "oscPath": "/avatar/parameters/TongueRight",
+            "wsKey": "avatar_parameters_TongueRight",
+            "enabled": true,
+            "label": "Tongue Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_roll",
+            "oscPath": "/avatar/parameters/TongueRoll",
+            "wsKey": "avatar_parameters_TongueRoll",
+            "enabled": true,
+            "label": "Tongue Roll",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_twist_l",
+            "oscPath": "/avatar/parameters/TongueTwistLeft",
+            "wsKey": "avatar_parameters_TongueTwistLeft",
+            "enabled": true,
+            "label": "Tongue Twist Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_twist_r",
+            "oscPath": "/avatar/parameters/TongueTwistRight",
+            "wsKey": "avatar_parameters_TongueTwistRight",
+            "enabled": true,
+            "label": "Tongue Twist Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_bend_down",
+            "oscPath": "/avatar/parameters/TongueBendDown",
+            "wsKey": "avatar_parameters_TongueBendDown",
+            "enabled": true,
+            "label": "Tongue Bend Down",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_curl_up",
+            "oscPath": "/avatar/parameters/TongueCurlUp",
+            "wsKey": "avatar_parameters_TongueCurlUp",
+            "enabled": true,
+            "label": "Tongue Curl Up",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_flat",
+            "oscPath": "/avatar/parameters/TongueFlat",
+            "wsKey": "avatar_parameters_TongueFlat",
+            "enabled": true,
+            "label": "Tongue Flat",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_tongue_squish",
+            "oscPath": "/avatar/parameters/TongueSquish",
+            "wsKey": "avatar_parameters_TongueSquish",
+            "enabled": true,
+            "label": "Tongue Squish",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_down_l",
+            "oscPath": "/avatar/parameters/BrowDownLeft",
+            "wsKey": "avatar_parameters_BrowDownLeft",
+            "enabled": true,
+            "label": "Brow Down Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_down_r",
+            "oscPath": "/avatar/parameters/BrowDownRight",
+            "wsKey": "avatar_parameters_BrowDownRight",
+            "enabled": true,
+            "label": "Brow Down Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_inner_up",
+            "oscPath": "/avatar/parameters/BrowInnerUp",
+            "wsKey": "avatar_parameters_BrowInnerUp",
+            "enabled": true,
+            "label": "Brow Inner Up",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_outer_up_l",
+            "oscPath": "/avatar/parameters/BrowOuterUpLeft",
+            "wsKey": "avatar_parameters_BrowOuterUpLeft",
+            "enabled": true,
+            "label": "Brow Outer Up Left",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_brow_outer_up_r",
+            "oscPath": "/avatar/parameters/BrowOuterUpRight",
+            "wsKey": "avatar_parameters_BrowOuterUpRight",
+            "enabled": true,
+            "label": "Brow Outer Up Right",
+            "category": "Babble Face",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_blink_l",
+            "oscPath": "/avatar/parameters/EyeBlinkLeft",
+            "wsKey": "avatar_parameters_EyeBlinkLeft",
+            "enabled": true,
+            "label": "Eye Blink Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_blink_r",
+            "oscPath": "/avatar/parameters/EyeBlinkRight",
+            "wsKey": "avatar_parameters_EyeBlinkRight",
+            "enabled": true,
+            "label": "Eye Blink Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_squint_l",
+            "oscPath": "/avatar/parameters/EyeSquintLeft",
+            "wsKey": "avatar_parameters_EyeSquintLeft",
+            "enabled": true,
+            "label": "Eye Squint Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_squint_r",
+            "oscPath": "/avatar/parameters/EyeSquintRight",
+            "wsKey": "avatar_parameters_EyeSquintRight",
+            "enabled": true,
+            "label": "Eye Squint Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_wide_l",
+            "oscPath": "/avatar/parameters/EyeWideLeft",
+            "wsKey": "avatar_parameters_EyeWideLeft",
+            "enabled": true,
+            "label": "Eye Wide Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_wide_r",
+            "oscPath": "/avatar/parameters/EyeWideRight",
+            "wsKey": "avatar_parameters_EyeWideRight",
+            "enabled": true,
+            "label": "Eye Wide Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_up_l",
+            "oscPath": "/avatar/parameters/EyeLookUpLeft",
+            "wsKey": "avatar_parameters_EyeLookUpLeft",
+            "enabled": true,
+            "label": "Eye Look Up Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_up_r",
+            "oscPath": "/avatar/parameters/EyeLookUpRight",
+            "wsKey": "avatar_parameters_EyeLookUpRight",
+            "enabled": true,
+            "label": "Eye Look Up Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_down_l",
+            "oscPath": "/avatar/parameters/EyeLookDownLeft",
+            "wsKey": "avatar_parameters_EyeLookDownLeft",
+            "enabled": true,
+            "label": "Eye Look Down Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_down_r",
+            "oscPath": "/avatar/parameters/EyeLookDownRight",
+            "wsKey": "avatar_parameters_EyeLookDownRight",
+            "enabled": true,
+            "label": "Eye Look Down Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_in_l",
+            "oscPath": "/avatar/parameters/EyeLookInLeft",
+            "wsKey": "avatar_parameters_EyeLookInLeft",
+            "enabled": true,
+            "label": "Eye Look In Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_in_r",
+            "oscPath": "/avatar/parameters/EyeLookInRight",
+            "wsKey": "avatar_parameters_EyeLookInRight",
+            "enabled": true,
+            "label": "Eye Look In Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_out_l",
+            "oscPath": "/avatar/parameters/EyeLookOutLeft",
+            "wsKey": "avatar_parameters_EyeLookOutLeft",
+            "enabled": true,
+            "label": "Eye Look Out Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_look_out_r",
+            "oscPath": "/avatar/parameters/EyeLookOutRight",
+            "wsKey": "avatar_parameters_EyeLookOutRight",
+            "enabled": true,
+            "label": "Eye Look Out Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_left_x",
+            "oscPath": "/avatar/parameters/EyeLeftX",
+            "wsKey": "avatar_parameters_EyeLeftX",
+            "enabled": true,
+            "label": "Eye Left X",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_left_y",
+            "oscPath": "/avatar/parameters/EyeLeftY",
+            "wsKey": "avatar_parameters_EyeLeftY",
+            "enabled": true,
+            "label": "Eye Left Y",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_right_x",
+            "oscPath": "/avatar/parameters/EyeRightX",
+            "wsKey": "avatar_parameters_EyeRightX",
+            "enabled": true,
+            "label": "Eye Right X",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_right_y",
+            "oscPath": "/avatar/parameters/EyeRightY",
+            "wsKey": "avatar_parameters_EyeRightY",
+            "enabled": true,
+            "label": "Eye Right Y",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_lid_left",
+            "oscPath": "/avatar/parameters/EyeLidLeft",
+            "wsKey": "avatar_parameters_EyeLidLeft",
+            "enabled": true,
+            "label": "Eye Lid Left",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "pb_eye_lid_right",
+            "oscPath": "/avatar/parameters/EyeLidRight",
+            "wsKey": "avatar_parameters_EyeLidRight",
+            "enabled": true,
+            "label": "Eye Lid Right",
+            "category": "Babble Eyes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_vertical",
+            "oscPath": "/input/Vertical",
+            "wsKey": "input_Vertical",
+            "enabled": true,
+            "label": "Vertical (Forward/Back)",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_horizontal",
+            "oscPath": "/input/Horizontal",
+            "wsKey": "input_Horizontal",
+            "enabled": true,
+            "label": "Horizontal (Left/Right)",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_look_horizontal",
+            "oscPath": "/input/LookHorizontal",
+            "wsKey": "input_LookHorizontal",
+            "enabled": true,
+            "label": "Look Horizontal",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_look_vertical",
+            "oscPath": "/input/LookVertical",
+            "wsKey": "input_LookVertical",
+            "enabled": true,
+            "label": "Look Vertical",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_spin_cw_ccw",
+            "oscPath": "/input/SpinHoldCwCcw",
+            "wsKey": "input_SpinHoldCwCcw",
+            "enabled": true,
+            "label": "Spin Held Item CW/CCW",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_spin_ud",
+            "oscPath": "/input/SpinHoldUD",
+            "wsKey": "input_SpinHoldUD",
+            "enabled": true,
+            "label": "Spin Held Item Up/Down",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_spin_lr",
+            "oscPath": "/input/SpinHoldLR",
+            "wsKey": "input_SpinHoldLR",
+            "enabled": true,
+            "label": "Spin Held Item Left/Right",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_move_hold_fb",
+            "oscPath": "/input/MoveHoldFB",
+            "wsKey": "input_MoveHoldFB",
+            "enabled": true,
+            "label": "Move Held Item Forward/Back",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_use_axis_right",
+            "oscPath": "/input/UseAxisRight",
+            "wsKey": "input_UseAxisRight",
+            "enabled": true,
+            "label": "Use Held Item (Right)",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_grab_axis_right",
+            "oscPath": "/input/GrabAxisRight",
+            "wsKey": "input_GrabAxisRight",
+            "enabled": true,
+            "label": "Grab Item (Right)",
+            "category": "VRChat Input: Axes",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_input_move_forward",
+            "oscPath": "/input/MoveForward",
+            "wsKey": "input_MoveForward",
+            "enabled": true,
+            "label": "Move Forward",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_move_backward",
+            "oscPath": "/input/MoveBackward",
+            "wsKey": "input_MoveBackward",
+            "enabled": true,
+            "label": "Move Backward",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_move_left",
+            "oscPath": "/input/MoveLeft",
+            "wsKey": "input_MoveLeft",
+            "enabled": true,
+            "label": "Move Left",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_move_right",
+            "oscPath": "/input/MoveRight",
+            "wsKey": "input_MoveRight",
+            "enabled": true,
+            "label": "Move Right",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_look_left",
+            "oscPath": "/input/LookLeft",
+            "wsKey": "input_LookLeft",
+            "enabled": true,
+            "label": "Look Left",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_look_right",
+            "oscPath": "/input/LookRight",
+            "wsKey": "input_LookRight",
+            "enabled": true,
+            "label": "Look Right",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_jump",
+            "oscPath": "/input/Jump",
+            "wsKey": "input_Jump",
+            "enabled": true,
+            "label": "Jump",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_run",
+            "oscPath": "/input/Run",
+            "wsKey": "input_Run",
+            "enabled": true,
+            "label": "Run",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_comfort_left",
+            "oscPath": "/input/ComfortLeft",
+            "wsKey": "input_ComfortLeft",
+            "enabled": true,
+            "label": "Comfort Snap-Turn Left (VR)",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_comfort_right",
+            "oscPath": "/input/ComfortRight",
+            "wsKey": "input_ComfortRight",
+            "enabled": true,
+            "label": "Comfort Snap-Turn Right (VR)",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_grab_right",
+            "oscPath": "/input/GrabRight",
+            "wsKey": "input_GrabRight",
+            "enabled": true,
+            "label": "Grab Right Hand",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_use_right",
+            "oscPath": "/input/UseRight",
+            "wsKey": "input_UseRight",
+            "enabled": true,
+            "label": "Use Right Hand",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_drop_right",
+            "oscPath": "/input/DropRight",
+            "wsKey": "input_DropRight",
+            "enabled": true,
+            "label": "Drop Right Hand",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_grab_left",
+            "oscPath": "/input/GrabLeft",
+            "wsKey": "input_GrabLeft",
+            "enabled": true,
+            "label": "Grab Left Hand",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_use_left",
+            "oscPath": "/input/UseLeft",
+            "wsKey": "input_UseLeft",
+            "enabled": true,
+            "label": "Use Left Hand",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_drop_left",
+            "oscPath": "/input/DropLeft",
+            "wsKey": "input_DropLeft",
+            "enabled": true,
+            "label": "Drop Left Hand",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_panic_button",
+            "oscPath": "/input/PanicButton",
+            "wsKey": "input_PanicButton",
+            "enabled": true,
+            "label": "Panic Button (Safe Mode)",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_quick_menu_left",
+            "oscPath": "/input/QuickMenuToggleLeft",
+            "wsKey": "input_QuickMenuToggleLeft",
+            "enabled": true,
+            "label": "Quick Menu Toggle (Left)",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_quick_menu_right",
+            "oscPath": "/input/QuickMenuToggleRight",
+            "wsKey": "input_QuickMenuToggleRight",
+            "enabled": true,
+            "label": "Quick Menu Toggle (Right)",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_toggle_sit_stand",
+            "oscPath": "/input/ToggleSitStand",
+            "wsKey": "input_ToggleSitStand",
+            "enabled": true,
+            "label": "Toggle Sit/Stand",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_afk_toggle",
+            "oscPath": "/input/AFKToggle",
+            "wsKey": "input_AFKToggle",
+            "enabled": true,
+            "label": "AFK Toggle",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_input_voice",
+            "oscPath": "/input/Voice",
+            "wsKey": "input_Voice",
+            "enabled": true,
+            "label": "Voice (Mute/PTT)",
+            "category": "VRChat Input: Buttons",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_mode",
+            "oscPath": "/usercamera/Mode",
+            "wsKey": "usercamera_Mode",
+            "enabled": true,
+            "label": "Camera Mode (0\u20136)",
+            "category": "VRChat User Camera",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_close",
+            "oscPath": "/usercamera/Close",
+            "wsKey": "usercamera_Close",
+            "enabled": true,
+            "label": "Close Camera",
+            "category": "VRChat User Camera: Actions",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_capture",
+            "oscPath": "/usercamera/Capture",
+            "wsKey": "usercamera_Capture",
+            "enabled": true,
+            "label": "Capture Photo",
+            "category": "VRChat User Camera: Actions",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_capture_delayed",
+            "oscPath": "/usercamera/CaptureDelayed",
+            "wsKey": "usercamera_CaptureDelayed",
+            "enabled": true,
+            "label": "Capture Photo (Delayed)",
+            "category": "VRChat User Camera: Actions",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_show_ui",
+            "oscPath": "/usercamera/ShowUIInCamera",
+            "wsKey": "usercamera_ShowUIInCamera",
+            "enabled": true,
+            "label": "Show UI in Camera",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_local_player",
+            "oscPath": "/usercamera/LocalPlayer",
+            "wsKey": "usercamera_LocalPlayer",
+            "enabled": true,
+            "label": "Mask: Local Player",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_remote_player",
+            "oscPath": "/usercamera/RemotePlayer",
+            "wsKey": "usercamera_RemotePlayer",
+            "enabled": true,
+            "label": "Mask: Remote Players",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_environment",
+            "oscPath": "/usercamera/Environment",
+            "wsKey": "usercamera_Environment",
+            "enabled": true,
+            "label": "Mask: Environment",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_green_screen",
+            "oscPath": "/usercamera/GreenScreen",
+            "wsKey": "usercamera_GreenScreen",
+            "enabled": true,
+            "label": "Green Screen",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_lock",
+            "oscPath": "/usercamera/Lock",
+            "wsKey": "usercamera_Lock",
+            "enabled": true,
+            "label": "Camera Lock",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_smooth_movement",
+            "oscPath": "/usercamera/SmoothMovement",
+            "wsKey": "usercamera_SmoothMovement",
+            "enabled": true,
+            "label": "Smooth Movement",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_look_at_me",
+            "oscPath": "/usercamera/LookAtMe",
+            "wsKey": "usercamera_LookAtMe",
+            "enabled": true,
+            "label": "Look-At-Me",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_auto_level_roll",
+            "oscPath": "/usercamera/AutoLevelRoll",
+            "wsKey": "usercamera_AutoLevelRoll",
+            "enabled": true,
+            "label": "Auto-Level Roll",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_auto_level_pitch",
+            "oscPath": "/usercamera/AutoLevelPitch",
+            "wsKey": "usercamera_AutoLevelPitch",
+            "enabled": true,
+            "label": "Auto-Level Pitch",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_flying",
+            "oscPath": "/usercamera/Flying",
+            "wsKey": "usercamera_Flying",
+            "enabled": true,
+            "label": "Flying",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_trigger_takes_photos",
+            "oscPath": "/usercamera/TriggerTakesPhotos",
+            "wsKey": "usercamera_TriggerTakesPhotos",
+            "enabled": true,
+            "label": "Trigger Takes Photos",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_dolly_paths_visible",
+            "oscPath": "/usercamera/DollyPathsStayVisible",
+            "wsKey": "usercamera_DollyPathsStayVisible",
+            "enabled": true,
+            "label": "Dolly Paths Stay Visible",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_audio_from_camera",
+            "oscPath": "/usercamera/AudioFromCamera",
+            "wsKey": "usercamera_AudioFromCamera",
+            "enabled": true,
+            "label": "Audio From Camera",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_show_focus",
+            "oscPath": "/usercamera/ShowFocus",
+            "wsKey": "usercamera_ShowFocus",
+            "enabled": true,
+            "label": "Show Focus Overlay",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_streaming",
+            "oscPath": "/usercamera/Streaming",
+            "wsKey": "usercamera_Streaming",
+            "enabled": true,
+            "label": "Spout Stream",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_roll_while_flying",
+            "oscPath": "/usercamera/RollWhileFlying",
+            "wsKey": "usercamera_RollWhileFlying",
+            "enabled": true,
+            "label": "Roll While Flying",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_orientation_landscape",
+            "oscPath": "/usercamera/OrientationIsLandscape",
+            "wsKey": "usercamera_OrientationIsLandscape",
+            "enabled": true,
+            "label": "Orientation: Landscape",
+            "category": "VRChat User Camera: Toggles",
+            "type": "digital"
+        },
+        {
+            "fieldId": "vrc_cam_zoom",
+            "oscPath": "/usercamera/Zoom",
+            "wsKey": "usercamera_Zoom",
+            "enabled": true,
+            "label": "Zoom (20\u2013150, default 45)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_exposure",
+            "oscPath": "/usercamera/Exposure",
+            "wsKey": "usercamera_Exposure",
+            "enabled": true,
+            "label": "Exposure (-10\u20134, default 0)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_focal_distance",
+            "oscPath": "/usercamera/FocalDistance",
+            "wsKey": "usercamera_FocalDistance",
+            "enabled": true,
+            "label": "Focal Distance (0\u201310, default 1.5)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_aperture",
+            "oscPath": "/usercamera/Aperture",
+            "wsKey": "usercamera_Aperture",
+            "enabled": true,
+            "label": "Aperture (1.4\u201332, default 15)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_hue",
+            "oscPath": "/usercamera/Hue",
+            "wsKey": "usercamera_Hue",
+            "enabled": true,
+            "label": "Green Screen Hue (0\u2013360, def 120)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_saturation",
+            "oscPath": "/usercamera/Saturation",
+            "wsKey": "usercamera_Saturation",
+            "enabled": true,
+            "label": "Green Screen Saturation (0\u2013100)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_lightness",
+            "oscPath": "/usercamera/Lightness",
+            "wsKey": "usercamera_Lightness",
+            "enabled": true,
+            "label": "Green Screen Lightness (0\u201350)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_look_at_me_x",
+            "oscPath": "/usercamera/LookAtMeXOffset",
+            "wsKey": "usercamera_LookAtMeXOffset",
+            "enabled": true,
+            "label": "Look-At-Me X Offset (-25\u201325)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_look_at_me_y",
+            "oscPath": "/usercamera/LookAtMeYOffset",
+            "wsKey": "usercamera_LookAtMeYOffset",
+            "enabled": true,
+            "label": "Look-At-Me Y Offset (-25\u201325)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_fly_speed",
+            "oscPath": "/usercamera/FlySpeed",
+            "wsKey": "usercamera_FlySpeed",
+            "enabled": true,
+            "label": "Fly Speed (0.1\u201315, default 3)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_turn_speed",
+            "oscPath": "/usercamera/TurnSpeed",
+            "wsKey": "usercamera_TurnSpeed",
+            "enabled": true,
+            "label": "Turn Speed (0.1\u20135, default 1)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_smoothing_strength",
+            "oscPath": "/usercamera/SmoothingStrength",
+            "wsKey": "usercamera_SmoothingStrength",
+            "enabled": true,
+            "label": "Smoothing Strength (0.1\u201310, def 5)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_photo_rate",
+            "oscPath": "/usercamera/PhotoRate",
+            "wsKey": "usercamera_PhotoRate",
+            "enabled": true,
+            "label": "Dolly Photo Rate (0.1\u20132, default 1)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        },
+        {
+            "fieldId": "vrc_cam_duration",
+            "oscPath": "/usercamera/Duration",
+            "wsKey": "usercamera_Duration",
+            "enabled": true,
+            "label": "Dolly Duration (0.1\u201360, default 2)",
+            "category": "VRChat User Camera: Sliders",
+            "type": "analog"
+        }
+    ],
+    "id": "vrchat_osc",
+    "name": "VRChat OSC",
+    "transport": "osc",
+    "direction": "output",
+    "active": false,
+    "osc": {
+        "host": "127.0.0.1",
+        "sendPort": 9000,
+        "recvPort": 9001
+    },
+    "ws": {
+        "port": 4269
+    }
+}

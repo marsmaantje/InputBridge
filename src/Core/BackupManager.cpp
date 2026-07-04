@@ -121,7 +121,7 @@ std::vector<std::string> BackupManager::ListBackups(const std::string& filePath)
         }
 
         // Sort by modification time (newest first).
-        // Use the error_code overload so the comparator never throws — if a
+        // Use the error_code overload so the comparator never throws - if a
         // file disappears between the directory scan and the sort (e.g. due to
         // a concurrent cleanup on another thread), the throwing overload would
         // propagate out of std::sort and leave the vector in an unspecified

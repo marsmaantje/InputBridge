@@ -164,8 +164,8 @@ int OSCServer::haptic_subchannel_handler(const char *path, const char *types, lo
 
         // The slot is carried as argv[1] (int), identical to the old fixed paths.
         // The slot in the OSC path (/haptic/<effect>/<N>) is used purely to give
-        // each slot a distinct path so hosts like Resonite — which only deliver
-        // one message per path per frame — can address multiple slots in the same
+        // each slot a distinct path so hosts like Resonite - which only deliver
+        // one message per path per frame - can address multiple slots in the same
         // frame.  The argument slot is always authoritative.
 
         switch (sub.effect) {
@@ -251,7 +251,7 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     if (!m_OutputMapper && m_savedOutputMapper)
         m_OutputMapper = m_savedOutputMapper;
 
-    LOG_INFO(kTag, "Started — sending to %s:%d, listening on port %d",
+    LOG_INFO(kTag, "Started - sending to %s:%d, listening on port %d",
              send_host.c_str(), send_port, recv_port);
 
     m_logs.push_back({"OSC server started. Sending to " + send_host + ":" + std::to_string(send_port) + ", Listening on port " + std::to_string(recv_port), false});
@@ -546,7 +546,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
             protoCopy    = server->m_protocol;
             handlerCopy  = server->m_handler;
         }
-        // m_mutex is now released — safe to do slow work below.
+        // m_mutex is now released - safe to do slow work below.
 
         if (!isRunning) return 0;
 
@@ -579,7 +579,7 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
     // Note: StopAllHapticEffects on no-clients is handled by the per-frame
     // CheckInactivity() and the edge-detection in Application::UpdateLogic(),
     // not here.  Calling it inside the message handler is incorrect because
-    // m_clients is populated earlier in this same call — HasClients() can
+    // m_clients is populated earlier in this same call - HasClients() can
     // return false on the very first message from a new client if the insert
     // above was skipped (e.g. lo_message_get_source returned null), causing
     // a spurious stop that interrupts valid haptic sessions.
@@ -784,7 +784,7 @@ void OSCServer::DrawContent() {
         std::string definitionId;
     };
 
-    // Built-in OSC protocols (named community protocols only — exclude the
+    // Built-in OSC protocols (named community protocols only - exclude the
     // generic "OSC" fallback which has no real behaviour of its own).
     std::vector<std::string> builtins;
     for (const auto& p : ProtocolManager::GetInstance().GetAvailableProtocols())
@@ -901,6 +901,12 @@ void OSCServer::DrawContent() {
         if (settingsChanged) {
             if (ImGui::Button("Restart to apply")) {
                 Stop();
+                // Wait for the detached liblo cleanup thread to fully release
+                // the old port before binding the new one.  Without this join,
+                // lo_server_thread_new_with_proto() races against the teardown
+                // and fails because the UDP port is still in use, leaving the
+                // server stopped after the button press.
+                WaitStopped();
                 Start(m_send_host, m_send_port, m_recv_port);
                 InputMapper::GetInstance().SaveCurrentProfile();
             }

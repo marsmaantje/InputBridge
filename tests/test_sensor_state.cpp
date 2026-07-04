@@ -69,7 +69,7 @@ TEST(AccelState, ScaleConstantIsPositive) {
 }
 
 TEST(AccelState, ScaleMatchesExpectedValue) {
-    // ±20 m/s² so that 1 g (≈9.81 m/s²) maps to roughly ±0.49 — well within
+    // ±20 m/s² so that 1 g (≈9.81 m/s²) maps to roughly ±0.49 - well within
     // the [-1,1] range without saturating at rest.
     EXPECT_FLOAT_EQ(AccelState::SCALE, 20.f);
 }
@@ -92,7 +92,7 @@ TEST(TouchFingerState, DefaultConstructionIsInactiveZero) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// TouchState — default construction
+// TouchState - default construction
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(TouchState, DefaultConstructionIsUnavailable) {
@@ -116,7 +116,7 @@ TEST(TouchState, FingerArraySizeIsTwo) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// TouchState::primaryX/Y/Pressure — inactive finger → zero
+// TouchState::primaryX/Y/Pressure - inactive finger → zero
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(TouchState, PrimaryXIsZeroWhenFingerInactive) {
@@ -141,7 +141,7 @@ TEST(TouchState, PrimaryPressureIsZeroWhenFingerInactive) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// TouchState::primaryX/Y/Pressure — active finger → real value
+// TouchState::primaryX/Y/Pressure - active finger → real value
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(TouchState, PrimaryXReturnsValueWhenFingerActive) {

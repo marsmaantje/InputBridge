@@ -1,6 +1,6 @@
 app-id: org.inputbridge.InputBridge
 runtime: org.freedesktop.Platform
-runtime-version: "23.08"
+runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
 command: InputBridge
 finish-args:
@@ -16,6 +16,8 @@ modules:
       config-opts:
           - -DCMAKE_BUILD_TYPE=Release
           - -DENABLE_WEBSOCKETS=ON
+          - -DSDL_SHARED=OFF
+          - -DSDL_STATIC=ON
       sources:
           - type: dir
             path: .
