@@ -441,20 +441,18 @@ jobs:
 
     run-tests:
         if: ${{ github.event.inputs.run_tests == 'yes' || github.event.inputs.run_tests == 'only' }}
-        env:
-            FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         strategy:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest, windows-latest, macos-latest]
         runs-on: ${{ matrix.os }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with: { submodules: recursive }
 
             - name: Cache apt packages
               if: runner.os == 'Linux'
-              uses: actions/cache@v4
+              uses: actions/cache@v5
               with:
                 path: |
                   /var/cache/apt/archives
@@ -467,6 +465,15 @@ jobs:
               run: |
                   sudo apt-get update
                   sudo apt-get install -y build-essential git pkg-config cmake ninja-build libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libxinerama-dev libxxf86vm-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev libxtst-dev libssl-dev zlib1g-dev libuv1-dev libusb-1.0-0-dev lcov
+
+            - name: Fix apt cache permissions
+              if: runner.os == 'Linux'
+              # apt creates /var/cache/apt/archives/partial with 700 root-only
+              # permissions. actions/cache tars this directory as the runner
+              # user during its post-job save step, and a permission-denied
+              # read on partial/ makes tar exit 2 and the save fail. Opening
+              # read/list permissions here lets the cache save succeed.
+              run: sudo chmod -R o+rX /var/cache/apt/archives
 
             - name: Add OpenSSL to PATH (Windows)
               if: runner.os == 'Windows'
@@ -490,13 +497,13 @@ jobs:
 
             - name: Upload Test Results
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: test-results-${{ matrix.os }}
                   path: build/test-results.xml
 
             - name: Publish Test Report
-              uses: dorny/test-reporter@v1
+              uses: dorny/test-reporter@v3
               if: always()
               with:
                 name: Test Results (${{ matrix.os }})
@@ -512,7 +519,7 @@ jobs:
 
             - name: Upload Coverage Report
               if: runner.os == 'Linux'
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: coverage-report
                   path: coverage-report
