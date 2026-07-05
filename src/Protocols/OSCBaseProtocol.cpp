@@ -50,6 +50,24 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         return (fieldId == fid) || (fieldId.empty() && path_sv == legacyPath);
     };
 
+    // Like match(), but for fields that cover a whole family of sub-addresses
+    // (e.g. DualSense trigger's .../left|right/effect) rather than one fixed
+    // address. Returns the base path to match against as a prefix: the
+    // field's configured oscPath if the active definition customizes it,
+    // otherwise the legacy hardcoded default.
+    auto resolveBase = [&](const char* legacyBase, const char* fid) {
+        std::string base = legacyBase;
+        if (def) {
+            for (const auto& field : def->fields) {
+                if (field.enabled && field.fieldId == fid) {
+                    base = field.oscPath;
+                    break;
+                }
+            }
+        }
+        return base;
+    };
+
     bool handled = false;
 
     // /inputbridge/haptics/rumble  iiffi  (deviceId, slot, low_freq, high_freq, duration_ms)
@@ -167,7 +185,10 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
         });
     }
     // DualSense Trigger Effects
-    // /inputbridge/haptics/dualsense/trigger/{left|right}/{feedback|weapon|vibration|bow|galloping|machine|off}
+    // {base}/{left|right}/{feedback|weapon|vibration|bow|galloping|machine|off}
+    // where {base} defaults to /inputbridge/haptics/dualsense/trigger but can
+    // be customized per-protocol via the "DualSense Adaptive Trigger" field
+    // in the Protocol Editor.
     //   feedback:  iii     (deviceId, position, strength)
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
@@ -175,7 +196,7 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
     //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
     //   off:       (no args required)
-    else if (path_sv.find("/inputbridge/haptics/dualsense/trigger/") != std::string_view::npos) {
+    else if (path_sv.starts_with(resolveBase("/inputbridge/haptics/dualsense/trigger", "haptic_dualsense_trigger") + "/")) {
         handled = true;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
             std::string trigger = (path_sv.find("/left/") != std::string_view::npos) ? "left" : "right";

@@ -16,7 +16,7 @@ static constexpr const char* kTag = "ProtocolRegistry";
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-// ─── Singleton ───────────────────────────────────────────────────────────────
+// --- Singleton ---------------------------------------------------------------
 
 ProtocolRegistry& ProtocolRegistry::GetInstance() {
     static ProtocolRegistry instance;
@@ -28,7 +28,7 @@ ProtocolRegistry::ProtocolRegistry() {
     LoadBuiltinCatalog();
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// --- Public API --------------------------------------------------------------
 
 void ProtocolRegistry::LoadAll() {
     EnsureDirectories();
@@ -421,7 +421,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     }
 }
 
-// ─── Paths ───────────────────────────────────────────────────────────────────
+// --- Paths -------------------------------------------------------------------
 
 std::string ProtocolRegistry::GetProtocolsDir() {
     // Protocol definitions, field catalogs, and templates are user data -
@@ -452,7 +452,7 @@ const char* ProtocolRegistry::DirectionLabel(ProtocolDirection d) {
     return d == ProtocolDirection::Output ? "Output (server → client)" : "Input (client → server)";
 }
 
-// ─── Private helpers ─────────────────────────────────────────────────────────
+// --- Private helpers ---------------------------------------------------------
 
 // Copies seed files from the read-only install directory into the writable
 // pref directory, but only when a file is absent (never overwrites).
@@ -800,7 +800,7 @@ void ProtocolRegistry::WriteDefaultFieldCatalog() {
     if (ofs) ofs << j.dump(4);
 }
 
-// ─── Built-in field catalogs ─────────────────────────────────────────────────
+// --- Built-in field catalogs -------------------------------------------------
 
 void ProtocolRegistry::LoadBuiltinCatalog() {
     m_outputFields.clear();
@@ -865,7 +865,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
         outArr.push_back(item);
     };
 
-    // ── Analog axes ──────────────────────────────────────────────────────────
+    // -- Analog axes ----------------------------------------------------------
     addOut("axis_steering",   "Steering / Yaw",  "Analog Axes", FieldType::AnalogAxis, "/input/yaw",        "yaw");
     addOut("axis_throttle",   "Throttle",        "Analog Axes", FieldType::AnalogAxis, "/input/throttle",   "throttle");
     addOut("axis_clutch",     "Clutch",          "Analog Axes", FieldType::AnalogAxis, "/input/clutch",     "clutch");
@@ -875,7 +875,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("axis_roll",       "Roll",            "Analog Axes", FieldType::AnalogAxis, "/input/roll",       "roll");
     addOut("axis_collective", "Collective",      "Analog Axes", FieldType::AnalogAxis, "/input/collective", "collective");
 
-    // ── Digital: Vehicle ─────────────────────────────────────────────────────
+    // -- Digital: Vehicle -----------------------------------------------------
     addOut("btn_gear_up",     "Gear Up",         "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_up",   "gear_up");
     addOut("btn_gear_down",   "Gear Down",       "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_down", "gear_down");
     addOut("btn_neutral",     "Neutral",         "Digital: Vehicle", FieldType::DigitalButton, "/input/neutral",   "neutral");
@@ -894,7 +894,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_difflock_f",  "Diff-lock Front", "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_front", "difflock_front");
     addOut("btn_difflock_b",  "Diff-lock Rear",  "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_rear",  "difflock_rear");
 
-    // ── Digital: Lights ──────────────────────────────────────────────────────
+    // -- Digital: Lights ------------------------------------------------------
     addOut("btn_lights",      "Lights",          "Digital: Lights", FieldType::DigitalButton, "/input/lights",      "lights");
     addOut("btn_beam",        "Low/High Beam",   "Digital: Lights", FieldType::DigitalButton, "/input/beam",        "beam");
     addOut("btn_parking",     "Parking Light",   "Digital: Lights", FieldType::DigitalButton, "/input/parking",     "parking");
@@ -903,7 +903,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_turn_right",  "Turn Right",      "Digital: Lights", FieldType::DigitalButton, "/input/turn_right",  "turn_right");
     addOut("btn_hazard",      "Hazard",          "Digital: Lights", FieldType::DigitalButton, "/input/hazard",      "hazard");
 
-    // ── Digital: Other ───────────────────────────────────────────────────────
+    // -- Digital: Other -------------------------------------------------------
     addOut("btn_engine",      "Engine",          "Digital: Other",  FieldType::DigitalButton, "/input/engine",      "engine");
     addOut("btn_horn",        "Horn",            "Digital: Other",  FieldType::DigitalButton, "/input/horn",        "horn");
     addOut("btn_cam_switch",  "Camera Switch",   "Digital: Other",  FieldType::DigitalButton, "/input/cam_switch",  "cam_switch");
@@ -914,18 +914,18 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
     addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
     
-    // ── Sensors: Gyroscope ───────────────────────────────────────────────────
+    // -- Sensors: Gyroscope ---------------------------------------------------
     // Available on DualSense and Steam Controller.  Values normalised to [-1, 1].
     addOut("sensor_gyro_x",   "Gyro X (pitch)",    "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/x",         "gyro_x");
     addOut("sensor_gyro_y",   "Gyro Y (yaw)",      "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/y",         "gyro_y");
     addOut("sensor_gyro_z",   "Gyro Z (roll)",     "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/z",         "gyro_z");
 
-    // ── Sensors: Accelerometer ───────────────────────────────────────────────
+    // -- Sensors: Accelerometer -----------------------------------------------
     addOut("sensor_accel_x",  "Accel X (lateral)",  "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/x",        "accel_x");
     addOut("sensor_accel_y",  "Accel Y (vertical)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/y",        "accel_y");
     addOut("sensor_accel_z",  "Accel Z (fore/aft)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/z",        "accel_z");
 
-    // ── Sensors: Touchpad ────────────────────────────────────────────────────
+    // -- Sensors: Touchpad ----------------------------------------------------
     // x/y centred: left/top=-1, right/bottom=+1.  Pressure: [0, 1].
     addOut("sensor_touch_x",     "Touch X (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/x",        "touch_x");
     addOut("sensor_touch_y",     "Touch Y (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/y",        "touch_y");
@@ -950,14 +950,17 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
         inArr.push_back(item);
     };
 
-    // ── Haptic feedback fields (received from client) ─────────────────────
+    // -- Haptic feedback fields (received from client) ---------------------
     addIn("haptic_rumble",      "Rumble",                  "Haptic", "/haptic/rumble",      "rumble");
     addIn("haptic_constant",    "Constant Force",          "Haptic", "/haptic/constant",    "constant");
     addIn("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
     addIn("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
     addIn("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
+    
+    // -- Adaptive trigger fields (received from client) ---------------------
+    addIn("haptic_dualsense_trigger", "DualSense Adaptive Trigger", "Haptic", "/haptic/dualsense_trigger", "dualsense_trigger");
 
-    // ── Rumble (simple gamepad) ───────────────────────────────────────────
+    // -- Rumble (simple gamepad) -------------------------------------------
     addIn("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");
     addIn("rumble_right", "Rumble Right Motor", "Rumble", "/rumble/right", "rumble_right");
 
@@ -968,7 +971,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     if (ofs) ofs << j.dump(4);
 }
 
-// ─── ID generation ───────────────────────────────────────────────────────────
+// --- ID generation -----------------------------------------------------------
 
 std::string ProtocolRegistry::GenerateId() {
     // Short hex ID based on time + random bits
