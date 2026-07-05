@@ -284,7 +284,10 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
             "The hide persists until you uncheck this box or restart the driver."
 #elif defined(__linux__)
             "Uses an exclusive evdev grab (EVIOCGRAB).\n"
-            "The hide is released automatically when InputBridge exits."
+            "The hide is released automatically when InputBridge exits.\n"
+            "Note: does NOT block Steam Input from reading gyro/accel via\n"
+            "hidraw on sensor-capable pads - Linux has no per-process hidraw\n"
+            "lock. Disable Steam Input for the controller if it still hijacks it."
 #elif defined(__APPLE__)
             "Uses IOHIDOptionsTypeSeizeDevice.\n"
             "The hide is released automatically when InputBridge exits."
