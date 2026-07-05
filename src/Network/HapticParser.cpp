@@ -51,8 +51,19 @@ namespace {
     const char* const kConditionCenter    = "center";
 
     // DualSense params
-    const char* const kTrigger     = "trigger";
-    const char* const kEffectType  = "effect_type";
+    const char* const kTrigger        = "trigger";
+    const char* const kEffectType     = "effect_type";
+    const char* const kDSPosition     = "position";
+    const char* const kDSEndPosition  = "end_position";
+    const char* const kDSAmplitude    = "amplitude";
+    const char* const kDSFrequency    = "frequency";
+    const char* const kDSSnapForce    = "snap_force";
+    const char* const kDSFirstFoot    = "first_foot";
+    const char* const kDSSecondFoot   = "second_foot";
+    const char* const kDSAmplitudeA   = "amplitude_a";
+    const char* const kDSAmplitudeB   = "amplitude_b";
+    // Note: DualSense "strength" and "period" reuse kConstantStrength / kPeriodicPeriod
+    // below since the JSON key text is identical for those fields.
 
     // Shared slot key used by all slotted effect types
     const char* const kSlot = "slot";
@@ -143,6 +154,31 @@ namespace {
                 data.value(kConditionCenter,     0.0f),
                 duration);
         }
+    }
+
+    // Dispatch a DualSense adaptive trigger effect. Handled separately from the
+    // generic dispatch() above since it goes through QueueDualSenseTrigger rather
+    // than the four standard SDL haptic effect queues.
+    void dispatchDualSenseTrigger(const nlohmann::json& data, const std::string& trigger,
+                                   const std::string& effect_type, int device, OutputMapper* mapper)
+    {
+        int position     = data.value(kDSPosition,      0);
+        int strength     = data.value(kConstantStrength, 0);
+        int end_position = data.value(kDSEndPosition,   0);
+        int amplitude    = data.value(kDSAmplitude,     0);
+        int frequency    = data.value(kDSFrequency,     0);
+        int snap_force   = data.value(kDSSnapForce,     0);
+        int first_foot   = data.value(kDSFirstFoot,     0);
+        int second_foot  = data.value(kDSSecondFoot,    0);
+        int period       = data.value(kPeriodicPeriod,  0);
+        int amplitude_a  = data.value(kDSAmplitudeA,    0);
+        int amplitude_b  = data.value(kDSAmplitudeB,    0);
+
+        mapper->QueueDualSenseTrigger(device, trigger.c_str(), effect_type.c_str(),
+                                       position, strength, end_position,
+                                       amplitude, frequency, snap_force,
+                                       first_foot, second_foot, period,
+                                       amplitude_a, amplitude_b);
     }
 
     // Sniff a flat JSON object (the top-level payload *or* its params sub-object)
@@ -293,12 +329,12 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
 
             const auto& data = get_params_obj(json);
 
-            // DualSense triggers are not handled through the standard dispatch()
-            // helper since they use QueueDualSenseTrigger, not the generic effects.
-            // For now we fall through to the standard JSON path when a DualSense
-            // trigger is auto-detected (the caller must still set "type" explicitly
-            // for DualSense - auto-detect only covers the four SDL effect classes).
-            if (det.kind != DetectedEffect::Kind::DualSenseTrigger) {
+            // DualSense triggers go through QueueDualSenseTrigger rather than the
+            // generic dispatch() used by the four standard SDL haptic effects.
+            if (det.kind == DetectedEffect::Kind::DualSenseTrigger) {
+                dispatchDualSenseTrigger(data.empty() ? json : data,
+                                          det.trigger, det.effect_type, det.device, mapper);
+            } else {
                 dispatch(json, data.empty() ? json : data,
                          kind_to_effect_string(det.kind), det.device, mapper);
             }

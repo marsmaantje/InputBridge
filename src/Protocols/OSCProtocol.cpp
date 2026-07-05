@@ -169,7 +169,14 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
         });
     }
     // DualSense Trigger Effects
-    // /inputbridge/haptics/dualsense/trigger/{left|right}/{feedback|weapon|vibration|off}
+    // /inputbridge/haptics/dualsense/trigger/{left|right}/{feedback|weapon|vibration|bow|galloping|machine|off}
+    //   feedback:  iii     (deviceId, position, strength)
+    //   weapon:    iiii    (deviceId, start_position, end_position, strength)
+    //   vibration: iiii    (deviceId, position, amplitude, frequency)
+    //   bow:       iiiii   (deviceId, start_position, end_position, strength, snap_force)
+    //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
+    //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
+    //   off:       (no args required)
     else if (path_sv.find("/inputbridge/haptics/dualsense/trigger/") != std::string_view::npos) {
         handled = true;
         DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
@@ -191,6 +198,27 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
                 params["position"]  = ClampDSPosition(argv[1]->i,  path_sv);
                 params["amplitude"] = ClampDSAmplitude(argv[2]->i, path_sv);
                 params["frequency"] = ClampDSFrequency(argv[3]->i, path_sv);
+            } else if (path_sv.ends_with("/bow") && std::strcmp(types, "iiiii") == 0 && argc == 5) {
+                effect = "bow";
+                params["start_position"] = ClampDSBowPos(argv[1]->i,     path_sv);
+                params["end_position"]   = ClampDSBowPos(argv[2]->i,     path_sv);
+                params["strength"]       = ClampDSStrength(argv[3]->i,   path_sv);
+                params["snap_force"]     = ClampDSSnapForce(argv[4]->i,  path_sv);
+            } else if (path_sv.ends_with("/galloping") && std::strcmp(types, "iiiiii") == 0 && argc == 6) {
+                effect = "galloping";
+                params["start_position"] = ClampDSGallopingPos(argv[1]->i, path_sv);
+                params["end_position"]   = ClampDSGallopingPos(argv[2]->i, path_sv);
+                params["first_foot"]     = ClampDSFirstFoot(argv[3]->i,   path_sv);
+                params["second_foot"]    = ClampDSSecondFoot(argv[4]->i,  path_sv);
+                params["frequency"]      = ClampDSFrequency(argv[5]->i,   path_sv);
+            } else if (path_sv.ends_with("/machine") && std::strcmp(types, "iiiiiii") == 0 && argc == 7) {
+                effect = "machine";
+                params["start_position"] = ClampDSMachinePos(argv[1]->i,  path_sv);
+                params["end_position"]   = ClampDSMachinePos(argv[2]->i,  path_sv);
+                params["amplitude_a"]    = ClampDSAmplitudeAB(argv[3]->i, path_sv);
+                params["amplitude_b"]    = ClampDSAmplitudeAB(argv[4]->i, path_sv);
+                params["frequency"]      = ClampDSFrequency(argv[5]->i,   path_sv);
+                params["period"]         = ClampDSPeriod(argv[6]->i,      path_sv);
             } else if (path_sv.ends_with("/off")) {
                 effect = "off";
             }
