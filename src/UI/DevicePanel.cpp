@@ -301,7 +301,7 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
 #ifdef _WIN32
     // -- Steam Input compatibility (Windows / HidHide only) ----------------
     ImGui::Spacing();
-    static bool steamCompat = true; // global preference; persisted separately if needed
+    static bool steamCompat = false; // global preference; persisted separately if needed
     if (ImGui::Checkbox("Keep Steam Input access", &steamCompat)) {
         deviceManager.SetSteamInputCompatible(steamCompat);
     }
