@@ -1,4 +1,4 @@
-//#include "App/Log.h" // currently unused expect for the adaptive trigger part
+#include "App/Log.h"
 #include "GamepadHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/GamepadHaptics.h"
@@ -194,9 +194,6 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             isDualSense = gamepadHaptics->IsDualSense();
     }
 
-    /***
-     * TODO: Add adaptive trigger support later down the line again
-     *
     if (isDualSense) {
         ImGui::Separator();
         ImGui::Text("DualSense Adaptive Triggers");
@@ -353,5 +350,4 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             }
         }
     }
-    */
 }
