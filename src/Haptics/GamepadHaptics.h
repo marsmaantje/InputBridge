@@ -66,6 +66,21 @@ public:
     bool IsReady() const override;
 
     /**
+     * @brief Stop all active haptic effects on this gamepad.
+     *
+     * In addition to the base HapticDevice::StopAll() behaviour (clearing
+     * rumble/constant/periodic/condition effects and their SDL effect IDs),
+     * this also sends an explicit "off" adaptive-trigger effect to both
+     * DualSense triggers. The base implementation only clears the in-memory
+     * m_activeDualSenseTriggers tracking map for UI display purposes - it
+     * never actually tells the controller hardware to release trigger
+     * tension, so a DualSense would otherwise stay physically resisted
+     * after InputBridge closes or a "Stop All Effects" is issued.
+     * No-op on non-DualSense controllers.
+     */
+    void StopAll() override;
+
+    /**
      * @brief Advertise gamepad capabilities: rumble always; adaptive triggers
      *        only when a DualSense is connected.
      */
