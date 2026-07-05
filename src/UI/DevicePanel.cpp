@@ -24,6 +24,8 @@
 
 static constexpr const char* kTag = "DevicePanel";
 
+static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManager);
+
 // ---------------------------------------------------------------------------
 // DrawDeviceSettingsTab
 // ---------------------------------------------------------------------------
@@ -31,34 +33,39 @@ static constexpr const char* kTag = "DevicePanel";
 // hosts the "Infinite-effect keepalive" toggle, which used to live on each
 // Haptic Test tab individually.
 
-static void DrawDeviceSettingsTab(const DeviceState&  dev,
+static void DrawDeviceSettingsTab(DeviceState&         dev,
                                    DeviceManager&      deviceManager,
                                    PreferencesManager& prefs,
                                    const std::string&  guid)
 {
     HapticDevice* haptic = deviceManager.GetHapticDevice(dev.instance_id);
 
+    if (haptic) {
+        // Restore saved preference once when the device first appears.
+        if (!prefs.IsPreferenceApplied(dev.instance_id)) {
+            haptic->EnableKeepalive(prefs.GetDeviceKeepalive(guid));
+        }
+
+        bool keepalive = haptic->IsKeepaliveEnabled();
+        if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
+            deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
+            prefs.SetDeviceKeepalive(guid, keepalive);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Re-uploads active infinite-duration effects every 30 s.\n"
+                "Required for devices that truncate SDL_HAPTIC_INFINITY to ~65 s\n"
+                "(e.g. Thrustmaster T150). Safe to enable on any device."
+            );
+        }
+        ImGui::Spacing();
+    }
+
+    // --- Device visibility (HidHide / evdev grab / IOKit seize) -------------
+    DrawDeviceHideControls(dev, deviceManager);
+
     if (!haptic) {
-        ImGui::TextDisabled("No device-specific settings available.");
-        return;
-    }
-
-    // Restore saved preference once when the device first appears.
-    if (!prefs.IsPreferenceApplied(dev.instance_id)) {
-        haptic->EnableKeepalive(prefs.GetDeviceKeepalive(guid));
-    }
-
-    bool keepalive = haptic->IsKeepaliveEnabled();
-    if (ImGui::Checkbox("Infinite-effect keepalive", &keepalive)) {
-        deviceManager.SetDeviceKeepalive(dev.instance_id, keepalive);
-        prefs.SetDeviceKeepalive(guid, keepalive);
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Re-uploads active infinite-duration effects every 30 s.\n"
-            "Required for devices that truncate SDL_HAPTIC_INFINITY to ~65 s\n"
-            "(e.g. Thrustmaster T150). Safe to enable on any device."
-        );
+        ImGui::TextDisabled("No haptic-specific settings available for this device.");
     }
 }
 
@@ -66,7 +73,7 @@ static void DrawDeviceSettingsTab(const DeviceState&  dev,
 // DrawDeviceVisualizer
 // ---------------------------------------------------------------------------
 
-void DrawDeviceVisualizer(const DeviceState&  dev,
+void DrawDeviceVisualizer(DeviceState&         dev,
                           DeviceManager&      deviceManager,
                           PreferencesManager& prefs,
                           bool                show_named_inputs)
@@ -242,7 +249,7 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
         return;
     }
 
-    // ── Hide toggle ───────────────────────────────────────────────────────
+    // -- Hide toggle -------------------------------------------------------
     bool hidden = dev.hide_from_other_apps;
 
     // Snapshot BEFORE ImGui::Checkbox can modify `hidden`.
@@ -285,14 +292,14 @@ static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManage
         );
     }
 
-    // ── Status label ─────────────────────────────────────────────────────
+    // -- Status label -----------------------------------------------------
     if (hidden) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "(hidden)");
     }
 
 #ifdef _WIN32
-    // ── Steam Input compatibility (Windows / HidHide only) ────────────────
+    // -- Steam Input compatibility (Windows / HidHide only) ----------------
     ImGui::Spacing();
     static bool steamCompat = true; // global preference; persisted separately if needed
     if (ImGui::Checkbox("Keep Steam Input access", &steamCompat)) {
@@ -340,7 +347,7 @@ void DrawDeviceItem(DeviceState&        dev,
 {
     ImGui::PushID(static_cast<int>(dev.instance_id));
 
-    // ── Device icon ───────────────────────────────────────────────────────
+    // -- Device icon -------------------------------------------------------
     // Resolve the Kenney icon for this device before building the label so we
     // know whether to reserve leading space for it.
     const DeviceIcon icon = DeviceIconProvider::GetIcon(dev);
@@ -422,7 +429,7 @@ void DrawDeviceItem(DeviceState&        dev,
                            icon.glyph);
     }
 
-    // ── Battery indicator ─────────────────────────────────────────────────
+    // -- Battery indicator -------------------------------------------------
     const bool hasBattery = (dev.battery_state != SDL_POWERSTATE_UNKNOWN
                              || dev.battery_percent >= 0)
                             && dev.battery_state != SDL_POWERSTATE_NO_BATTERY;
@@ -491,7 +498,7 @@ void DrawDeviceItem(DeviceState&        dev,
     if (header_open) {
         ImGui::Indent();
 
-        // ── Battery detail ────────────────────────────────────────────────
+        // -- Battery detail ------------------------------------------------
         if (hasBattery) {
             auto DrawBatteryRow = [&](const char* label,
                                       SDL_PowerState state, int pct) {
@@ -521,15 +528,6 @@ void DrawDeviceItem(DeviceState&        dev,
                 DrawBatteryRow("Battery:", dev.battery_state, dev.battery_percent);
             }
         }
-
-        // ── Hide controls ─────────────────────────────────────────────────
-        ImGui::Spacing();
-        if (ImGui::CollapsingHeader("Device Visibility")) {
-            ImGui::Indent();
-            DrawDeviceHideControls(dev, deviceManager);
-            ImGui::Unindent();
-        }
-        ImGui::Spacing();
 
         DrawDeviceVisualizer(dev, deviceManager, prefs, show_named_inputs);
         ImGui::Unindent();

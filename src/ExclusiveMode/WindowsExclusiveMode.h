@@ -44,9 +44,6 @@ class WindowsExclusiveMode : public InputExclusiveModeImpl {
 
   private:
     // ── HidHide IOCTL interface ──────────────────────────────────────────
-    // The actual IOCTL codes live as file-local constexprs at the top of
-    // WindowsExclusiveMode.cpp, verified against HidHide's shared contract
-    // header (Shared/HidHideIoctlContract.h in nefarius/HidHide on GitHub).
 
     // Device path of the HidHide control device.
     static constexpr const wchar_t *kHidHideDevice = L"\\\\.\\HidHide";
