@@ -523,7 +523,6 @@ void DrawDeviceItem(DeviceState&        dev,
         }
 
         // ── Hide controls ─────────────────────────────────────────────────
-        /* TODO: fix in future update
         ImGui::Spacing();
         if (ImGui::CollapsingHeader("Device Visibility")) {
             ImGui::Indent();
@@ -531,7 +530,6 @@ void DrawDeviceItem(DeviceState&        dev,
             ImGui::Unindent();
         }
         ImGui::Spacing();
-        */
 
         DrawDeviceVisualizer(dev, deviceManager, prefs, show_named_inputs);
         ImGui::Unindent();

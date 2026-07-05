@@ -44,19 +44,12 @@ class WindowsExclusiveMode : public InputExclusiveModeImpl {
 
   private:
     // ── HidHide IOCTL interface ──────────────────────────────────────────
+    // The actual IOCTL codes live as file-local constexprs at the top of
+    // WindowsExclusiveMode.cpp, verified against HidHide's shared contract
+    // header (Shared/HidHideIoctlContract.h in nefarius/HidHide on GitHub).
 
     // Device path of the HidHide control device.
     static constexpr const wchar_t *kHidHideDevice = L"\\\\.\\HidHide";
-
-    // IOCTL codes  (FILE_DEVICE_UNKNOWN = 0x22, METHOD_BUFFERED = 0,
-    //               FILE_READ_DATA | FILE_WRITE_DATA = 0x0003)
-    // CTL_CODE(DeviceType, Function, Method, Access)
-    static constexpr DWORD IOCTL_GET_BLACKLIST = 0x220404; // Function 0x101
-    static constexpr DWORD IOCTL_SET_BLACKLIST = 0x220408; // Function 0x102
-    static constexpr DWORD IOCTL_GET_WHITELIST = 0x220410; // Function 0x104
-    static constexpr DWORD IOCTL_SET_WHITELIST = 0x220414; // Function 0x105
-    static constexpr DWORD IOCTL_GET_ACTIVE = 0x220400;    // Function 0x100
-    static constexpr DWORD IOCTL_SET_ACTIVE = 0x220404;    // same as GET
 
     // ── helpers ─────────────────────────────────────────────────────────
 
@@ -85,6 +78,13 @@ class WindowsExclusiveMode : public InputExclusiveModeImpl {
 
     // Return the path to steam.exe if Steam is installed, otherwise empty.
     static std::wstring FindSteamExePath();
+
+    // Convert a normal Win32 path (e.g. "C:\Program Files\InputBridge\InputBridge.exe")
+    // into the NT-style "full image name" HidHide's whitelist actually matches against
+    // (e.g. "\Device\HarddiskVolume3\Program Files\InputBridge\InputBridge.exe").
+    // Returns the input unchanged if conversion fails (e.g. unusual mount points),
+    // which keeps behavior safe rather than silently whitelisting nothing.
+    static std::wstring ToFullImageName(const std::wstring &win32Path);
 
     bool EnsureWhitelisted(const std::wstring &own, const std::wstring &steam, bool steamCompat, bool &selfWhitelistedFlag);
 
