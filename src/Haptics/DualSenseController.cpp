@@ -47,7 +47,10 @@ void DualSense::OutputState::Reset() {
 
 InputBridge::Result<bool, InputBridge::HapticError> DualSenseController::Init() {
     m_connectionTypeDetected = false;
-    m_outputState.Reset();
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+        m_outputState.Reset();
+    }
     
     // Call base class init
     auto result = HapticDevice::Init();
@@ -169,11 +172,14 @@ int DualSenseController::SetTriggerEffect(const std::string& trigger,
     
     // Apply effect to appropriate trigger(s)
     bool success = true;
-    if (updateLeft) {
-        success &= ApplyTriggerEffect(m_outputState.leftTriggerEffect.data(), effectType, params);
-    }
-    if (updateRight) {
-        success &= ApplyTriggerEffect(m_outputState.rightTriggerEffect.data(), effectType, params);
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+        if (updateLeft) {
+            success &= ApplyTriggerEffect(m_outputState.leftTriggerEffect.data(), effectType, params);
+        }
+        if (updateRight) {
+            success &= ApplyTriggerEffect(m_outputState.rightTriggerEffect.data(), effectType, params);
+        }
     }
     
     if (!success) {
@@ -250,32 +256,40 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
 }
 
 void DualSenseController::DisableTriggerEffects() {
-    ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.leftTriggerEffect.data(), 0);
-    ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.rightTriggerEffect.data(), 0);
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+        ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.leftTriggerEffect.data(), 0);
+        ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.rightTriggerEffect.data(), 0);
+    }
     ApplyOutputState();
 }
 
 // ==================== LED Control ====================
 
 void DualSenseController::SetLEDColor(const DualSense::RGBColor& color) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.ledColor = color;
 }
 
 void DualSenseController::SetLEDBrightness(uint8_t brightness) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.ledBrightness = brightness;
 }
 
 void DualSenseController::SetPlayerLEDs(uint8_t playerMask) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.playerLEDs = playerMask & 0x1F;  // 5-bit mask
 }
 
 void DualSenseController::SetMuteLED(uint8_t state) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.muteLED = state;
 }
 
 // ==================== Rumble Motors ====================
 
 void DualSenseController::SetRumble(uint8_t leftIntensity, uint8_t rightIntensity) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.leftRumble = leftIntensity;
     m_outputState.rightRumble = rightIntensity;
 }
@@ -300,54 +314,60 @@ bool DualSenseController::SendOutput() {
     // Bluetooth, so one buffer works for both connection types.
     std::array<uint8_t, EFFECTS_PAYLOAD_SIZE> data{};
 
-    // ucEnableBits1 (offset 0): rumble + which trigger(s) we're driving.
-    // The MODIFY_RIGHT/LEFT_TRIGGER bits are what actually tell the firmware
-    // to apply rgucRightTriggerEffect/rgucLeftTriggerEffect - without them the
-    // trigger effect bytes are silently ignored.
-    uint8_t enableBits1 = ENABLE1_MODIFY_RIGHT_TRIGGER | ENABLE1_MODIFY_LEFT_TRIGGER;
-    if (m_outputState.leftRumble != 0 || m_outputState.rightRumble != 0) {
-        enableBits1 |= ENABLE1_RUMBLE_EMULATION | ENABLE1_DISABLE_AUDIO_HAPTICS;
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+
+        // ucEnableBits1 (offset 0): rumble + which trigger(s) we're driving.
+        // The MODIFY_RIGHT/LEFT_TRIGGER bits are what actually tell the firmware
+        // to apply rgucRightTriggerEffect/rgucLeftTriggerEffect - without them the
+        // trigger effect bytes are silently ignored.
+        uint8_t enableBits1 = ENABLE1_MODIFY_RIGHT_TRIGGER | ENABLE1_MODIFY_LEFT_TRIGGER;
+        if (m_outputState.leftRumble != 0 || m_outputState.rightRumble != 0) {
+            enableBits1 |= ENABLE1_RUMBLE_EMULATION | ENABLE1_DISABLE_AUDIO_HAPTICS;
+        }
+        data[0] = enableBits1;
+
+        // ucEnableBits2 (offset 1): LED color / player lights.
+        uint8_t enableBits2 = 0;
+        const bool ledSet = (m_outputState.ledColor.red != 0 ||
+                              m_outputState.ledColor.green != 0 ||
+                              m_outputState.ledColor.blue != 0);
+        if (ledSet) {
+            enableBits2 |= ENABLE2_LED_COLOR;
+        }
+        if (m_outputState.playerLEDs != 0) {
+            enableBits2 |= ENABLE2_PLAYER_LIGHTS;
+        }
+        data[1] = enableBits2;
+
+        // ucRumbleRight / ucRumbleLeft (offsets 2-3)
+        data[2] = m_outputState.rightRumble;
+        data[3] = m_outputState.leftRumble;
+
+        // ucMicLightMode (offset 8) - reuse muteLED state for the mic/mute light
+        data[8] = m_outputState.muteLED;
+
+        // rgucRightTriggerEffect / rgucLeftTriggerEffect (offsets 10 / 21)
+        std::memcpy(&data[RIGHT_TRIGGER_OFFSET], m_outputState.rightTriggerEffect.data(), 11);
+        std::memcpy(&data[LEFT_TRIGGER_OFFSET], m_outputState.leftTriggerEffect.data(), 11);
+
+        // ucLedBrightness (offset 42), ucPadLights (offset 43),
+        // ucLedRed/Green/Blue (offsets 44-46)
+        data[LED_BRIGHTNESS_OFFSET] = m_outputState.ledBrightness;
+        data[PAD_LIGHTS_OFFSET] = m_outputState.playerLEDs;
+        data[LED_RED_OFFSET] = m_outputState.ledColor.red;
+        data[LED_GREEN_OFFSET] = m_outputState.ledColor.green;
+        data[LED_BLUE_OFFSET] = m_outputState.ledColor.blue;
     }
-    data[0] = enableBits1;
-
-    // ucEnableBits2 (offset 1): LED color / player lights.
-    uint8_t enableBits2 = 0;
-    const bool ledSet = (m_outputState.ledColor.red != 0 ||
-                          m_outputState.ledColor.green != 0 ||
-                          m_outputState.ledColor.blue != 0);
-    if (ledSet) {
-        enableBits2 |= ENABLE2_LED_COLOR;
-    }
-    if (m_outputState.playerLEDs != 0) {
-        enableBits2 |= ENABLE2_PLAYER_LIGHTS;
-    }
-    data[1] = enableBits2;
-
-    // ucRumbleRight / ucRumbleLeft (offsets 2-3)
-    data[2] = m_outputState.rightRumble;
-    data[3] = m_outputState.leftRumble;
-
-    // ucMicLightMode (offset 8) - reuse muteLED state for the mic/mute light
-    data[8] = m_outputState.muteLED;
-
-    // rgucRightTriggerEffect / rgucLeftTriggerEffect (offsets 10 / 21)
-    std::memcpy(&data[RIGHT_TRIGGER_OFFSET], m_outputState.rightTriggerEffect.data(), 11);
-    std::memcpy(&data[LEFT_TRIGGER_OFFSET], m_outputState.leftTriggerEffect.data(), 11);
-
-    // ucLedBrightness (offset 42), ucPadLights (offset 43),
-    // ucLedRed/Green/Blue (offsets 44-46)
-    data[LED_BRIGHTNESS_OFFSET] = m_outputState.ledBrightness;
-    data[PAD_LIGHTS_OFFSET] = m_outputState.playerLEDs;
-    data[LED_RED_OFFSET] = m_outputState.ledColor.red;
-    data[LED_GREEN_OFFSET] = m_outputState.ledColor.green;
-    data[LED_BLUE_OFFSET] = m_outputState.ledColor.blue;
+    // Lock released - everything below reads only the local `data` copy, not
+    // m_outputState, so it can't race with a subsequent writer.
 
     LOG_DEBUG(kTag, "Sending effects payload, size=%zu (connection=%s)", data.size(),
               GetConnectionType() == DualSense::ConnectionType::USB ? "USB" : "Bluetooth");
     LOG_DEBUG(kTag, "  EnableBits: [0]=0x%02X [1]=0x%02X", data[0], data[1]);
     LOG_DEBUG(kTag, "  Rumble: L=%d R=%d", data[3], data[2]);
     LOG_DEBUG(kTag, "  Triggers: R[0]=0x%02X L[0]=0x%02X",
-           m_outputState.rightTriggerEffect[0], m_outputState.leftTriggerEffect[0]);
+           data[RIGHT_TRIGGER_OFFSET], data[LEFT_TRIGGER_OFFSET]);
 
     if (!SDL_SendJoystickEffect(m_joystick, data.data(), data.size())) {
         LOG_WARN(kTag, "DualSense: Send failed - %s", SDL_GetError());

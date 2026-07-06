@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <array>
 #include <map>
+#include <mutex>
 #include <string>
 
 /**
@@ -248,6 +249,12 @@ private:
     // ==================== State ====================
     
     DualSense::OutputState m_outputState;
+    // Guards m_outputState: writers (SetTriggerEffect, SetRumble, SetLED*,
+    // SetMuteLED, SetPlayerLEDs, DisableTriggerEffects) can run on whatever
+    // thread calls them (OSC/WebSocket/UI), while SendOutput() reads it from
+    // the async worker thread queued via RunAsync(). Without this, a read
+    // and a write can interleave mid-struct, producing a torn HID report.
+    mutable std::mutex m_outputStateMutex;
     DualSense::ConnectionType m_connectionType;
     mutable bool m_connectionTypeDetected;
 
