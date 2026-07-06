@@ -13,6 +13,13 @@
 
 static constexpr const char* kTag = "ProtocolRegistry";
 
+// Bump this whenever WriteDefaultBuiltinCatalog()'s field list changes (fields
+// added/removed/renamed). LoadBuiltinCatalog() compares it against the
+// "_version" stored in the cached builtin_fields.json and regenerates the
+// file automatically on a mismatch, so users don't have to know to delete a
+// stale cache by hand after an update.
+static constexpr int kBuiltinCatalogVersion = 1;
+
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -809,7 +816,32 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     std::string path = GetProtocolsDir() + "builtin_fields.json";
     std::ifstream ifs(path);
     if (!ifs.is_open()) {
+        LOG_INFO(kTag, "builtin_fields.json not found - writing defaults (schema v%d)", kBuiltinCatalogVersion);
         WriteDefaultBuiltinCatalog();
+        ifs.open(path);
+        if (!ifs.is_open()) return;
+    } else {
+        // Peek at "_version" before doing the real parse below. A missing or
+        // mismatched version means this cache predates (or postdates) the
+        // built-in field list currently compiled into the program - most
+        // commonly seen after an update that added/removed/renamed fields.
+        // Regenerate rather than silently running with a stale/foreign list.
+        int cachedVersion = -1;
+        try {
+            json probe = json::parse(ifs);
+            cachedVersion = probe.value("_version", -1);
+        } catch (const std::exception&) {
+            // Unparseable - treat the same as a version mismatch below.
+        }
+
+        if (cachedVersion != kBuiltinCatalogVersion) {
+            LOG_WARN(kTag,
+                "builtin_fields.json schema mismatch (cached v%d, program expects v%d) - "
+                "regenerating from current defaults", cachedVersion, kBuiltinCatalogVersion);
+            WriteDefaultBuiltinCatalog();
+        }
+
+        ifs.close();
         ifs.open(path);
         if (!ifs.is_open()) return;
     }
@@ -851,7 +883,9 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
 
 void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     json j;
-    j["_comment"] = "Default built-in fields. Delete this file to regenerate defaults.";
+    j["_comment"] = "Default built-in fields. Auto-regenerated whenever InputBridge's "
+                    "built-in field list changes; also regenerated if this file is deleted.";
+    j["_version"] = kBuiltinCatalogVersion;
 
     json outArr = json::array();
     auto addOut = [&](const char* id, const char* label, const char* cat, FieldType type, const char* oscPath, const char* wsKey) {
