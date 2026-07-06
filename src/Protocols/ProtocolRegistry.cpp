@@ -13,13 +13,6 @@
 
 static constexpr const char* kTag = "ProtocolRegistry";
 
-// Bump this whenever WriteDefaultBuiltinCatalog()'s field list changes (fields
-// added/removed/renamed). LoadBuiltinCatalog() compares it against the
-// "_version" stored in the cached builtin_fields.json and regenerates the
-// file automatically on a mismatch, so users don't have to know to delete a
-// stale cache by hand after an update.
-static constexpr int kBuiltinCatalogVersion = 1;
-
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -234,8 +227,8 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
             fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
         } else if (!desc && f.hasInlineDef) {
             // Catalog entry absent (e.g. field not yet persisted) but the
-            // ProtocolField still carries its own inline metadata - use it so
-            // the exported file stays self-describing.
+            // ProtocolField still carries its own inline metadata,
+            // use it so the exported file stays self-describing.
             fj["label"]    = f.inlineLabel;
             fj["category"] = f.inlineCategory;
             fj["type"]     = (f.inlineType == FieldType::DigitalButton) ? "digital" : "analog";
@@ -328,7 +321,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                         fd.category       = f.inlineCategory;
                         fd.type           = f.inlineType;
                     } else {
-                        // No inline metadata - synthesise sensible defaults so
+                        // No inline metadata, synthesise sensible defaults so
                         // the field at least appears in the editor.
                         fd.label    = f.fieldId;
                         fd.category = "Custom (imported)";
@@ -407,7 +400,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     }
     j["fields"] = fieldsArr;
 
-    // Per-protocol exclusions - only write the keys when non-empty so that
+    // Per-protocol exclusions, only write the keys when non-empty so that
     // the vast majority of definition files stay clean.
     if (!def.excludedFieldIds.empty()) {
         json arr = json::array();
@@ -495,10 +488,10 @@ static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
         }
     };
 
-    // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
+    // Seed top-level JSON files (input_fields.json, …).
     seedDir(srcDir, prefProtocolsDir);
 
-    // Seed built-in protocol definitions - these populate the OSC/WS output
+    // Seed built-in protocol definitions, these populate the OSC/WS output
     // dropdown via LoadDefinitionFiles(). This was the missing step that caused
     // the dropdown to appear empty on first run under AppImage.
     seedDir(srcDefs, dstDefs);
@@ -537,7 +530,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
                 fd.defaultWsKey   = item.value("wsKey",    fd.id);
                 fd.isBuiltIn      = false;
 
-                // Skip if already present in either catalog - a field that
+                // Skip if already present in either catalog, a field that
                 // belongs in m_inputFields (e.g. a built-in sensor or button)
                 // must not be duplicated into m_outputFields regardless of
                 // what was written to input_fields.json by an older code path.
@@ -721,7 +714,7 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                         for (const auto& fd : m_inputFields)  if (fd.id == f.fieldId) count++;
 
                         if (count > 1) {
-                            // More than one entry for this ID - keep only the
+                            // More than one entry for this ID, keep only the
                             // first real (non-stale) one and remove the rest.
                             bool kept = false;
                             auto dedup = [&](std::vector<FieldDescriptor>& cat) {
@@ -813,90 +806,16 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     m_outputFields.clear();
     m_inputFields.clear();
 
-    std::string path = GetProtocolsDir() + "builtin_fields.json";
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) {
-        LOG_INFO(kTag, "builtin_fields.json not found - writing defaults (schema v%d)", kBuiltinCatalogVersion);
-        WriteDefaultBuiltinCatalog();
-        ifs.open(path);
-        if (!ifs.is_open()) return;
-    } else {
-        // Peek at "_version" before doing the real parse below. A missing or
-        // mismatched version means this cache predates (or postdates) the
-        // built-in field list currently compiled into the program - most
-        // commonly seen after an update that added/removed/renamed fields.
-        // Regenerate rather than silently running with a stale/foreign list.
-        int cachedVersion = -1;
-        try {
-            json probe = json::parse(ifs);
-            cachedVersion = probe.value("_version", -1);
-        } catch (const std::exception&) {
-            // Unparseable - treat the same as a version mismatch below.
-        }
-
-        if (cachedVersion != kBuiltinCatalogVersion) {
-            LOG_WARN(kTag,
-                "builtin_fields.json schema mismatch (cached v%d, program expects v%d) - "
-                "regenerating from current defaults", cachedVersion, kBuiltinCatalogVersion);
-            WriteDefaultBuiltinCatalog();
-        }
-
-        ifs.close();
-        ifs.open(path);
-        if (!ifs.is_open()) return;
-    }
-
-    try {
-        json j = json::parse(ifs);
-        if (j.contains("output_fields") && j["output_fields"].is_array()) {
-            for (const auto& item : j["output_fields"]) {
-                FieldDescriptor fd;
-                fd.id             = item.value("id",       "");
-                fd.label          = item.value("label",    fd.id);
-                fd.category       = item.value("category", "Custom");
-                std::string type  = item.value("type",     "analog");
-                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
-                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
-                fd.defaultWsKey   = item.value("wsKey",    fd.id);
-                fd.isBuiltIn      = true;
-                if (!fd.id.empty()) m_outputFields.push_back(fd);
-            }
-        }
-        if (j.contains("input_fields") && j["input_fields"].is_array()) {
-            for (const auto& item : j["input_fields"]) {
-                FieldDescriptor fd;
-                fd.id             = item.value("id",       "");
-                fd.label          = item.value("label",    fd.id);
-                fd.category       = item.value("category", "Haptic");
-                std::string type  = item.value("type",     "analog");
-                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
-                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
-                fd.defaultWsKey   = item.value("wsKey",    fd.id);
-                fd.isBuiltIn      = true;
-                if (!fd.id.empty()) m_inputFields.push_back(fd);
-            }
-        }
-    } catch (const std::exception& e) {
-    LOG_ERROR(kTag, "Failed to parse builtin_fields.json: %s", e.what());
-    }
-}
-
-void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
-    json j;
-    j["_comment"] = "Default built-in fields. Auto-regenerated whenever InputBridge's "
-                    "built-in field list changes; also regenerated if this file is deleted.";
-    j["_version"] = kBuiltinCatalogVersion;
-
-    json outArr = json::array();
     auto addOut = [&](const char* id, const char* label, const char* cat, FieldType type, const char* oscPath, const char* wsKey) {
-        json item;
-        item["id"] = id;
-        item["label"] = label;
-        item["category"] = cat;
-        item["type"] = (type == FieldType::DigitalButton) ? "digital" : "analog";
-        item["oscPath"] = oscPath;
-        item["wsKey"] = wsKey;
-        outArr.push_back(item);
+        FieldDescriptor fd;
+        fd.id             = id;
+        fd.label          = label;
+        fd.category       = cat;
+        fd.type           = type;
+        fd.defaultOscPath = oscPath;
+        fd.defaultWsKey   = wsKey;
+        fd.isBuiltIn      = true;
+        m_outputFields.push_back(fd);
     };
 
     // -- Analog axes ----------------------------------------------------------
@@ -947,7 +866,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_weapon_main", "Weapon Main",     "Digital: Other",  FieldType::DigitalButton, "/input/weapon_main", "weapon_main");
     addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
     addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
-
+    
     // -- Sensors: Gyroscope ---------------------------------------------------
     // Available on DualSense and Steam Controller.  Values normalised to [-1, 1].
     addOut("sensor_gyro_x",   "Gyro X (pitch)",    "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/x",         "gyro_x");
@@ -967,21 +886,18 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("sensor_touch2_x",    "Touch 2 X (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/x",       "touch2_x");
     addOut("sensor_touch2_y",    "Touch 2 Y (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/y",       "touch2_y");
     addOut("sensor_touch2_p",    "Touch 2 Pressure",    "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/pressure","touch2_pressure");
-    addOut("sensor_touch_active","Touch Active",         "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
+    addOut("sensor_touch_active","Touch Active",        "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
 
-
-    j["output_fields"] = outArr;
-
-    json inArr = json::array();
     auto addIn = [&](const char* id, const char* label, const char* cat, const char* oscPath, const char* wsKey) {
-        json item;
-        item["id"] = id;
-        item["label"] = label;
-        item["category"] = cat;
-        item["type"] = "analog";
-        item["oscPath"] = oscPath;
-        item["wsKey"] = wsKey;
-        inArr.push_back(item);
+        FieldDescriptor fd;
+        fd.id             = id;
+        fd.label          = label;
+        fd.category       = cat;
+        fd.type           = FieldType::AnalogAxis; // Input fields are currently all analog for haptics
+        fd.defaultOscPath = oscPath;
+        fd.defaultWsKey   = wsKey;
+        fd.isBuiltIn      = true;
+        m_inputFields.push_back(fd);
     };
 
     // -- Haptic feedback fields (received from client) ---------------------
@@ -992,7 +908,11 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addIn("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
     // -- Adaptive Trigger (DualSense) ---------------------------------------
     // One field per trigger side x effect, since each combination is its
-    // own OSC address/arg signature rather than a single message shape:
+    // own OSC address/arg signature rather than a single message shape.
+    // Addresses use the same flat /haptics/{name} convention as
+    // the Haptic fields above (rumble, force, periodic, condition, gain)
+    // rather than nesting left/right and the effect name as separate path
+    // segments:
     //   feedback:  iii     (deviceId, position, strength)
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
@@ -1001,43 +921,37 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
     //   off:       (no args)
     addIn("ds_trigger_left_feedback",   "Left Trigger: Feedback",   "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/left/feedback",   "dualsense_trigger_left_feedback");
+          "/haptics/dualsense/trigger/left/feedback",   "dualsense_trigger_left_feedback");
     addIn("ds_trigger_right_feedback",  "Right Trigger: Feedback",  "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/right/feedback",  "dualsense_trigger_right_feedback");
+          "/haptics/dualsense/trigger/right/feedback",  "dualsense_trigger_right_feedback");
     addIn("ds_trigger_left_weapon",     "Left Trigger: Weapon",     "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/left/weapon",     "dualsense_trigger_left_weapon");
+          "/haptics/dualsense/trigger/left/weapon",     "dualsense_trigger_left_weapon");
     addIn("ds_trigger_right_weapon",    "Right Trigger: Weapon",    "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/right/weapon",    "dualsense_trigger_right_weapon");
+          "/haptics/dualsense/trigger/right/weapon",    "dualsense_trigger_right_weapon");
     addIn("ds_trigger_left_vibration",  "Left Trigger: Vibration",  "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/left/vibration",  "dualsense_trigger_left_vibration");
+          "/haptics/dualsense/trigger/left/vibration",  "dualsense_trigger_left_vibration");
     addIn("ds_trigger_right_vibration", "Right Trigger: Vibration", "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
+          "/haptics/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
     addIn("ds_trigger_left_bow",        "Left Trigger: Bow",        "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
+          "/haptics/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
     addIn("ds_trigger_right_bow",       "Right Trigger: Bow",       "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
+          "/haptics/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
     addIn("ds_trigger_left_galloping",  "Left Trigger: Galloping",  "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");
+          "/haptics/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");
     addIn("ds_trigger_right_galloping", "Right Trigger: Galloping", "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/right/galloping", "dualsense_trigger_right_galloping");
+          "/haptics/dualsense/trigger/right/galloping", "dualsense_trigger_right_galloping");
     addIn("ds_trigger_left_machine",    "Left Trigger: Machine",    "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/left/machine",    "dualsense_trigger_left_machine");
+          "/haptics/dualsense/trigger/left/machine",    "dualsense_trigger_left_machine");
     addIn("ds_trigger_right_machine",   "Right Trigger: Machine",   "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/right/machine",   "dualsense_trigger_right_machine");
+          "/haptics/dualsense/trigger/right/machine",   "dualsense_trigger_right_machine");
     addIn("ds_trigger_left_off",        "Left Trigger: Off",        "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/left/off",        "dualsense_trigger_left_off");
+          "/haptics/dualsense/trigger/left/off",        "dualsense_trigger_left_off");
     addIn("ds_trigger_right_off",       "Right Trigger: Off",       "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger/right/off",       "dualsense_trigger_right_off");
+          "/haptics/dualsense/trigger/right/off",       "dualsense_trigger_right_off");
 
     // -- Rumble (simple gamepad) -------------------------------------------
     addIn("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");
     addIn("rumble_right", "Rumble Right Motor", "Rumble", "/rumble/right", "rumble_right");
-
-    j["input_fields"] = inArr;
-
-    std::string path = GetProtocolsDir() + "builtin_fields.json";
-    std::ofstream ofs(path);
-    if (ofs) ofs << j.dump(4);
 }
 
 // --- ID generation -----------------------------------------------------------

@@ -54,6 +54,80 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     std::string_view path_sv(path);
     bool handled = false;
 
+    // DualSense adaptive trigger senders - one per effect shape, parameterized
+    // by trigger side ("left"/"right"). Defined here so they're available to
+    // the flat per-side/per-effect address checks further down.
+    auto sendFeedback = [&](const char* trig) {
+        if (std::strcmp(types, "iii") != 0 || argc != 3) return;
+        std::map<std::string, int> params;
+        params["position"] = ClampDSPosition(argv[1]->i, path_sv);
+        params["strength"] = ClampDSStrength(argv[2]->i, path_sv);
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "feedback", params);
+        });
+    };
+    auto sendWeapon = [&](const char* trig) {
+        if (std::strcmp(types, "iiii") != 0 || argc != 4) return;
+        std::map<std::string, int> params;
+        params["start_position"] = ClampDSStartPos(argv[1]->i, path_sv);
+        params["end_position"]   = ClampDSEndPos(argv[2]->i,   path_sv);
+        params["strength"]       = ClampDSStrength(argv[3]->i, path_sv);
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "weapon", params);
+        });
+    };
+    auto sendVibration = [&](const char* trig) {
+        if (std::strcmp(types, "iiii") != 0 || argc != 4) return;
+        std::map<std::string, int> params;
+        params["position"]  = ClampDSPosition(argv[1]->i,  path_sv);
+        params["amplitude"] = ClampDSAmplitude(argv[2]->i, path_sv);
+        params["frequency"] = ClampDSFrequency(argv[3]->i, path_sv);
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "vibration", params);
+        });
+    };
+    auto sendBow = [&](const char* trig) {
+        if (std::strcmp(types, "iiiii") != 0 || argc != 5) return;
+        std::map<std::string, int> params;
+        params["start_position"] = ClampDSBowPos(argv[1]->i,    path_sv);
+        params["end_position"]   = ClampDSBowPos(argv[2]->i,    path_sv);
+        params["strength"]       = ClampDSStrength(argv[3]->i,  path_sv);
+        params["snap_force"]     = ClampDSSnapForce(argv[4]->i, path_sv);
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "bow", params);
+        });
+    };
+    auto sendGalloping = [&](const char* trig) {
+        if (std::strcmp(types, "iiiiii") != 0 || argc != 6) return;
+        std::map<std::string, int> params;
+        params["start_position"] = ClampDSGallopingPos(argv[1]->i, path_sv);
+        params["end_position"]   = ClampDSGallopingPos(argv[2]->i, path_sv);
+        params["first_foot"]     = ClampDSFirstFoot(argv[3]->i,    path_sv);
+        params["second_foot"]    = ClampDSSecondFoot(argv[4]->i,   path_sv);
+        params["frequency"]      = ClampDSFrequency(argv[5]->i,    path_sv);
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "galloping", params);
+        });
+    };
+    auto sendMachine = [&](const char* trig) {
+        if (std::strcmp(types, "iiiiiii") != 0 || argc != 7) return;
+        std::map<std::string, int> params;
+        params["start_position"] = ClampDSMachinePos(argv[1]->i,  path_sv);
+        params["end_position"]   = ClampDSMachinePos(argv[2]->i,  path_sv);
+        params["amplitude_a"]    = ClampDSAmplitudeAB(argv[3]->i, path_sv);
+        params["amplitude_b"]    = ClampDSAmplitudeAB(argv[4]->i, path_sv);
+        params["frequency"]      = ClampDSFrequency(argv[5]->i,   path_sv);
+        params["period"]         = ClampDSPeriod(argv[6]->i,      path_sv);
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "machine", params);
+        });
+    };
+    auto sendOff = [&](const char* trig) {
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "off", {});
+        });
+    };
+
     // /inputbridge/haptics/rumble  iiffi  (deviceId, slot, low_freq, high_freq, duration_ms)
     if (path_sv == "/inputbridge/haptics/rumble" && std::strcmp(types, "iiffi") == 0 && argc == 5) {
         handled = true;
@@ -168,8 +242,10 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
             wheel->SetGain(gain);
         });
     }
-    // DualSense Trigger Effects
-    // /inputbridge/haptics/dualsense/trigger/{left|right}/{feedback|weapon|vibration|bow|galloping|machine|off}
+    // DualSense Trigger Effects, addresses follow the same flat
+    // single-segment convention as the other /inputbridge/haptics/{name}
+    // handlers above, rather than nesting left/right and the effect name
+    // as separate path segments.
     //   feedback:  iii     (deviceId, position, strength)
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
@@ -177,57 +253,20 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
     //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
     //   off:       (no args required)
-    else if (path_sv.find("/inputbridge/haptics/dualsense/trigger/") != std::string_view::npos) {
-        handled = true;
-        DispatchHapticCommand<GamepadHaptics>([&](GamepadHaptics* gamepad) {
-            std::string trigger = (path_sv.find("/left/") != std::string_view::npos) ? "left" : "right";
-            std::string effect = "off";
-            std::map<std::string, int> params;
-
-            if (path_sv.ends_with("/feedback") && std::strcmp(types, "iii") == 0 && argc == 3) {
-                effect = "feedback";
-                params["position"] = ClampDSPosition(argv[1]->i, path_sv);
-                params["strength"] = ClampDSStrength(argv[2]->i, path_sv);
-            } else if (path_sv.ends_with("/weapon") && std::strcmp(types, "iiii") == 0 && argc == 4) {
-                effect = "weapon";
-                params["start_position"] = ClampDSStartPos(argv[1]->i, path_sv);
-                params["end_position"]   = ClampDSEndPos(argv[2]->i,   path_sv);
-                params["strength"]       = ClampDSStrength(argv[3]->i, path_sv);
-            } else if (path_sv.ends_with("/vibration") && std::strcmp(types, "iiii") == 0 && argc == 4) {
-                effect = "vibration";
-                params["position"]  = ClampDSPosition(argv[1]->i,  path_sv);
-                params["amplitude"] = ClampDSAmplitude(argv[2]->i, path_sv);
-                params["frequency"] = ClampDSFrequency(argv[3]->i, path_sv);
-            } else if (path_sv.ends_with("/bow") && std::strcmp(types, "iiiii") == 0 && argc == 5) {
-                effect = "bow";
-                params["start_position"] = ClampDSBowPos(argv[1]->i,     path_sv);
-                params["end_position"]   = ClampDSBowPos(argv[2]->i,     path_sv);
-                params["strength"]       = ClampDSStrength(argv[3]->i,   path_sv);
-                params["snap_force"]     = ClampDSSnapForce(argv[4]->i,  path_sv);
-            } else if (path_sv.ends_with("/galloping") && std::strcmp(types, "iiiiii") == 0 && argc == 6) {
-                effect = "galloping";
-                params["start_position"] = ClampDSGallopingPos(argv[1]->i, path_sv);
-                params["end_position"]   = ClampDSGallopingPos(argv[2]->i, path_sv);
-                params["first_foot"]     = ClampDSFirstFoot(argv[3]->i,   path_sv);
-                params["second_foot"]    = ClampDSSecondFoot(argv[4]->i,  path_sv);
-                params["frequency"]      = ClampDSFrequency(argv[5]->i,   path_sv);
-            } else if (path_sv.ends_with("/machine") && std::strcmp(types, "iiiiiii") == 0 && argc == 7) {
-                effect = "machine";
-                params["start_position"] = ClampDSMachinePos(argv[1]->i,  path_sv);
-                params["end_position"]   = ClampDSMachinePos(argv[2]->i,  path_sv);
-                params["amplitude_a"]    = ClampDSAmplitudeAB(argv[3]->i, path_sv);
-                params["amplitude_b"]    = ClampDSAmplitudeAB(argv[4]->i, path_sv);
-                params["frequency"]      = ClampDSFrequency(argv[5]->i,   path_sv);
-                params["period"]         = ClampDSPeriod(argv[6]->i,      path_sv);
-            } else if (path_sv.ends_with("/off")) {
-                effect = "off";
-            }
-
-            if (effect != "off" || path_sv.ends_with("/off")) {
-                gamepad->SendDualSenseTrigger(trigger.c_str(), effect.c_str(), params);
-            }
-        });
-    }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_feedback")   { handled = true; sendFeedback("left"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_feedback")  { handled = true; sendFeedback("right"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_weapon")     { handled = true; sendWeapon("left"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_weapon")    { handled = true; sendWeapon("right"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_vibration")  { handled = true; sendVibration("left"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_vibration") { handled = true; sendVibration("right"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_bow")        { handled = true; sendBow("left"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_bow")       { handled = true; sendBow("right"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_galloping")  { handled = true; sendGalloping("left"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_galloping") { handled = true; sendGalloping("right"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_machine")    { handled = true; sendMachine("left"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_machine")   { handled = true; sendMachine("right"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_off")        { handled = true; sendOff("left"); }
+    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_off")       { handled = true; sendOff("right"); }
     // /inputbridge/wheel/led_rpm  f  (rpm_percent 0.0–1.0)
     else if (path_sv == "/inputbridge/wheel/led_rpm" && std::strcmp(types, "f") == 0 && argc == 1) {
         handled = true;
