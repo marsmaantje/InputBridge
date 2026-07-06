@@ -93,6 +93,16 @@ private:
     void WriteDefaultFieldCatalog();
     void LoadBuiltinCatalog();
     void WriteDefaultBuiltinCatalog();
+    // serialises current m_outputFields/m_inputFields to builtin_fields.json
+    void WriteBuiltinCatalogToDisk();
+
+    // Canonical, in-code list of built-in fields. Used both to seed a fresh
+    // builtin_fields.json for new installs and to reconcile an existing file
+    // (LoadBuiltinCatalog merges in any built-in id present here but missing
+    // from the on-disk file, so shipping a new built-in field actually
+    // reaches users who already have a builtin_fields.json on disk).
+    static void BuildDefaultCatalog(std::vector<FieldDescriptor>& outFields,
+                                    std::vector<FieldDescriptor>& inFields);
 
     static std::string GenerateId();
 

@@ -23,6 +23,7 @@ namespace {
     const char* const kEffectConstant  = "constant";
     const char* const kEffectPeriodic  = "periodic";
     const char* const kEffectCondition = "condition";
+    const char* const kEffectDualSenseTrigger = "dualsense_trigger";
 
     // Rumble params
     const char* const kRumbleLow      = "low";
@@ -54,6 +55,7 @@ namespace {
     const char* const kTrigger        = "trigger";
     const char* const kEffectType     = "effect_type";
     const char* const kDSPosition     = "position";
+    const char* const kDSStartPosition = "start_position";
     const char* const kDSEndPosition  = "end_position";
     const char* const kDSAmplitude    = "amplitude";
     const char* const kDSFrequency    = "frequency";
@@ -162,7 +164,11 @@ namespace {
     void dispatchDualSenseTrigger(const nlohmann::json& data, const std::string& trigger,
                                    const std::string& effect_type, int device, OutputMapper* mapper)
     {
-        int position     = data.value(kDSPosition,      0);
+        // "position" is used by feedback/vibration; weapon/bow/galloping/machine
+        // use "start_position" instead (see OSCBaseProtocol's DualSense docs).
+        // Prefer start_position when present so both naming conventions work.
+        int position     = data.contains(kDSStartPosition) ? data.value(kDSStartPosition, 0)
+                                                           : data.value(kDSPosition, 0);
         int strength     = data.value(kConstantStrength, 0);
         int end_position = data.value(kDSEndPosition,   0);
         int amplitude    = data.value(kDSAmplitude,     0);
@@ -346,7 +352,14 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
             std::string effect = json.value(kEffect, "");
             int device = json.value(kDevice, 0);
             const auto& data = get_params_obj(json);
-            dispatch(json, data, effect, device, mapper);
+
+            if (effect == kEffectDualSenseTrigger) {
+                std::string trigger     = data.value(kTrigger,    std::string{});
+                std::string effect_type = data.value(kEffectType, std::string{});
+                dispatchDualSenseTrigger(data, trigger, effect_type, device, mapper);
+            } else {
+                dispatch(json, data, effect, device, mapper);
+            }
         }
 
     } catch (...) {
