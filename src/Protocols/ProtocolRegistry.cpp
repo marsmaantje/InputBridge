@@ -9,7 +9,6 @@
 #include <chrono>
 #include <iomanip>
 #include <random>
-#include <algorithm>
 #include <SDL3/SDL_filesystem.h>
 
 static constexpr const char* kTag = "ProtocolRegistry";
@@ -668,7 +667,6 @@ void ProtocolRegistry::LoadDefinitionFiles() {
             if (j.contains("ws")) {
                 def.wssPort = j["ws"].value("port", 4269);
             }
-            bool defFieldMigrated = false;
             if (j.contains("fields") && j["fields"].is_array()) {
                 for (const auto& fj : j["fields"]) {
                     ProtocolField f;
@@ -678,18 +676,6 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     f.enabled = fj.value("enabled",  true);
                     if (f.fieldId.empty())
                         continue;
-
-                    // One-time migration: this field's catalog default OSC
-                    // path used to be "/haptic/dualsense_trigger" (mismatched
-                    // against the actual hardcoded runtime default), so any
-                    // protocol that enabled it before the catalog fix copied
-                    // that wrong path into its own field entry. Repoint it to
-                    // the canonical address so it keeps receiving messages.
-                    if (f.fieldId == "haptic_dualsense_trigger" &&
-                        f.oscPath == "/haptic/dualsense_trigger") {
-                        f.oscPath = "/inputbridge/haptics/dualsense/trigger";
-                        defFieldMigrated = true;
-                    }
 
                     bool hasInline = fj.contains("label") || fj.contains("category") || fj.contains("type");
                     if (hasInline) {
@@ -773,9 +759,6 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     if (v.is_string()) def.excludedCategories.push_back(v.get<std::string>());
 
             m_definitions.push_back(def);
-            if (defFieldMigrated) {
-                SaveDefinition(m_definitions.back());
-            }
         } catch (const std::exception& e) {
             LOG_ERROR(kTag, "Failed to parse %s: %s",
                       entry.path().string().c_str(), e.what());
@@ -864,80 +847,22 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     } catch (const std::exception& e) {
     LOG_ERROR(kTag, "Failed to parse builtin_fields.json: %s", e.what());
     }
-
-    // Reconcile against the canonical in-code catalog: builtin_fields.json is
-    // seeded once and then never overwritten (existing installs keep whatever
-    // was on disk from whenever they first ran), so a built-in field added to
-    // BuildDefaultCatalog() later would otherwise never reach anyone who
-    // already has a builtin_fields.json. Add any built-in id that's missing
-    // from what we just loaded, and persist the merge so it's stable.
-    std::vector<FieldDescriptor> defaultOut, defaultIn;
-    BuildDefaultCatalog(defaultOut, defaultIn);
-
-    auto mergeMissing = [](std::vector<FieldDescriptor>& loaded,
-                           const std::vector<FieldDescriptor>& canonical) {
-        bool added = false;
-        for (const auto& fd : canonical) {
-            bool found = std::any_of(loaded.begin(), loaded.end(),
-                [&](const FieldDescriptor& l) { return l.id == fd.id; });
-            if (!found) {
-                loaded.push_back(fd);
-                added = true;
-            }
-        }
-        return added;
-    };
-
-    bool outAdded = mergeMissing(m_outputFields, defaultOut);
-    bool inAdded  = mergeMissing(m_inputFields,  defaultIn);
-
-    // Targeted one-time fix-up: earlier builds shipped haptic_dualsense_trigger
-    // under category "Haptic" with default OSC path "/haptic/dualsense_trigger",
-    // which mismatched the actual hardcoded runtime default and lumped it in
-    // with the unrelated generic SDL haptic effects. Installs that already
-    // have builtin_fields.json on disk from that period keep those wrong
-    // values forever (mergeMissing only adds ids that are absent, it doesn't
-    // correct ones that already exist) - so explicitly repoint this one
-    // known-bad entry back to the canonical values. This only fires when the
-    // on-disk values still exactly match the old mistake, so it won't touch
-    // a category the user has since renamed/merged on purpose.
-    bool inFixedUp = false;
-    for (auto& fd : m_inputFields) {
-        if (fd.id == "haptic_dualsense_trigger" &&
-            fd.category == "Haptic" &&
-            fd.defaultOscPath == "/haptic/dualsense_trigger") {
-            auto it = std::find_if(defaultIn.begin(), defaultIn.end(),
-                [](const FieldDescriptor& d) { return d.id == "haptic_dualsense_trigger"; });
-            if (it != defaultIn.end()) {
-                fd.category       = it->category;
-                fd.defaultOscPath = it->defaultOscPath;
-                fd.defaultWsKey   = it->defaultWsKey;
-                inFixedUp = true;
-            }
-            break;
-        }
-    }
-
-    if (outAdded || inAdded || inFixedUp) {
-        WriteBuiltinCatalogToDisk();
-    }
 }
 
-void ProtocolRegistry::BuildDefaultCatalog(std::vector<FieldDescriptor>& outFields,
-                                           std::vector<FieldDescriptor>& inFields) {
-    outFields.clear();
-    inFields.clear();
+void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
+    json j;
+    j["_comment"] = "Default built-in fields. Delete this file to regenerate defaults.";
 
+    json outArr = json::array();
     auto addOut = [&](const char* id, const char* label, const char* cat, FieldType type, const char* oscPath, const char* wsKey) {
-        FieldDescriptor fd;
-        fd.id             = id;
-        fd.label          = label;
-        fd.category       = cat;
-        fd.type           = type;
-        fd.defaultOscPath = oscPath;
-        fd.defaultWsKey   = wsKey;
-        fd.isBuiltIn      = true;
-        outFields.push_back(fd);
+        json item;
+        item["id"] = id;
+        item["label"] = label;
+        item["category"] = cat;
+        item["type"] = (type == FieldType::DigitalButton) ? "digital" : "analog";
+        item["oscPath"] = oscPath;
+        item["wsKey"] = wsKey;
+        outArr.push_back(item);
     };
 
     // -- Analog axes ----------------------------------------------------------
@@ -1010,16 +935,19 @@ void ProtocolRegistry::BuildDefaultCatalog(std::vector<FieldDescriptor>& outFiel
     addOut("sensor_touch2_p",    "Touch 2 Pressure",    "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/pressure","touch2_pressure");
     addOut("sensor_touch_active","Touch Active",         "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
 
+
+    j["output_fields"] = outArr;
+
+    json inArr = json::array();
     auto addIn = [&](const char* id, const char* label, const char* cat, const char* oscPath, const char* wsKey) {
-        FieldDescriptor fd;
-        fd.id             = id;
-        fd.label          = label;
-        fd.category       = cat;
-        fd.type           = FieldType::AnalogAxis;
-        fd.defaultOscPath = oscPath;
-        fd.defaultWsKey   = wsKey;
-        fd.isBuiltIn      = true;
-        inFields.push_back(fd);
+        json item;
+        item["id"] = id;
+        item["label"] = label;
+        item["category"] = cat;
+        item["type"] = "analog";
+        item["oscPath"] = oscPath;
+        item["wsKey"] = wsKey;
+        inArr.push_back(item);
     };
 
     // -- Haptic feedback fields (received from client) ---------------------
@@ -1028,52 +956,54 @@ void ProtocolRegistry::BuildDefaultCatalog(std::vector<FieldDescriptor>& outFiel
     addIn("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
     addIn("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
     addIn("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
-
-    // -- Adaptive Trigger (received from client) -----------------------------
-    // Own category (not lumped under "Haptic") since it's a materially
-    // different kind of effect (DualSense-only, positional/zone-based)
-    // from the four generic SDL haptic effects above. Default OSC path
-    // matches the hardcoded fallback base in OSCBaseProtocol.cpp/
-    // OSCProtocol.cpp so the suggested default and the actual runtime
-    // default are the same address.
-    addIn("haptic_dualsense_trigger", "DualSense Adaptive Trigger", "Adaptive Trigger",
-          "/inputbridge/haptics/dualsense/trigger", "dualsense_trigger");
+    // -- Adaptive Trigger (DualSense) ---------------------------------------
+    // One field per trigger side x effect, since each combination is its
+    // own OSC address/arg signature rather than a single message shape:
+    //   feedback:  iii     (deviceId, position, strength)
+    //   weapon:    iiii    (deviceId, start_position, end_position, strength)
+    //   vibration: iiii    (deviceId, position, amplitude, frequency)
+    //   bow:       iiiii   (deviceId, start_position, end_position, strength, snap_force)
+    //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
+    //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
+    //   off:       (no args)
+    addIn("ds_trigger_left_feedback",   "Left Trigger: Feedback",   "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/left/feedback",   "dualsense_trigger_left_feedback");
+    addIn("ds_trigger_right_feedback",  "Right Trigger: Feedback",  "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/right/feedback",  "dualsense_trigger_right_feedback");
+    addIn("ds_trigger_left_weapon",     "Left Trigger: Weapon",     "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/left/weapon",     "dualsense_trigger_left_weapon");
+    addIn("ds_trigger_right_weapon",    "Right Trigger: Weapon",    "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/right/weapon",    "dualsense_trigger_right_weapon");
+    addIn("ds_trigger_left_vibration",  "Left Trigger: Vibration",  "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/left/vibration",  "dualsense_trigger_left_vibration");
+    addIn("ds_trigger_right_vibration", "Right Trigger: Vibration", "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
+    addIn("ds_trigger_left_bow",        "Left Trigger: Bow",        "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
+    addIn("ds_trigger_right_bow",       "Right Trigger: Bow",       "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
+    addIn("ds_trigger_left_galloping",  "Left Trigger: Galloping",  "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");
+    addIn("ds_trigger_right_galloping", "Right Trigger: Galloping", "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/right/galloping", "dualsense_trigger_right_galloping");
+    addIn("ds_trigger_left_machine",    "Left Trigger: Machine",    "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/left/machine",    "dualsense_trigger_left_machine");
+    addIn("ds_trigger_right_machine",   "Right Trigger: Machine",   "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/right/machine",   "dualsense_trigger_right_machine");
+    addIn("ds_trigger_left_off",        "Left Trigger: Off",        "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/left/off",        "dualsense_trigger_left_off");
+    addIn("ds_trigger_right_off",       "Right Trigger: Off",       "Adaptive Trigger",
+          "/inputbridge/haptics/dualsense/trigger/right/off",       "dualsense_trigger_right_off");
 
     // -- Rumble (simple gamepad) -------------------------------------------
     addIn("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");
     addIn("rumble_right", "Rumble Right Motor", "Rumble", "/rumble/right", "rumble_right");
-}
 
-void ProtocolRegistry::WriteBuiltinCatalogToDisk() {
-    json j;
-    j["_comment"] = "Default built-in fields. Delete this file to regenerate defaults.";
-
-    auto toJson = [](const std::vector<FieldDescriptor>& fields) {
-        json arr = json::array();
-        for (const auto& fd : fields) {
-            json item;
-            item["id"] = fd.id;
-            item["label"] = fd.label;
-            item["category"] = fd.category;
-            item["type"] = (fd.type == FieldType::DigitalButton) ? "digital" : "analog";
-            item["oscPath"] = fd.defaultOscPath;
-            item["wsKey"] = fd.defaultWsKey;
-            arr.push_back(item);
-        }
-        return arr;
-    };
-
-    j["output_fields"] = toJson(m_outputFields);
-    j["input_fields"]  = toJson(m_inputFields);
+    j["input_fields"] = inArr;
 
     std::string path = GetProtocolsDir() + "builtin_fields.json";
     std::ofstream ofs(path);
     if (ofs) ofs << j.dump(4);
-}
-
-void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
-    BuildDefaultCatalog(m_outputFields, m_inputFields);
-    WriteBuiltinCatalogToDisk();
 }
 
 // --- ID generation -----------------------------------------------------------
