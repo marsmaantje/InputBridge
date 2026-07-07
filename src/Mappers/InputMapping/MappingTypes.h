@@ -27,6 +27,7 @@ struct HapticTarget {
     bool enable_constant = true;
     bool enable_periodic = true;
     bool enable_condition = true;
+    bool enable_dualsense_trigger = true;
 
     // Cached Effect IDs
     int constant_effect_id = -1;
