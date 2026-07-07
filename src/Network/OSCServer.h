@@ -123,6 +123,19 @@ private:
     static int haptic_condition_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_gain_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
+    // DualSense adaptive trigger handlers: one per effect shape, shared between
+    // the /left/ and /right/ path variants. Each determines which side fired
+    // by inspecting the incoming OSC path, since the argument list itself
+    // carries no trigger field (see HapticDispatcher for the per-effect
+    // argument formats).
+    static int haptic_dualsense_feedback_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_weapon_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_vibration_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_bow_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_galloping_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_machine_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_off_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+
     // Handles subchannel paths of the form /haptic/<effect>/<slot>
     // where the slot is encoded in the path instead of as a message argument.
     // This allows multiple effects of the same type to be sent in the same
@@ -169,7 +182,7 @@ private:
     bool m_outputEnabled = true;  // send OSC messages to clients
     bool m_inputEnabled  = true;  // receive OSC messages from clients
 
-    // Inactivity timeout - persisted to prefs.
+    // Inactivity timeout persisted to prefs.
     bool     m_inactivityTimeoutEnabled = true;
     uint64_t m_inactivityTimeoutMs      = 5000;
 
@@ -177,4 +190,4 @@ private:
     // main/UI thread.  Stored (not detached) so the destructor can join it
     // and guarantee the thread finishes before members are destroyed.
     std::thread m_cleanupThread;
-};
+};

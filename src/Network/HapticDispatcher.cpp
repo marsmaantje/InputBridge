@@ -86,3 +86,111 @@ void HapticDispatcher::DispatchGain(lo_arg** argv, int argc, OutputMapper* mappe
     const int gain = argv[1]->i;
     mapper->QueueSetGain(id, gain);
 }
+
+void HapticDispatcher::DispatchDualSenseFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 3) return;
+    for (int i = 0; i < 3; ++i) { if (!argv[i]) return; }
+    const int id       = argv[0]->i;
+    const int position = argv[1]->i;
+    const int strength = argv[2]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "feedback",
+                                   position, strength, /*end_position*/0,
+                                   /*amplitude*/0, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseWeapon(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int strength       = argv[3]->i;
+    // "position" doubles as "start_position" downstream (see OutputMapper::TriggerDualSenseTrigger).
+    mapper->QueueDualSenseTrigger(id, trigger, "weapon",
+                                   start_position, strength, end_position,
+                                   /*amplitude*/0, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseVibration(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
+    const int id        = argv[0]->i;
+    const int position  = argv[1]->i;
+    const int amplitude = argv[2]->i;
+    const int frequency = argv[3]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "vibration",
+                                   position, /*strength*/0, /*end_position*/0,
+                                   amplitude, frequency, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseBow(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 5) return;
+    for (int i = 0; i < 5; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int strength       = argv[3]->i;
+    const int snap_force     = argv[4]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "bow",
+                                   start_position, strength, end_position,
+                                   /*amplitude*/0, /*frequency*/0, snap_force,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseGalloping(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 6) return;
+    for (int i = 0; i < 6; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int first_foot     = argv[3]->i;
+    const int second_foot    = argv[4]->i;
+    const int frequency      = argv[5]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "galloping",
+                                   start_position, /*strength*/0, end_position,
+                                   /*amplitude*/0, frequency, /*snap_force*/0,
+                                   first_foot, second_foot, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseMachine(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 7) return;
+    for (int i = 0; i < 7; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int amplitude_a    = argv[3]->i;
+    const int amplitude_b    = argv[4]->i;
+    const int frequency      = argv[5]->i;
+    const int period         = argv[6]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "machine",
+                                   start_position, /*strength*/0, end_position,
+                                   /*amplitude*/0, frequency, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, period,
+                                   amplitude_a, amplitude_b);
+}
+
+void HapticDispatcher::DispatchDualSenseOff(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 1) return;
+    if (!argv[0]) return;
+    const int id = argv[0]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "off",
+                                   /*position*/0, /*strength*/0, /*end_position*/0,
+                                   /*amplitude*/0, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
