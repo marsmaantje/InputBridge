@@ -156,6 +156,8 @@ private:
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
     struct LogEntry { std::string text; bool isError = false; };
     std::deque<LogEntry> m_logs;
+    bool m_showValidMessages = true;    // UI filter: show "Recv:" entries that were successfully handled
+    bool m_showInvalidMessages = true;  // UI filter: show "Recv:" entries that didn't match a known OSC path
     std::set<std::string> m_clients;
     uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;
@@ -175,4 +177,4 @@ private:
     // main/UI thread.  Stored (not detached) so the destructor can join it
     // and guarantee the thread finishes before members are destroyed.
     std::thread m_cleanupThread;
-};
+};

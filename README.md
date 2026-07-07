@@ -69,7 +69,7 @@ Incoming haptic paths - both short and long forms are always active:
 
 Subchannel paths encode the slot in the URL (`/haptic/rumble/0`, `/haptic/rumble/1`, …) for hosts like Resonite that allow only one message per path per frame.
 
-DualSense adaptive triggers use `/inputbridge/haptics/dualsense/trigger/{left|right}/{feedback|weapon|vibration|off}`.
+DualSense adaptive triggers use `/haptic/dualsense_trigger_{left|right}_{feedback|weapon|vibration|bow|galloping|machine|off}`.
 
 ### WebSocket Server
 

@@ -909,10 +909,9 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     // -- Adaptive Trigger (DualSense) ---------------------------------------
     // One field per trigger side x effect, since each combination is its
     // own OSC address/arg signature rather than a single message shape.
-    // Addresses use the same flat /haptics/{name} convention as
-    // the Haptic fields above (rumble, force, periodic, condition, gain)
-    // rather than nesting left/right and the effect name as separate path
-    // segments:
+    // Addresses use the same flat /haptic/{name} convention as
+    // the Haptic fields above (rumble, force, periodic, condition, gain),
+    // not nested left/right + effect-name path segments:
     //   feedback:  iii     (deviceId, position, strength)
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
@@ -920,20 +919,20 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
     //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
     //   off:       (no args)
-    addIn("ds_trigger_left_feedback",   "Left Trigger: Feedback",   "Adaptive Trigger", "/haptics/dualsense/trigger/left/feedback",   "dualsense_trigger_left_feedback");
-    addIn("ds_trigger_right_feedback",  "Right Trigger: Feedback",  "Adaptive Trigger", "/haptics/dualsense/trigger/right/feedback",  "dualsense_trigger_right_feedback");
-    addIn("ds_trigger_left_weapon",     "Left Trigger: Weapon",     "Adaptive Trigger", "/haptics/dualsense/trigger/left/weapon",     "dualsense_trigger_left_weapon");
-    addIn("ds_trigger_right_weapon",    "Right Trigger: Weapon",    "Adaptive Trigger", "/haptics/dualsense/trigger/right/weapon",    "dualsense_trigger_right_weapon");
-    addIn("ds_trigger_left_vibration",  "Left Trigger: Vibration",  "Adaptive Trigger", "/haptics/dualsense/trigger/left/vibration",  "dualsense_trigger_left_vibration");
-    addIn("ds_trigger_right_vibration", "Right Trigger: Vibration", "Adaptive Trigger", "/haptics/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
-    addIn("ds_trigger_left_bow",        "Left Trigger: Bow",        "Adaptive Trigger", "/haptics/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
-    addIn("ds_trigger_right_bow",       "Right Trigger: Bow",       "Adaptive Trigger", "/haptics/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
-    addIn("ds_trigger_left_galloping",  "Left Trigger: Galloping",  "Adaptive Trigger", "/haptics/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");
-    addIn("ds_trigger_right_galloping", "Right Trigger: Galloping", "Adaptive Trigger", "/haptics/dualsense/trigger/right/galloping", "dualsense_trigger_right_galloping");
-    addIn("ds_trigger_left_machine",    "Left Trigger: Machine",    "Adaptive Trigger", "/haptics/dualsense/trigger/left/machine",    "dualsense_trigger_left_machine");
-    addIn("ds_trigger_right_machine",   "Right Trigger: Machine",   "Adaptive Trigger", "/haptics/dualsense/trigger/right/machine",   "dualsense_trigger_right_machine");
-    addIn("ds_trigger_left_off",        "Left Trigger: Off",        "Adaptive Trigger", "/haptics/dualsense/trigger/left/off",        "dualsense_trigger_left_off");
-    addIn("ds_trigger_right_off",       "Right Trigger: Off",       "Adaptive Trigger", "/haptics/dualsense/trigger/right/off",       "dualsense_trigger_right_off");
+    addIn("ds_trigger_left_feedback",   "Left Trigger: Feedback",   "Adaptive Trigger", "/haptic/dualsense/trigger/left/feedback",   "dualsense_trigger_left_feedback");
+    addIn("ds_trigger_right_feedback",  "Right Trigger: Feedback",  "Adaptive Trigger", "/haptic/dualsense/trigger/right/feedback",  "dualsense_trigger_right_feedback");
+    addIn("ds_trigger_left_weapon",     "Left Trigger: Weapon",     "Adaptive Trigger", "/haptic/dualsense/trigger/left/weapon",     "dualsense_trigger_left_weapon");
+    addIn("ds_trigger_right_weapon",    "Right Trigger: Weapon",    "Adaptive Trigger", "/haptic/dualsense/trigger/right/weapon",    "dualsense_trigger_right_weapon");
+    addIn("ds_trigger_left_vibration",  "Left Trigger: Vibration",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/vibration",  "dualsense_trigger_left_vibration");
+    addIn("ds_trigger_right_vibration", "Right Trigger: Vibration", "Adaptive Trigger", "/haptic/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
+    addIn("ds_trigger_left_bow",        "Left Trigger: Bow",        "Adaptive Trigger", "/haptic/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
+    addIn("ds_trigger_right_bow",       "Right Trigger: Bow",       "Adaptive Trigger", "/haptic/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
+    addIn("ds_trigger_left_galloping",  "Left Trigger: Galloping",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");
+    addIn("ds_trigger_right_galloping", "Right Trigger: Galloping", "Adaptive Trigger", "/haptic/dualsense/trigger/right/galloping", "dualsense_trigger_right_galloping");
+    addIn("ds_trigger_left_machine",    "Left Trigger: Machine",    "Adaptive Trigger", "/haptic/dualsense/trigger/left/machine",    "dualsense_trigger_left_machine");
+    addIn("ds_trigger_right_machine",   "Right Trigger: Machine",   "Adaptive Trigger", "/haptic/dualsense/trigger/right/machine",   "dualsense_trigger_right_machine");
+    addIn("ds_trigger_left_off",        "Left Trigger: Off",        "Adaptive Trigger", "/haptic/dualsense/trigger/left/off",        "dualsense_trigger_left_off");
+    addIn("ds_trigger_right_off",       "Right Trigger: Off",       "Adaptive Trigger", "/haptic/dualsense/trigger/right/off",       "dualsense_trigger_right_off");
 
     // -- Rumble (simple gamepad) -------------------------------------------
     addIn("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");

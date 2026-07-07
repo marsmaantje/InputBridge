@@ -567,8 +567,11 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 bool handled = oscProtocol->handle_osc_message(path, types, argv, argc);
                 if (!handled) {
                     std::lock_guard<std::mutex> errLock(server->m_mutex);
-                    server->m_logs.push_back({"Invalid OSC path: " + std::string(path), true});
-                    if (server->m_logs.size() > 100) server->m_logs.pop_front();
+                    // Mark the "Recv:" entry logged for this exact message (pushed
+                    // above, always the most recent entry - liblo dispatches one
+                    // message at a time on this thread, so there's no race) as
+                    // invalid instead of appending a second, duplicate line.
+                    if (!server->m_logs.empty()) server->m_logs.back().isError = true;
                 }
             }
         } else if (handlerCopy) {
@@ -948,8 +951,21 @@ void OSCServer::DrawContent() {
     }
     ImGui::Separator();
     ImGui::Text("Log");
+    ImGui::SameLine();
+    ImGui::Checkbox("Valid##log_valid", &m_showValidMessages);
+    ImGui::SameLine();
+    ImGui::Checkbox("Invalid##log_invalid", &m_showInvalidMessages);
     if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
+        // Filter only applies to per-message "Recv:" entries - server
+        // lifecycle/status lines (started, stopped, client timeout, etc.)
+        // aren't received messages, so they always stay visible.
+        static constexpr const char* kRecvPrefix = "Recv: ";
         for (const auto& l : logs) {
+            bool isRecvEntry = l.text.compare(0, std::strlen(kRecvPrefix), kRecvPrefix) == 0;
+            if (isRecvEntry) {
+                if (l.isError && !m_showInvalidMessages) continue;
+                if (!l.isError && !m_showValidMessages) continue;
+            }
             if (l.isError)
                 ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", l.text.c_str());
             else
