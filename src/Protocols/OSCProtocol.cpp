@@ -1,5 +1,7 @@
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/OSCValidation.h"
+#include "Protocols/ProtocolManager.h"
+#include "Protocols/ProtocolRegistry.h"
 #include "Network/OSCServer.h"
 #include "Devices/DeviceManager.h"
 #include "Haptics/GamepadHaptics.h"
@@ -53,6 +55,29 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
 
     std::string_view path_sv(path);
     bool handled = false;
+
+    // Field-customization lookup: lets a Protocol Editor field's custom OSC
+    // Path override the legacy default below, same mechanism as
+    // OSCBaseProtocol.cpp. Only actually consulted by match() calls further
+    // down (currently just the DualSense trigger branch) - everything else
+    // in this handler still uses its fixed legacy address directly.
+    std::string activeId = ProtocolManager::GetInstance().GetActiveInputProtocolId();
+    const ProtocolDefinition* def = nullptr;
+    if (!activeId.empty()) def = ProtocolRegistry::GetInstance().FindById(activeId);
+
+    std::string fieldId;
+    if (def) {
+        for (const auto& field : def->fields) {
+            if (field.enabled && field.oscPath == path_sv) {
+                fieldId = field.fieldId;
+                break;
+            }
+        }
+    }
+
+    auto match = [&](const char* legacyPath, const char* fid) {
+        return (fieldId == fid) || (fieldId.empty() && path_sv == legacyPath);
+    };
 
     // DualSense adaptive trigger senders - one per effect shape, parameterized
     // by trigger side ("left"/"right"). Defined here so they're available to
@@ -242,10 +267,9 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
             wheel->SetGain(gain);
         });
     }
-    // DualSense Trigger Effects, addresses follow the same flat
-    // single-segment convention as the other /inputbridge/haptics/{name}
-    // handlers above, rather than nesting left/right and the effect name
-    // as separate path segments.
+    // DualSense Trigger Effects, one Protocol Editor field per trigger side
+    // x effect (see "Adaptive Trigger" category), falling back to this
+    // nested legacy address when no custom OSC Path has been set.
     //   feedback:  iii     (deviceId, position, strength)
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
@@ -253,20 +277,20 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
     //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
     //   off:       (no args required)
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_feedback")   { handled = true; sendFeedback("left"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_feedback")  { handled = true; sendFeedback("right"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_weapon")     { handled = true; sendWeapon("left"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_weapon")    { handled = true; sendWeapon("right"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_vibration")  { handled = true; sendVibration("left"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_vibration") { handled = true; sendVibration("right"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_bow")        { handled = true; sendBow("left"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_bow")       { handled = true; sendBow("right"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_galloping")  { handled = true; sendGalloping("left"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_galloping") { handled = true; sendGalloping("right"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_machine")    { handled = true; sendMachine("left"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_machine")   { handled = true; sendMachine("right"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_left_off")        { handled = true; sendOff("left"); }
-    else if (path_sv == "/inputbridge/haptics/dualsense_trigger_right_off")       { handled = true; sendOff("right"); }
+    else if (match("/haptics/dualsense/trigger/left/feedback",   "ds_trigger_left_feedback"))   { handled = true; sendFeedback("left"); }
+    else if (match("/haptics/dualsense/trigger/right/feedback",  "ds_trigger_right_feedback"))  { handled = true; sendFeedback("right"); }
+    else if (match("/haptics/dualsense/trigger/left/weapon",     "ds_trigger_left_weapon"))     { handled = true; sendWeapon("left"); }
+    else if (match("/haptics/dualsense/trigger/right/weapon",    "ds_trigger_right_weapon"))    { handled = true; sendWeapon("right"); }
+    else if (match("/haptics/dualsense/trigger/left/vibration",  "ds_trigger_left_vibration"))  { handled = true; sendVibration("left"); }
+    else if (match("/haptics/dualsense/trigger/right/vibration", "ds_trigger_right_vibration")) { handled = true; sendVibration("right"); }
+    else if (match("/haptics/dualsense/trigger/left/bow",        "ds_trigger_left_bow"))        { handled = true; sendBow("left"); }
+    else if (match("/haptics/dualsense/trigger/right/bow",       "ds_trigger_right_bow"))       { handled = true; sendBow("right"); }
+    else if (match("/haptics/dualsense/trigger/left/galloping",  "ds_trigger_left_galloping"))  { handled = true; sendGalloping("left"); }
+    else if (match("/haptics/dualsense/trigger/right/galloping", "ds_trigger_right_galloping")) { handled = true; sendGalloping("right"); }
+    else if (match("/haptics/dualsense/trigger/left/machine",    "ds_trigger_left_machine"))    { handled = true; sendMachine("left"); }
+    else if (match("/haptics/dualsense/trigger/right/machine",   "ds_trigger_right_machine"))   { handled = true; sendMachine("right"); }
+    else if (match("/haptics/dualsense/trigger/left/off",        "ds_trigger_left_off"))        { handled = true; sendOff("left"); }
+    else if (match("/haptics/dualsense/trigger/right/off",       "ds_trigger_right_off"))       { handled = true; sendOff("right"); }
     // /inputbridge/wheel/led_rpm  f  (rpm_percent 0.0–1.0)
     else if (path_sv == "/inputbridge/wheel/led_rpm" && std::strcmp(types, "f") == 0 && argc == 1) {
         handled = true;
