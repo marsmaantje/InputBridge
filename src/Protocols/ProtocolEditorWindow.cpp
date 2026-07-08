@@ -1309,10 +1309,33 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                         ImGui::AlignTextToFramePadding();
                         ImGui::TextUnformatted("OSC Path:");
                         if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
-                        ImGui::SetNextItemWidth(-FLT_MIN);
+
+                        // Reserve space for the "Reset" button so the input field
+                        // doesn't overlap it.
+                        const bool isDefaultPath = (pf->oscPath == fd.defaultOscPath);
+                        const float resetBtnWidth = ImGui::CalcTextSize("Reset").x +
+                                                    ImGui::GetStyle().FramePadding.x * 2.0f;
+                        const float inputWidth = ImGui::GetContentRegionAvail().x -
+                                                 resetBtnWidth - ImGui::GetStyle().ItemSpacing.x;
+                        ImGui::SetNextItemWidth(inputWidth > 0.0f ? inputWidth : -FLT_MIN);
                         if (ImGui::InputText("##oscPath", pathBuffer, sizeof(pathBuffer))) {
                             pf->oscPath = pathBuffer;
                             pendingSave = true;
+                        }
+
+                        // Revert this field's OSC path back to its internal safe default
+                        // (e.g. "/haptic/rumble" for the Haptic category), discarding any
+                        // custom override.
+                        ImGui::SameLine();
+                        if (isDefaultPath) ImGui::BeginDisabled();
+                        if (ImGui::SmallButton("Reset##resetOscPath")) {
+                            pf->oscPath = fd.defaultOscPath;
+                            pendingSave = true;
+                        }
+                        if (isDefaultPath) ImGui::EndDisabled();
+                        if (ImGui::IsItemHovered() && !isDefaultPath) {
+                            ImGui::SetTooltip("Revert to the default safe path:\n%s",
+                                               fd.defaultOscPath.c_str());
                         }
                     } else {
                         char keyBuffer[128];
