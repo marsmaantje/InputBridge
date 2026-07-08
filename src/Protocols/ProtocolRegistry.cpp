@@ -197,7 +197,7 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
     j["id"]        = def->id;
     j["name"]      = def->name;
     j["transport"] = (def->transport == ProtocolTransport::OSC) ? "osc" : "websocket";
-    j["direction"] = (def->direction == ProtocolDirection::Output) ? "output" : "input";
+    j["direction"] = (def->direction == ProtocolDirection::Send) ? "send" : "receive";
     j["active"]    = false; // Don't activate exported protocols by default
 
     j["osc"]["host"]     = def->oscHost;
@@ -257,10 +257,14 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
         std::string ts = j.value("transport", "osc");
         def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
 
-        std::string dir_s = j.value("direction", "output");
-        def.direction = (dir_s == "input") ? ProtocolDirection::Input : ProtocolDirection::Output;
-
         def.active = false;
+
+        // Accept both the current "send"/"receive" terms and the legacy
+        // "output"/"input" terms so protocol files exported by older builds
+        // still import correctly.
+        std::string dir_s = j.value("direction", "send");
+        def.direction = (dir_s == "receive" || dir_s == "input")
+                            ? ProtocolDirection::Receive : ProtocolDirection::Send;
 
         if (j.contains("osc")) {
             def.oscHost     = j["osc"].value("host",     "127.0.0.1");
@@ -297,7 +301,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                 // Auto-register the field in the catalog when it is unknown so
                 // that the editor can display and manipulate it without requiring
                 // a matching entry in input_fields.json.
-                auto& catalog = (def.direction == ProtocolDirection::Output)
+                auto& catalog = (def.direction == ProtocolDirection::Send)
                                  ? m_outputFields : m_inputFields;
 
                 // Check both catalogs: a field may legitimately live in the
@@ -369,7 +373,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     j["id"]        = def.id;
     j["name"]      = def.name;
     j["transport"] = (def.transport == ProtocolTransport::OSC) ? "osc" : "websocket";
-    j["direction"] = (def.direction == ProtocolDirection::Output) ? "output" : "input";
+    j["direction"] = (def.direction == ProtocolDirection::Send) ? "send" : "receive";
     j["active"]    = def.active;
 
     j["osc"]["host"]     = def.oscHost;
@@ -449,7 +453,7 @@ const char* ProtocolRegistry::TransportLabel(ProtocolTransport t) {
 }
 
 const char* ProtocolRegistry::DirectionLabel(ProtocolDirection d) {
-    return d == ProtocolDirection::Output ? "Output (server → client)" : "Input (client → server)";
+    return d == ProtocolDirection::Send ? "Send (server → client)" : "Receive (client → server)";
 }
 
 // --- Private helpers ---------------------------------------------------------
@@ -654,8 +658,12 @@ void ProtocolRegistry::LoadDefinitionFiles() {
             std::string ts = j.value("transport", "osc");
             def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
 
-            std::string dir_s = j.value("direction", "output");
-            def.direction = (dir_s == "input") ? ProtocolDirection::Input : ProtocolDirection::Output;
+            // Accept both "send"/"receive" (current) and "output"/"input"
+            // (legacy) so definition files saved by older builds still load
+            // with the correct direction.
+            std::string dir_s = j.value("direction", "send");
+            def.direction = (dir_s == "receive" || dir_s == "input")
+                                ? ProtocolDirection::Receive : ProtocolDirection::Send;
 
             def.active = j.value("active", false);
 
@@ -689,7 +697,7 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     def.fields.push_back(f);
 
                     // Auto-register unknown fields so the editor shows them.
-                    auto& catalog = (def.direction == ProtocolDirection::Output)
+                    auto& catalog = (def.direction == ProtocolDirection::Send)
                                      ? m_outputFields : m_inputFields;
                     // Check both catalogs before synthesising an entry; the
                     // field may already be registered on the opposite side.

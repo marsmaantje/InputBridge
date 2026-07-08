@@ -25,6 +25,10 @@ namespace {
 
     const std::string VAL_TRANSPORT_OSC = "osc";
     const std::string VAL_TRANSPORT_WEBSOCKET = "websocket";
+    const std::string VAL_DIRECTION_SEND = "send";
+    const std::string VAL_DIRECTION_RECEIVE = "receive";
+    // Legacy terms, still accepted so protocol files exported by older
+    // builds continue to validate correctly.
     const std::string VAL_DIRECTION_OUTPUT = "output";
     const std::string VAL_DIRECTION_INPUT = "input";
 
@@ -108,7 +112,7 @@ ValidationResult ProtocolValidator::ValidateProtocolDefinition(const ProtocolDef
             result.AddError(hostError);
         }
 
-        if (definition.direction == ProtocolDirection::Output) {
+        if (definition.direction == ProtocolDirection::Send) {
             std::string portError = ValidatePort(definition.oscSendPort, PORT_TYPE_OSC_SEND);
             if (!portError.empty()) {
                 result.AddError(portError);
@@ -197,8 +201,9 @@ ValidationResult ProtocolValidator::ValidateProtocolJSON(const json& j) {
     // Validate direction
     if (j.contains(KEY_DIRECTION)) {
         std::string direction = j[KEY_DIRECTION];
-        if (direction != VAL_DIRECTION_OUTPUT && direction != VAL_DIRECTION_INPUT) {
-            result.AddError("Invalid direction: must be '" + VAL_DIRECTION_OUTPUT + "' or '" + VAL_DIRECTION_INPUT + "'");
+        if (direction != VAL_DIRECTION_SEND && direction != VAL_DIRECTION_RECEIVE &&
+            direction != VAL_DIRECTION_OUTPUT && direction != VAL_DIRECTION_INPUT) {
+            result.AddError("Invalid direction: must be '" + VAL_DIRECTION_SEND + "' or '" + VAL_DIRECTION_RECEIVE + "'");
         }
     }
 

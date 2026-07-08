@@ -651,7 +651,7 @@ void WebSocketServer::DrawContent() {
         }
     };
 
-    // ── Output protocol (server → client) ────────────────────────────────────
+    // ── Send protocol (server → client) ──────────────────────────────────────
     {
         if (ImGui::Checkbox("##ws_out_en", &outputEnabled)) {
             SetOutputEnabled(outputEnabled);
@@ -659,10 +659,10 @@ void WebSocketServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!outputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Output);
+        auto entries = buildEntries(ProtocolDirection::Send);
         int curIdx = findIdx(entries, outDefId);
         int newIdx = curIdx;
-        ImGui::Text("Output (send to clients)");
+        ImGui::Text("Send (to clients)");
         drawCombo("##out_proto", entries, curIdx, newIdx);
         if (newIdx != curIdx && !entries[newIdx].isSeparator) {
             const auto& c = entries[newIdx];
@@ -674,7 +674,7 @@ void WebSocketServer::DrawContent() {
         if (!outputEnabled) ImGui::EndDisabled();
     }
 
-    // ── Input protocol (client → server) ─────────────────────────────────────
+    // ── Receive protocol (client → server) ───────────────────────────────────
     {
         if (ImGui::Checkbox("##ws_in_en", &inputEnabled)) {
             SetInputEnabled(inputEnabled);
@@ -682,10 +682,10 @@ void WebSocketServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!inputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Input);
+        auto entries = buildEntries(ProtocolDirection::Receive);
         int curIdx = findIdx(entries, inDefId);
         int newIdx = curIdx;
-        ImGui::Text("Input (receive from clients)");
+        ImGui::Text("Receive (from clients)");
         drawCombo("##in_proto", entries, curIdx, newIdx);
         if (newIdx != curIdx && !entries[newIdx].isSeparator) {
             const auto& c = entries[newIdx];
