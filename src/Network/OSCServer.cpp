@@ -943,7 +943,7 @@ void OSCServer::DrawContent() {
         }
     };
 
-    // ── Output protocol (server → client) ─────────────────────────────────────
+    // ── Send protocol (server → client) ─────────────────────────────────────────
     {
         if (ImGui::Checkbox("##osc_out_en", &outputEnabled)) {
             SetOutputEnabled(outputEnabled);
@@ -951,10 +951,10 @@ void OSCServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!outputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Output);
+        auto entries = buildEntries(ProtocolDirection::Send);
         int curIdx = findIdx(entries, outDefId, currentProto);
         int newIdx = curIdx;
-        ImGui::Text("Output (send to client)");
+        ImGui::Text("Send (to client)");
         drawCombo("##osc_out", entries, curIdx, newIdx);
         if (newIdx != curIdx && !entries[newIdx].isSeparator) {
             const auto& c = entries[newIdx];
@@ -966,7 +966,7 @@ void OSCServer::DrawContent() {
         if (!outputEnabled) ImGui::EndDisabled();
     }
 
-    // ── Input protocol (client → server) ──────────────────────────────────────
+    // ── Receive protocol (client → server) ──────────────────────────────────────
     {
         if (ImGui::Checkbox("##osc_in_en", &inputEnabled)) {
             SetInputEnabled(inputEnabled);
@@ -974,10 +974,10 @@ void OSCServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!inputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Input);
+        auto entries = buildEntries(ProtocolDirection::Receive);
         int curIdx = findIdx(entries, inDefId, currentInputProto);
         int newIdx = curIdx;
-        ImGui::Text("Input (receive from client)");
+        ImGui::Text("Receive (from client)");
         drawCombo("##osc_in", entries, curIdx, newIdx);
         if (newIdx != curIdx && !entries[newIdx].isSeparator) {
             const auto& c = entries[newIdx];

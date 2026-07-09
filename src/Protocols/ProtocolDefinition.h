@@ -40,8 +40,8 @@ struct ProtocolField {
 // ─── Protocol direction ─────────────────────────────────────────────────────
 
 enum class ProtocolDirection {
-    Output, // server → client  (send input / sensor data)
-    Input   // client → server  (receive haptic / command data)
+    Send,    // server → client  (send input / sensor data)
+    Receive  // client → server  (receive haptic / command data)
 };
 
 // ─── Transport type ─────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ struct ProtocolDefinition {
     std::string        id;          // unique UUID / slug (generated on creation)
     std::string        name;        // user-facing name, e.g. "Sim Racing OSC Out"
     ProtocolTransport  transport  = ProtocolTransport::OSC;
-    ProtocolDirection  direction  = ProtocolDirection::Output;
+    ProtocolDirection  direction  = ProtocolDirection::Send;
 
     // OSC-specific
     std::string oscHost     = "127.0.0.1";
