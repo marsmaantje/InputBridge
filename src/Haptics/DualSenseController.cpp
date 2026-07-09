@@ -47,8 +47,10 @@ void DualSense::OutputState::Reset() {
 
 InputBridge::Result<bool, InputBridge::HapticError> DualSenseController::Init() {
     m_connectionTypeDetected = false;
-    m_bluetoothSequence = 0;
-    m_outputState.Reset();
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+        m_outputState.Reset();
+    }
     
     // Call base class init
     auto result = HapticDevice::Init();
@@ -170,11 +172,14 @@ int DualSenseController::SetTriggerEffect(const std::string& trigger,
     
     // Apply effect to appropriate trigger(s)
     bool success = true;
-    if (updateLeft) {
-        success &= ApplyTriggerEffect(m_outputState.leftTriggerEffect.data(), effectType, params);
-    }
-    if (updateRight) {
-        success &= ApplyTriggerEffect(m_outputState.rightTriggerEffect.data(), effectType, params);
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+        if (updateLeft) {
+            success &= ApplyTriggerEffect(m_outputState.leftTriggerEffect.data(), effectType, params);
+        }
+        if (updateRight) {
+            success &= ApplyTriggerEffect(m_outputState.rightTriggerEffect.data(), effectType, params);
+        }
     }
     
     if (!success) {
@@ -251,32 +256,40 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
 }
 
 void DualSenseController::DisableTriggerEffects() {
-    ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.leftTriggerEffect.data(), 0);
-    ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.rightTriggerEffect.data(), 0);
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+        ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.leftTriggerEffect.data(), 0);
+        ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Off(m_outputState.rightTriggerEffect.data(), 0);
+    }
     ApplyOutputState();
 }
 
 // ==================== LED Control ====================
 
 void DualSenseController::SetLEDColor(const DualSense::RGBColor& color) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.ledColor = color;
 }
 
 void DualSenseController::SetLEDBrightness(uint8_t brightness) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.ledBrightness = brightness;
 }
 
 void DualSenseController::SetPlayerLEDs(uint8_t playerMask) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.playerLEDs = playerMask & 0x1F;  // 5-bit mask
 }
 
 void DualSenseController::SetMuteLED(uint8_t state) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.muteLED = state;
 }
 
 // ==================== Rumble Motors ====================
 
 void DualSenseController::SetRumble(uint8_t leftIntensity, uint8_t rightIntensity) {
+    std::lock_guard<std::mutex> lock(m_outputStateMutex);
     m_outputState.leftRumble = leftIntensity;
     m_outputState.rightRumble = rightIntensity;
 }
@@ -285,154 +298,82 @@ void DualSenseController::SetRumble(uint8_t leftIntensity, uint8_t rightIntensit
 
 void DualSenseController::ApplyOutputState() {
     RunAsync([this]() {
-        const DualSense::ConnectionType connType = GetConnectionType();
-        
-        bool success = false;
-        if (connType == DualSense::ConnectionType::USB) {
-            success = SendUSBOutput();
-        } else {
-            success = SendBluetoothOutput();
-        }
-        
-        if (!success) {
+        if (!SendOutput()) {
             LOG_WARN(kTag, "Failed to send output state");
         }
     });
 }
 
-bool DualSenseController::SendUSBOutput() {
-    // USB report is 63 bytes (bluetooth 48)
-    std::array<uint8_t, USB_REPORT_SIZE> data{};
-    
-    data[0] = USB_REPORT_ID;  // 0x02
-    
-    // Feature flags byte 1 (offset 1)
-    // Enable HID mode and rumble
-    data[1] = USB_FLAG_ENABLE_HID | USB_FLAG_ENABLE_RUMBLE;
-    
-    // Feature flags byte 2 (offset 2)
-    // Only enable LED/player flags if they're actually being set
-    uint8_t flags2 = FLAG2_ENABLE_HAPTICS;  // Always enable haptics for triggers
-    
-    // Only enable LED if not black
-    if (m_outputState.ledColor.red != 0 || 
-        m_outputState.ledColor.green != 0 || 
-        m_outputState.ledColor.blue != 0) {
-        flags2 |= FLAG2_ENABLE_LED_COLOR;
-    }
-    
-    // Only enable player LEDs if set
-    if (m_outputState.playerLEDs != 0) {
-        flags2 |= FLAG2_ENABLE_PLAYER_LEDS;
-    }
-    
-    data[2] = flags2;
-    
-    // Rumble motors (offset 3-4)
-    data[3] = m_outputState.rightRumble;
-    data[4] = m_outputState.leftRumble;
-    
-    // Mute LED (offset 9)
-    data[9] = m_outputState.muteLED;
-    
-    // Right trigger at offset 11
-    std::memcpy(&data[USB_RIGHT_TRIGGER_OFFSET], m_outputState.rightTriggerEffect.data(), 11);
-    
-    // Left trigger at offset 22
-    std::memcpy(&data[USB_LEFT_TRIGGER_OFFSET], m_outputState.leftTriggerEffect.data(), 11);
-    
-    // LED color (offset 39-41)
-    data[39] = m_outputState.ledColor.red;
-    data[40] = m_outputState.ledColor.green;
-    data[41] = m_outputState.ledColor.blue;
-    
-    // Player LEDs (offset 42)
-    data[42] = m_outputState.playerLEDs;
-    
-    // LED brightness (offset 43)
-    data[43] = m_outputState.ledBrightness;
-    
-    LOG_DEBUG(kTag, "USB: Sending report, size=%zu", data.size());
-    LOG_DEBUG(kTag, "  Flags: [1]=0x%02X [2]=0x%02X", data[1], data[2]);
-    LOG_DEBUG(kTag, "  Rumble: L=%d R=%d", data[4], data[3]);
-    LOG_DEBUG(kTag, "  Triggers: R[0]=0x%02X L[0]=0x%02X", 
-           m_outputState.rightTriggerEffect[0], m_outputState.leftTriggerEffect[0]);
-    
-    if (!SDL_SendJoystickEffect(m_joystick, data.data(), data.size())) {
-        LOG_WARN(kTag, "DualSense USB: Send failed - %s", SDL_GetError());
-        return false;
-    }
-    
-    LOG_DEBUG(kTag, "USB: Report sent successfully");
-    return true;
-}
+bool DualSenseController::SendOutput() {
+    // This buffer is ONLY the DS5EffectsState_t-equivalent payload (47 bytes),
+    // starting at ucEnableBits1. SDL's PS5 HIDAPI driver prepends the report
+    // ID itself (and, on Bluetooth, a sequence/tag byte plus a trailing CRC),
+    // so this must NOT include a report ID/sequence byte of our own - doing so
+    // shifts every field (including the trigger effect bytes) out of place and
+    // silently breaks adaptive triggers. SDL also auto-detects USB vs
+    // Bluetooth, so one buffer works for both connection types.
+    std::array<uint8_t, EFFECTS_PAYLOAD_SIZE> data{};
 
-bool DualSenseController::SendBluetoothOutput() {
-    // Bluetooth report is 78 bytes
-    std::array<uint8_t, BT_REPORT_SIZE> data{};
-    
-    data[0] = BT_REPORT_ID;  // 0x31
-    
-    // Sequence byte (offset 1)
-    // Increment sequence counter (0-15) and set enable flag
-    m_bluetoothSequence = (m_bluetoothSequence + 1) & 0x0F;
-    data[1] = 0x10 | m_bluetoothSequence;  // 0x10 = enable flag
-    
-    // Feature flags byte 1 (offset 2)
-    data[2] = BT_FLAG_ENABLE_RUMBLE_EMULATION;
-    
-    // Feature flags byte 2 (offset 3)
-    // Only enable LED/player flags if they're actually being set
-    uint8_t flags2 = FLAG2_ENABLE_HAPTICS;  // Always enable haptics for triggers
-    
-    // Only enable LED if not black
-    if (m_outputState.ledColor.red != 0 || 
-        m_outputState.ledColor.green != 0 || 
-        m_outputState.ledColor.blue != 0) {
-        flags2 |= FLAG2_ENABLE_LED_COLOR;
+    {
+        std::lock_guard<std::mutex> lock(m_outputStateMutex);
+
+        // ucEnableBits1 (offset 0): rumble + which trigger(s) we're driving.
+        // The MODIFY_RIGHT/LEFT_TRIGGER bits are what actually tell the firmware
+        // to apply rgucRightTriggerEffect/rgucLeftTriggerEffect - without them the
+        // trigger effect bytes are silently ignored.
+        uint8_t enableBits1 = ENABLE1_MODIFY_RIGHT_TRIGGER | ENABLE1_MODIFY_LEFT_TRIGGER;
+        if (m_outputState.leftRumble != 0 || m_outputState.rightRumble != 0) {
+            enableBits1 |= ENABLE1_RUMBLE_EMULATION | ENABLE1_DISABLE_AUDIO_HAPTICS;
+        }
+        data[0] = enableBits1;
+
+        // ucEnableBits2 (offset 1): LED color / player lights.
+        uint8_t enableBits2 = 0;
+        const bool ledSet = (m_outputState.ledColor.red != 0 ||
+                              m_outputState.ledColor.green != 0 ||
+                              m_outputState.ledColor.blue != 0);
+        if (ledSet) {
+            enableBits2 |= ENABLE2_LED_COLOR;
+        }
+        if (m_outputState.playerLEDs != 0) {
+            enableBits2 |= ENABLE2_PLAYER_LIGHTS;
+        }
+        data[1] = enableBits2;
+
+        // ucRumbleRight / ucRumbleLeft (offsets 2-3)
+        data[2] = m_outputState.rightRumble;
+        data[3] = m_outputState.leftRumble;
+
+        // ucMicLightMode (offset 8) - reuse muteLED state for the mic/mute light
+        data[8] = m_outputState.muteLED;
+
+        // rgucRightTriggerEffect / rgucLeftTriggerEffect (offsets 10 / 21)
+        std::memcpy(&data[RIGHT_TRIGGER_OFFSET], m_outputState.rightTriggerEffect.data(), 11);
+        std::memcpy(&data[LEFT_TRIGGER_OFFSET], m_outputState.leftTriggerEffect.data(), 11);
+
+        // ucLedBrightness (offset 42), ucPadLights (offset 43),
+        // ucLedRed/Green/Blue (offsets 44-46)
+        data[LED_BRIGHTNESS_OFFSET] = m_outputState.ledBrightness;
+        data[PAD_LIGHTS_OFFSET] = m_outputState.playerLEDs;
+        data[LED_RED_OFFSET] = m_outputState.ledColor.red;
+        data[LED_GREEN_OFFSET] = m_outputState.ledColor.green;
+        data[LED_BLUE_OFFSET] = m_outputState.ledColor.blue;
     }
-    
-    // Only enable player LEDs if set
-    if (m_outputState.playerLEDs != 0) {
-        flags2 |= FLAG2_ENABLE_PLAYER_LEDS;
-    }
-    
-    data[3] = flags2;
-    
-    // Rumble motors (offset 4-5)
-    data[4] = m_outputState.rightRumble;
-    data[5] = m_outputState.leftRumble;
-    
-    // Mute LED (offset 9)
-    data[9] = m_outputState.muteLED;
-    
-    // Bluetooth uses different offsets!
-    // Right trigger at offset 22 (not 23!)
-    std::memcpy(&data[BT_RIGHT_TRIGGER_OFFSET], m_outputState.rightTriggerEffect.data(), 11);
-    
-    // Left trigger at offset 33 (not 34!)
-    std::memcpy(&data[BT_LEFT_TRIGGER_OFFSET], m_outputState.leftTriggerEffect.data(), 11);
-    
-    // LED color (offset 45-47)
-    data[45] = m_outputState.ledColor.red;
-    data[46] = m_outputState.ledColor.green;
-    data[47] = m_outputState.ledColor.blue;
-    
-    // Player LEDs (offset 44)
-    data[44] = m_outputState.playerLEDs;
-    
-    LOG_DEBUG(kTag, "BT: Sending report, size=%zu, seq=%d", data.size(), m_bluetoothSequence);
-    LOG_DEBUG(kTag, "  Flags: [1]=0x%02X [2]=0x%02X [3]=0x%02X", data[1], data[2], data[3]);
-    LOG_DEBUG(kTag, "  Rumble: L=%d R=%d", data[5], data[4]);
-    LOG_DEBUG(kTag, "  Triggers: R[0]=0x%02X L[0]=0x%02X", 
-           m_outputState.rightTriggerEffect[0], m_outputState.leftTriggerEffect[0]);
-    
-    // SDL handles CRC32 for Bluetooth automatically
+    // Lock released - everything below reads only the local `data` copy, not
+    // m_outputState, so it can't race with a subsequent writer.
+
+    LOG_DEBUG(kTag, "Sending effects payload, size=%zu (connection=%s)", data.size(),
+              GetConnectionType() == DualSense::ConnectionType::USB ? "USB" : "Bluetooth");
+    LOG_DEBUG(kTag, "  EnableBits: [0]=0x%02X [1]=0x%02X", data[0], data[1]);
+    LOG_DEBUG(kTag, "  Rumble: L=%d R=%d", data[3], data[2]);
+    LOG_DEBUG(kTag, "  Triggers: R[0]=0x%02X L[0]=0x%02X",
+           data[RIGHT_TRIGGER_OFFSET], data[LEFT_TRIGGER_OFFSET]);
+
     if (!SDL_SendJoystickEffect(m_joystick, data.data(), data.size())) {
-        LOG_WARN(kTag, "DualSense BT: Send failed - %s", SDL_GetError());
+        LOG_WARN(kTag, "DualSense: Send failed - %s", SDL_GetError());
         return false;
     }
-    
-    LOG_DEBUG(kTag, "BT: Report sent successfully");
+
+    LOG_DEBUG(kTag, "Effects payload sent successfully");
     return true;
 }

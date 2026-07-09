@@ -48,6 +48,31 @@ namespace {
     const char* const kHapticConditionPath = "/haptic/condition";
     const char* const kHapticGainPath = "/haptic/gain";
 
+    // DualSense adaptive trigger paths, one per side x effect, only carrying
+    // the arguments that effect actually uses (see HapticDispatcher.h).
+    const char* const kDsFeedbackLeftPath   = "/haptic/dualsense/trigger/left/feedback";
+    const char* const kDsFeedbackRightPath  = "/haptic/dualsense/trigger/right/feedback";
+    const char* const kDsWeaponLeftPath     = "/haptic/dualsense/trigger/left/weapon";
+    const char* const kDsWeaponRightPath    = "/haptic/dualsense/trigger/right/weapon";
+    const char* const kDsVibrationLeftPath  = "/haptic/dualsense/trigger/left/vibration";
+    const char* const kDsVibrationRightPath = "/haptic/dualsense/trigger/right/vibration";
+    const char* const kDsBowLeftPath        = "/haptic/dualsense/trigger/left/bow";
+    const char* const kDsBowRightPath       = "/haptic/dualsense/trigger/right/bow";
+    const char* const kDsGallopingLeftPath  = "/haptic/dualsense/trigger/left/galloping";
+    const char* const kDsGallopingRightPath = "/haptic/dualsense/trigger/right/galloping";
+    const char* const kDsMachineLeftPath    = "/haptic/dualsense/trigger/left/machine";
+    const char* const kDsMachineRightPath   = "/haptic/dualsense/trigger/right/machine";
+    const char* const kDsOffLeftPath        = "/haptic/dualsense/trigger/left/off";
+    const char* const kDsOffRightPath       = "/haptic/dualsense/trigger/right/off";
+
+    // Shared by all haptic_dualsense_*_handler functions: reads the trigger
+    // side off the tail of the OSC path so one handler can serve both the
+    // /left/ and /right/ path variants for a given effect.
+    const char* dualsense_trigger_side_from_path(const char* path) {
+        std::string_view p(path);
+        return (p.find("/right/") != std::string_view::npos) ? "right" : "left";
+    }
+
     const char* const kWheelSteerPath = "/wheel/steer";
     const char* const kWheelBrakePath = "/wheel/brake";
     const char* const kWheelThrottlePath = "/wheel/throttle";
@@ -137,6 +162,76 @@ int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg *
         auto* server = static_cast<OSCServer*>(user_data);
         if (!server || !server->m_running || !server->m_OutputMapper) return 0;
         HapticDispatcher::DispatchGain(argv, argc, server->m_OutputMapper);
+    } catch (...) {}
+    return 0;
+}
+
+int OSCServer::haptic_dualsense_feedback_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        HapticDispatcher::DispatchDualSenseFeedback(argv, argc, server->m_OutputMapper, dualsense_trigger_side_from_path(path));
+    } catch (...) {}
+    return 0;
+}
+
+int OSCServer::haptic_dualsense_weapon_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        HapticDispatcher::DispatchDualSenseWeapon(argv, argc, server->m_OutputMapper, dualsense_trigger_side_from_path(path));
+    } catch (...) {}
+    return 0;
+}
+
+int OSCServer::haptic_dualsense_vibration_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        HapticDispatcher::DispatchDualSenseVibration(argv, argc, server->m_OutputMapper, dualsense_trigger_side_from_path(path));
+    } catch (...) {}
+    return 0;
+}
+
+int OSCServer::haptic_dualsense_bow_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        HapticDispatcher::DispatchDualSenseBow(argv, argc, server->m_OutputMapper, dualsense_trigger_side_from_path(path));
+    } catch (...) {}
+    return 0;
+}
+
+int OSCServer::haptic_dualsense_galloping_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        HapticDispatcher::DispatchDualSenseGalloping(argv, argc, server->m_OutputMapper, dualsense_trigger_side_from_path(path));
+    } catch (...) {}
+    return 0;
+}
+
+int OSCServer::haptic_dualsense_machine_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        HapticDispatcher::DispatchDualSenseMachine(argv, argc, server->m_OutputMapper, dualsense_trigger_side_from_path(path));
+    } catch (...) {}
+    return 0;
+}
+
+int OSCServer::haptic_dualsense_off_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
+    try {
+        if (s_isDestroyed) return 0;
+        auto* server = static_cast<OSCServer*>(user_data);
+        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        HapticDispatcher::DispatchDualSenseOff(argv, argc, server->m_OutputMapper, dualsense_trigger_side_from_path(path));
     } catch (...) {}
     return 0;
 }
@@ -233,6 +328,23 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
     lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iififfii",    haptic_periodic_handler,  this);  // legacy, no wave_type
     lo_server_thread_add_method(m_server_thread, kHapticConditionPath,   "iiiffffffi",  haptic_condition_handler, this);
     lo_server_thread_add_method(m_server_thread, kHapticGainPath,        "ii",          haptic_gain_handler,      this);
+
+    // DualSense adaptive trigger paths: one per side x effect, each with only
+    // the args that effect uses (see HapticDispatcher.h for formats).
+    lo_server_thread_add_method(m_server_thread, kDsFeedbackLeftPath,   "iii",     haptic_dualsense_feedback_handler,  this);
+    lo_server_thread_add_method(m_server_thread, kDsFeedbackRightPath,  "iii",     haptic_dualsense_feedback_handler,  this);
+    lo_server_thread_add_method(m_server_thread, kDsWeaponLeftPath,     "iiii",    haptic_dualsense_weapon_handler,    this);
+    lo_server_thread_add_method(m_server_thread, kDsWeaponRightPath,    "iiii",    haptic_dualsense_weapon_handler,    this);
+    lo_server_thread_add_method(m_server_thread, kDsVibrationLeftPath,  "iiii",    haptic_dualsense_vibration_handler, this);
+    lo_server_thread_add_method(m_server_thread, kDsVibrationRightPath, "iiii",    haptic_dualsense_vibration_handler, this);
+    lo_server_thread_add_method(m_server_thread, kDsBowLeftPath,        "iiiii",   haptic_dualsense_bow_handler,       this);
+    lo_server_thread_add_method(m_server_thread, kDsBowRightPath,       "iiiii",   haptic_dualsense_bow_handler,       this);
+    lo_server_thread_add_method(m_server_thread, kDsGallopingLeftPath,  "iiiiii",  haptic_dualsense_galloping_handler, this);
+    lo_server_thread_add_method(m_server_thread, kDsGallopingRightPath, "iiiiii",  haptic_dualsense_galloping_handler, this);
+    lo_server_thread_add_method(m_server_thread, kDsMachineLeftPath,    "iiiiiii", haptic_dualsense_machine_handler,   this);
+    lo_server_thread_add_method(m_server_thread, kDsMachineRightPath,   "iiiiiii", haptic_dualsense_machine_handler,   this);
+    lo_server_thread_add_method(m_server_thread, kDsOffLeftPath,        "i",       haptic_dualsense_off_handler,       this);
+    lo_server_thread_add_method(m_server_thread, kDsOffRightPath,       "i",       haptic_dualsense_off_handler,       this);
     // Subchannel handler: catches /haptic/<effect>/<slot> paths (slot in path, no slot arg).
     // Registered before the generic catch-all so it runs first for subchannel messages.
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, haptic_subchannel_handler, this);
@@ -567,8 +679,11 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 bool handled = oscProtocol->handle_osc_message(path, types, argv, argc);
                 if (!handled) {
                     std::lock_guard<std::mutex> errLock(server->m_mutex);
-                    server->m_logs.push_back({"Invalid OSC path: " + std::string(path), true});
-                    if (server->m_logs.size() > 100) server->m_logs.pop_front();
+                    // Mark the "Recv:" entry logged for this exact message (pushed
+                    // above, always the most recent entry - liblo dispatches one
+                    // message at a time on this thread, so there's no race) as
+                    // invalid instead of appending a second, duplicate line.
+                    if (!server->m_logs.empty()) server->m_logs.back().isError = true;
                 }
             }
         } else if (handlerCopy) {
@@ -828,7 +943,7 @@ void OSCServer::DrawContent() {
         }
     };
 
-    // ── Output protocol (server → client) ─────────────────────────────────────
+    // ── Send protocol (server → client) ─────────────────────────────────────────
     {
         if (ImGui::Checkbox("##osc_out_en", &outputEnabled)) {
             SetOutputEnabled(outputEnabled);
@@ -836,10 +951,10 @@ void OSCServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!outputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Output);
+        auto entries = buildEntries(ProtocolDirection::Send);
         int curIdx = findIdx(entries, outDefId, currentProto);
         int newIdx = curIdx;
-        ImGui::Text("Output (send to client)");
+        ImGui::Text("Send (to client)");
         drawCombo("##osc_out", entries, curIdx, newIdx);
         if (newIdx != curIdx && !entries[newIdx].isSeparator) {
             const auto& c = entries[newIdx];
@@ -851,7 +966,7 @@ void OSCServer::DrawContent() {
         if (!outputEnabled) ImGui::EndDisabled();
     }
 
-    // ── Input protocol (client → server) ──────────────────────────────────────
+    // ── Receive protocol (client → server) ──────────────────────────────────────
     {
         if (ImGui::Checkbox("##osc_in_en", &inputEnabled)) {
             SetInputEnabled(inputEnabled);
@@ -859,10 +974,10 @@ void OSCServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!inputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Input);
+        auto entries = buildEntries(ProtocolDirection::Receive);
         int curIdx = findIdx(entries, inDefId, currentInputProto);
         int newIdx = curIdx;
-        ImGui::Text("Input (receive from client)");
+        ImGui::Text("Receive (from client)");
         drawCombo("##osc_in", entries, curIdx, newIdx);
         if (newIdx != curIdx && !entries[newIdx].isSeparator) {
             const auto& c = entries[newIdx];
@@ -948,8 +1063,21 @@ void OSCServer::DrawContent() {
     }
     ImGui::Separator();
     ImGui::Text("Log");
+    ImGui::SameLine();
+    ImGui::Checkbox("Valid##log_valid", &m_showValidMessages);
+    ImGui::SameLine();
+    ImGui::Checkbox("Invalid##log_invalid", &m_showInvalidMessages);
     if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
+        // Filter only applies to per-message "Recv:" entries - server
+        // lifecycle/status lines (started, stopped, client timeout, etc.)
+        // aren't received messages, so they always stay visible.
+        static constexpr const char* kRecvPrefix = "Recv: ";
         for (const auto& l : logs) {
+            bool isRecvEntry = l.text.compare(0, std::strlen(kRecvPrefix), kRecvPrefix) == 0;
+            if (isRecvEntry) {
+                if (l.isError && !m_showInvalidMessages) continue;
+                if (!l.isError && !m_showValidMessages) continue;
+            }
             if (l.isError)
                 ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", l.text.c_str());
             else

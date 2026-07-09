@@ -16,7 +16,7 @@ static constexpr const char* kTag = "ProtocolRegistry";
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-// ─── Singleton ───────────────────────────────────────────────────────────────
+// --- Singleton ---------------------------------------------------------------
 
 ProtocolRegistry& ProtocolRegistry::GetInstance() {
     static ProtocolRegistry instance;
@@ -28,7 +28,7 @@ ProtocolRegistry::ProtocolRegistry() {
     LoadBuiltinCatalog();
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// --- Public API --------------------------------------------------------------
 
 void ProtocolRegistry::LoadAll() {
     EnsureDirectories();
@@ -197,7 +197,7 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
     j["id"]        = def->id;
     j["name"]      = def->name;
     j["transport"] = (def->transport == ProtocolTransport::OSC) ? "osc" : "websocket";
-    j["direction"] = (def->direction == ProtocolDirection::Output) ? "output" : "input";
+    j["direction"] = (def->direction == ProtocolDirection::Send) ? "send" : "receive";
     j["active"]    = false; // Don't activate exported protocols by default
 
     j["osc"]["host"]     = def->oscHost;
@@ -227,8 +227,8 @@ bool ProtocolRegistry::ExportDefinition(const std::string& id, const std::string
             fj["type"]     = (desc->type == FieldType::DigitalButton) ? "digital" : "analog";
         } else if (!desc && f.hasInlineDef) {
             // Catalog entry absent (e.g. field not yet persisted) but the
-            // ProtocolField still carries its own inline metadata - use it so
-            // the exported file stays self-describing.
+            // ProtocolField still carries its own inline metadata,
+            // use it so the exported file stays self-describing.
             fj["label"]    = f.inlineLabel;
             fj["category"] = f.inlineCategory;
             fj["type"]     = (f.inlineType == FieldType::DigitalButton) ? "digital" : "analog";
@@ -257,10 +257,14 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
         std::string ts = j.value("transport", "osc");
         def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
 
-        std::string dir_s = j.value("direction", "output");
-        def.direction = (dir_s == "input") ? ProtocolDirection::Input : ProtocolDirection::Output;
-
         def.active = false;
+
+        // Accept both the current "send"/"receive" terms and the legacy
+        // "output"/"input" terms so protocol files exported by older builds
+        // still import correctly.
+        std::string dir_s = j.value("direction", "send");
+        def.direction = (dir_s == "receive" || dir_s == "input")
+                            ? ProtocolDirection::Receive : ProtocolDirection::Send;
 
         if (j.contains("osc")) {
             def.oscHost     = j["osc"].value("host",     "127.0.0.1");
@@ -297,7 +301,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                 // Auto-register the field in the catalog when it is unknown so
                 // that the editor can display and manipulate it without requiring
                 // a matching entry in input_fields.json.
-                auto& catalog = (def.direction == ProtocolDirection::Output)
+                auto& catalog = (def.direction == ProtocolDirection::Send)
                                  ? m_outputFields : m_inputFields;
 
                 // Check both catalogs: a field may legitimately live in the
@@ -321,7 +325,7 @@ std::string ProtocolRegistry::ImportDefinition(const std::string& path) {
                         fd.category       = f.inlineCategory;
                         fd.type           = f.inlineType;
                     } else {
-                        // No inline metadata - synthesise sensible defaults so
+                        // No inline metadata, synthesise sensible defaults so
                         // the field at least appears in the editor.
                         fd.label    = f.fieldId;
                         fd.category = "Custom (imported)";
@@ -369,7 +373,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     j["id"]        = def.id;
     j["name"]      = def.name;
     j["transport"] = (def.transport == ProtocolTransport::OSC) ? "osc" : "websocket";
-    j["direction"] = (def.direction == ProtocolDirection::Output) ? "output" : "input";
+    j["direction"] = (def.direction == ProtocolDirection::Send) ? "send" : "receive";
     j["active"]    = def.active;
 
     j["osc"]["host"]     = def.oscHost;
@@ -400,7 +404,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     }
     j["fields"] = fieldsArr;
 
-    // Per-protocol exclusions - only write the keys when non-empty so that
+    // Per-protocol exclusions, only write the keys when non-empty so that
     // the vast majority of definition files stay clean.
     if (!def.excludedFieldIds.empty()) {
         json arr = json::array();
@@ -421,7 +425,7 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
     }
 }
 
-// ─── Paths ───────────────────────────────────────────────────────────────────
+// --- Paths -------------------------------------------------------------------
 
 std::string ProtocolRegistry::GetProtocolsDir() {
     // Protocol definitions, field catalogs, and templates are user data -
@@ -449,10 +453,10 @@ const char* ProtocolRegistry::TransportLabel(ProtocolTransport t) {
 }
 
 const char* ProtocolRegistry::DirectionLabel(ProtocolDirection d) {
-    return d == ProtocolDirection::Output ? "Output (server → client)" : "Input (client → server)";
+    return d == ProtocolDirection::Send ? "Send (server → client)" : "Receive (client → server)";
 }
 
-// ─── Private helpers ─────────────────────────────────────────────────────────
+// --- Private helpers ---------------------------------------------------------
 
 // Copies seed files from the read-only install directory into the writable
 // pref directory, but only when a file is absent (never overwrites).
@@ -488,10 +492,10 @@ static void BootstrapFromInstallDir(const std::string& prefProtocolsDir) {
         }
     };
 
-    // Seed top-level JSON files (input_fields.json, builtin_fields.json, …).
+    // Seed top-level JSON files (input_fields.json, …).
     seedDir(srcDir, prefProtocolsDir);
 
-    // Seed built-in protocol definitions - these populate the OSC/WS output
+    // Seed built-in protocol definitions, these populate the OSC/WS output
     // dropdown via LoadDefinitionFiles(). This was the missing step that caused
     // the dropdown to appear empty on first run under AppImage.
     seedDir(srcDefs, dstDefs);
@@ -530,7 +534,7 @@ void ProtocolRegistry::LoadFieldCatalog() {
                 fd.defaultWsKey   = item.value("wsKey",    fd.id);
                 fd.isBuiltIn      = false;
 
-                // Skip if already present in either catalog - a field that
+                // Skip if already present in either catalog, a field that
                 // belongs in m_inputFields (e.g. a built-in sensor or button)
                 // must not be duplicated into m_outputFields regardless of
                 // what was written to input_fields.json by an older code path.
@@ -654,8 +658,12 @@ void ProtocolRegistry::LoadDefinitionFiles() {
             std::string ts = j.value("transport", "osc");
             def.transport = (ts == "websocket") ? ProtocolTransport::WebSocket : ProtocolTransport::OSC;
 
-            std::string dir_s = j.value("direction", "output");
-            def.direction = (dir_s == "input") ? ProtocolDirection::Input : ProtocolDirection::Output;
+            // Accept both "send"/"receive" (current) and "output"/"input"
+            // (legacy) so definition files saved by older builds still load
+            // with the correct direction.
+            std::string dir_s = j.value("direction", "send");
+            def.direction = (dir_s == "receive" || dir_s == "input")
+                                ? ProtocolDirection::Receive : ProtocolDirection::Send;
 
             def.active = j.value("active", false);
 
@@ -689,7 +697,7 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                     def.fields.push_back(f);
 
                     // Auto-register unknown fields so the editor shows them.
-                    auto& catalog = (def.direction == ProtocolDirection::Output)
+                    auto& catalog = (def.direction == ProtocolDirection::Send)
                                      ? m_outputFields : m_inputFields;
                     // Check both catalogs before synthesising an entry; the
                     // field may already be registered on the opposite side.
@@ -714,7 +722,7 @@ void ProtocolRegistry::LoadDefinitionFiles() {
                         for (const auto& fd : m_inputFields)  if (fd.id == f.fieldId) count++;
 
                         if (count > 1) {
-                            // More than one entry for this ID - keep only the
+                            // More than one entry for this ID, keep only the
                             // first real (non-stale) one and remove the rest.
                             bool kept = false;
                             auto dedup = [&](std::vector<FieldDescriptor>& cat) {
@@ -800,72 +808,25 @@ void ProtocolRegistry::WriteDefaultFieldCatalog() {
     if (ofs) ofs << j.dump(4);
 }
 
-// ─── Built-in field catalogs ─────────────────────────────────────────────────
+// --- Built-in field catalogs -------------------------------------------------
 
 void ProtocolRegistry::LoadBuiltinCatalog() {
     m_outputFields.clear();
     m_inputFields.clear();
 
-    std::string path = GetProtocolsDir() + "builtin_fields.json";
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) {
-        WriteDefaultBuiltinCatalog();
-        ifs.open(path);
-        if (!ifs.is_open()) return;
-    }
-
-    try {
-        json j = json::parse(ifs);
-        if (j.contains("output_fields") && j["output_fields"].is_array()) {
-            for (const auto& item : j["output_fields"]) {
-                FieldDescriptor fd;
-                fd.id             = item.value("id",       "");
-                fd.label          = item.value("label",    fd.id);
-                fd.category       = item.value("category", "Custom");
-                std::string type  = item.value("type",     "analog");
-                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
-                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
-                fd.defaultWsKey   = item.value("wsKey",    fd.id);
-                fd.isBuiltIn      = true;
-                if (!fd.id.empty()) m_outputFields.push_back(fd);
-            }
-        }
-        if (j.contains("input_fields") && j["input_fields"].is_array()) {
-            for (const auto& item : j["input_fields"]) {
-                FieldDescriptor fd;
-                fd.id             = item.value("id",       "");
-                fd.label          = item.value("label",    fd.id);
-                fd.category       = item.value("category", "Haptic");
-                std::string type  = item.value("type",     "analog");
-                fd.type           = (type == "digital") ? FieldType::DigitalButton : FieldType::AnalogAxis;
-                fd.defaultOscPath = item.value("oscPath",  "/" + fd.id);
-                fd.defaultWsKey   = item.value("wsKey",    fd.id);
-                fd.isBuiltIn      = true;
-                if (!fd.id.empty()) m_inputFields.push_back(fd);
-            }
-        }
-    } catch (const std::exception& e) {
-    LOG_ERROR(kTag, "Failed to parse builtin_fields.json: %s", e.what());
-    }
-}
-
-void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
-    json j;
-    j["_comment"] = "Default built-in fields. Delete this file to regenerate defaults.";
-
-    json outArr = json::array();
     auto addOut = [&](const char* id, const char* label, const char* cat, FieldType type, const char* oscPath, const char* wsKey) {
-        json item;
-        item["id"] = id;
-        item["label"] = label;
-        item["category"] = cat;
-        item["type"] = (type == FieldType::DigitalButton) ? "digital" : "analog";
-        item["oscPath"] = oscPath;
-        item["wsKey"] = wsKey;
-        outArr.push_back(item);
+        FieldDescriptor fd;
+        fd.id             = id;
+        fd.label          = label;
+        fd.category       = cat;
+        fd.type           = type;
+        fd.defaultOscPath = oscPath;
+        fd.defaultWsKey   = wsKey;
+        fd.isBuiltIn      = true;
+        m_outputFields.push_back(fd);
     };
 
-    // ── Analog axes ──────────────────────────────────────────────────────────
+    // -- Analog axes ----------------------------------------------------------
     addOut("axis_steering",   "Steering / Yaw",  "Analog Axes", FieldType::AnalogAxis, "/input/yaw",        "yaw");
     addOut("axis_throttle",   "Throttle",        "Analog Axes", FieldType::AnalogAxis, "/input/throttle",   "throttle");
     addOut("axis_clutch",     "Clutch",          "Analog Axes", FieldType::AnalogAxis, "/input/clutch",     "clutch");
@@ -875,7 +836,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("axis_roll",       "Roll",            "Analog Axes", FieldType::AnalogAxis, "/input/roll",       "roll");
     addOut("axis_collective", "Collective",      "Analog Axes", FieldType::AnalogAxis, "/input/collective", "collective");
 
-    // ── Digital: Vehicle ─────────────────────────────────────────────────────
+    // -- Digital: Vehicle -----------------------------------------------------
     addOut("btn_gear_up",     "Gear Up",         "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_up",   "gear_up");
     addOut("btn_gear_down",   "Gear Down",       "Digital: Vehicle", FieldType::DigitalButton, "/input/gear_down", "gear_down");
     addOut("btn_neutral",     "Neutral",         "Digital: Vehicle", FieldType::DigitalButton, "/input/neutral",   "neutral");
@@ -894,7 +855,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_difflock_f",  "Diff-lock Front", "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_front", "difflock_front");
     addOut("btn_difflock_b",  "Diff-lock Rear",  "Digital: Vehicle", FieldType::DigitalButton, "/input/difflock_rear",  "difflock_rear");
 
-    // ── Digital: Lights ──────────────────────────────────────────────────────
+    // -- Digital: Lights ------------------------------------------------------
     addOut("btn_lights",      "Lights",          "Digital: Lights", FieldType::DigitalButton, "/input/lights",      "lights");
     addOut("btn_beam",        "Low/High Beam",   "Digital: Lights", FieldType::DigitalButton, "/input/beam",        "beam");
     addOut("btn_parking",     "Parking Light",   "Digital: Lights", FieldType::DigitalButton, "/input/parking",     "parking");
@@ -903,7 +864,7 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_turn_right",  "Turn Right",      "Digital: Lights", FieldType::DigitalButton, "/input/turn_right",  "turn_right");
     addOut("btn_hazard",      "Hazard",          "Digital: Lights", FieldType::DigitalButton, "/input/hazard",      "hazard");
 
-    // ── Digital: Other ───────────────────────────────────────────────────────
+    // -- Digital: Other -------------------------------------------------------
     addOut("btn_engine",      "Engine",          "Digital: Other",  FieldType::DigitalButton, "/input/engine",      "engine");
     addOut("btn_horn",        "Horn",            "Digital: Other",  FieldType::DigitalButton, "/input/horn",        "horn");
     addOut("btn_cam_switch",  "Camera Switch",   "Digital: Other",  FieldType::DigitalButton, "/input/cam_switch",  "cam_switch");
@@ -913,19 +874,19 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("btn_weapon_main", "Weapon Main",     "Digital: Other",  FieldType::DigitalButton, "/input/weapon_main", "weapon_main");
     addOut("btn_weapon_sec",  "Weapon Secondary","Digital: Other",  FieldType::DigitalButton, "/input/weapon_sec",  "weapon_sec");
     addOut("btn_reload",      "Reload",          "Digital: Other",  FieldType::DigitalButton, "/input/reload",      "reload");
-    
-    // ── Sensors: Gyroscope ───────────────────────────────────────────────────
+
+    // -- Sensors: Gyroscope ---------------------------------------------------
     // Available on DualSense and Steam Controller.  Values normalised to [-1, 1].
     addOut("sensor_gyro_x",   "Gyro X (pitch)",    "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/x",         "gyro_x");
     addOut("sensor_gyro_y",   "Gyro Y (yaw)",      "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/y",         "gyro_y");
     addOut("sensor_gyro_z",   "Gyro Z (roll)",     "Sensors: Gyroscope",      FieldType::AnalogAxis,   "/sensor/gyro/z",         "gyro_z");
 
-    // ── Sensors: Accelerometer ───────────────────────────────────────────────
+    // -- Sensors: Accelerometer -----------------------------------------------
     addOut("sensor_accel_x",  "Accel X (lateral)",  "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/x",        "accel_x");
     addOut("sensor_accel_y",  "Accel Y (vertical)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/y",        "accel_y");
     addOut("sensor_accel_z",  "Accel Z (fore/aft)", "Sensors: Accelerometer", FieldType::AnalogAxis,  "/sensor/accel/z",        "accel_z");
 
-    // ── Sensors: Touchpad ────────────────────────────────────────────────────
+    // -- Sensors: Touchpad ----------------------------------------------------
     // x/y centred: left/top=-1, right/bottom=+1.  Pressure: [0, 1].
     addOut("sensor_touch_x",     "Touch X (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/x",        "touch_x");
     addOut("sensor_touch_y",     "Touch Y (centered)",  "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch/y",        "touch_y");
@@ -933,42 +894,60 @@ void ProtocolRegistry::WriteDefaultBuiltinCatalog() {
     addOut("sensor_touch2_x",    "Touch 2 X (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/x",       "touch2_x");
     addOut("sensor_touch2_y",    "Touch 2 Y (centered)","Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/y",       "touch2_y");
     addOut("sensor_touch2_p",    "Touch 2 Pressure",    "Sensors: Touchpad", FieldType::AnalogAxis,    "/sensor/touch2/pressure","touch2_pressure");
-    addOut("sensor_touch_active","Touch Active",         "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
+    addOut("sensor_touch_active","Touch Active",        "Sensors: Touchpad", FieldType::DigitalButton, "/sensor/touch/active",   "touch_active");
 
-
-    j["output_fields"] = outArr;
-
-    json inArr = json::array();
     auto addIn = [&](const char* id, const char* label, const char* cat, const char* oscPath, const char* wsKey) {
-        json item;
-        item["id"] = id;
-        item["label"] = label;
-        item["category"] = cat;
-        item["type"] = "analog";
-        item["oscPath"] = oscPath;
-        item["wsKey"] = wsKey;
-        inArr.push_back(item);
+        FieldDescriptor fd;
+        fd.id             = id;
+        fd.label          = label;
+        fd.category       = cat;
+        fd.type           = FieldType::AnalogAxis; // Input fields are currently all analog for haptics
+        fd.defaultOscPath = oscPath;
+        fd.defaultWsKey   = wsKey;
+        fd.isBuiltIn      = true;
+        m_inputFields.push_back(fd);
     };
 
-    // ── Haptic feedback fields (received from client) ─────────────────────
+    // -- Haptic feedback fields (received from client) ---------------------
     addIn("haptic_rumble",      "Rumble",                  "Haptic", "/haptic/rumble",      "rumble");
     addIn("haptic_constant",    "Constant Force",          "Haptic", "/haptic/constant",    "constant");
     addIn("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
     addIn("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
     addIn("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
+    // -- Adaptive Trigger (DualSense) ---------------------------------------
+    // One field per trigger side x effect, since each combination is its
+    // own OSC address/arg signature rather than a single message shape.
+    // Addresses use the same flat /haptic/{name} convention as
+    // the Haptic fields above (rumble, force, periodic, condition, gain),
+    // not nested left/right + effect-name path segments:
+    //   feedback:  iii     (deviceId, position, strength)
+    //   weapon:    iiii    (deviceId, start_position, end_position, strength)
+    //   vibration: iiii    (deviceId, position, amplitude, frequency)
+    //   bow:       iiiii   (deviceId, start_position, end_position, strength, snap_force)
+    //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
+    //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
+    //   off:       (no args)
+    addIn("ds_trigger_left_feedback",   "Left Trigger: Feedback",   "Adaptive Trigger", "/haptic/dualsense/trigger/left/feedback",   "dualsense_trigger_left_feedback");
+    addIn("ds_trigger_right_feedback",  "Right Trigger: Feedback",  "Adaptive Trigger", "/haptic/dualsense/trigger/right/feedback",  "dualsense_trigger_right_feedback");
+    addIn("ds_trigger_left_weapon",     "Left Trigger: Weapon",     "Adaptive Trigger", "/haptic/dualsense/trigger/left/weapon",     "dualsense_trigger_left_weapon");
+    addIn("ds_trigger_right_weapon",    "Right Trigger: Weapon",    "Adaptive Trigger", "/haptic/dualsense/trigger/right/weapon",    "dualsense_trigger_right_weapon");
+    addIn("ds_trigger_left_vibration",  "Left Trigger: Vibration",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/vibration",  "dualsense_trigger_left_vibration");
+    addIn("ds_trigger_right_vibration", "Right Trigger: Vibration", "Adaptive Trigger", "/haptic/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
+    addIn("ds_trigger_left_bow",        "Left Trigger: Bow",        "Adaptive Trigger", "/haptic/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
+    addIn("ds_trigger_right_bow",       "Right Trigger: Bow",       "Adaptive Trigger", "/haptic/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
+    addIn("ds_trigger_left_galloping",  "Left Trigger: Galloping",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");
+    addIn("ds_trigger_right_galloping", "Right Trigger: Galloping", "Adaptive Trigger", "/haptic/dualsense/trigger/right/galloping", "dualsense_trigger_right_galloping");
+    addIn("ds_trigger_left_machine",    "Left Trigger: Machine",    "Adaptive Trigger", "/haptic/dualsense/trigger/left/machine",    "dualsense_trigger_left_machine");
+    addIn("ds_trigger_right_machine",   "Right Trigger: Machine",   "Adaptive Trigger", "/haptic/dualsense/trigger/right/machine",   "dualsense_trigger_right_machine");
+    addIn("ds_trigger_left_off",        "Left Trigger: Off",        "Adaptive Trigger", "/haptic/dualsense/trigger/left/off",        "dualsense_trigger_left_off");
+    addIn("ds_trigger_right_off",       "Right Trigger: Off",       "Adaptive Trigger", "/haptic/dualsense/trigger/right/off",       "dualsense_trigger_right_off");
 
-    // ── Rumble (simple gamepad) ───────────────────────────────────────────
+    // -- Rumble (simple gamepad) -------------------------------------------
     addIn("rumble_left",  "Rumble Left Motor",  "Rumble", "/rumble/left",  "rumble_left");
     addIn("rumble_right", "Rumble Right Motor", "Rumble", "/rumble/right", "rumble_right");
-
-    j["input_fields"] = inArr;
-
-    std::string path = GetProtocolsDir() + "builtin_fields.json";
-    std::ofstream ofs(path);
-    if (ofs) ofs << j.dump(4);
 }
 
-// ─── ID generation ───────────────────────────────────────────────────────────
+// --- ID generation -----------------------------------------------------------
 
 std::string ProtocolRegistry::GenerateId() {
     // Short hex ID based on time + random bits

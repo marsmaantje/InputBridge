@@ -11,9 +11,9 @@ TEST(ProtocolDefinition, DefaultTransportIsOSC) {
     EXPECT_EQ(def.transport, ProtocolTransport::OSC);
 }
 
-TEST(ProtocolDefinition, DefaultDirectionIsOutput) {
+TEST(ProtocolDefinition, DefaultDirectionIsSend) {
     ProtocolDefinition def;
-    EXPECT_EQ(def.direction, ProtocolDirection::Output);
+    EXPECT_EQ(def.direction, ProtocolDirection::Send);
 }
 
 TEST(ProtocolDefinition, DefaultOSCHost) {
@@ -62,10 +62,10 @@ TEST(ProtocolDefinition, CanSetTransportToWebSocket) {
     EXPECT_EQ(def.transport, ProtocolTransport::WebSocket);
 }
 
-TEST(ProtocolDefinition, CanSetDirectionToInput) {
+TEST(ProtocolDefinition, CanSetDirectionToReceive) {
     ProtocolDefinition def;
-    def.direction = ProtocolDirection::Input;
-    EXPECT_EQ(def.direction, ProtocolDirection::Input);
+    def.direction = ProtocolDirection::Receive;
+    EXPECT_EQ(def.direction, ProtocolDirection::Receive);
 }
 
 TEST(ProtocolDefinition, CanAddField) {

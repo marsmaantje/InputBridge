@@ -833,7 +833,7 @@ void ProtocolEditorWindow::DrawProtocolList() {
         const char* icon = (definition.transport == ProtocolTransport::OSC) ? "[OSC] " : "[WS]  ";
 
         // Direction indicator
-        const char* direction = (definition.direction == ProtocolDirection::Output) ? "↑" : "↓";
+        const char* direction = (definition.direction == ProtocolDirection::Send) ? "↑" : "↓";
 
         std::string label = std::string(icon) + direction + " " + definition.name + "##" + definition.id;
 
@@ -909,7 +909,7 @@ void ProtocolEditorWindow::DrawEditor() {
     ImGui::Text("Transport: %s",
                 definition.transport == ProtocolTransport::OSC ? "OSC" : "WebSocket");
     ImGui::Text("Direction: %s",
-                definition.direction == ProtocolDirection::Output ? "Output" : "Input");
+                definition.direction == ProtocolDirection::Send ? "Send" : "Receive");
 
     // ── Transport-specific settings ──────────────────────────────────────────
     if (definition.transport == ProtocolTransport::OSC) {
@@ -924,7 +924,7 @@ void ProtocolEditorWindow::DrawEditor() {
             needsSave = true;
         }
 
-        if (definition.direction == ProtocolDirection::Output) {
+        if (definition.direction == ProtocolDirection::Send) {
             ImGui::AlignTextToFramePadding();
             ImGui::TextUnformatted("Send Port:");
             if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
@@ -954,7 +954,7 @@ void ProtocolEditorWindow::DrawEditor() {
     ImGui::Separator();
 
     // ── Field selection ──────────────────────────────────────────────────────
-    if (definition.direction == ProtocolDirection::Output) {
+    if (definition.direction == ProtocolDirection::Send) {
         DrawOutputFieldPicker();
     } else {
         DrawInputFieldPicker();
@@ -1309,10 +1309,33 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                         ImGui::AlignTextToFramePadding();
                         ImGui::TextUnformatted("OSC Path:");
                         if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
-                        ImGui::SetNextItemWidth(-FLT_MIN);
+
+                        // Reserve space for the "Reset" button so the input field
+                        // doesn't overlap it.
+                        const bool isDefaultPath = (pf->oscPath == fd.defaultOscPath);
+                        const float resetBtnWidth = ImGui::CalcTextSize("Reset").x +
+                                                    ImGui::GetStyle().FramePadding.x * 2.0f;
+                        const float inputWidth = ImGui::GetContentRegionAvail().x -
+                                                 resetBtnWidth - ImGui::GetStyle().ItemSpacing.x;
+                        ImGui::SetNextItemWidth(inputWidth > 0.0f ? inputWidth : -FLT_MIN);
                         if (ImGui::InputText("##oscPath", pathBuffer, sizeof(pathBuffer))) {
                             pf->oscPath = pathBuffer;
                             pendingSave = true;
+                        }
+
+                        // Revert this field's OSC path back to its internal safe default
+                        // (e.g. "/haptic/rumble" for the Haptic category), discarding any
+                        // custom override.
+                        ImGui::SameLine();
+                        if (isDefaultPath) ImGui::BeginDisabled();
+                        if (ImGui::SmallButton("Reset##resetOscPath")) {
+                            pf->oscPath = fd.defaultOscPath;
+                            pendingSave = true;
+                        }
+                        if (isDefaultPath) ImGui::EndDisabled();
+                        if (ImGui::IsItemHovered() && !isDefaultPath) {
+                            ImGui::SetTooltip("Revert to the default safe path:\n%s",
+                                               fd.defaultOscPath.c_str());
                         }
                     } else {
                         char keyBuffer[128];
@@ -1358,7 +1381,7 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
         const char* transports[] = {"OSC", "WebSocket"};
         ImGui::Combo("Transport", &s_newTransport, transports, 2);
 
-        const char* directions[] = {"Output", "Input"};
+        const char* directions[] = {"Send", "Receive"};
         ImGui::Combo("Direction", &s_newDirection, directions, 2);
 
         // Template selection - templates and presets are the same thing.
@@ -1376,7 +1399,7 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
             ProtocolTransport transport = (s_newTransport == 0) ?
                 ProtocolTransport::OSC : ProtocolTransport::WebSocket;
             ProtocolDirection direction = (s_newDirection == 0) ?
-                ProtocolDirection::Output : ProtocolDirection::Input;
+                ProtocolDirection::Send : ProtocolDirection::Receive;
 
             std::string newId = ProtocolRegistry::GetInstance().CreateDefinition(
                 s_newName, transport, direction);
@@ -2278,7 +2301,7 @@ void ProtocolEditorWindow::DrawHideCategoryModal() {
             ImGui::Separator();
 
             // Build the full category list for the relevant catalog.
-            bool isOutput = (def.direction == ProtocolDirection::Output);
+            bool isOutput = (def.direction == ProtocolDirection::Send);
             const auto& catalog = isOutput ? registry.GetOutputFields()
                                            : registry.GetInputFields();
             std::vector<std::string> cats;
@@ -2367,7 +2390,7 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
                     j["protocol_id"]      = def.id;
                     j["protocol_name"]    = def.name;
                     j["transport"]        = (def.transport == ProtocolTransport::OSC) ? "OSC" : "WebSocket";
-                    j["direction"]        = (def.direction == ProtocolDirection::Output) ? "Output" : "Input";
+                    j["direction"]        = (def.direction == ProtocolDirection::Send) ? "Send" : "Receive";
                     json fieldsArr = json::array();
                     for (const auto& pf : def.fields) {
                         if (!pf.enabled) continue;

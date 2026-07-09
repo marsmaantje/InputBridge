@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <array>
 #include <map>
+#include <mutex>
 #include <string>
 
 /**
@@ -212,20 +213,27 @@ private:
     /**
      * @brief Detect USB vs Bluetooth connection
      * @return Connection type
+     *
+     * Informational only (used for logging/UI) - SDL_SendJoystickEffect's
+     * underlying HIDAPI driver auto-detects and handles the USB vs Bluetooth
+     * report framing itself, so this class does not need to branch on it
+     * when building the effects payload.
      */
     DualSense::ConnectionType DetectConnectionType() const;
 
     /**
-     * @brief Send output state via USB protocol
+     * @brief Build and send the DualSense "effects" output payload
+     *
+     * IMPORTANT: SDL's PS5 HIDAPI driver (SDL_hidapi_ps5.c) builds the raw
+     * HID report itself - it prepends the report ID (and, on Bluetooth, the
+     * sequence/tag byte and trailing CRC) around whatever buffer is passed to
+     * SDL_SendJoystickEffect(). The buffer passed here must therefore contain
+     * ONLY the "DS5EffectsState_t"-equivalent payload starting at
+     * ucEnableBits1 - it must NOT include a report ID byte, or every field
+     * ends up shifted by one (or more) bytes once SDL adds its own header.
      * @return true on success
      */
-    bool SendUSBOutput();
-
-    /**
-     * @brief Send output state via Bluetooth protocol
-     * @return true on success
-     */
-    bool SendBluetoothOutput();
+    bool SendOutput();
 
     /**
      * @brief Apply trigger effect to trigger data array
@@ -241,9 +249,14 @@ private:
     // ==================== State ====================
     
     DualSense::OutputState m_outputState;
+    // Guards m_outputState: writers (SetTriggerEffect, SetRumble, SetLED*,
+    // SetMuteLED, SetPlayerLEDs, DisableTriggerEffects) can run on whatever
+    // thread calls them (OSC/WebSocket/UI), while SendOutput() reads it from
+    // the async worker thread queued via RunAsync(). Without this, a read
+    // and a write can interleave mid-struct, producing a torn HID report.
+    mutable std::mutex m_outputStateMutex;
     DualSense::ConnectionType m_connectionType;
     mutable bool m_connectionTypeDetected;
-    uint8_t m_bluetoothSequence;  ///< Bluetooth sequence counter
 
     // ==================== Protocol Constants ====================
 
@@ -252,31 +265,28 @@ private:
     static constexpr uint16_t DUALSENSE_PRODUCT_ID = 0x0CE6;
     static constexpr uint16_t DUALSENSE_EDGE_PRODUCT_ID = 0x0DF2;
 
-    // USB Protocol
-    static constexpr uint8_t USB_REPORT_ID = 0x02;
-    static constexpr size_t USB_REPORT_SIZE = 63;
-    static constexpr size_t USB_RIGHT_TRIGGER_OFFSET = 11;
-    static constexpr size_t USB_LEFT_TRIGGER_OFFSET = 22;
+    // ==================== Effects Payload Layout ====================
+    // Mirrors SDL's DS5EffectsState_t (src/joystick/hidapi/SDL_hidapi_ps5.c),
+    // and Sony DualSense/Data_Structures' SetStateData - NOT including any
+    // report ID byte, which SDL adds on our behalf.
+    static constexpr size_t EFFECTS_PAYLOAD_SIZE = 47;
+    static constexpr size_t RIGHT_TRIGGER_OFFSET = 10;   // rgucRightTriggerEffect[11]
+    static constexpr size_t LEFT_TRIGGER_OFFSET = 21;    // rgucLeftTriggerEffect[11]
+    static constexpr size_t LED_BRIGHTNESS_OFFSET = 42;  // ucLedBrightness
+    static constexpr size_t PAD_LIGHTS_OFFSET = 43;      // ucPadLights (player LEDs)
+    static constexpr size_t LED_RED_OFFSET = 44;         // ucLedRed
+    static constexpr size_t LED_GREEN_OFFSET = 45;       // ucLedGreen
+    static constexpr size_t LED_BLUE_OFFSET = 46;        // ucLedBlue
 
-    // Bluetooth Protocol
-    static constexpr uint8_t BT_REPORT_ID = 0x31;
-    static constexpr size_t BT_REPORT_SIZE = 78;
-    static constexpr size_t BT_RIGHT_TRIGGER_OFFSET = 22;
-    static constexpr size_t BT_LEFT_TRIGGER_OFFSET = 33;
+    // ucEnableBits1 (payload offset 0)
+    static constexpr uint8_t ENABLE1_RUMBLE_EMULATION = 0x01;
+    static constexpr uint8_t ENABLE1_DISABLE_AUDIO_HAPTICS = 0x02;
+    static constexpr uint8_t ENABLE1_MODIFY_RIGHT_TRIGGER = 0x04; ///< Required for right adaptive trigger effect to take effect
+    static constexpr uint8_t ENABLE1_MODIFY_LEFT_TRIGGER = 0x08;  ///< Required for left adaptive trigger effect to take effect
 
-    // Feature flags (USB byte 1)
-    static constexpr uint8_t USB_FLAG_ENABLE_HID = 0x01;
-    static constexpr uint8_t USB_FLAG_ENABLE_RUMBLE = 0x02;
-    static constexpr uint8_t USB_FLAG_ENABLE_HAPTICS = 0x04;
-    static constexpr uint8_t USB_FLAG_USE_RUMBLE_NOT_HAPTICS = 0x08;
-
-    // Feature flags (BT byte 1)
-    static constexpr uint8_t BT_FLAG_ENABLE_RUMBLE_EMULATION = 0x01;
-    static constexpr uint8_t BT_FLAG_USE_RUMBLE_NOT_HAPTICS = 0x02;
-
-    // Feature flags byte 2 (both USB and BT)
-    static constexpr uint8_t FLAG2_ENABLE_LED_COLOR = 0x04;
-    static constexpr uint8_t FLAG2_ENABLE_PLAYER_LEDS = 0x10;
-    static constexpr uint8_t FLAG2_ENABLE_HAPTICS = 0x01;
-    static constexpr uint8_t FLAG2_ENABLE_LIGHTBAR = 0x02;
+    // ucEnableBits2 (payload offset 1)
+    static constexpr uint8_t ENABLE2_MIC_LIGHT = 0x01;
+    static constexpr uint8_t ENABLE2_LED_COLOR = 0x04;
+    static constexpr uint8_t ENABLE2_LED_RESET = 0x08;
+    static constexpr uint8_t ENABLE2_PLAYER_LIGHTS = 0x10;
 };

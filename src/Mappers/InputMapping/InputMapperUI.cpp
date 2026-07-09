@@ -228,12 +228,12 @@ void InputMapperUI::DrawOutputProtocolSelector() {
     bool changed = false;
 
     if (m_Store.SelectedProtocolView() == 0) {
-        changed |= DrawProtocolDefinitionCombo("OSC Output##out", profile->oscOutputProtocolId,
-                                                ProtocolTransport::OSC, ProtocolDirection::Output, 200.f);
+        changed |= DrawProtocolDefinitionCombo("OSC Send##out", profile->oscOutputProtocolId,
+                                                ProtocolTransport::OSC, ProtocolDirection::Send, 200.f);
     } else {
 #ifdef ENABLE_WEBSOCKETS
-        changed |= DrawProtocolDefinitionCombo("WS Output##out", profile->wsOutputProtocolId,
-                                                ProtocolTransport::WebSocket, ProtocolDirection::Output, 200.f);
+        changed |= DrawProtocolDefinitionCombo("WS Send##out", profile->wsOutputProtocolId,
+                                                ProtocolTransport::WebSocket, ProtocolDirection::Send, 200.f);
 #else
         ImGui::TextDisabled("WebSockets disabled.");
 #endif
@@ -262,12 +262,12 @@ void InputMapperUI::DrawInputProtocolSelector() {
                              changed);
 
     if (m_Store.SelectedProtocolView() == 0) {
-        changed |= DrawProtocolDefinitionCombo("OSC Input", profile->oscInputProtocolId, ProtocolTransport::OSC,
-                                                ProtocolDirection::Input);
+        changed |= DrawProtocolDefinitionCombo("OSC Receive", profile->oscInputProtocolId, ProtocolTransport::OSC,
+                                                ProtocolDirection::Receive);
     } else {
 #ifdef ENABLE_WEBSOCKETS
-        changed |= DrawProtocolDefinitionCombo("WebSocket Input", profile->wsInputProtocolId,
-                                                ProtocolTransport::WebSocket, ProtocolDirection::Input);
+        changed |= DrawProtocolDefinitionCombo("WebSocket Receive", profile->wsInputProtocolId,
+                                                ProtocolTransport::WebSocket, ProtocolDirection::Receive);
 #else
         ImGui::TextDisabled("WebSockets are disabled in this build.");
 #endif
@@ -658,12 +658,12 @@ void InputMapperUI::DrawMappingContent() {
                              changed);
 
     if (m_Store.SelectedProtocolView() == 0) {
-        changed |= DrawProtocolDefinitionCombo("OSC Output", profile.oscOutputProtocolId, ProtocolTransport::OSC,
-                                                ProtocolDirection::Output);
+        changed |= DrawProtocolDefinitionCombo("OSC Send", profile.oscOutputProtocolId, ProtocolTransport::OSC,
+                                                ProtocolDirection::Send);
     } else {
 #ifdef ENABLE_WEBSOCKETS
-        changed |= DrawProtocolDefinitionCombo("WebSocket Output", profile.wsOutputProtocolId,
-                                                ProtocolTransport::WebSocket, ProtocolDirection::Output);
+        changed |= DrawProtocolDefinitionCombo("WebSocket Send", profile.wsOutputProtocolId,
+                                                ProtocolTransport::WebSocket, ProtocolDirection::Send);
 #else
         ImGui::TextDisabled("WebSockets are disabled in this build.");
 #endif

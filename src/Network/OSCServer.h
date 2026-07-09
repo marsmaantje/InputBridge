@@ -123,6 +123,19 @@ private:
     static int haptic_condition_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
     static int haptic_gain_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
+    // DualSense adaptive trigger handlers: one per effect shape, shared between
+    // the /left/ and /right/ path variants. Each determines which side fired
+    // by inspecting the incoming OSC path, since the argument list itself
+    // carries no trigger field (see HapticDispatcher for the per-effect
+    // argument formats).
+    static int haptic_dualsense_feedback_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_weapon_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_vibration_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_bow_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_galloping_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_machine_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+    static int haptic_dualsense_off_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+
     // Handles subchannel paths of the form /haptic/<effect>/<slot>
     // where the slot is encoded in the path instead of as a message argument.
     // This allows multiple effects of the same type to be sent in the same
@@ -156,6 +169,8 @@ private:
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
     struct LogEntry { std::string text; bool isError = false; };
     std::deque<LogEntry> m_logs;
+    bool m_showValidMessages = true;    // UI filter: show "Recv:" entries that were successfully handled
+    bool m_showInvalidMessages = true;  // UI filter: show "Recv:" entries that didn't match a known OSC path
     std::set<std::string> m_clients;
     uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;
@@ -167,7 +182,7 @@ private:
     bool m_outputEnabled = true;  // send OSC messages to clients
     bool m_inputEnabled  = true;  // receive OSC messages from clients
 
-    // Inactivity timeout - persisted to prefs.
+    // Inactivity timeout persisted to prefs.
     bool     m_inactivityTimeoutEnabled = true;
     uint64_t m_inactivityTimeoutMs      = 5000;
 

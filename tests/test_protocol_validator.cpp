@@ -247,19 +247,19 @@ TEST(ValidateFieldId, Over64CharsIsError) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(ValidateProtocolJSON, MissingIdIsError) {
-    json j = { {"name","Test"}, {"transport","osc"}, {"direction","output"} };
+    json j = { {"name","Test"}, {"transport","osc"}, {"direction","send"} };
     auto r = ProtocolValidator::ValidateProtocolJSON(j);
     EXPECT_FALSE(r.IsValid());
 }
 
 TEST(ValidateProtocolJSON, MissingNameIsError) {
-    json j = { {"id","abc"}, {"transport","osc"}, {"direction","output"} };
+    json j = { {"id","abc"}, {"transport","osc"}, {"direction","send"} };
     auto r = ProtocolValidator::ValidateProtocolJSON(j);
     EXPECT_FALSE(r.IsValid());
 }
 
 TEST(ValidateProtocolJSON, MissingTransportIsError) {
-    json j = { {"id","abc"}, {"name","Test"}, {"direction","output"} };
+    json j = { {"id","abc"}, {"name","Test"}, {"direction","send"} };
     auto r = ProtocolValidator::ValidateProtocolJSON(j);
     EXPECT_FALSE(r.IsValid());
 }
@@ -271,7 +271,7 @@ TEST(ValidateProtocolJSON, MissingDirectionIsError) {
 }
 
 TEST(ValidateProtocolJSON, InvalidTransportIsError) {
-    json j = { {"id","abc"}, {"name","Test"}, {"transport","serial"}, {"direction","output"} };
+    json j = { {"id","abc"}, {"name","Test"}, {"transport","serial"}, {"direction","send"} };
     auto r = ProtocolValidator::ValidateProtocolJSON(j);
     EXPECT_FALSE(r.IsValid());
 }
@@ -282,9 +282,19 @@ TEST(ValidateProtocolJSON, InvalidDirectionIsError) {
     EXPECT_FALSE(r.IsValid());
 }
 
+TEST(ValidateProtocolJSON, LegacyOutputInputDirectionStillValid) {
+    // Files exported by older builds use "output"/"input" instead of the
+    // current "send"/"receive" - both must keep validating.
+    json outJ = { {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","output"} };
+    EXPECT_TRUE(ProtocolValidator::ValidateProtocolJSON(outJ).IsValid());
+
+    json inJ = { {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","input"} };
+    EXPECT_TRUE(ProtocolValidator::ValidateProtocolJSON(inJ).IsValid());
+}
+
 TEST(ValidateProtocolJSON, ValidMinimalOSCIsValid) {
     json j = {
-        {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","output"},
+        {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","send"},
         {"oscHost","127.0.0.1"}, {"oscSendPort",9066}, {"fields", json::array()}
     };
     auto r = ProtocolValidator::ValidateProtocolJSON(j);
@@ -293,7 +303,7 @@ TEST(ValidateProtocolJSON, ValidMinimalOSCIsValid) {
 
 TEST(ValidateProtocolJSON, ValidMinimalWebSocketIsValid) {
     json j = {
-        {"id","abc"}, {"name","Test"}, {"transport","websocket"}, {"direction","input"},
+        {"id","abc"}, {"name","Test"}, {"transport","websocket"}, {"direction","receive"},
         {"wssPort",4269}, {"fields", json::array()}
     };
     auto r = ProtocolValidator::ValidateProtocolJSON(j);
@@ -302,7 +312,7 @@ TEST(ValidateProtocolJSON, ValidMinimalWebSocketIsValid) {
 
 TEST(ValidateProtocolJSON, MissingOSCHostProducesWarningNotError) {
     json j = {
-        {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","output"},
+        {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","send"},
         {"fields", json::array()}
     };
     auto r = ProtocolValidator::ValidateProtocolJSON(j);
@@ -312,7 +322,7 @@ TEST(ValidateProtocolJSON, MissingOSCHostProducesWarningNotError) {
 
 TEST(ValidateProtocolJSON, EmptyFieldsArrayProducesWarning) {
     json j = {
-        {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","output"},
+        {"id","abc"}, {"name","Test"}, {"transport","osc"}, {"direction","send"},
         {"oscHost","127.0.0.1"}, {"oscSendPort",9066},
         {"fields", json::array()}
     };
@@ -330,7 +340,7 @@ TEST(ValidateProtocolDefinition, ValidOSCDefinitionPasses) {
     def.id        = "test-osc";
     def.name      = "Test OSC";
     def.transport = ProtocolTransport::OSC;
-    def.direction = ProtocolDirection::Output;
+    def.direction = ProtocolDirection::Send;
     def.oscHost   = "127.0.0.1";
     def.oscSendPort = 9066;
 
@@ -343,7 +353,7 @@ TEST(ValidateProtocolDefinition, ValidWebSocketDefinitionPasses) {
     def.id        = "test-ws";
     def.name      = "Test WS";
     def.transport = ProtocolTransport::WebSocket;
-    def.direction = ProtocolDirection::Input;
+    def.direction = ProtocolDirection::Receive;
     def.wssPort   = 4269;
 
     auto r = ProtocolValidator::ValidateProtocolDefinition(def);
@@ -355,7 +365,7 @@ TEST(ValidateProtocolDefinition, InvalidPortIsError) {
     def.id        = "bad-port";
     def.name      = "Bad Port";
     def.transport = ProtocolTransport::OSC;
-    def.direction = ProtocolDirection::Output;
+    def.direction = ProtocolDirection::Send;
     def.oscHost   = "127.0.0.1";
     def.oscSendPort = 0;  // invalid
 
@@ -368,7 +378,7 @@ TEST(ValidateProtocolDefinition, EmptyIdIsError) {
     def.id        = "";  // empty
     def.name      = "No ID";
     def.transport = ProtocolTransport::WebSocket;
-    def.direction = ProtocolDirection::Output;
+    def.direction = ProtocolDirection::Send;
     def.wssPort   = 4269;
 
     auto r = ProtocolValidator::ValidateProtocolDefinition(def);

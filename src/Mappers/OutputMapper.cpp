@@ -179,6 +179,7 @@ void OutputMapper::DrawContentOnly() {
                 bool has_constant = false;
                 bool has_periodic = false;
                 bool has_condition = false;
+                bool has_adaptive_trigger = false;
 
                 if (target.haptic_device) {
                     unsigned int features = SDL_GetHapticFeatures(target.haptic_device);
@@ -189,6 +190,15 @@ void OutputMapper::DrawContentOnly() {
                 } else {
                     // Assume Gamepad supports rumble
                     has_rumble = true;
+                }
+
+                // Adaptive triggers are exposed via the DeviceManager's HapticDevice
+                // abstraction (only present for gamepads), not through raw SDL_Haptic
+                // features, since they're a DualSense-specific extension.
+                if (target.instance_id != 0) {
+                    if (auto* hapticDevice = m_DeviceManager.GetHapticDevice(target.instance_id)) {
+                        has_adaptive_trigger = hapticDevice->caps().adaptiveTriggers;
+                    }
                 }
 
                 ImGuiStyle& style = ImGui::GetStyle();
@@ -217,6 +227,7 @@ void OutputMapper::DrawContentOnly() {
                 DrawEffect("Constant", &target.enable_constant, has_constant);
                 DrawEffect("Periodic", &target.enable_periodic, has_periodic);
                 DrawEffect("Condition", &target.enable_condition, has_condition);
+                DrawEffect("Adaptive Trigger", &target.enable_dualsense_trigger, has_adaptive_trigger);
 
             } else if (!target.device_guid.empty()) {
                 ImGui::TextColored(ImVec4(1,0,0,1), "Missing");
@@ -694,6 +705,7 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
         if (!target || target->instance_id == 0) continue;
+        if (!target->enable_dualsense_trigger) continue;
 
         // Get the haptic device - for DualSense, we need to access GamepadHaptics
         auto* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);

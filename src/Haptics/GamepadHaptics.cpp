@@ -11,6 +11,27 @@ static constexpr const char* kTag = "GamepadHaptics";
 GamepadHaptics::~GamepadHaptics() {
 }
 
+void GamepadHaptics::StopAll() {
+    // Send the "off" adaptive trigger command first (synchronous HID write).
+    // The base class only clears the m_activeDualSenseTriggers tracking map
+    // used for UI display - it never tells the controller hardware to
+    // release trigger tension, so a DualSense would otherwise stay
+    // physically resisted after effects are "stopped" (e.g. on app
+    // shutdown, via StopAllHapticEffects()). No-op on non-DualSense
+    // controllers.
+    if (m_dualSense) {
+        PlayDualSenseTrigger("both", "off", {});
+    }
+
+    // Clears rumble/constant/periodic/condition effects and their SDL
+    // effect IDs, plus the m_activeDualSenseTriggers tracking map. This
+    // runs asynchronously on the device's worker thread, so it's queued
+    // after (not before) the synchronous off-command above - otherwise the
+    // "off" entry PlayDualSenseTrigger just recorded could be cleared out
+    // of order and leave a stale entry in the tracking map.
+    HapticDevice::StopAll();
+}
+
 // ==================== Initialization ====================
 
 InputBridge::Result<bool, InputBridge::HapticError> GamepadHaptics::Init() {
