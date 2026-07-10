@@ -2382,15 +2382,31 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
                     if (c == ' ' || c == '/' || c == '\\') c = '_';
                 std::string templatePath = templatesDir + "/" + filename + ".json";
 
-                // Write template metadata + definition
+                // Write template metadata + definition.
+                //
+                // Templates use the same "id"/"name"/"transport"/"direction"
+                // keys and lowercase "send"/"receive"/"osc"/"websocket"
+                // values as ProtocolRegistry::ExportDefinition, so a saved
+                // template is also a valid file for Import Protocol /
+                // ProtocolValidator (which require "id"/"name" and only
+                // accept lowercase transport/direction values). The
+                // template_name/template_desc keys are additional metadata
+                // read by LoadPresets() for the "New Protocol" template list.
                 try {
                     json j;
-                    j["template_name"]    = s_templateName;
-                    j["template_desc"]    = s_templateDesc;
-                    j["protocol_id"]      = def.id;
-                    j["protocol_name"]    = def.name;
-                    j["transport"]        = (def.transport == ProtocolTransport::OSC) ? "OSC" : "WebSocket";
-                    j["direction"]        = (def.direction == ProtocolDirection::Send) ? "Send" : "Receive";
+                    j["id"]                = def.id;
+                    j["name"]              = def.name;
+                    j["template_name"]     = s_templateName;
+                    j["template_desc"]     = s_templateDesc;
+                    j["transport"]         = (def.transport == ProtocolTransport::OSC) ? "osc" : "websocket";
+                    j["direction"]         = (def.direction == ProtocolDirection::Send) ? "send" : "receive";
+                    j["active"]            = false; // Don't activate imported templates by default
+
+                    j["osc"]["host"]     = def.oscHost;
+                    j["osc"]["sendPort"] = def.oscSendPort;
+                    j["osc"]["recvPort"] = def.oscRecvPort;
+                    j["ws"]["port"]      = def.wssPort;
+
                     json fieldsArr = json::array();
                     for (const auto& pf : def.fields) {
                         if (!pf.enabled) continue;
@@ -2398,6 +2414,7 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
                         fj["fieldId"] = pf.fieldId;
                         fj["oscPath"] = pf.oscPath;
                         fj["wsKey"]   = pf.wsKey;
+                        fj["enabled"] = pf.enabled;
                         fieldsArr.push_back(fj);
                     }
                     j["fields"] = fieldsArr;
