@@ -1,5 +1,6 @@
 #include "App/Log.h"
 #include "ProtocolRegistry.h"
+#include "Network/OSCServer.h"
 #include "Utils/XdgDirs.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -422,6 +423,15 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
         ofs << j.dump(4);
     } else {
     LOG_ERROR(kTag, "Failed to write %s", path.c_str());
+    }
+
+    // If this is the definition currently selected as OSCServer's active
+    // *input* protocol, re-point its dynamic OSC receive handlers at the
+    // (possibly just-edited) field paths immediately. No-op if the server
+    // isn't running or def isn't the active input definition - see
+    // OSCServer::RebuildInputHandlers().
+    if (!OSCServer::IsDestroyed()) {
+        OSCServer::GetInstance().OnDefinitionSaved(def.id);
     }
 }
 
