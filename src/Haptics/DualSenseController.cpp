@@ -223,6 +223,14 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
         uint8_t frequency = getParam("frequency", 10, 0, 255);
         return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Vibration(triggerData, 0, position, amplitude, frequency);
     }
+    else if (effectType == "slope_feedback") {
+        uint8_t startPos      = getParam("start_position", 0, 0, 8);
+        uint8_t endPos        = getParam("end_position", 9, 0, 9);
+        uint8_t startStrength = getParam("start_strength", 1, 1, 8);
+        uint8_t endStrength   = getParam("end_strength", 8, 1, 8);
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::SlopeFeedback(triggerData, 0, startPos, endPos,
+                                                          startStrength, endStrength);
+    }
     else if (effectType == "bow") {
         uint8_t startPos = getParam("start_position", 0, 0, 8);
         uint8_t endPos = getParam("end_position", 8, 0, 8);

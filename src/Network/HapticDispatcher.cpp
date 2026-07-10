@@ -132,6 +132,24 @@ void HapticDispatcher::DispatchDualSenseVibration(lo_arg** argv, int argc, Outpu
                                    /*amplitude_a*/0, /*amplitude_b*/0);
 }
 
+void HapticDispatcher::DispatchDualSenseSlopeFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 5) return;
+    for (int i = 0; i < 5; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int start_strength = argv[3]->i;
+    const int end_strength   = argv[4]->i;
+    // "strength"/"amplitude" double as "start_strength"/"end_strength" downstream
+    // (see OutputMapper::TriggerDualSenseTrigger).
+    mapper->QueueDualSenseTrigger(id, trigger, "slope_feedback",
+                                   start_position, start_strength, end_position,
+                                   end_strength, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
 void HapticDispatcher::DispatchDualSenseBow(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
 {
     if (!mapper || argc < 5) return;

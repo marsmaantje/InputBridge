@@ -132,6 +132,7 @@ public:
      * - "feedback": Constant resistance from position
      * - "weapon": Two-stage trigger (gun simulation)
      * - "vibration": Vibration at trigger position
+     * - "slope_feedback": Linearly interpolated resistance between two positions
      * - "bow": Bow tension and release
      * - "galloping": Rhythmic resistance pattern
      * - "machine": Complex vibration pattern

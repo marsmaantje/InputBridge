@@ -1,5 +1,6 @@
 #include "App/Log.h"
 #include "ProtocolRegistry.h"
+#include "Network/OSCServer.h"
 #include "Utils/XdgDirs.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -422,6 +423,15 @@ void ProtocolRegistry::SaveDefinition(const ProtocolDefinition& def) {
         ofs << j.dump(4);
     } else {
     LOG_ERROR(kTag, "Failed to write %s", path.c_str());
+    }
+
+    // If this is the definition currently selected as OSCServer's active
+    // *input* protocol, re-point its dynamic OSC receive handlers at the
+    // (possibly just-edited) field paths immediately. No-op if the server
+    // isn't running or def isn't the active input definition - see
+    // OSCServer::RebuildInputHandlers().
+    if (!OSCServer::IsDestroyed()) {
+        OSCServer::GetInstance().OnDefinitionSaved(def.id);
     }
 }
 
@@ -923,6 +933,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     //   feedback:  iii     (deviceId, position, strength)
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
+    //   slope_feedback: iiiii (deviceId, start_position, end_position, start_strength, end_strength)
     //   bow:       iiiii   (deviceId, start_position, end_position, strength, snap_force)
     //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
     //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
@@ -933,6 +944,8 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     addIn("ds_trigger_right_weapon",    "Right Trigger: Weapon",    "Adaptive Trigger", "/haptic/dualsense/trigger/right/weapon",    "dualsense_trigger_right_weapon");
     addIn("ds_trigger_left_vibration",  "Left Trigger: Vibration",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/vibration",  "dualsense_trigger_left_vibration");
     addIn("ds_trigger_right_vibration", "Right Trigger: Vibration", "Adaptive Trigger", "/haptic/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
+    addIn("ds_trigger_left_slope_feedback",  "Left Trigger: Slope Feedback",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/slope_feedback",  "dualsense_trigger_left_slope_feedback");
+    addIn("ds_trigger_right_slope_feedback", "Right Trigger: Slope Feedback", "Adaptive Trigger", "/haptic/dualsense/trigger/right/slope_feedback", "dualsense_trigger_right_slope_feedback");
     addIn("ds_trigger_left_bow",        "Left Trigger: Bow",        "Adaptive Trigger", "/haptic/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
     addIn("ds_trigger_right_bow",       "Right Trigger: Bow",       "Adaptive Trigger", "/haptic/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
     addIn("ds_trigger_left_galloping",  "Left Trigger: Galloping",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");

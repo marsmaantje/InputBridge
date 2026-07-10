@@ -717,6 +717,8 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
         params["strength"] = strength;
         params["end_position"] = end_position;
         params["start_position"] = position;  // Many effects use start_position instead of position
+        params["start_strength"] = strength;  // slope_feedback uses start_strength/end_strength
+        params["end_strength"] = amplitude;   // instead of strength/amplitude
         params["amplitude"] = amplitude;
         params["frequency"] = frequency;
         params["snap_force"] = snap_force;
