@@ -116,6 +116,12 @@ inline int ClampDSFrequency(int v, std::string_view p) { return ClampInt(v,   0,
 inline int ClampDSStartPos(int v, std::string_view p)  { return ClampInt(v,   2,   7, "start_position", p); }
 inline int ClampDSEndPos(int v, std::string_view p)    { return ClampInt(v,   0,   8, "end_position",   p); }
 
+// Slope feedback start/end position (0-8 / 0-9) and start/end strength (1-8, not 0-8 -
+// SlopeFeedback rejects a strength of 0) matches ApplyTriggerEffect's "slope_feedback" branch.
+inline int ClampDSSlopePos(int v, std::string_view p)      { return ClampInt(v, 0, 8, "start_position", p); }
+inline int ClampDSSlopeEndPos(int v, std::string_view p)   { return ClampInt(v, 0, 9, "end_position",   p); }
+inline int ClampDSSlopeStrength(int v, std::string_view p) { return ClampInt(v, 1, 8, "strength",       p); }
+
 // Bow start/end position and snap force - 0-8, matches ApplyTriggerEffect's "bow" branch.
 inline int ClampDSBowPos(int v, std::string_view p)       { return ClampInt(v, 0, 8, "position",   p); }
 inline int ClampDSSnapForce(int v, std::string_view p)    { return ClampInt(v, 0, 8, "snap_force", p); }

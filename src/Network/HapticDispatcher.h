@@ -25,6 +25,7 @@ class OutputMapper;
  *   feedback   iii       id, position, strength
  *   weapon     iiii      id, start_position, end_position, strength
  *   vibration  iiii      id, position, amplitude, frequency
+ *   slope_feedback iiiii id, start_position, end_position, start_strength, end_strength
  *   bow        iiiii     id, start_position, end_position, strength, snap_force
  *   galloping  iiiiii    id, start_position, end_position, first_foot, second_foot, frequency
  *   machine    iiiiiii   id, start_position, end_position, amplitude_a, amplitude_b, frequency, period
@@ -99,6 +100,13 @@ public:
      * Accepted format:  iiii  (id, position, amplitude, frequency)
      */
     static void DispatchDualSenseVibration(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger);
+
+    /**
+     * @brief Parse a DualSense adaptive trigger "slope_feedback" message and queue it.
+     *
+     * Accepted format:  iiiii  (id, start_position, end_position, start_strength, end_strength)
+     */
+    static void DispatchDualSenseSlopeFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger);
 
     /**
      * @brief Parse a DualSense adaptive trigger "bow" message and queue it.

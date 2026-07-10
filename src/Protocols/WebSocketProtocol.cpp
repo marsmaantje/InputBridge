@@ -129,7 +129,10 @@ bool WebSocketProtocol::parse(const std::string &message) {
         } else if (type == "gamepad" && effect == "dualsense_trigger") {
             // DualSense adaptive trigger effect
             std::string trigger = params.value("trigger", "left");  // "left", "right", or "both"
-            std::string effect_type = params.value("effect_type", "off");  // off, feedback, weapon, vibration, bow, galloping, machine
+            std::string effect_type = params.value("effect_type", "off");  // off, feedback, weapon, vibration, slope_feedback, bow, galloping, machine
+            // slope_feedback reuses the generic position/strength/end_position/amplitude
+            // fields as start_position/start_strength/end_position/end_strength - see
+            // OutputMapper::TriggerDualSenseTrigger, which builds those named keys.
 
             int position = params.value("position", 0);
             int strength = params.value("strength", 5);

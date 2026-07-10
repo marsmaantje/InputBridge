@@ -90,6 +90,8 @@ namespace {
         { "ds_trigger_right_weapon",    "/haptic/dualsense/trigger/right/weapon",    "iiii",    OSCServer::HapticEffectKind::DsWeapon,    "right" },
         { "ds_trigger_left_vibration",  "/haptic/dualsense/trigger/left/vibration",  "iiii",    OSCServer::HapticEffectKind::DsVibration, "left"  },
         { "ds_trigger_right_vibration", "/haptic/dualsense/trigger/right/vibration", "iiii",    OSCServer::HapticEffectKind::DsVibration, "right" },
+        { "ds_trigger_left_slope_feedback",  "/haptic/dualsense/trigger/left/slope_feedback",  "iiiii", OSCServer::HapticEffectKind::DsSlopeFeedback, "left"  },
+        { "ds_trigger_right_slope_feedback", "/haptic/dualsense/trigger/right/slope_feedback", "iiiii", OSCServer::HapticEffectKind::DsSlopeFeedback, "right" },
         { "ds_trigger_left_bow",        "/haptic/dualsense/trigger/left/bow",        "iiiii",   OSCServer::HapticEffectKind::DsBow,       "left"  },
         { "ds_trigger_right_bow",       "/haptic/dualsense/trigger/right/bow",       "iiiii",   OSCServer::HapticEffectKind::DsBow,       "right" },
         { "ds_trigger_left_galloping",  "/haptic/dualsense/trigger/left/galloping",  "iiiiii",  OSCServer::HapticEffectKind::DsGalloping, "left"  },
@@ -191,6 +193,7 @@ int OSCServer::dynamic_field_handler(const char* path, const char* types, lo_arg
             case HapticEffectKind::DsFeedback:      HapticDispatcher::DispatchDualSenseFeedback(argv, argc, mapper, ctx->side); break;
             case HapticEffectKind::DsWeapon:        HapticDispatcher::DispatchDualSenseWeapon(argv, argc, mapper, ctx->side); break;
             case HapticEffectKind::DsVibration:     HapticDispatcher::DispatchDualSenseVibration(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsSlopeFeedback: HapticDispatcher::DispatchDualSenseSlopeFeedback(argv, argc, mapper, ctx->side); break;
             case HapticEffectKind::DsBow:           HapticDispatcher::DispatchDualSenseBow(argv, argc, mapper, ctx->side); break;
             case HapticEffectKind::DsGalloping:     HapticDispatcher::DispatchDualSenseGalloping(argv, argc, mapper, ctx->side); break;
             case HapticEffectKind::DsMachine:       HapticDispatcher::DispatchDualSenseMachine(argv, argc, mapper, ctx->side); break;

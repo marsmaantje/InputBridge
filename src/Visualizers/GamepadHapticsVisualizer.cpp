@@ -203,7 +203,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
         static int right_effect_type = 0;
         static int right_params[10] = {};
 
-        const char* ds_effect_names[] = { "Off", "Feedback", "Weapon", "Vibration", "Bow", "Galloping", "Machine" };
+        const char* ds_effect_names[] = { "Off", "Feedback", "Weapon", "Vibration", "Slope Feedback", "Bow", "Galloping", "Machine" };
 
         auto DrawTriggerUI = [&](const char* label, int& effect_type, int* params) {
             ImGui::PushID(label);
@@ -225,20 +225,26 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                     ImGui::SliderInt("Amplitude", &params[1], 0, 8);
                     ImGui::SliderInt("Frequency", &params[2], 0, 255);
                     break;
-                case 4: // Bow
+                case 4: // Slope Feedback
+                    ImGui::SliderInt("Start Position", &params[0], 0, 8);
+                    ImGui::SliderInt("End Position", &params[1], 0, 9);
+                    ImGui::SliderInt("Start Strength", &params[2], 1, 8);
+                    ImGui::SliderInt("End Strength", &params[3], 1, 8);
+                    break;
+                case 5: // Bow
                     ImGui::SliderInt("Start Position", &params[0], 0, 8);
                     ImGui::SliderInt("End Position", &params[1], 0, 8);
                     ImGui::SliderInt("Strength", &params[2], 0, 8);
                     ImGui::SliderInt("Snap Force", &params[3], 0, 8);
                     break;
-                case 5: // Galloping
+                case 6: // Galloping
                     ImGui::SliderInt("Start Position", &params[0], 0, 9);
                     ImGui::SliderInt("End Position", &params[1], 0, 9);
                     ImGui::SliderInt("First Foot", &params[2], 0, 6);
                     ImGui::SliderInt("Second Foot", &params[3], 0, 7);
                     ImGui::SliderInt("Frequency", &params[4], 0, 255);
                     break;
-                case 6: // Machine
+                case 7: // Machine
                     ImGui::SliderInt("Start Position", &params[0], 0, 9);
                     ImGui::SliderInt("End Position", &params[1], 0, 9);
                     ImGui::SliderInt("Amplitude A", &params[2], 0, 7);
@@ -256,7 +262,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
 
         if (ImGui::Button("Send Effect")) {
             if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
-                const char* effect_names[] = { "off", "feedback", "weapon", "vibration", "bow", "galloping", "machine" }; // must match ds_effect_names
+                const char* effect_names[] = { "off", "feedback", "weapon", "vibration", "slope_feedback", "bow", "galloping", "machine" }; // must match ds_effect_names
                 
                 // Send left trigger effect
                 std::map<std::string, int> leftParams;
@@ -277,20 +283,26 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                         leftParams["amplitude"] = left_params[1];
                         leftParams["frequency"] = left_params[2];
                         break;
-                    case 4: // Bow
+                    case 4: // Slope Feedback
+                        leftParams["start_position"] = left_params[0];
+                        leftParams["end_position"] = left_params[1];
+                        leftParams["start_strength"] = left_params[2];
+                        leftParams["end_strength"] = left_params[3];
+                        break;
+                    case 5: // Bow
                         leftParams["start_position"] = left_params[0];
                         leftParams["end_position"] = left_params[1];
                         leftParams["strength"] = left_params[2];
                         leftParams["snap_force"] = left_params[3];
                         break;
-                    case 5: // Galloping
+                    case 6: // Galloping
                         leftParams["start_position"] = left_params[0];
                         leftParams["end_position"] = left_params[1];
                         leftParams["first_foot"] = left_params[2];
                         leftParams["second_foot"] = left_params[3];
                         leftParams["frequency"] = left_params[4];
                         break;
-                    case 6: // Machine
+                    case 7: // Machine
                         leftParams["start_position"] = left_params[0];
                         leftParams["end_position"] = left_params[1];
                         leftParams["amplitude_a"] = left_params[2];
@@ -322,20 +334,26 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                         rightParams["amplitude"] = right_params[1];
                         rightParams["frequency"] = right_params[2];
                         break;
-                    case 4: // Bow
+                    case 4: // Slope Feedback
+                        rightParams["start_position"] = right_params[0];
+                        rightParams["end_position"] = right_params[1];
+                        rightParams["start_strength"] = right_params[2];
+                        rightParams["end_strength"] = right_params[3];
+                        break;
+                    case 5: // Bow
                         rightParams["start_position"] = right_params[0];
                         rightParams["end_position"] = right_params[1];
                         rightParams["strength"] = right_params[2];
                         rightParams["snap_force"] = right_params[3];
                         break;
-                    case 5: // Galloping
+                    case 6: // Galloping
                         rightParams["start_position"] = right_params[0];
                         rightParams["end_position"] = right_params[1];
                         rightParams["first_foot"] = right_params[2];
                         rightParams["second_foot"] = right_params[3];
                         rightParams["frequency"] = right_params[4];
                         break;
-                    case 6: // Machine
+                    case 7: // Machine
                         rightParams["start_position"] = right_params[0];
                         rightParams["end_position"] = right_params[1];
                         rightParams["amplitude_a"] = right_params[2];
