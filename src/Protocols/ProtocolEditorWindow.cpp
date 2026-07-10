@@ -906,10 +906,54 @@ void ProtocolEditorWindow::DrawEditor() {
         needsSave = true;
     }
 
-    ImGui::Text("Transport: %s",
-                definition.transport == ProtocolTransport::OSC ? "OSC" : "WebSocket");
-    ImGui::Text("Direction: %s",
-                definition.direction == ProtocolDirection::Send ? "Send" : "Receive");
+    {
+        static const char* kTransportItems[] = { "OSC", "WebSocket" };
+        int transIdx = (definition.transport == ProtocolTransport::OSC) ? 0 : 1;
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Transport:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::Combo("##Transport", &transIdx, kTransportItems, 2)) {
+            const ProtocolTransport newTransport = (transIdx == 0) ? ProtocolTransport::OSC : ProtocolTransport::WebSocket;
+            if (newTransport != definition.transport) {
+                // Unlike direction, this is non-destructive: every field in
+                // GetOutputFields()/GetInputFields() already carries both an
+                // oscPath and a wsKey (see addIn/addOut in ProtocolRegistry),
+                // and OSC vs WebSocket host/port settings live in separate
+                // members on ProtocolDefinition - nothing to clear.
+                definition.transport = newTransport;
+                needsSave = true;
+            }
+        }
+    }
+
+    {
+        static const char* kDirectionItems[] = { "Send", "Receive" };
+        int dirIdx = (definition.direction == ProtocolDirection::Send) ? 0 : 1;
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Direction:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::Combo("##Direction", &dirIdx, kDirectionItems, 2)) {
+            const ProtocolDirection newDirection = (dirIdx == 0) ? ProtocolDirection::Send : ProtocolDirection::Receive;
+            if (newDirection != definition.direction) {
+                // Send and Receive fields come from entirely separate catalogs
+                // (GetOutputFields() vs GetInputFields() - disjoint id spaces),
+                // so the existing selection/exclusions can't carry over.
+                definition.direction = newDirection;
+                definition.fields.clear();
+                definition.excludedFieldIds.clear();
+                definition.excludedCategories.clear();
+                needsSave = true;
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Changing direction clears this protocol's field selection,\n"
+                               "since Send and Receive fields come from separate catalogs.");
+        }
+    }
 
     // ── Transport-specific settings ──────────────────────────────────────────
     if (definition.transport == ProtocolTransport::OSC) {
