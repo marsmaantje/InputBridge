@@ -164,7 +164,7 @@ namespace {
     void dispatchDualSenseTrigger(const nlohmann::json& data, const std::string& trigger,
                                    const std::string& effect_type, int device, OutputMapper* mapper)
     {
-        // "position" is used by feedback/vibration; weapon/bow/galloping/machine
+        // "position" is used by feedback/vibration; weapon/slope_feedback/bow/galloping/machine
         // use "start_position" instead (see OSCBaseProtocol's DualSense docs).
         // Prefer start_position when present so both naming conventions work.
         int position     = data.contains(kDSStartPosition) ? data.value(kDSStartPosition, 0)

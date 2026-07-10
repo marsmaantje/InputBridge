@@ -568,6 +568,27 @@ TEST_F(HapticParserTest, DualSenseTriggerFallsBackToPositionWhenNoStartPosition)
     EXPECT_EQ(HapticStub::dualSenseCalls[0].p1, 2);  // position
 }
 
+// slope_feedback has no dedicated JSON keys of its own - it reuses
+// start_position/end_position/strength/amplitude, which OutputMapper::
+// TriggerDualSenseTrigger re-maps to start_strength/end_strength downstream
+// (see its params["start_strength"]/params["end_strength"] assignments).
+// This just confirms HapticParser forwards those fields through unchanged.
+TEST_F(HapticParserTest, DualSenseTriggerSlopeFeedbackReadsStrengthAndAmplitude) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"right","effect_type":"slope_feedback",
+                                     "start_position":0,"end_position":8,
+                                     "strength":1,"amplitude":8}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseCalls[0];
+    EXPECT_EQ(call.effect_type, "slope_feedback");
+    EXPECT_EQ(call.p1, 0);  // position (populated from start_position)
+    EXPECT_EQ(call.p2, 1);  // strength (becomes start_strength downstream)
+    EXPECT_EQ(call.p3, 8);  // end_position
+    EXPECT_EQ(call.p4, 8);  // amplitude (becomes end_strength downstream)
+}
+
 // Condition must win over constant when both "strength" and sat fields co-exist.
 TEST_F(HapticParserTest, AutoDetectConditionBeatsConstantWhenSatPresent) {
     auto det = HapticParser::AutoDetect(
