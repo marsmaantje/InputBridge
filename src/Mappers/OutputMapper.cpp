@@ -179,6 +179,7 @@ void OutputMapper::DrawContentOnly() {
                 bool has_constant = false;
                 bool has_periodic = false;
                 bool has_condition = false;
+                bool has_adaptive_trigger = false;
 
                 if (target.haptic_device) {
                     unsigned int features = SDL_GetHapticFeatures(target.haptic_device);
@@ -189,6 +190,15 @@ void OutputMapper::DrawContentOnly() {
                 } else {
                     // Assume Gamepad supports rumble
                     has_rumble = true;
+                }
+
+                // Adaptive triggers are exposed via the DeviceManager's HapticDevice
+                // abstraction (only present for gamepads), not through raw SDL_Haptic
+                // features, since they're a DualSense-specific extension.
+                if (target.instance_id != 0) {
+                    if (auto* hapticDevice = m_DeviceManager.GetHapticDevice(target.instance_id)) {
+                        has_adaptive_trigger = hapticDevice->caps().adaptiveTriggers;
+                    }
                 }
 
                 ImGuiStyle& style = ImGui::GetStyle();
@@ -217,6 +227,7 @@ void OutputMapper::DrawContentOnly() {
                 DrawEffect("Constant", &target.enable_constant, has_constant);
                 DrawEffect("Periodic", &target.enable_periodic, has_periodic);
                 DrawEffect("Condition", &target.enable_condition, has_condition);
+                DrawEffect("Adaptive Trigger", &target.enable_dualsense_trigger, has_adaptive_trigger);
 
             } else if (!target.device_guid.empty()) {
                 ImGui::TextColored(ImVec4(1,0,0,1), "Missing");
@@ -272,6 +283,26 @@ void OutputMapper::Update() {
                                        cmd.iParams[3], cmd.iParams[4], cmd.iParams[5],
                                        cmd.iParams[6], cmd.iParams[7], cmd.iParams[8],
                                        cmd.iParams[9] & 0xFF, (cmd.iParams[9] >> 8) & 0xFF);
+                break;
+            case HapticCommand::XBOX_TRIGGER:
+                TriggerXboxTrigger(cmd.virtual_id, cmd.iParams[0], cmd.iParams[1], cmd.iParams[2]);
+                break;
+        }
+    }
+
+    std::vector<DualSenseArrayCommand> arrayQueue;
+    {
+        std::lock_guard<std::mutex> lock(m_ArrayMutex);
+        arrayQueue.swap(m_ArrayCommandQueue);
+    }
+
+    for (const auto& cmd : arrayQueue) {
+        switch (cmd.type) {
+            case DualSenseArrayCommand::MULTI_POSITION_FEEDBACK:
+                TriggerDualSenseMultiPositionFeedback(cmd.virtual_id, cmd.trigger, cmd.values);
+                break;
+            case DualSenseArrayCommand::MULTI_POSITION_VIBRATION:
+                TriggerDualSenseMultiPositionVibration(cmd.virtual_id, cmd.trigger, cmd.frequency, cmd.values);
                 break;
         }
     }
@@ -400,6 +431,11 @@ void OutputMapper::QueueCommand(HapticCommand&& cmd) {
     m_CommandQueue.push_back(std::move(cmd));
 }
 
+void OutputMapper::QueueArrayCommand(DualSenseArrayCommand&& cmd) {
+    std::lock_guard<std::mutex> lock(m_ArrayMutex);
+    m_ArrayCommandQueue.push_back(std::move(cmd));
+}
+
 void OutputMapper::QueueRumble(int virtual_id, int slot, float low_freq, float high_freq, int duration_ms) {
     if (low_freq > 0.0f || high_freq > 0.0f) {
         m_lastHapticActivityTime = SDL_GetTicks();
@@ -493,6 +529,43 @@ void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, co
     cmd.iParams[8] = period;
     cmd.iParams[9] = (amplitude_a & 0xFF) | ((amplitude_b & 0xFF) << 8);
     QueueCommand(std::move(cmd));
+}
+
+void OutputMapper::QueueXboxTrigger(int virtual_id, int left_intensity, int right_intensity, int duration_ms) {
+    if (left_intensity > 0 || right_intensity > 0) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
+    HapticCommand cmd;
+    cmd.type = HapticCommand::XBOX_TRIGGER;
+    cmd.virtual_id = virtual_id;
+    cmd.iParams[0] = left_intensity;
+    cmd.iParams[1] = right_intensity;
+    cmd.iParams[2] = duration_ms;
+    QueueCommand(std::move(cmd));
+}
+
+void OutputMapper::QueueDualSenseMultiPositionFeedback(int virtual_id, const char* trigger, const uint8_t strengths[10]) {
+    m_lastHapticActivityTime = SDL_GetTicks();
+    DualSenseArrayCommand cmd;
+    cmd.type = DualSenseArrayCommand::MULTI_POSITION_FEEDBACK;
+    cmd.virtual_id = virtual_id;
+    std::strncpy(cmd.trigger, trigger, sizeof(cmd.trigger) - 1);
+    cmd.trigger[sizeof(cmd.trigger) - 1] = '\0';
+    cmd.frequency = 0; // unused for feedback
+    std::memcpy(cmd.values, strengths, 10);
+    QueueArrayCommand(std::move(cmd));
+}
+
+void OutputMapper::QueueDualSenseMultiPositionVibration(int virtual_id, const char* trigger, uint8_t frequency, const uint8_t amplitudes[10]) {
+    m_lastHapticActivityTime = SDL_GetTicks();
+    DualSenseArrayCommand cmd;
+    cmd.type = DualSenseArrayCommand::MULTI_POSITION_VIBRATION;
+    cmd.virtual_id = virtual_id;
+    std::strncpy(cmd.trigger, trigger, sizeof(cmd.trigger) - 1);
+    cmd.trigger[sizeof(cmd.trigger) - 1] = '\0';
+    cmd.frequency = frequency;
+    std::memcpy(cmd.values, amplitudes, 10);
+    QueueArrayCommand(std::move(cmd));
 }
 
 // --- Trigger Implementations ---
@@ -694,6 +767,7 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
         if (!target || target->instance_id == 0) continue;
+        if (!target->enable_dualsense_trigger) continue;
 
         // Get the haptic device - for DualSense, we need to access GamepadHaptics
         auto* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
@@ -705,6 +779,8 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
         params["strength"] = strength;
         params["end_position"] = end_position;
         params["start_position"] = position;  // Many effects use start_position instead of position
+        params["start_strength"] = strength;  // slope_feedback uses start_strength/end_strength
+        params["end_strength"] = amplitude;   // instead of strength/amplitude
         params["amplitude"] = amplitude;
         params["frequency"] = frequency;
         params["snap_force"] = snap_force;
@@ -715,5 +791,62 @@ void OutputMapper::TriggerDualSenseTrigger(int virtual_id, const char* trigger, 
         params["amplitude_b"] = amplitude_b;
 
         hapticDevice->PlayDualSenseTrigger(trigger, effect_type, params);
+    }
+}
+
+void OutputMapper::TriggerDualSenseMultiPositionFeedback(int virtual_id, const char* trigger, const uint8_t* strengths) {
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+        if (!target || target->instance_id == 0) continue;
+        if (!target->enable_dualsense_trigger) continue;
+
+        auto* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (!hapticDevice) continue;
+
+        std::map<std::string, int> params;
+        for (int i = 0; i < 10; ++i) {
+            params["strength_" + std::to_string(i)] = strengths[i];
+        }
+
+        hapticDevice->PlayDualSenseTrigger(trigger, "multi_position_feedback", params);
+    }
+}
+
+void OutputMapper::TriggerDualSenseMultiPositionVibration(int virtual_id, const char* trigger, uint8_t frequency, const uint8_t* amplitudes) {
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+        if (!target || target->instance_id == 0) continue;
+        if (!target->enable_dualsense_trigger) continue;
+
+        auto* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (!hapticDevice) continue;
+
+        std::map<std::string, int> params;
+        params["frequency"] = frequency;
+        for (int i = 0; i < 10; ++i) {
+            params["amplitude_" + std::to_string(i)] = amplitudes[i];
+        }
+
+        hapticDevice->PlayDualSenseTrigger(trigger, "multi_position_vibration", params);
+    }
+}
+
+void OutputMapper::TriggerXboxTrigger(int virtual_id, int left_intensity, int right_intensity, int duration_ms) {
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+        if (!target || target->instance_id == 0) continue;
+        if (!target->enable_xbox_trigger) continue;
+
+        auto* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (!hapticDevice) continue;
+
+        uint8_t left  = static_cast<uint8_t>(std::clamp(left_intensity, 0, 255));
+        uint8_t right = static_cast<uint8_t>(std::clamp(right_intensity, 0, 255));
+        uint32_t duration = (duration_ms < 0) ? 0 : static_cast<uint32_t>(duration_ms);
+
+        hapticDevice->PlayXboxTrigger(left, right, duration);
     }
 }

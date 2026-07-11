@@ -41,12 +41,11 @@ namespace {
     const char* const kDefaultHost = "127.0.0.1";
     const char* const kDefaultProtocol = "OSC Back Ally Racing";
 
-    // OSC Paths
-    const char* const kHapticRumblePath = "/haptic/rumble";
-    const char* const kHapticConstantPath = "/haptic/constant";
-    const char* const kHapticPeriodicPath = "/haptic/periodic";
-    const char* const kHapticConditionPath = "/haptic/condition";
-    const char* const kHapticGainPath = "/haptic/gain";
+    // OSC Paths for haptic/DualSense fields are now driven dynamically from
+    // the active input ProtocolDefinition - see kFieldHandlerSpecs and
+    // OSCServer::RebuildInputHandlers() below. The strings there double as
+    // the built-in defaults used when no input definition is selected, or
+    // when the selected one doesn't mention a given field.
 
     const char* const kWheelSteerPath = "/wheel/steer";
     const char* const kWheelBrakePath = "/wheel/brake";
@@ -58,6 +57,55 @@ namespace {
     const char* const kWheelButtons1Path = "/wheel/buttons/1";
     const char* const kWheelButtons2Path = "/wheel/buttons/2";
     const char* const kWheelButtons3Path = "/wheel/buttons/3";
+
+    // One entry per OSC-receivable haptic/DualSense field. fieldId matches
+    // FieldDescriptor::id in the input field catalog (see
+    // ProtocolRegistry.cpp's addIn(...) calls) so RebuildInputHandlers() can
+    // look up each field's *current*, possibly-user-customized oscPath.
+    // defaultPath/typespec double as the fallback used when no input
+    // definition is selected, or the selected one doesn't mention a field.
+    //
+    // Periodic has two entries sharing one fieldId: liblo distinguishes them
+    // by typespec, so both the "with wave_type" and legacy formats stay
+    // addressable on the same (default or user-chosen) path.
+    struct FieldHandlerSpec {
+        const char* fieldId;
+        const char* defaultPath;
+        const char* typespec;
+        OSCServer::HapticEffectKind kind;
+        const char* side; // "left" / "right" / nullptr
+    };
+
+    const FieldHandlerSpec kFieldHandlerSpecs[] = {
+        { "haptic_rumble",    "/haptic/rumble",    "iiffi",      OSCServer::HapticEffectKind::Rumble,   nullptr },
+        { "haptic_constant",  "/haptic/constant",  "iifi",       OSCServer::HapticEffectKind::Constant, nullptr },
+        { "haptic_periodic",  "/haptic/periodic",  "iiififfii",  OSCServer::HapticEffectKind::PeriodicNew,    nullptr },
+        { "haptic_periodic",  "/haptic/periodic",  "iififfii",   OSCServer::HapticEffectKind::PeriodicLegacy, nullptr },
+        { "haptic_condition", "/haptic/condition", "iiiffffffi", OSCServer::HapticEffectKind::Condition, nullptr },
+        { "haptic_gain",      "/haptic/gain",      "ii",         OSCServer::HapticEffectKind::Gain,      nullptr },
+        { "xbox_trigger",     "/haptic/xbox/trigger", "iiii",    OSCServer::HapticEffectKind::XboxTrigger, nullptr },
+
+        { "ds_trigger_left_feedback",   "/haptic/dualsense/trigger/left/feedback",   "iii",     OSCServer::HapticEffectKind::DsFeedback,  "left"  },
+        { "ds_trigger_right_feedback",  "/haptic/dualsense/trigger/right/feedback",  "iii",     OSCServer::HapticEffectKind::DsFeedback,  "right" },
+        { "ds_trigger_left_weapon",     "/haptic/dualsense/trigger/left/weapon",     "iiii",    OSCServer::HapticEffectKind::DsWeapon,    "left"  },
+        { "ds_trigger_right_weapon",    "/haptic/dualsense/trigger/right/weapon",    "iiii",    OSCServer::HapticEffectKind::DsWeapon,    "right" },
+        { "ds_trigger_left_vibration",  "/haptic/dualsense/trigger/left/vibration",  "iiii",    OSCServer::HapticEffectKind::DsVibration, "left"  },
+        { "ds_trigger_right_vibration", "/haptic/dualsense/trigger/right/vibration", "iiii",    OSCServer::HapticEffectKind::DsVibration, "right" },
+        { "ds_trigger_left_slope_feedback",  "/haptic/dualsense/trigger/left/slope_feedback",  "iiiii", OSCServer::HapticEffectKind::DsSlopeFeedback, "left"  },
+        { "ds_trigger_right_slope_feedback", "/haptic/dualsense/trigger/right/slope_feedback", "iiiii", OSCServer::HapticEffectKind::DsSlopeFeedback, "right" },
+        { "ds_trigger_left_multi_position_feedback",  "/haptic/dualsense/trigger/left/multi_position_feedback",  "iiiiiiiiiii", OSCServer::HapticEffectKind::DsMultiPositionFeedback, "left"  },
+        { "ds_trigger_right_multi_position_feedback", "/haptic/dualsense/trigger/right/multi_position_feedback", "iiiiiiiiiii", OSCServer::HapticEffectKind::DsMultiPositionFeedback, "right" },
+        { "ds_trigger_left_multi_position_vibration",  "/haptic/dualsense/trigger/left/multi_position_vibration",  "iiiiiiiiiiii", OSCServer::HapticEffectKind::DsMultiPositionVibration, "left"  },
+        { "ds_trigger_right_multi_position_vibration", "/haptic/dualsense/trigger/right/multi_position_vibration", "iiiiiiiiiiii", OSCServer::HapticEffectKind::DsMultiPositionVibration, "right" },
+        { "ds_trigger_left_bow",        "/haptic/dualsense/trigger/left/bow",        "iiiii",   OSCServer::HapticEffectKind::DsBow,       "left"  },
+        { "ds_trigger_right_bow",       "/haptic/dualsense/trigger/right/bow",       "iiiii",   OSCServer::HapticEffectKind::DsBow,       "right" },
+        { "ds_trigger_left_galloping",  "/haptic/dualsense/trigger/left/galloping",  "iiiiii",  OSCServer::HapticEffectKind::DsGalloping, "left"  },
+        { "ds_trigger_right_galloping", "/haptic/dualsense/trigger/right/galloping", "iiiiii",  OSCServer::HapticEffectKind::DsGalloping, "right" },
+        { "ds_trigger_left_machine",    "/haptic/dualsense/trigger/left/machine",    "iiiiiii", OSCServer::HapticEffectKind::DsMachine,   "left"  },
+        { "ds_trigger_right_machine",   "/haptic/dualsense/trigger/right/machine",   "iiiiiii", OSCServer::HapticEffectKind::DsMachine,   "right" },
+        { "ds_trigger_left_off",        "/haptic/dualsense/trigger/left/off",        "i",       OSCServer::HapticEffectKind::DsOff,       "left"  },
+        { "ds_trigger_right_off",       "/haptic/dualsense/trigger/right/off",       "i",       OSCServer::HapticEffectKind::DsOff,       "right" },
+    };
 }
 
 static std::atomic<bool> s_isDestroyed{false};
@@ -85,60 +133,175 @@ OSCServer::~OSCServer() {
     s_isDestroyed = true;
 }
 
-int OSCServer::haptic_rumble_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    // All static handlers are called from the liblo background thread (a plain C thread).
-    // Any uncaught C++ exception propagating into that thread is undefined behaviour and
-    // will typically terminate the process.  Guard every handler with try/catch.
-    // Also check s_isDestroyed to avoid touching the OSCServer object after it has been
-    // destroyed (belt-and-suspenders alongside lo_server_thread_stop in Stop()).
+// Single trampoline for every dynamically registered field handler (see
+// RebuildInputHandlers()). user_data is a FieldHandlerCtx*, not an
+// OSCServer* - it carries both the owning server and which
+// HapticDispatcher::Dispatch* call this particular (path, typespec)
+// registration corresponds to.
+//
+// Unlike the old fixed handlers this replaces, this trampoline also does the
+// bookkeeping generic_handler does for other messages (client tracking, the
+// UI "Recv:" log, m_lastMessageTime, and honoring the input-enabled toggle),
+// since none of that ran for haptic/DualSense traffic before - it went
+// straight from liblo into HapticDispatcher with no visibility and no way to
+// disable it via "Receive OSC" in the UI.
+int OSCServer::dynamic_field_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data) {
     try {
         if (s_isDestroyed) return 0;
-        auto* server = static_cast<OSCServer*>(user_data);
-        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        HapticDispatcher::DispatchRumble(argv, argc, server->m_OutputMapper);
+        auto* ctx = static_cast<FieldHandlerCtx*>(user_data);
+        if (!ctx || !ctx->server) return 0;
+        OSCServer* server = ctx->server;
+
+        OutputMapper* mapper = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(server->m_mutex);
+            if (!server->m_running || !server->m_inputEnabled) return 0;
+            mapper = server->m_OutputMapper;
+            server->m_lastMessageTime = SDL_GetTicks();
+
+            lo_address src = lo_message_get_source(msg);
+            if (src) {
+                const char* hostname = lo_address_get_hostname(src);
+                const char* port     = lo_address_get_port(src);
+                if (hostname && port) {
+                    server->m_clients.insert(std::string(hostname) + ":" + std::string(port));
+                }
+            }
+
+            std::string logEntry = "Recv: " + std::string(path) + " [";
+            for (int i = 0; i < argc; ++i) {
+                if (i > 0) logEntry += ", ";
+                char argBuf[64];
+                switch (types[i]) {
+                    case 'i': std::snprintf(argBuf, sizeof(argBuf), "%d",   argv[i]->i); break;
+                    case 'f': std::snprintf(argBuf, sizeof(argBuf), "%.3f", argv[i]->f); break;
+                    case 's': std::snprintf(argBuf, sizeof(argBuf), "\"%s\"", &argv[i]->s); break;
+                    default:  std::snprintf(argBuf, sizeof(argBuf), "(%c)", types[i]); break;
+                }
+                logEntry += argBuf;
+            }
+            logEntry += "]";
+            server->m_logs.push_back({logEntry, false});
+            if (server->m_logs.size() > 100) server->m_logs.pop_front();
+        }
+        // m_mutex released - HapticDispatcher/OutputMapper work happens outside the lock.
+
+        if (!mapper) return 0;
+
+        switch (ctx->kind) {
+            case HapticEffectKind::Rumble:          HapticDispatcher::DispatchRumble(argv, argc, mapper); break;
+            case HapticEffectKind::Constant:        HapticDispatcher::DispatchConstant(argv, argc, mapper); break;
+            case HapticEffectKind::PeriodicNew:
+            case HapticEffectKind::PeriodicLegacy:  HapticDispatcher::DispatchPeriodic(argv, argc, mapper); break;
+            case HapticEffectKind::Condition:       HapticDispatcher::DispatchCondition(argv, argc, mapper); break;
+            case HapticEffectKind::Gain:            HapticDispatcher::DispatchGain(argv, argc, mapper); break;
+            case HapticEffectKind::XboxTrigger:     HapticDispatcher::DispatchXboxTrigger(argv, argc, mapper); break;
+            case HapticEffectKind::DsFeedback:      HapticDispatcher::DispatchDualSenseFeedback(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsWeapon:        HapticDispatcher::DispatchDualSenseWeapon(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsVibration:     HapticDispatcher::DispatchDualSenseVibration(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsSlopeFeedback: HapticDispatcher::DispatchDualSenseSlopeFeedback(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsMultiPositionFeedback:  HapticDispatcher::DispatchDualSenseMultiPositionFeedback(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsMultiPositionVibration: HapticDispatcher::DispatchDualSenseMultiPositionVibration(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsBow:           HapticDispatcher::DispatchDualSenseBow(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsGalloping:     HapticDispatcher::DispatchDualSenseGalloping(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsMachine:       HapticDispatcher::DispatchDualSenseMachine(argv, argc, mapper, ctx->side); break;
+            case HapticEffectKind::DsOff:           HapticDispatcher::DispatchDualSenseOff(argv, argc, mapper, ctx->side); break;
+        }
     } catch (...) {}
     return 0;
 }
 
-int OSCServer::haptic_constant_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    try {
-        if (s_isDestroyed) return 0;
-        auto* server = static_cast<OSCServer*>(user_data);
-        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        HapticDispatcher::DispatchConstant(argv, argc, server->m_OutputMapper);
-    } catch (...) {}
-    return 0;
+// Tears down every handler previously registered by RebuildInputHandlersFor().
+// Safe to call even if nothing is registered yet. Caller must hold m_handlerMutex.
+void OSCServer::ClearInputHandlers() {
+    if (!m_server_thread) { m_fieldHandlerCtxs.clear(); return; }
+    for (auto& ctx : m_fieldHandlerCtxs) {
+        lo_server_thread_del_method(m_server_thread, ctx->oscPath.c_str(), ctx->typespec.c_str());
+    }
+    m_fieldHandlerCtxs.clear();
 }
 
-int OSCServer::haptic_periodic_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    try {
-        if (s_isDestroyed) return 0;
-        auto* server = static_cast<OSCServer*>(user_data);
-        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        HapticDispatcher::DispatchPeriodic(argv, argc, server->m_OutputMapper);
-    } catch (...) {}
-    return 0;
+// Rebuilds the per-field OSC receive handlers for the given input
+// ProtocolDefinition id, one lo_server_thread_add_method registration per
+// enabled field, bound to that field's *current* oscPath - so a custom path
+// set in the Protocol Editor is what actually gets listened on, not just
+// what a field-lookup scan would have matched inside generic_handler.
+// Falls back to each field's built-in default path/typespec when
+// inputDefinitionId is empty, or the definition doesn't mention a given
+// field, so the built-in defaults keep working.
+//
+// Must run before haptic_subchannel_handler/generic_handler are registered
+// (see Start()) so liblo tries these specific (path, typespec) matches
+// first; only messages that don't match any of them fall through to the
+// wildcard handlers.
+//
+// Only ever locks m_handlerMutex (never m_mutex) - see the header comment
+// on this method for why.
+void OSCServer::RebuildInputHandlersFor(const std::string& inputDefinitionId) {
+    if (!m_server_thread) return;
+
+    // ProtocolRegistry has its own internal locking; call it before taking
+    // m_handlerMutex, same "look up outside the lock" convention used by
+    // SetInputDefinition()/SetOutputDefinition() above.
+    const ProtocolDefinition* def = nullptr;
+    if (!inputDefinitionId.empty()) {
+        def = ProtocolRegistry::GetInstance().FindById(inputDefinitionId);
+    }
+
+    std::lock_guard<std::mutex> lock(m_handlerMutex);
+    ClearInputHandlers();
+
+    for (const auto& spec : kFieldHandlerSpecs) {
+        std::string path = spec.defaultPath;
+        bool enabled = true;
+
+        if (def) {
+            const ProtocolField* field = nullptr;
+            for (const auto& f : def->fields) {
+                if (f.fieldId == spec.fieldId) { field = &f; break; }
+            }
+            if (field) {
+                enabled = field->enabled;
+                if (!field->oscPath.empty()) path = field->oscPath;
+            }
+            // Field absent from this definition entirely -> keep the
+            // built-in default path/enabled state, same as before dynamic
+            // registration existed.
+        }
+
+        if (!enabled) continue;
+
+        auto ctx = std::make_unique<FieldHandlerCtx>();
+        ctx->server   = this;
+        ctx->kind     = spec.kind;
+        ctx->side     = spec.side;
+        ctx->oscPath  = std::move(path);
+        ctx->typespec = spec.typespec;
+
+        lo_server_thread_add_method(m_server_thread, ctx->oscPath.c_str(), ctx->typespec.c_str(),
+                                     dynamic_field_handler, ctx.get());
+        m_fieldHandlerCtxs.push_back(std::move(ctx));
+    }
 }
 
-int OSCServer::haptic_condition_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    try {
-        if (s_isDestroyed) return 0;
-        auto* server = static_cast<OSCServer*>(user_data);
-        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        HapticDispatcher::DispatchCondition(argv, argc, server->m_OutputMapper);
-    } catch (...) {}
-    return 0;
+void OSCServer::RebuildInputHandlers() {
+    std::string inputDefId;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_running) return;
+        inputDefId = m_inputDefinitionId;
+    }
+    RebuildInputHandlersFor(inputDefId);
 }
 
-
-int OSCServer::haptic_gain_handler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data) {
-    try {
-        if (s_isDestroyed) return 0;
-        auto* server = static_cast<OSCServer*>(user_data);
-        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
-        HapticDispatcher::DispatchGain(argv, argc, server->m_OutputMapper);
-    } catch (...) {}
-    return 0;
+void OSCServer::OnDefinitionSaved(const std::string& definitionId) {
+    if (IsDestroyed() || definitionId.empty()) return;
+    bool isActiveInput = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        isActiveInput = m_running && (definitionId == m_inputDefinitionId);
+    }
+    if (isActiveInput) RebuildInputHandlers();
 }
 
 // Handles subchannel paths of the form /haptic/<effect>/<slot>
@@ -156,11 +319,19 @@ int OSCServer::haptic_subchannel_handler(const char *path, const char *types, lo
     try {
         if (s_isDestroyed) return 0;
         auto* server = static_cast<OSCServer*>(user_data);
-        if (!server || !server->m_running || !server->m_OutputMapper) return 0;
+        if (!server || !server->m_running || !server->m_OutputMapper) return 1;
 
         // Delegate path parsing to the testable free function.
         const SubchannelPath sub = ParseSubchannelPath(path);
-        if (!sub.valid) return 0;
+        // Not a /haptic/<effect>/<slot> subchannel path: return "not handled"
+        // (non-zero) so liblo keeps trying other registered methods for this
+        // message (the dynamic per-field handlers, then generic_handler).
+        // This used to unconditionally return 0 here, which - since this
+        // wildcard handler is registered before generic_handler - made
+        // generic_handler's client tracking, "Recv:" log, and legacy
+        // IProtocol dispatch permanently unreachable for every message that
+        // wasn't itself a subchannel path.
+        if (!sub.valid) return 1;
 
         // The slot is carried as argv[1] (int), identical to the old fixed paths.
         // The slot in the OSC path (/haptic/<effect>/<N>) is used purely to give
@@ -227,12 +398,15 @@ bool OSCServer::Start(const std::string& send_host, int send_port, int recv_port
         return false;
     }
 
-    lo_server_thread_add_method(m_server_thread, kHapticRumblePath,      "iiffi",       haptic_rumble_handler,    this);
-    lo_server_thread_add_method(m_server_thread, kHapticConstantPath,    "iifi",        haptic_constant_handler,  this);
-    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iiififfii",   haptic_periodic_handler,  this);  // with wave_type
-    lo_server_thread_add_method(m_server_thread, kHapticPeriodicPath,    "iififfii",    haptic_periodic_handler,  this);  // legacy, no wave_type
-    lo_server_thread_add_method(m_server_thread, kHapticConditionPath,   "iiiffffffi",  haptic_condition_handler, this);
-    lo_server_thread_add_method(m_server_thread, kHapticGainPath,        "ii",          haptic_gain_handler,      this);
+    // Haptic/DualSense receive handlers are generated dynamically from the
+    // active input ProtocolDefinition's *current* field paths (falling back
+    // to built-in defaults for any field it doesn't customize). We already
+    // hold m_mutex here, so read m_inputDefinitionId directly rather than
+    // going through the self-locking RebuildInputHandlers() wrapper.
+    // Must happen before the wildcard handlers below so liblo tries these
+    // specific (path, typespec) registrations first.
+    RebuildInputHandlersFor(m_inputDefinitionId);
+
     // Subchannel handler: catches /haptic/<effect>/<slot> paths (slot in path, no slot arg).
     // Registered before the generic catch-all so it runs first for subchannel messages.
     lo_server_thread_add_method(m_server_thread, nullptr, nullptr, haptic_subchannel_handler, this);
@@ -300,6 +474,14 @@ void OSCServer::Stop() {
 
     if (mapper) {
         mapper->StopAllHapticEffects();
+    }
+
+    {
+        // The lo_server_thread these were registered on is being torn down
+        // on the detached cleanup thread below; m_server_thread is already
+        // null at this point so there's nothing to de-register against.
+        std::lock_guard<std::mutex> handlerLock(m_handlerMutex);
+        m_fieldHandlerCtxs.clear();
     }
 
     // lo_server_thread_stop() blocks until the liblo receive thread exits.
@@ -567,8 +749,11 @@ int OSCServer::generic_handler(const char* path, const char* types, lo_arg** arg
                 bool handled = oscProtocol->handle_osc_message(path, types, argv, argc);
                 if (!handled) {
                     std::lock_guard<std::mutex> errLock(server->m_mutex);
-                    server->m_logs.push_back({"Invalid OSC path: " + std::string(path), true});
-                    if (server->m_logs.size() > 100) server->m_logs.pop_front();
+                    // Mark the "Recv:" entry logged for this exact message (pushed
+                    // above, always the most recent entry - liblo dispatches one
+                    // message at a time on this thread, so there's no race) as
+                    // invalid instead of appending a second, duplicate line.
+                    if (!server->m_logs.empty()) server->m_logs.back().isError = true;
                 }
             }
         } else if (handlerCopy) {
@@ -643,9 +828,16 @@ void OSCServer::SetInputDefinition(const std::string& definitionId) {
     if (!definitionId.empty()) {
         def = ProtocolRegistry::GetInstance().FindById(definitionId);
     }
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_inputDefinitionId = definitionId;
-    if (def) m_recv_port = def->oscRecvPort;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_inputDefinitionId = definitionId;
+        if (def) m_recv_port = def->oscRecvPort;
+    }
+    // If we're already listening, re-point the dynamic OSC handlers at this
+    // definition's fields immediately rather than waiting for a manual
+    // restart (recv port changes still need a restart - only the receive
+    // handler set is re-pointed here).
+    RebuildInputHandlers();
 }
 
 std::string OSCServer::GetOutputDefinitionId() const {
@@ -836,7 +1028,7 @@ void OSCServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!outputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Output);
+        auto entries = buildEntries(ProtocolDirection::Send);
         int curIdx = findIdx(entries, outDefId, currentProto);
         int newIdx = curIdx;
         ImGui::Text("Output (send to client)");
@@ -859,7 +1051,7 @@ void OSCServer::DrawContent() {
         }
         ImGui::SameLine();
         if (!inputEnabled) ImGui::BeginDisabled();
-        auto entries = buildEntries(ProtocolDirection::Input);
+        auto entries = buildEntries(ProtocolDirection::Receive);
         int curIdx = findIdx(entries, inDefId, currentInputProto);
         int newIdx = curIdx;
         ImGui::Text("Input (receive from client)");
@@ -948,8 +1140,21 @@ void OSCServer::DrawContent() {
     }
     ImGui::Separator();
     ImGui::Text("Log");
+    ImGui::SameLine();
+    ImGui::Checkbox("Valid##log_valid", &m_showValidMessages);
+    ImGui::SameLine();
+    ImGui::Checkbox("Invalid##log_invalid", &m_showInvalidMessages);
     if (ImGui::BeginChild("Log", ImVec2(0, 150), true)) {
+        // Filter only applies to per-message "Recv:" entries - server
+        // lifecycle/status lines (started, stopped, client timeout, etc.)
+        // aren't received messages, so they always stay visible.
+        static constexpr const char* kRecvPrefix = "Recv: ";
         for (const auto& l : logs) {
+            bool isRecvEntry = l.text.compare(0, std::strlen(kRecvPrefix), kRecvPrefix) == 0;
+            if (isRecvEntry) {
+                if (l.isError && !m_showInvalidMessages) continue;
+                if (!l.isError && !m_showValidMessages) continue;
+            }
             if (l.isError)
                 ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", l.text.c_str());
             else

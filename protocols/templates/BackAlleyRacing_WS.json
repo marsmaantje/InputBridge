@@ -1,25 +1,37 @@
 {
-    "direction": "Output",
+    "active": false,
+    "direction": "send",
     "fields": [
         {
+            "enabled": true,
             "fieldId": "axis_throttle",
             "oscPath": "/input/throttle",
             "wsKey": "throttle"
         },
         {
+            "enabled": true,
             "fieldId": "axis_steering",
             "oscPath": "/input/yaw",
             "wsKey": "yaw"
         },
         {
+            "enabled": true,
             "fieldId": "axis_brake",
             "oscPath": "/input/brake",
             "wsKey": "brake"
         }
     ],
-    "protocol_id": "a0366c64614aa6a2",
-    "protocol_name": "BackAlleyRacing WS",
+    "id": "a0366c64614aa6a2",
+    "name": "BackAlleyRacing WS",
+    "osc": {
+        "host": "127.0.0.1",
+        "recvPort": 9068,
+        "sendPort": 9066
+    },
     "template_desc": "",
     "template_name": "BackAlleyRacing WS",
-    "transport": "WebSocket"
+    "transport": "websocket",
+    "ws": {
+        "port": 4269
+    }
 }

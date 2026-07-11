@@ -43,6 +43,19 @@ public:
         MarsmaantjeNew
     };
 
+    // Identifies which HapticDispatcher::Dispatch* call a dynamically
+    // registered field handler should make. "side" (for the DualSense Ds*
+    // kinds) is a stable string literal ("left"/"right"), never owned.
+    // Public because the file-scope kFieldHandlerSpecs table in OSCServer.cpp
+    // needs to name these values outside the class.
+    enum class HapticEffectKind {
+        Rumble, Constant, PeriodicNew, PeriodicLegacy, Condition, Gain,
+        XboxTrigger,
+        DsFeedback, DsWeapon, DsVibration, DsSlopeFeedback,
+        DsMultiPositionFeedback, DsMultiPositionVibration,
+        DsBow, DsGalloping, DsMachine, DsOff
+    };
+
     OSCServer();
     ~OSCServer();
 
@@ -115,13 +128,15 @@ public:
     // The caller must restart manually (or the UI shows "Restart to apply").
     void SetPortsFromProfile(const std::string& sendHost, int sendPort, int recvPort);
 
+    // Called by ProtocolRegistry::SaveDefinition() whenever a definition is
+    // persisted. If it's the currently active *input* definition, the OSC
+    // receive-side handlers are rebuilt so edited field paths (e.g. from the
+    // Protocol Editor) take effect immediately without a manual restart.
+    // No-op if the server isn't running or the saved definition isn't active.
+    void OnDefinitionSaved(const std::string& definitionId);
+
 private:
     static int generic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
-    static int haptic_rumble_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
-    static int haptic_constant_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
-    static int haptic_periodic_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
-    static int haptic_condition_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
-    static int haptic_gain_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
 
     // Handles subchannel paths of the form /haptic/<effect>/<slot>
     // where the slot is encoded in the path instead of as a message argument.
@@ -129,6 +144,56 @@ private:
     // frame (required by hosts like Resonite that allow only one message per
     // OSC path per frame).
     static int haptic_subchannel_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+
+    // Identifies which HapticDispatcher::Dispatch* call a dynamically
+    // registered field handler should make - see the public HapticEffectKind
+    // declared near the top of the class.
+
+    // Per-registration context handed to liblo as user_data for a
+    // dynamically registered field handler. Owns the path/typespec strings
+    // for the lifetime of the registration so liblo never holds a dangling
+    // pointer into a ProtocolField that could be edited/reallocated later.
+    struct FieldHandlerCtx {
+        OSCServer*       server = nullptr;
+        HapticEffectKind kind{};
+        const char*      side = nullptr; // "left" / "right" / nullptr, string-literal, unowned
+        std::string      oscPath;
+        std::string      typespec;
+    };
+
+    // Single trampoline shared by every dynamically registered field handler.
+    // Replaces what used to be ~12 near-identical haptic_*_handler methods,
+    // one per effect shape.
+    static int dynamic_field_handler(const char* path, const char* types, lo_arg** argv, int argc, lo_message msg, void* user_data);
+
+    // (Re)builds the set of per-field OSC receive handlers from the given
+    // input ProtocolDefinition id, using each enabled field's *current*
+    // oscPath. Falls back to a field's built-in default path/enabled state
+    // when defId is empty, or the definition doesn't mention that field at
+    // all - so behaviour matches the pre-existing built-in defaults there.
+    //
+    // Deliberately takes the definition id as a parameter (rather than
+    // reading m_inputDefinitionId itself) and only ever locks m_handlerMutex
+    // - never m_mutex - so it can be called safely both from contexts that
+    // already hold m_mutex (Start()) and from contexts that don't
+    // (SetInputDefinition(), OnDefinitionSaved()) without risking deadlock
+    // against dynamic_field_handler, which locks m_mutex on the liblo
+    // callback thread while a rebuild might be mid-flight on the UI thread.
+    void RebuildInputHandlersFor(const std::string& inputDefinitionId);
+
+    // Convenience wrapper for call sites that don't already hold m_mutex:
+    // snapshots m_inputDefinitionId under m_mutex, releases it, then calls
+    // RebuildInputHandlersFor(). Must NOT be called while already holding
+    // m_mutex (use RebuildInputHandlersFor(m_inputDefinitionId) directly in
+    // that case, as Start() does).
+    void RebuildInputHandlers();
+
+    void ClearInputHandlers(); // assumes caller holds m_handlerMutex
+
+    // Guards m_fieldHandlerCtxs and the underlying liblo (de)registration
+    // calls. Kept separate from m_mutex on purpose - see RebuildInputHandlersFor().
+    std::mutex m_handlerMutex;
+    std::vector<std::unique_ptr<FieldHandlerCtx>> m_fieldHandlerCtxs;
 
     lo_address m_send_address = nullptr;
     lo_server_thread m_server_thread = nullptr;
@@ -156,6 +221,8 @@ private:
     std::string m_inputDefinitionId;  // selected input  (client→server) definition
     struct LogEntry { std::string text; bool isError = false; };
     std::deque<LogEntry> m_logs;
+    bool m_showValidMessages = true;    // UI filter: show "Recv:" entries that were successfully handled
+    bool m_showInvalidMessages = true;  // UI filter: show "Recv:" entries that didn't match a known OSC path
     std::set<std::string> m_clients;
     uint64_t m_lastMessageTime = 0;
     OutputMapper* m_OutputMapper = nullptr;
@@ -167,7 +234,7 @@ private:
     bool m_outputEnabled = true;  // send OSC messages to clients
     bool m_inputEnabled  = true;  // receive OSC messages from clients
 
-    // Inactivity timeout - persisted to prefs.
+    // Inactivity timeout persisted to prefs.
     bool     m_inactivityTimeoutEnabled = true;
     uint64_t m_inactivityTimeoutMs      = 5000;
 

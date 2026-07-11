@@ -1,6 +1,7 @@
 #include "HapticDispatcher.h"
 #include "Haptics/HapticDevice.h"
 #include "../Mappers/OutputMapper.h"
+#include <cstdint>
 
 void HapticDispatcher::DispatchRumble(lo_arg** argv, int argc, OutputMapper* mapper)
 {
@@ -85,4 +86,169 @@ void HapticDispatcher::DispatchGain(lo_arg** argv, int argc, OutputMapper* mappe
     const int id   = argv[0]->i;
     const int gain = argv[1]->i;
     mapper->QueueSetGain(id, gain);
+}
+
+void HapticDispatcher::DispatchXboxTrigger(lo_arg** argv, int argc, OutputMapper* mapper)
+{
+    if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
+    const int id              = argv[0]->i;
+    const int left_intensity  = argv[1]->i;
+    const int right_intensity = argv[2]->i;
+    const int duration        = argv[3]->i;
+    mapper->QueueXboxTrigger(id, left_intensity, right_intensity, duration);
+}
+
+void HapticDispatcher::DispatchDualSenseFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 3) return;
+    for (int i = 0; i < 3; ++i) { if (!argv[i]) return; }
+    const int id       = argv[0]->i;
+    const int position = argv[1]->i;
+    const int strength = argv[2]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "feedback",
+                                   position, strength, /*end_position*/0,
+                                   /*amplitude*/0, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseWeapon(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int strength       = argv[3]->i;
+    // "position" doubles as "start_position" downstream (see OutputMapper::TriggerDualSenseTrigger).
+    mapper->QueueDualSenseTrigger(id, trigger, "weapon",
+                                   start_position, strength, end_position,
+                                   /*amplitude*/0, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseVibration(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
+    const int id        = argv[0]->i;
+    const int position  = argv[1]->i;
+    const int amplitude = argv[2]->i;
+    const int frequency = argv[3]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "vibration",
+                                   position, /*strength*/0, /*end_position*/0,
+                                   amplitude, frequency, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseMultiPositionFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 11) return;
+    for (int i = 0; i < 11; ++i) { if (!argv[i]) return; }
+    const int id = argv[0]->i;
+    uint8_t strengths[10];
+    for (int i = 0; i < 10; ++i) {
+        int v = argv[i + 1]->i;
+        strengths[i] = static_cast<uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }
+    mapper->QueueDualSenseMultiPositionFeedback(id, trigger, strengths);
+}
+
+void HapticDispatcher::DispatchDualSenseMultiPositionVibration(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 12) return;
+    for (int i = 0; i < 12; ++i) { if (!argv[i]) return; }
+    const int id = argv[0]->i;
+    int freq = argv[1]->i;
+    uint8_t frequency = static_cast<uint8_t>(freq < 0 ? 0 : (freq > 255 ? 255 : freq));
+    uint8_t amplitudes[10];
+    for (int i = 0; i < 10; ++i) {
+        int v = argv[i + 2]->i;
+        amplitudes[i] = static_cast<uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }
+    mapper->QueueDualSenseMultiPositionVibration(id, trigger, frequency, amplitudes);
+}
+
+void HapticDispatcher::DispatchDualSenseSlopeFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 5) return;
+    for (int i = 0; i < 5; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int start_strength = argv[3]->i;
+    const int end_strength   = argv[4]->i;
+    // "strength"/"amplitude" double as "start_strength"/"end_strength" downstream
+    // (see OutputMapper::TriggerDualSenseTrigger).
+    mapper->QueueDualSenseTrigger(id, trigger, "slope_feedback",
+                                   start_position, start_strength, end_position,
+                                   end_strength, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseBow(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 5) return;
+    for (int i = 0; i < 5; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int strength       = argv[3]->i;
+    const int snap_force     = argv[4]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "bow",
+                                   start_position, strength, end_position,
+                                   /*amplitude*/0, /*frequency*/0, snap_force,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseGalloping(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 6) return;
+    for (int i = 0; i < 6; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int first_foot     = argv[3]->i;
+    const int second_foot    = argv[4]->i;
+    const int frequency      = argv[5]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "galloping",
+                                   start_position, /*strength*/0, end_position,
+                                   /*amplitude*/0, frequency, /*snap_force*/0,
+                                   first_foot, second_foot, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseMachine(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 7) return;
+    for (int i = 0; i < 7; ++i) { if (!argv[i]) return; }
+    const int id             = argv[0]->i;
+    const int start_position = argv[1]->i;
+    const int end_position   = argv[2]->i;
+    const int amplitude_a    = argv[3]->i;
+    const int amplitude_b    = argv[4]->i;
+    const int frequency      = argv[5]->i;
+    const int period         = argv[6]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "machine",
+                                   start_position, /*strength*/0, end_position,
+                                   /*amplitude*/0, frequency, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, period,
+                                   amplitude_a, amplitude_b);
+}
+
+void HapticDispatcher::DispatchDualSenseOff(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 1) return;
+    if (!argv[0]) return;
+    const int id = argv[0]->i;
+    mapper->QueueDualSenseTrigger(id, trigger, "off",
+                                   /*position*/0, /*strength*/0, /*end_position*/0,
+                                   /*amplitude*/0, /*frequency*/0, /*snap_force*/0,
+                                   /*first_foot*/0, /*second_foot*/0, /*period*/0,
+                                   /*amplitude_a*/0, /*amplitude_b*/0);
 }

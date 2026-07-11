@@ -11,12 +11,19 @@
 //
 // When a device is hidden, all evdev event nodes that belong to the same
 // physical HID device are grabbed exclusively so no other process receives
-// input events from them.  SDL (InputBridge) reads directly from SDL's
+// button/axis events from them.  SDL (InputBridge) reads directly from SDL's
 // already-opened file descriptors and is therefore unaffected.
 //
-// This is purely process-level (similar to HidHide's allow-list having only
-// InputBridge in it).  Steam uses a separate /dev/uinput virtual device and
-// can still function normally.
+// LIMITATION: this does NOT block Steam Input from hijacking gyro/accel data
+// on sensor-capable pads (DualSense, DualShock4, Switch Pro, etc). Steam's
+// controller backend talks to /dev/hidrawN directly for those, not evdev, and
+// Linux's hidraw has no exclusive-access primitive equivalent to EVIOCGRAB -
+// any process can open a hidraw node concurrently, and since Steam and
+// InputBridge normally run as the same Linux user there's no filesystem
+// permission boundary to exploit either. There is currently no Linux
+// equivalent of Windows' HidHide filter driver for this. The practical
+// workaround is the same as on Linux without this feature at all: disable
+// Steam Input for the affected controller type in Steam's settings.
 class LinuxExclusiveMode : public InputExclusiveModeImpl {
 public:
     ~LinuxExclusiveMode() override;

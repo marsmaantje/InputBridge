@@ -2,6 +2,7 @@
 #include "../Mappers/OutputMapper.h"
 #include <nlohmann/json.hpp>
 #include <SDL3/SDL_haptic.h>
+#include <cstdint>
 
 namespace {
     // JSON keys for haptic commands
@@ -23,6 +24,8 @@ namespace {
     const char* const kEffectConstant  = "constant";
     const char* const kEffectPeriodic  = "periodic";
     const char* const kEffectCondition = "condition";
+    const char* const kEffectDualSenseTrigger = "dualsense_trigger";
+    const char* const kEffectXboxTrigger = "xbox_trigger";
 
     // Rumble params
     const char* const kRumbleLow      = "low";
@@ -51,8 +54,33 @@ namespace {
     const char* const kConditionCenter    = "center";
 
     // DualSense params
-    const char* const kTrigger     = "trigger";
-    const char* const kEffectType  = "effect_type";
+    const char* const kTrigger        = "trigger";
+    const char* const kEffectType     = "effect_type";
+    const char* const kDSPosition     = "position";
+    const char* const kDSStartPosition = "start_position";
+    const char* const kDSEndPosition  = "end_position";
+    const char* const kDSAmplitude    = "amplitude";
+    const char* const kDSFrequency    = "frequency";
+    const char* const kDSSnapForce    = "snap_force";
+    const char* const kDSFirstFoot    = "first_foot";
+    const char* const kDSSecondFoot   = "second_foot";
+    const char* const kDSAmplitudeA   = "amplitude_a";
+    const char* const kDSAmplitudeB   = "amplitude_b";
+    // Note: DualSense "strength" and "period" reuse kConstantStrength / kPeriodicPeriod
+    // below since the JSON key text is identical for those fields.
+
+    // Xbox impulse trigger params
+    const char* const kXboxLeftIntensity  = "left_intensity";
+    const char* const kXboxRightIntensity = "right_intensity";
+
+    // Array-based DualSense effects (10-element per-position arrays). These
+    // bypass QueueDualSenseTrigger/HapticCommand entirely - see
+    // OutputMapper::DualSenseArrayCommand for why - so they get their own
+    // JSON array fields rather than reusing the scalar keys above.
+    const char* const kEffectTypeMultiPositionFeedback  = "multi_position_feedback";
+    const char* const kEffectTypeMultiPositionVibration = "multi_position_vibration";
+    const char* const kDSStrengths  = "strengths";   // array[10], multi_position_feedback
+    const char* const kDSAmplitudes = "amplitudes";  // array[10], multi_position_vibration
 
     // Shared slot key used by all slotted effect types
     const char* const kSlot = "slot";
@@ -142,7 +170,69 @@ namespace {
                 data.value(kConditionDeadband,   0.0f),
                 data.value(kConditionCenter,     0.0f),
                 duration);
+        } else if (effect == kEffectXboxTrigger) {
+            int left_intensity  = data.value(kXboxLeftIntensity, 0);
+            int right_intensity = data.value(kXboxRightIntensity, 0);
+            int duration = get_duration(data);
+
+            mapper->QueueXboxTrigger(device, left_intensity, right_intensity, duration);
         }
+    }
+
+    // Dispatch a DualSense adaptive trigger effect. Handled separately from the
+    // generic dispatch() above since it goes through QueueDualSenseTrigger rather
+    // than the four standard SDL haptic effect queues.
+    void dispatchDualSenseTrigger(const nlohmann::json& data, const std::string& trigger,
+                                   const std::string& effect_type, int device, OutputMapper* mapper)
+    {
+        // Array-based effects carry a JSON array of 10 per-position values
+        // rather than the scalar fields below - see OutputMapper's dedicated
+        // QueueDualSenseMultiPosition* methods.
+        if (effect_type == kEffectTypeMultiPositionFeedback) {
+            uint8_t strengths[10] = {0};
+            if (data.contains(kDSStrengths) && data[kDSStrengths].is_array()) {
+                const auto& arr = data[kDSStrengths];
+                for (size_t i = 0; i < 10 && i < arr.size(); ++i) {
+                    strengths[i] = static_cast<uint8_t>(arr[i].get<int>());
+                }
+            }
+            mapper->QueueDualSenseMultiPositionFeedback(device, trigger.c_str(), strengths);
+            return;
+        }
+        if (effect_type == kEffectTypeMultiPositionVibration) {
+            uint8_t amplitudes[10] = {0};
+            if (data.contains(kDSAmplitudes) && data[kDSAmplitudes].is_array()) {
+                const auto& arr = data[kDSAmplitudes];
+                for (size_t i = 0; i < 10 && i < arr.size(); ++i) {
+                    amplitudes[i] = static_cast<uint8_t>(arr[i].get<int>());
+                }
+            }
+            uint8_t frequency = static_cast<uint8_t>(data.value(kDSFrequency, 0));
+            mapper->QueueDualSenseMultiPositionVibration(device, trigger.c_str(), frequency, amplitudes);
+            return;
+        }
+
+        // "position" is used by feedback/vibration; weapon/slope_feedback/bow/galloping/machine
+        // use "start_position" instead (see OSCBaseProtocol's DualSense docs).
+        // Prefer start_position when present so both naming conventions work.
+        int position     = data.contains(kDSStartPosition) ? data.value(kDSStartPosition, 0)
+                                                           : data.value(kDSPosition, 0);
+        int strength     = data.value(kConstantStrength, 0);
+        int end_position = data.value(kDSEndPosition,   0);
+        int amplitude    = data.value(kDSAmplitude,     0);
+        int frequency    = data.value(kDSFrequency,     0);
+        int snap_force   = data.value(kDSSnapForce,     0);
+        int first_foot   = data.value(kDSFirstFoot,     0);
+        int second_foot  = data.value(kDSSecondFoot,    0);
+        int period       = data.value(kPeriodicPeriod,  0);
+        int amplitude_a  = data.value(kDSAmplitudeA,    0);
+        int amplitude_b  = data.value(kDSAmplitudeB,    0);
+
+        mapper->QueueDualSenseTrigger(device, trigger.c_str(), effect_type.c_str(),
+                                       position, strength, end_position,
+                                       amplitude, frequency, snap_force,
+                                       first_foot, second_foot, period,
+                                       amplitude_a, amplitude_b);
     }
 
     // Sniff a flat JSON object (the top-level payload *or* its params sub-object)
@@ -157,7 +247,15 @@ namespace {
             return DetectedEffect::Kind::DualSenseTrigger;
         }
 
-        // 2. Condition: distinguishing fields are the sat/coeff pair or condition_type.
+        // 2. Xbox impulse trigger: needs at least one of the intensity fields.
+        if (flat.contains(kXboxLeftIntensity) || flat.contains(kXboxRightIntensity)) {
+            out.left_intensity  = flat.value(kXboxLeftIntensity,  0);
+            out.right_intensity = flat.value(kXboxRightIntensity, 0);
+            out.duration_ms     = get_duration(flat);
+            return DetectedEffect::Kind::XboxTrigger;
+        }
+
+        // 3. Condition: distinguishing fields are the sat/coeff pair or condition_type.
         if (flat.contains(kConditionRightSat) || flat.contains(kConditionLeftSat)
                 || flat.contains(kConditionType)) {
             out.condition_type = ConditionTypeFromIndex(flat.value(kConditionType, 0));
@@ -172,7 +270,7 @@ namespace {
             return DetectedEffect::Kind::Condition;
         }
 
-        // 3. Periodic: "period" is the clearest signal; also accept "magnitude"+"offset"
+        // 4. Periodic: "period" is the clearest signal; also accept "magnitude"+"offset"
         //    together (to distinguish from constant which only has "strength").
         if (flat.contains(kPeriodicPeriod)
                 || (flat.contains(kPeriodicMagnitude) && flat.contains(kPeriodicOffset))) {
@@ -187,7 +285,7 @@ namespace {
             return DetectedEffect::Kind::Periodic;
         }
 
-        // 4. Constant: "strength" alone (no periodic sub-fields).
+        // 5. Constant: "strength" alone (no periodic sub-fields).
         if (flat.contains(kConstantStrength)) {
             out.strength    = flat.value(kConstantStrength, 0.0f);
             out.slot        = flat.value(kSlot, 0);
@@ -195,7 +293,7 @@ namespace {
             return DetectedEffect::Kind::Constant;
         }
 
-        // 5. Rumble: "low"/"high" aliases or "large_magnitude"/"small_magnitude".
+        // 6. Rumble: "low"/"high" aliases or "large_magnitude"/"small_magnitude".
         if (flat.contains(kRumbleLow) || flat.contains(kRumbleHigh)
                 || flat.contains(kRumbleLargeMag) || flat.contains(kRumbleSmallMag)) {
             out.low  = flat.contains(kRumbleLargeMag) ? flat.value(kRumbleLargeMag, 0.0f)
@@ -217,6 +315,7 @@ namespace {
             case DetectedEffect::Kind::Constant:  return kEffectConstant;
             case DetectedEffect::Kind::Periodic:  return kEffectPeriodic;
             case DetectedEffect::Kind::Condition: return kEffectCondition;
+            case DetectedEffect::Kind::XboxTrigger: return kEffectXboxTrigger;
             default:                              return "";
         }
     }
@@ -250,6 +349,7 @@ DetectedEffect HapticParser::AutoDetect(std::string_view message) {
             else if (explicit_effect == kEffectConstant)  out.kind = DetectedEffect::Kind::Constant;
             else if (explicit_effect == kEffectPeriodic)  out.kind = DetectedEffect::Kind::Periodic;
             else if (explicit_effect == kEffectCondition) out.kind = DetectedEffect::Kind::Condition;
+            else if (explicit_effect == kEffectXboxTrigger) out.kind = DetectedEffect::Kind::XboxTrigger;
         }
 
         if (out.kind == DetectedEffect::Kind::Unknown) {
@@ -293,12 +393,12 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
 
             const auto& data = get_params_obj(json);
 
-            // DualSense triggers are not handled through the standard dispatch()
-            // helper since they use QueueDualSenseTrigger, not the generic effects.
-            // For now we fall through to the standard JSON path when a DualSense
-            // trigger is auto-detected (the caller must still set "type" explicitly
-            // for DualSense - auto-detect only covers the four SDL effect classes).
-            if (det.kind != DetectedEffect::Kind::DualSenseTrigger) {
+            // DualSense triggers go through QueueDualSenseTrigger rather than the
+            // generic dispatch() used by the four standard SDL haptic effects.
+            if (det.kind == DetectedEffect::Kind::DualSenseTrigger) {
+                dispatchDualSenseTrigger(data.empty() ? json : data,
+                                          det.trigger, det.effect_type, det.device, mapper);
+            } else {
                 dispatch(json, data.empty() ? json : data,
                          kind_to_effect_string(det.kind), det.device, mapper);
             }
@@ -310,7 +410,14 @@ void HapticParser::Parse(std::string_view message, OutputMapper* mapper) {
             std::string effect = json.value(kEffect, "");
             int device = json.value(kDevice, 0);
             const auto& data = get_params_obj(json);
-            dispatch(json, data, effect, device, mapper);
+
+            if (effect == kEffectDualSenseTrigger) {
+                std::string trigger     = data.value(kTrigger,    std::string{});
+                std::string effect_type = data.value(kEffectType, std::string{});
+                dispatchDualSenseTrigger(data, trigger, effect_type, device, mapper);
+            } else {
+                dispatch(json, data, effect, device, mapper);
+            }
         }
 
     } catch (...) {

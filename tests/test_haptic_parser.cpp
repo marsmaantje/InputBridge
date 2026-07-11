@@ -4,8 +4,8 @@
 
 // ─── Fake mapper pointer ──────────────────────────────────────────────────────
 // HapticParser::Parse() only requires a non-null OutputMapper*.
-// The stub's Queue methods never dereference 'this' - they only write to the
-// HapticStub global vectors.  We pass the address of a static intptr_t as
+// The stub's Queue methods never dereference 'this', they only write to the
+// HapticStub global vectors. We pass the address of a static intptr_t as
 // the sentinel; no OutputMapper is ever constructed.
 // A non-null sentinel address; the stub Queue* methods never dereference 'this'.
 // We use intptr_t to avoid strict-aliasing UB and keep the cast well-defined.
@@ -506,16 +506,146 @@ TEST_F(HapticParserTest, AutoDetectDualSenseTrigger) {
     EXPECT_EQ(det.effect_type, "feedback");
 }
 
-TEST_F(HapticParserTest, TypeAutoDoesNotDispatchDualSenseTriggerYet) {
-    // This documents the current limitation in HapticParser.cpp where
-    // "auto" detection works but dispatching for DualSense is skipped.
+TEST_F(HapticParserTest, TypeAutoDispatchesDualSenseTrigger) {
     HapticParser::Parse(
-        R"({"type":"auto","params":{"trigger":"right","effect_type":"feedback"}})",
+        R"({"type":"auto","params":{"trigger":"right","effect_type":"feedback",
+                                     "position":3,"strength":6}})",
         FakeMapper());
-    
-    // No calls should happen because QueueDualSenseTrigger isn't called by dispatch()
-    // and Parse() explicitly skips it for det.kind == DualSenseTrigger.
-    EXPECT_TRUE(HapticStub::dualSenseCalls.empty());
+
+    ASSERT_EQ(HapticStub::dualSenseCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseCalls[0];
+    EXPECT_EQ(call.trigger,     "right");
+    EXPECT_EQ(call.effect_type, "feedback");
+    EXPECT_EQ(call.p1, 3);  // position
+    EXPECT_EQ(call.p2, 6);  // strength
+}
+
+// Explicit (non-"auto") type must also dispatch DualSense trigger effects.
+// Previously only the "auto" path handled "trigger"/"effect_type" fields,
+// so a client using an explicit "type" with "effect":"dualsense_trigger"
+// was silently dropped.
+TEST_F(HapticParserTest, TypeHapticDispatchesDualSenseTrigger) {
+    HapticParser::Parse(
+        R"({"type":"haptic","effect":"dualsense_trigger","device":0,
+            "params":{"trigger":"left","effect_type":"feedback",
+                      "position":4,"strength":7}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseCalls[0];
+    EXPECT_EQ(call.trigger,     "left");
+    EXPECT_EQ(call.effect_type, "feedback");
+    EXPECT_EQ(call.p1, 4);  // position
+    EXPECT_EQ(call.p2, 7);  // strength
+}
+
+// weapon/bow/galloping/machine effects use "start_position" rather than
+// "position" (matching the OSC address docs and TriggerDualSenseTrigger's
+// param mapping). Previously "start_position" was never read at all,
+// so it always came through as 0 regardless of what the client sent.
+TEST_F(HapticParserTest, DualSenseTriggerReadsStartPosition) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"right","effect_type":"weapon",
+                                     "start_position":5,"end_position":8,"strength":6}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseCalls[0];
+    EXPECT_EQ(call.effect_type, "weapon");
+    EXPECT_EQ(call.p1, 5);  // position (populated from start_position)
+    EXPECT_EQ(call.p3, 8);  // end_position
+}
+
+// "position" must still work for feedback/vibration when "start_position"
+// is absent (no regression for the pre-existing key).
+TEST_F(HapticParserTest, DualSenseTriggerFallsBackToPositionWhenNoStartPosition) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"left","effect_type":"vibration",
+                                     "position":2,"amplitude":3,"frequency":100}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseCalls.size(), 1u);
+    EXPECT_EQ(HapticStub::dualSenseCalls[0].p1, 2);  // position
+}
+
+// slope_feedback has no dedicated JSON keys of its own - it reuses
+// start_position/end_position/strength/amplitude, which OutputMapper::
+// TriggerDualSenseTrigger re-maps to start_strength/end_strength downstream
+// (see its params["start_strength"]/params["end_strength"] assignments).
+// This just confirms HapticParser forwards those fields through unchanged.
+TEST_F(HapticParserTest, DualSenseTriggerSlopeFeedbackReadsStrengthAndAmplitude) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"right","effect_type":"slope_feedback",
+                                     "start_position":0,"end_position":8,
+                                     "strength":1,"amplitude":8}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseCalls[0];
+    EXPECT_EQ(call.effect_type, "slope_feedback");
+    EXPECT_EQ(call.p1, 0);  // position (populated from start_position)
+    EXPECT_EQ(call.p2, 1);  // strength (becomes start_strength downstream)
+    EXPECT_EQ(call.p3, 8);  // end_position
+    EXPECT_EQ(call.p4, 8);  // amplitude (becomes end_strength downstream)
+}
+
+// multi_position_feedback/vibration bypass QueueDualSenseTrigger entirely
+// (see OutputMapper::DualSenseArrayCommand) and route through the dedicated
+// QueueDualSenseMultiPosition* methods instead - recorded in dualSenseArrayCalls.
+TEST_F(HapticParserTest, DualSenseTriggerMultiPositionFeedbackReadsStrengthsArray) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"left","effect_type":"multi_position_feedback",
+                                     "strengths":[0,0,0,0,0,3,0,0,0,0]}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseArrayCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseArrayCalls[0];
+    EXPECT_EQ(call.trigger, "left");
+    EXPECT_EQ(call.effect_type, "multi_position_feedback");
+    EXPECT_EQ(call.values[5], 3);
+    EXPECT_EQ(call.values[0], 0);
+}
+
+TEST_F(HapticParserTest, DualSenseTriggerMultiPositionVibrationReadsAmplitudesAndFrequency) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"right","effect_type":"multi_position_vibration",
+                                     "frequency":50,"amplitudes":[0,0,0,0,5,0,0,0,0,0]}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseArrayCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseArrayCalls[0];
+    EXPECT_EQ(call.trigger, "right");
+    EXPECT_EQ(call.effect_type, "multi_position_vibration");
+    EXPECT_EQ(call.frequency, 50);
+    EXPECT_EQ(call.values[4], 5);
+}
+
+// Missing/short arrays should not read out of bounds - remaining slots stay 0.
+TEST_F(HapticParserTest, DualSenseTriggerMultiPositionFeedbackHandlesShortArray) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"left","effect_type":"multi_position_feedback",
+                                     "strengths":[4,4]}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseArrayCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseArrayCalls[0];
+    EXPECT_EQ(call.values[0], 4);
+    EXPECT_EQ(call.values[1], 4);
+    EXPECT_EQ(call.values[9], 0);
+}
+
+// Xbox impulse trigger - routes through QueueXboxTrigger rather than any of
+// the DualSense-specific queues.
+TEST_F(HapticParserTest, XboxTriggerReadsIntensitiesAndDuration) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"left_intensity":80,"right_intensity":40,"duration_ms":150}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::xboxTriggerCalls.size(), 1u);
+    const auto& call = HapticStub::xboxTriggerCalls[0];
+    EXPECT_EQ(call.left_intensity, 80);
+    EXPECT_EQ(call.right_intensity, 40);
+    EXPECT_EQ(call.duration, 150);
 }
 
 // Condition must win over constant when both "strength" and sat fields co-exist.

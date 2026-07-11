@@ -111,7 +111,34 @@ inline int ClampDSPosition(int v, std::string_view p)  { return ClampInt(v,   0,
 inline int ClampDSStrength(int v, std::string_view p)  { return ClampInt(v,   0,   8, "strength",       p); }
 inline int ClampDSAmplitude(int v, std::string_view p) { return ClampInt(v,   0,   8, "amplitude",      p); }
 inline int ClampDSFrequency(int v, std::string_view p) { return ClampInt(v,   0, 255, "frequency",      p); }
+
+// Weapon start/end position matches ApplyTriggerEffect's getParam("start_position",2,2,7) and getParam("end_position",7,0,8).
 inline int ClampDSStartPos(int v, std::string_view p)  { return ClampInt(v,   2,   7, "start_position", p); }
-inline int ClampDSEndPos(int v, std::string_view p)    { return ClampInt(v,   3,   8, "end_position",   p); }
+inline int ClampDSEndPos(int v, std::string_view p)    { return ClampInt(v,   0,   8, "end_position",   p); }
+
+// Multi-position feedback/vibration per-index strength/amplitude - 0-8, matches
+// ApplyTriggerEffect's "multi_position_feedback"/"multi_position_vibration" branches.
+inline int ClampDSMultiStrength(int v, std::string_view p)  { return ClampInt(v, 0, 8, "strength",  p); }
+inline int ClampDSMultiAmplitude(int v, std::string_view p) { return ClampInt(v, 0, 8, "amplitude", p); }
+
+// Slope feedback start/end position (0-8 / 0-9) and start/end strength (1-8, not 0-8 -
+// SlopeFeedback rejects a strength of 0) matches ApplyTriggerEffect's "slope_feedback" branch.
+inline int ClampDSSlopePos(int v, std::string_view p)      { return ClampInt(v, 0, 8, "start_position", p); }
+inline int ClampDSSlopeEndPos(int v, std::string_view p)   { return ClampInt(v, 0, 9, "end_position",   p); }
+inline int ClampDSSlopeStrength(int v, std::string_view p) { return ClampInt(v, 1, 8, "strength",       p); }
+
+// Bow start/end position and snap force - 0-8, matches ApplyTriggerEffect's "bow" branch.
+inline int ClampDSBowPos(int v, std::string_view p)       { return ClampInt(v, 0, 8, "position",   p); }
+inline int ClampDSSnapForce(int v, std::string_view p)    { return ClampInt(v, 0, 8, "snap_force", p); }
+
+// Galloping start/end position (0-9) and foot indices matches ApplyTriggerEffect's "galloping" branch.
+inline int ClampDSGallopingPos(int v, std::string_view p) { return ClampInt(v, 0, 9, "position",     p); }
+inline int ClampDSFirstFoot(int v, std::string_view p)    { return ClampInt(v, 0, 6, "first_foot",   p); }
+inline int ClampDSSecondFoot(int v, std::string_view p)   { return ClampInt(v, 0, 7, "second_foot",  p); }
+
+// Machine start/end position (0-9), amplitude A/B (0-7), and period (0-2) matches ApplyTriggerEffect's "machine" branch.
+inline int ClampDSMachinePos(int v, std::string_view p)   { return ClampInt(v, 0, 9, "position",     p); }
+inline int ClampDSAmplitudeAB(int v, std::string_view p)  { return ClampInt(v, 0, 7, "amplitude",    p); }
+inline int ClampDSPeriod(int v, std::string_view p)       { return ClampInt(v, 0, 2, "period",       p); }
 
 } // namespace OscValidation

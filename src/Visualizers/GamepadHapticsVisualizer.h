@@ -24,4 +24,9 @@ private:
     // DualSense
     int m_ds_effect_type = 0;
     int m_ds_params[5] = {0};
+
+    // Xbox Impulse Triggers (network-dispatched, via GamepadHaptics::PlayXboxTrigger)
+    int m_xbox_left_intensity = 0;
+    int m_xbox_right_intensity = 0;
+    int m_xbox_trigger_duration = 1000;
 };

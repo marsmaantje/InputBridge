@@ -3,6 +3,7 @@
 #include "Devices/DeviceManager.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstdint>
 #include <string>
 #include <map>
 
@@ -129,25 +130,58 @@ bool WebSocketProtocol::parse(const std::string &message) {
         } else if (type == "gamepad" && effect == "dualsense_trigger") {
             // DualSense adaptive trigger effect
             std::string trigger = params.value("trigger", "left");  // "left", "right", or "both"
-            std::string effect_type = params.value("effect_type", "off");  // off, feedback, weapon, vibration, bow, galloping, machine
+            std::string effect_type = params.value("effect_type", "off");  // off, feedback, weapon, vibration, slope_feedback, multi_position_feedback, multi_position_vibration, bow, galloping, machine
+            // slope_feedback reuses the generic position/strength/end_position/amplitude
+            // fields as start_position/start_strength/end_position/end_strength - see
+            // OutputMapper::TriggerDualSenseTrigger, which builds those named keys.
 
-            int position = params.value("position", 0);
-            int strength = params.value("strength", 5);
-            int end_position = params.value("end_position", 9);
-            int amplitude = params.value("amplitude", 5);
-            int frequency = params.value("frequency", 10);
-            int snap_force = params.value("snap_force", 5);
-            int first_foot = params.value("first_foot", 2);
-            int second_foot = params.value("second_foot", 7);
-            int period = params.value("period", 10);
-            int amplitude_a = params.value("amplitude_a", 4);
-            int amplitude_b = params.value("amplitude_b", 4);
+            if (effect_type == "multi_position_feedback") {
+                // "strengths": [s0..s9], one value per trigger position (0-9). These
+                // bypass QueueDualSenseTrigger entirely - see OutputMapper::
+                // DualSenseArrayCommand for why.
+                uint8_t strengths[10] = {0};
+                if (params.contains("strengths") && params["strengths"].is_array()) {
+                    const auto& arr = params["strengths"];
+                    for (size_t i = 0; i < 10 && i < arr.size(); ++i)
+                        strengths[i] = static_cast<uint8_t>(arr[i].get<int>());
+                }
+                OutputMapper::GetInstance().QueueDualSenseMultiPositionFeedback(0, trigger.c_str(), strengths);
+            } else if (effect_type == "multi_position_vibration") {
+                // "amplitudes": [a0..a9], one value per trigger position (0-9), plus
+                // a single shared "frequency".
+                uint8_t amplitudes[10] = {0};
+                if (params.contains("amplitudes") && params["amplitudes"].is_array()) {
+                    const auto& arr = params["amplitudes"];
+                    for (size_t i = 0; i < 10 && i < arr.size(); ++i)
+                        amplitudes[i] = static_cast<uint8_t>(arr[i].get<int>());
+                }
+                uint8_t frequency = static_cast<uint8_t>(params.value("frequency", 10));
+                OutputMapper::GetInstance().QueueDualSenseMultiPositionVibration(0, trigger.c_str(), frequency, amplitudes);
+            } else {
+                int position = params.value("position", 0);
+                int strength = params.value("strength", 5);
+                int end_position = params.value("end_position", 9);
+                int amplitude = params.value("amplitude", 5);
+                int frequency = params.value("frequency", 10);
+                int snap_force = params.value("snap_force", 5);
+                int first_foot = params.value("first_foot", 2);
+                int second_foot = params.value("second_foot", 7);
+                int period = params.value("period", 10);
+                int amplitude_a = params.value("amplitude_a", 4);
+                int amplitude_b = params.value("amplitude_b", 4);
 
-            OutputMapper::GetInstance().QueueDualSenseTrigger(0, trigger.c_str(), effect_type.c_str(),
-                                                              position, strength, end_position,
-                                                              amplitude, frequency, snap_force,
-                                                              first_foot, second_foot, period,
-                                                              amplitude_a, amplitude_b);
+                OutputMapper::GetInstance().QueueDualSenseTrigger(0, trigger.c_str(), effect_type.c_str(),
+                                                                  position, strength, end_position,
+                                                                  amplitude, frequency, snap_force,
+                                                                  first_foot, second_foot, period,
+                                                                  amplitude_a, amplitude_b);
+            }
+        } else if (type == "gamepad" && effect == "xbox_trigger") {
+            // Xbox impulse trigger effect
+            int left_intensity = params.value("left_intensity", 0);
+            int right_intensity = params.value("right_intensity", 0);
+            int duration_ms = params.value("duration_ms", 0);
+            OutputMapper::GetInstance().QueueXboxTrigger(0, left_intensity, right_intensity, duration_ms);
         } else if (type == "steering_wheel") {
             if (effect == "constant") {
                 float strength = params.at("strength");

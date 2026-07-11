@@ -833,7 +833,7 @@ void ProtocolEditorWindow::DrawProtocolList() {
         const char* icon = (definition.transport == ProtocolTransport::OSC) ? "[OSC] " : "[WS]  ";
 
         // Direction indicator
-        const char* direction = (definition.direction == ProtocolDirection::Output) ? "↑" : "↓";
+        const char* direction = (definition.direction == ProtocolDirection::Send) ? "↑" : "↓";
 
         std::string label = std::string(icon) + direction + " " + definition.name + "##" + definition.id;
 
@@ -906,10 +906,54 @@ void ProtocolEditorWindow::DrawEditor() {
         needsSave = true;
     }
 
-    ImGui::Text("Transport: %s",
-                definition.transport == ProtocolTransport::OSC ? "OSC" : "WebSocket");
-    ImGui::Text("Direction: %s",
-                definition.direction == ProtocolDirection::Output ? "Output" : "Input");
+    {
+        static const char* kTransportItems[] = { "OSC", "WebSocket" };
+        int transIdx = (definition.transport == ProtocolTransport::OSC) ? 0 : 1;
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Transport:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::Combo("##Transport", &transIdx, kTransportItems, 2)) {
+            const ProtocolTransport newTransport = (transIdx == 0) ? ProtocolTransport::OSC : ProtocolTransport::WebSocket;
+            if (newTransport != definition.transport) {
+                // Unlike direction, this is non-destructive: every field in
+                // GetOutputFields()/GetInputFields() already carries both an
+                // oscPath and a wsKey (see addIn/addOut in ProtocolRegistry),
+                // and OSC vs WebSocket host/port settings live in separate
+                // members on ProtocolDefinition - nothing to clear.
+                definition.transport = newTransport;
+                needsSave = true;
+            }
+        }
+    }
+
+    {
+        static const char* kDirectionItems[] = { "Send", "Receive" };
+        int dirIdx = (definition.direction == ProtocolDirection::Send) ? 0 : 1;
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Direction:");
+        if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::Combo("##Direction", &dirIdx, kDirectionItems, 2)) {
+            const ProtocolDirection newDirection = (dirIdx == 0) ? ProtocolDirection::Send : ProtocolDirection::Receive;
+            if (newDirection != definition.direction) {
+                // Send and Receive fields come from entirely separate catalogs
+                // (GetOutputFields() vs GetInputFields() - disjoint id spaces),
+                // so the existing selection/exclusions can't carry over.
+                definition.direction = newDirection;
+                definition.fields.clear();
+                definition.excludedFieldIds.clear();
+                definition.excludedCategories.clear();
+                needsSave = true;
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Changing direction clears this protocol's field selection,\n"
+                               "since Send and Receive fields come from separate catalogs.");
+        }
+    }
 
     // ── Transport-specific settings ──────────────────────────────────────────
     if (definition.transport == ProtocolTransport::OSC) {
@@ -924,7 +968,7 @@ void ProtocolEditorWindow::DrawEditor() {
             needsSave = true;
         }
 
-        if (definition.direction == ProtocolDirection::Output) {
+        if (definition.direction == ProtocolDirection::Send) {
             ImGui::AlignTextToFramePadding();
             ImGui::TextUnformatted("Send Port:");
             if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
@@ -954,7 +998,7 @@ void ProtocolEditorWindow::DrawEditor() {
     ImGui::Separator();
 
     // ── Field selection ──────────────────────────────────────────────────────
-    if (definition.direction == ProtocolDirection::Output) {
+    if (definition.direction == ProtocolDirection::Send) {
         DrawOutputFieldPicker();
     } else {
         DrawInputFieldPicker();
@@ -1309,10 +1353,33 @@ void ProtocolEditorWindow::DrawFieldTable(ProtocolDefinition& def,
                         ImGui::AlignTextToFramePadding();
                         ImGui::TextUnformatted("OSC Path:");
                         if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
-                        ImGui::SetNextItemWidth(-FLT_MIN);
+
+                        // Reserve space for the "Reset" button so the input field
+                        // doesn't overlap it.
+                        const bool isDefaultPath = (pf->oscPath == fd.defaultOscPath);
+                        const float resetBtnWidth = ImGui::CalcTextSize("Reset").x +
+                                                    ImGui::GetStyle().FramePadding.x * 2.0f;
+                        const float inputWidth = ImGui::GetContentRegionAvail().x -
+                                                 resetBtnWidth - ImGui::GetStyle().ItemSpacing.x;
+                        ImGui::SetNextItemWidth(inputWidth > 0.0f ? inputWidth : -FLT_MIN);
                         if (ImGui::InputText("##oscPath", pathBuffer, sizeof(pathBuffer))) {
                             pf->oscPath = pathBuffer;
                             pendingSave = true;
+                        }
+
+                        // Revert this field's OSC path back to its internal safe default
+                        // (e.g. "/haptic/rumble" for the Haptic category), discarding any
+                        // custom override.
+                        ImGui::SameLine();
+                        if (isDefaultPath) ImGui::BeginDisabled();
+                        if (ImGui::SmallButton("Reset##resetOscPath")) {
+                            pf->oscPath = fd.defaultOscPath;
+                            pendingSave = true;
+                        }
+                        if (isDefaultPath) ImGui::EndDisabled();
+                        if (ImGui::IsItemHovered() && !isDefaultPath) {
+                            ImGui::SetTooltip("Revert to the default safe path:\n%s",
+                                               fd.defaultOscPath.c_str());
                         }
                     } else {
                         char keyBuffer[128];
@@ -1358,7 +1425,7 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
         const char* transports[] = {"OSC", "WebSocket"};
         ImGui::Combo("Transport", &s_newTransport, transports, 2);
 
-        const char* directions[] = {"Output", "Input"};
+        const char* directions[] = {"Send", "Receive"};
         ImGui::Combo("Direction", &s_newDirection, directions, 2);
 
         // Template selection - templates and presets are the same thing.
@@ -1376,7 +1443,7 @@ void ProtocolEditorWindow::DrawNewProtocolModal() {
             ProtocolTransport transport = (s_newTransport == 0) ?
                 ProtocolTransport::OSC : ProtocolTransport::WebSocket;
             ProtocolDirection direction = (s_newDirection == 0) ?
-                ProtocolDirection::Output : ProtocolDirection::Input;
+                ProtocolDirection::Send : ProtocolDirection::Receive;
 
             std::string newId = ProtocolRegistry::GetInstance().CreateDefinition(
                 s_newName, transport, direction);
@@ -2278,7 +2345,7 @@ void ProtocolEditorWindow::DrawHideCategoryModal() {
             ImGui::Separator();
 
             // Build the full category list for the relevant catalog.
-            bool isOutput = (def.direction == ProtocolDirection::Output);
+            bool isOutput = (def.direction == ProtocolDirection::Send);
             const auto& catalog = isOutput ? registry.GetOutputFields()
                                            : registry.GetInputFields();
             std::vector<std::string> cats;
@@ -2359,15 +2426,31 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
                     if (c == ' ' || c == '/' || c == '\\') c = '_';
                 std::string templatePath = templatesDir + "/" + filename + ".json";
 
-                // Write template metadata + definition
+                // Write template metadata + definition.
+                //
+                // Templates use the same "id"/"name"/"transport"/"direction"
+                // keys and lowercase "send"/"receive"/"osc"/"websocket"
+                // values as ProtocolRegistry::ExportDefinition, so a saved
+                // template is also a valid file for Import Protocol /
+                // ProtocolValidator (which require "id"/"name" and only
+                // accept lowercase transport/direction values). The
+                // template_name/template_desc keys are additional metadata
+                // read by LoadPresets() for the "New Protocol" template list.
                 try {
                     json j;
-                    j["template_name"]    = s_templateName;
-                    j["template_desc"]    = s_templateDesc;
-                    j["protocol_id"]      = def.id;
-                    j["protocol_name"]    = def.name;
-                    j["transport"]        = (def.transport == ProtocolTransport::OSC) ? "OSC" : "WebSocket";
-                    j["direction"]        = (def.direction == ProtocolDirection::Output) ? "Output" : "Input";
+                    j["id"]                = def.id;
+                    j["name"]              = def.name;
+                    j["template_name"]     = s_templateName;
+                    j["template_desc"]     = s_templateDesc;
+                    j["transport"]         = (def.transport == ProtocolTransport::OSC) ? "osc" : "websocket";
+                    j["direction"]         = (def.direction == ProtocolDirection::Send) ? "send" : "receive";
+                    j["active"]            = false; // Don't activate imported templates by default
+
+                    j["osc"]["host"]     = def.oscHost;
+                    j["osc"]["sendPort"] = def.oscSendPort;
+                    j["osc"]["recvPort"] = def.oscRecvPort;
+                    j["ws"]["port"]      = def.wssPort;
+
                     json fieldsArr = json::array();
                     for (const auto& pf : def.fields) {
                         if (!pf.enabled) continue;
@@ -2375,6 +2458,7 @@ void ProtocolEditorWindow::DrawSaveTemplateModal() {
                         fj["fieldId"] = pf.fieldId;
                         fj["oscPath"] = pf.oscPath;
                         fj["wsKey"]   = pf.wsKey;
+                        fj["enabled"] = pf.enabled;
                         fieldsArr.push_back(fj);
                     }
                     j["fields"] = fieldsArr;

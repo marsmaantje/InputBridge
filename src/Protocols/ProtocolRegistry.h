@@ -91,8 +91,10 @@ private:
 
     void EnsureDirectories();
     void WriteDefaultFieldCatalog();
+    // Populates m_outputFields/m_inputFields with the canonical, in-code list
+    // of built-in fields. Purely in-memory - built-in fields are no longer
+    // cached to or read from disk.
     void LoadBuiltinCatalog();
-    void WriteDefaultBuiltinCatalog();
 
     static std::string GenerateId();
 

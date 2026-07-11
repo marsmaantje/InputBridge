@@ -18,34 +18,69 @@ static constexpr const char* kTag = "ExclusiveMode";
 #pragma comment(lib, "cfgmgr32.lib")
 
 // ─── CTL_CODE macro ──────────────────────────────────────────────────────────
-// HidHide uses FILE_DEVICE_UNKNOWN (0x22), METHOD_BUFFERED (0),
-// FILE_READ_DATA|FILE_WRITE_DATA (0x0003).
-// CTL_CODE = (DevType<<16)|(Access<<14)|(Func<<2)|Method
+// Verified directly against HidHide's shared IOCTL contract
+// (Shared/HidHideIoctlContract.h in https://github.com/nefarius/HidHide):
 //
-// Verified against HidHide's open-source HidHideIoControl.h:
-//   IOCTL_GET_WHITELIST  Function=0x101
-//   IOCTL_SET_WHITELIST  Function=0x102
-//   IOCTL_GET_BLACKLIST  Function=0x104  (device block-list)
-//   IOCTL_SET_BLACKLIST  Function=0x105
-//   IOCTL_GET_ACTIVE     Function=0x100
-//   IOCTL_SET_ACTIVE     Function=0x100  (same code, write direction)
+//   #define IoControlDeviceType 32769   // vendor range 32768..65535, NOT FILE_DEVICE_UNKNOWN
+//   IOCTL_GET_WHITELIST  = CTL_CODE(IoControlDeviceType, 2048, METHOD_BUFFERED, FILE_READ_DATA)
+//   IOCTL_SET_WHITELIST  = CTL_CODE(IoControlDeviceType, 2049, METHOD_BUFFERED, FILE_READ_DATA)
+//   IOCTL_GET_BLACKLIST  = CTL_CODE(IoControlDeviceType, 2050, METHOD_BUFFERED, FILE_READ_DATA)
+//   IOCTL_SET_BLACKLIST  = CTL_CODE(IoControlDeviceType, 2051, METHOD_BUFFERED, FILE_READ_DATA)
+//   IOCTL_GET_ACTIVE     = CTL_CODE(IoControlDeviceType, 2052, METHOD_BUFFERED, FILE_READ_DATA)
+//   IOCTL_SET_ACTIVE     = CTL_CODE(IoControlDeviceType, 2053, METHOD_BUFFERED, FILE_READ_DATA)
+//
+// The previous constants here (FILE_DEVICE_UNKNOWN / function 0x100-0x105) did not
+// match the driver at all - every DeviceIoControl call would have been rejected.
+// CTL_CODE = (DevType<<16)|(Access<<14)|(Func<<2)|Method
 
 #ifndef CTL_CODE
 #define CTL_CODE(DeviceType, Function, Method, Access) (((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method))
 #endif
 
-static constexpr DWORD kIoctlGetWhitelist = CTL_CODE(0x22, 0x101, 0 /*METHOD_BUFFERED*/, 0x0003);
-static constexpr DWORD kIoctlSetWhitelist = CTL_CODE(0x22, 0x102, 0, 0x0003);
-static constexpr DWORD kIoctlGetBlacklist = CTL_CODE(0x22, 0x104, 0, 0x0003);
-static constexpr DWORD kIoctlSetBlacklist = CTL_CODE(0x22, 0x105, 0, 0x0003);
-static constexpr DWORD kIoctlGetActive = CTL_CODE(0x22, 0x100, 0, 0x0003);
-static constexpr DWORD kIoctlSetActive = CTL_CODE(0x22, 0x100, 0, 0x0003);
+static constexpr DWORD kHidHideDeviceType = 32769;
+
+static constexpr DWORD kIoctlGetWhitelist = CTL_CODE(kHidHideDeviceType, 2048, 0 /*METHOD_BUFFERED*/, FILE_READ_DATA);
+static constexpr DWORD kIoctlSetWhitelist = CTL_CODE(kHidHideDeviceType, 2049, 0, FILE_READ_DATA);
+static constexpr DWORD kIoctlGetBlacklist = CTL_CODE(kHidHideDeviceType, 2050, 0, FILE_READ_DATA);
+static constexpr DWORD kIoctlSetBlacklist = CTL_CODE(kHidHideDeviceType, 2051, 0, FILE_READ_DATA);
+static constexpr DWORD kIoctlGetActive    = CTL_CODE(kHidHideDeviceType, 2052, 0, FILE_READ_DATA);
+static constexpr DWORD kIoctlSetActive    = CTL_CODE(kHidHideDeviceType, 2053, 0, FILE_READ_DATA);
+
+// ─── ToFullImageName ───────────────────────────────────────────────────────────
+//
+// HidHide's whitelist is matched against the NT "full image name" the kernel
+// records for a process (e.g. "\Device\HarddiskVolume3\Windows\System32\cmd.exe"),
+// NOT the drive-letter path GetModuleFileNameW / the registry give us. The
+// HidHide client does this conversion itself before writing the whitelist
+// (see HidHideCLI/src/Volume.cpp: FileNameToFullImageName), so we have to do
+// the same or every whitelist entry we write will simply never match and the
+// device will stay hidden from us too.
+//
+// This covers the common case (file lives directly under a drive letter, no
+// mount-point junctions involved), which is what QueryDosDeviceW gives us
+// directly for "X:".  That covers the vast majority of installs.
+std::wstring WindowsExclusiveMode::ToFullImageName(const std::wstring &win32Path) {
+    if (win32Path.size() < 2 || win32Path[1] != L':')
+        return win32Path; // not a drive-letter path we know how to convert
+
+    const std::wstring drive = win32Path.substr(0, 2); // e.g. "C:"
+    const std::wstring rest  = win32Path.substr(2);    // e.g. "\Program Files\InputBridge\InputBridge.exe"
+
+    wchar_t target[MAX_PATH]{};
+    if (QueryDosDeviceW(drive.c_str(), target, MAX_PATH) == 0) {
+        LOG_WARN(kTag, "HidHide: QueryDosDeviceW failed for '%ls' (err=%lu); using Win32 path as-is.",
+                 drive.c_str(), GetLastError());
+        return win32Path;
+    }
+
+    return std::wstring(target) + rest;
+}
 
 // ─── Constructor / destructor ─────────────────────────────────────────────────
 
 WindowsExclusiveMode::WindowsExclusiveMode() {
-    m_OwnExePath = GetOwnExePath();
-    m_SteamExePath = FindSteamExePath();
+    m_OwnExePath = ToFullImageName(GetOwnExePath());
+    m_SteamExePath = ToFullImageName(FindSteamExePath());
 }
 
 WindowsExclusiveMode::~WindowsExclusiveMode() {
