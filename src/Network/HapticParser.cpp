@@ -2,6 +2,7 @@
 #include "../Mappers/OutputMapper.h"
 #include <nlohmann/json.hpp>
 #include <SDL3/SDL_haptic.h>
+#include <cstdint>
 
 namespace {
     // JSON keys for haptic commands
@@ -66,6 +67,15 @@ namespace {
     const char* const kDSAmplitudeB   = "amplitude_b";
     // Note: DualSense "strength" and "period" reuse kConstantStrength / kPeriodicPeriod
     // below since the JSON key text is identical for those fields.
+
+    // Array-based DualSense effects (10-element per-position arrays). These
+    // bypass QueueDualSenseTrigger/HapticCommand entirely - see
+    // OutputMapper::DualSenseArrayCommand for why - so they get their own
+    // JSON array fields rather than reusing the scalar keys above.
+    const char* const kEffectTypeMultiPositionFeedback  = "multi_position_feedback";
+    const char* const kEffectTypeMultiPositionVibration = "multi_position_vibration";
+    const char* const kDSStrengths  = "strengths";   // array[10], multi_position_feedback
+    const char* const kDSAmplitudes = "amplitudes";  // array[10], multi_position_vibration
 
     // Shared slot key used by all slotted effect types
     const char* const kSlot = "slot";
@@ -164,6 +174,33 @@ namespace {
     void dispatchDualSenseTrigger(const nlohmann::json& data, const std::string& trigger,
                                    const std::string& effect_type, int device, OutputMapper* mapper)
     {
+        // Array-based effects carry a JSON array of 10 per-position values
+        // rather than the scalar fields below - see OutputMapper's dedicated
+        // QueueDualSenseMultiPosition* methods.
+        if (effect_type == kEffectTypeMultiPositionFeedback) {
+            uint8_t strengths[10] = {0};
+            if (data.contains(kDSStrengths) && data[kDSStrengths].is_array()) {
+                const auto& arr = data[kDSStrengths];
+                for (size_t i = 0; i < 10 && i < arr.size(); ++i) {
+                    strengths[i] = static_cast<uint8_t>(arr[i].get<int>());
+                }
+            }
+            mapper->QueueDualSenseMultiPositionFeedback(device, trigger.c_str(), strengths);
+            return;
+        }
+        if (effect_type == kEffectTypeMultiPositionVibration) {
+            uint8_t amplitudes[10] = {0};
+            if (data.contains(kDSAmplitudes) && data[kDSAmplitudes].is_array()) {
+                const auto& arr = data[kDSAmplitudes];
+                for (size_t i = 0; i < 10 && i < arr.size(); ++i) {
+                    amplitudes[i] = static_cast<uint8_t>(arr[i].get<int>());
+                }
+            }
+            uint8_t frequency = static_cast<uint8_t>(data.value(kDSFrequency, 0));
+            mapper->QueueDualSenseMultiPositionVibration(device, trigger.c_str(), frequency, amplitudes);
+            return;
+        }
+
         // "position" is used by feedback/vibration; weapon/slope_feedback/bow/galloping/machine
         // use "start_position" instead (see OSCBaseProtocol's DualSense docs).
         // Prefer start_position when present so both naming conventions work.

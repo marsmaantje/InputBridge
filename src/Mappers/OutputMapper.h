@@ -22,6 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
+#include <cstdint>
 #include <SDL3/SDL.h>
 #include "Devices/DeviceManager.h"
 
@@ -34,6 +35,21 @@ struct HapticCommand {
     float fParams[8]; // Generic float storage
     int iParams[10];  // Generic int storage - increased for more params
     char sParams[2][32]; // String params: [0]=trigger ("left"/"right"/"both"), [1]=effect_type
+};
+
+// DualSense adaptive trigger effects that carry a 10-element per-position array
+// (MultiplePositionFeedback/MultiplePositionVibration) don't fit HapticCommand's
+// fixed 10-slot iParams - those are already fully used by the scalar-only
+// DualSense effects (feedback/weapon/vibration/slope_feedback/bow/galloping/
+// machine, see QueueDualSenseTrigger). Rather than growing iParams (which would
+// affect every other effect type's marshaling), these two get their own small,
+// dedicated queue.
+struct DualSenseArrayCommand {
+    enum Type { MULTI_POSITION_FEEDBACK, MULTI_POSITION_VIBRATION } type;
+    int virtual_id;
+    char trigger[8];     // "left" / "right" / "both"
+    uint8_t frequency;   // only used by MULTI_POSITION_VIBRATION
+    uint8_t values[10];  // per-position strength (feedback) or amplitude (vibration)
 };
 
 class OutputMapper {
@@ -70,6 +86,10 @@ public:
                                int amplitude, int frequency, int snap_force,
                                int first_foot, int second_foot, int period,
                                int amplitude_a, int amplitude_b);
+    // Array-based DualSense effects - see DualSenseArrayCommand above for why
+    // these bypass QueueDualSenseTrigger/HapticCommand.
+    void QueueDualSenseMultiPositionFeedback(int virtual_id, const char* trigger, const uint8_t strengths[10]);
+    void QueueDualSenseMultiPositionVibration(int virtual_id, const char* trigger, uint8_t frequency, const uint8_t amplitudes[10]);
 
 private:
     OutputMapper(const DeviceManager& deviceManager);
@@ -83,9 +103,13 @@ private:
     std::mutex m_Mutex;
     std::vector<HapticCommand> m_CommandQueue;
 
+    std::mutex m_ArrayMutex;
+    std::vector<DualSenseArrayCommand> m_ArrayCommandQueue;
+
     std::atomic<uint64_t> m_lastHapticActivityTime{0};
 
     void QueueCommand(HapticCommand&& cmd);
+    void QueueArrayCommand(DualSenseArrayCommand&& cmd);
     void GetTargets(int virtual_id, std::vector<HapticTarget*>& out_targets);
     void UpdateHapticDevice(HapticTarget& target);
     void CloseHapticDevice(HapticTarget& target);
@@ -101,4 +125,6 @@ private:
                                  int amplitude, int frequency, int snap_force,
                                  int first_foot, int second_foot, int period,
                                  int amplitude_a, int amplitude_b);
+    void TriggerDualSenseMultiPositionFeedback(int virtual_id, const char* trigger, const uint8_t* strengths);
+    void TriggerDualSenseMultiPositionVibration(int virtual_id, const char* trigger, uint8_t frequency, const uint8_t* amplitudes);
 };

@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "Haptics/GamepadHaptics.h"
 #include <SDL3/SDL.h>
+#include <string>
 
 static constexpr const char* kTag = "GamepadHapticsViz";
 
@@ -200,12 +201,14 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
 
         static int left_effect_type = 0;
         static int left_params[10] = {};
+        static int left_mp_freq = 10;
         static int right_effect_type = 0;
         static int right_params[10] = {};
+        static int right_mp_freq = 10;
 
-        const char* ds_effect_names[] = { "Off", "Feedback", "Weapon", "Vibration", "Slope Feedback", "Bow", "Galloping", "Machine" };
+        const char* ds_effect_names[] = { "Off", "Feedback", "Weapon", "Vibration", "Multi-Position Feedback", "Slope Feedback", "Multi-Position Vibration", "Bow", "Galloping", "Machine" };
 
-        auto DrawTriggerUI = [&](const char* label, int& effect_type, int* params) {
+        auto DrawTriggerUI = [&](const char* label, int& effect_type, int* params, int& mp_freq) {
             ImGui::PushID(label);
             ImGui::Text("%s", label);
             ImGui::Combo("Effect Type", &effect_type, ds_effect_names, IM_ARRAYSIZE(ds_effect_names));
@@ -225,26 +228,41 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                     ImGui::SliderInt("Amplitude", &params[1], 0, 8);
                     ImGui::SliderInt("Frequency", &params[2], 0, 255);
                     break;
-                case 4: // Slope Feedback
+                case 4: // Multi-Position Feedback - one strength per trigger position (0-9)
+                    for (int i = 0; i < 10; ++i) {
+                        ImGui::PushID(i);
+                        ImGui::SliderInt(("Strength " + std::to_string(i)).c_str(), &params[i], 0, 8);
+                        ImGui::PopID();
+                    }
+                    break;
+                case 5: // Slope Feedback
                     ImGui::SliderInt("Start Position", &params[0], 0, 8);
                     ImGui::SliderInt("End Position", &params[1], 0, 9);
                     ImGui::SliderInt("Start Strength", &params[2], 1, 8);
                     ImGui::SliderInt("End Strength", &params[3], 1, 8);
                     break;
-                case 5: // Bow
+                case 6: // Multi-Position Vibration - shared frequency + one amplitude per position (0-9)
+                    ImGui::SliderInt("Frequency", &mp_freq, 0, 255);
+                    for (int i = 0; i < 10; ++i) {
+                        ImGui::PushID(i);
+                        ImGui::SliderInt(("Amplitude " + std::to_string(i)).c_str(), &params[i], 0, 8);
+                        ImGui::PopID();
+                    }
+                    break;
+                case 7: // Bow
                     ImGui::SliderInt("Start Position", &params[0], 0, 8);
                     ImGui::SliderInt("End Position", &params[1], 0, 8);
                     ImGui::SliderInt("Strength", &params[2], 0, 8);
                     ImGui::SliderInt("Snap Force", &params[3], 0, 8);
                     break;
-                case 6: // Galloping
+                case 8: // Galloping
                     ImGui::SliderInt("Start Position", &params[0], 0, 9);
                     ImGui::SliderInt("End Position", &params[1], 0, 9);
                     ImGui::SliderInt("First Foot", &params[2], 0, 6);
                     ImGui::SliderInt("Second Foot", &params[3], 0, 7);
                     ImGui::SliderInt("Frequency", &params[4], 0, 255);
                     break;
-                case 7: // Machine
+                case 9: // Machine
                     ImGui::SliderInt("Start Position", &params[0], 0, 9);
                     ImGui::SliderInt("End Position", &params[1], 0, 9);
                     ImGui::SliderInt("Amplitude A", &params[2], 0, 7);
@@ -256,13 +274,13 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             ImGui::PopID();
         };
 
-        DrawTriggerUI("Left Trigger", left_effect_type, left_params);
+        DrawTriggerUI("Left Trigger", left_effect_type, left_params, left_mp_freq);
         ImGui::Separator();
-        DrawTriggerUI("Right Trigger", right_effect_type, right_params);
+        DrawTriggerUI("Right Trigger", right_effect_type, right_params, right_mp_freq);
 
         if (ImGui::Button("Send Effect")) {
             if (auto *gamepadHaptics = dynamic_cast<GamepadHaptics *>(haptic)) {
-                const char* effect_names[] = { "off", "feedback", "weapon", "vibration", "slope_feedback", "bow", "galloping", "machine" }; // must match ds_effect_names
+                const char* effect_names[] = { "off", "feedback", "weapon", "vibration", "multi_position_feedback", "slope_feedback", "multi_position_vibration", "bow", "galloping", "machine" }; // must match ds_effect_names
                 
                 // Send left trigger effect
                 std::map<std::string, int> leftParams;
@@ -283,26 +301,37 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                         leftParams["amplitude"] = left_params[1];
                         leftParams["frequency"] = left_params[2];
                         break;
-                    case 4: // Slope Feedback
+                    case 4: // Multi-Position Feedback
+                        for (int i = 0; i < 10; ++i) {
+                            leftParams["strength_" + std::to_string(i)] = left_params[i];
+                        }
+                        break;
+                    case 5: // Slope Feedback
                         leftParams["start_position"] = left_params[0];
                         leftParams["end_position"] = left_params[1];
                         leftParams["start_strength"] = left_params[2];
                         leftParams["end_strength"] = left_params[3];
                         break;
-                    case 5: // Bow
+                    case 6: // Multi-Position Vibration
+                        leftParams["frequency"] = left_mp_freq;
+                        for (int i = 0; i < 10; ++i) {
+                            leftParams["amplitude_" + std::to_string(i)] = left_params[i];
+                        }
+                        break;
+                    case 7: // Bow
                         leftParams["start_position"] = left_params[0];
                         leftParams["end_position"] = left_params[1];
                         leftParams["strength"] = left_params[2];
                         leftParams["snap_force"] = left_params[3];
                         break;
-                    case 6: // Galloping
+                    case 8: // Galloping
                         leftParams["start_position"] = left_params[0];
                         leftParams["end_position"] = left_params[1];
                         leftParams["first_foot"] = left_params[2];
                         leftParams["second_foot"] = left_params[3];
                         leftParams["frequency"] = left_params[4];
                         break;
-                    case 7: // Machine
+                    case 9: // Machine
                         leftParams["start_position"] = left_params[0];
                         leftParams["end_position"] = left_params[1];
                         leftParams["amplitude_a"] = left_params[2];
@@ -334,26 +363,37 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                         rightParams["amplitude"] = right_params[1];
                         rightParams["frequency"] = right_params[2];
                         break;
-                    case 4: // Slope Feedback
+                    case 4: // Multi-Position Feedback
+                        for (int i = 0; i < 10; ++i) {
+                            rightParams["strength_" + std::to_string(i)] = right_params[i];
+                        }
+                        break;
+                    case 5: // Slope Feedback
                         rightParams["start_position"] = right_params[0];
                         rightParams["end_position"] = right_params[1];
                         rightParams["start_strength"] = right_params[2];
                         rightParams["end_strength"] = right_params[3];
                         break;
-                    case 5: // Bow
+                    case 6: // Multi-Position Vibration
+                        rightParams["frequency"] = right_mp_freq;
+                        for (int i = 0; i < 10; ++i) {
+                            rightParams["amplitude_" + std::to_string(i)] = right_params[i];
+                        }
+                        break;
+                    case 7: // Bow
                         rightParams["start_position"] = right_params[0];
                         rightParams["end_position"] = right_params[1];
                         rightParams["strength"] = right_params[2];
                         rightParams["snap_force"] = right_params[3];
                         break;
-                    case 6: // Galloping
+                    case 8: // Galloping
                         rightParams["start_position"] = right_params[0];
                         rightParams["end_position"] = right_params[1];
                         rightParams["first_foot"] = right_params[2];
                         rightParams["second_foot"] = right_params[3];
                         rightParams["frequency"] = right_params[4];
                         break;
-                    case 7: // Machine
+                    case 9: // Machine
                         rightParams["start_position"] = right_params[0];
                         rightParams["end_position"] = right_params[1];
                         rightParams["amplitude_a"] = right_params[2];
