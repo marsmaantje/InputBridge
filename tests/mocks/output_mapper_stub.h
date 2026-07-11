@@ -78,6 +78,13 @@ struct DualSenseArrayArgs {
     std::array<uint8_t, 10>  values;      // per-position strength or amplitude
 };
 
+struct XboxTriggerArgs {
+    int device;
+    int left_intensity;
+    int right_intensity;
+    int duration;
+};
+
 // Populated by the stub implementations in output_mapper_stub.cpp.
 extern std::vector<RumbleArgs>    rumbleCalls;
 extern std::vector<ConstantArgs>  constantCalls;
@@ -85,6 +92,7 @@ extern std::vector<PeriodicArgs>  periodicCalls;
 extern std::vector<ConditionArgs> conditionCalls;
 extern std::vector<DualSenseArgs> dualSenseCalls;
 extern std::vector<DualSenseArrayArgs> dualSenseArrayCalls;
+extern std::vector<XboxTriggerArgs> xboxTriggerCalls;
 
 /// Clear all recorded calls.  Call this in test SetUp().
 void Reset();

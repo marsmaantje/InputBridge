@@ -634,6 +634,20 @@ TEST_F(HapticParserTest, DualSenseTriggerMultiPositionFeedbackHandlesShortArray)
     EXPECT_EQ(call.values[9], 0);
 }
 
+// Xbox impulse trigger - routes through QueueXboxTrigger rather than any of
+// the DualSense-specific queues.
+TEST_F(HapticParserTest, XboxTriggerReadsIntensitiesAndDuration) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"left_intensity":80,"right_intensity":40,"duration_ms":150}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::xboxTriggerCalls.size(), 1u);
+    const auto& call = HapticStub::xboxTriggerCalls[0];
+    EXPECT_EQ(call.left_intensity, 80);
+    EXPECT_EQ(call.right_intensity, 40);
+    EXPECT_EQ(call.duration, 150);
+}
+
 // Condition must win over constant when both "strength" and sat fields co-exist.
 TEST_F(HapticParserTest, AutoDetectConditionBeatsConstantWhenSatPresent) {
     auto det = HapticParser::AutoDetect(

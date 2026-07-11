@@ -2,7 +2,7 @@
 // output_mapper_stub.cpp
 //
 // Link-seam replacement for OutputMapper.cpp in the HapticParser test binary.
-// Every method is a no-op stub EXCEPT the four Queue* methods called by
+// Every method is a no-op stub EXCEPT the Queue* methods called by
 // HapticParser::Parse(), which record their arguments into the HapticStub
 // vectors declared in output_mapper_stub.h.
 //
@@ -25,6 +25,7 @@ std::vector<PeriodicArgs>  periodicCalls;
 std::vector<ConditionArgs> conditionCalls;
 std::vector<DualSenseArgs> dualSenseCalls;
 std::vector<DualSenseArrayArgs> dualSenseArrayCalls;
+std::vector<XboxTriggerArgs> xboxTriggerCalls;
 
 void Reset() {
     rumbleCalls.clear();
@@ -33,6 +34,7 @@ void Reset() {
     conditionCalls.clear();
     dualSenseCalls.clear();
     dualSenseArrayCalls.clear();
+    xboxTriggerCalls.clear();
 }
 
 } // namespace HapticStub
@@ -115,6 +117,10 @@ void OutputMapper::QueueDualSenseMultiPositionVibration(int device, const char* 
     HapticStub::dualSenseArrayCalls.push_back(args);
 }
 
+void OutputMapper::QueueXboxTrigger(int device, int left_intensity, int right_intensity, int duration) {
+    HapticStub::xboxTriggerCalls.push_back({device, left_intensity, right_intensity, duration});
+}
+
 // Private helpers - never called from outside; stubs prevent link errors.
 void OutputMapper::QueueCommand(HapticCommand&&)                       {}
 void OutputMapper::QueueArrayCommand(DualSenseArrayCommand&&)          {}
@@ -132,3 +138,4 @@ void OutputMapper::TriggerDualSenseTrigger(int, const char*, const char*,
                                             int, int, int, int, int)  {}
 void OutputMapper::TriggerDualSenseMultiPositionFeedback(int, const char*, const uint8_t*)              {}
 void OutputMapper::TriggerDualSenseMultiPositionVibration(int, const char*, uint8_t, const uint8_t*)    {}
+void OutputMapper::TriggerXboxTrigger(int, int, int, int)                                                {}
