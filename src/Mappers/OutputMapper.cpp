@@ -284,6 +284,9 @@ void OutputMapper::Update() {
                                        cmd.iParams[6], cmd.iParams[7], cmd.iParams[8],
                                        cmd.iParams[9] & 0xFF, (cmd.iParams[9] >> 8) & 0xFF);
                 break;
+            case HapticCommand::XBOX_TRIGGER:
+                TriggerXboxTrigger(cmd.virtual_id, cmd.iParams[0], cmd.iParams[1], cmd.iParams[2]);
+                break;
         }
     }
 
@@ -525,6 +528,19 @@ void OutputMapper::QueueDualSenseTrigger(int virtual_id, const char* trigger, co
     cmd.iParams[7] = second_foot;
     cmd.iParams[8] = period;
     cmd.iParams[9] = (amplitude_a & 0xFF) | ((amplitude_b & 0xFF) << 8);
+    QueueCommand(std::move(cmd));
+}
+
+void OutputMapper::QueueXboxTrigger(int virtual_id, int left_intensity, int right_intensity, int duration_ms) {
+    if (left_intensity > 0 || right_intensity > 0) {
+        m_lastHapticActivityTime = SDL_GetTicks();
+    }
+    HapticCommand cmd;
+    cmd.type = HapticCommand::XBOX_TRIGGER;
+    cmd.virtual_id = virtual_id;
+    cmd.iParams[0] = left_intensity;
+    cmd.iParams[1] = right_intensity;
+    cmd.iParams[2] = duration_ms;
     QueueCommand(std::move(cmd));
 }
 
@@ -814,5 +830,23 @@ void OutputMapper::TriggerDualSenseMultiPositionVibration(int virtual_id, const 
         }
 
         hapticDevice->PlayDualSenseTrigger(trigger, "multi_position_vibration", params);
+    }
+}
+
+void OutputMapper::TriggerXboxTrigger(int virtual_id, int left_intensity, int right_intensity, int duration_ms) {
+    std::vector<HapticTarget*> targets;
+    GetTargets(virtual_id, targets);
+    for (auto* target : targets) {
+        if (!target || target->instance_id == 0) continue;
+        if (!target->enable_xbox_trigger) continue;
+
+        auto* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
+        if (!hapticDevice) continue;
+
+        uint8_t left  = static_cast<uint8_t>(std::clamp(left_intensity, 0, 255));
+        uint8_t right = static_cast<uint8_t>(std::clamp(right_intensity, 0, 255));
+        uint32_t duration = (duration_ms < 0) ? 0 : static_cast<uint32_t>(duration_ms);
+
+        hapticDevice->PlayXboxTrigger(left, right, duration);
     }
 }

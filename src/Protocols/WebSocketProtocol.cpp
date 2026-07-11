@@ -176,6 +176,12 @@ bool WebSocketProtocol::parse(const std::string &message) {
                                                                   first_foot, second_foot, period,
                                                                   amplitude_a, amplitude_b);
             }
+        } else if (type == "gamepad" && effect == "xbox_trigger") {
+            // Xbox impulse trigger effect
+            int left_intensity = params.value("left_intensity", 0);
+            int right_intensity = params.value("right_intensity", 0);
+            int duration_ms = params.value("duration_ms", 0);
+            OutputMapper::GetInstance().QueueXboxTrigger(0, left_intensity, right_intensity, duration_ms);
         } else if (type == "steering_wheel") {
             if (effect == "constant") {
                 float strength = params.at("strength");

@@ -9,6 +9,7 @@
 // • Supports multiple force-feedback effect types, including rumble,
 //   constant force, periodic effects, condition effects, and gain control.
 // • Provides DualSense adaptive trigger effect support.
+// • Provides Xbox impulse trigger effect support.
 // • Exposes a thread-safe API for servers and background systems to
 //   generate haptic feedback.
 // • Tracks haptic activity state and offers runtime controls for
@@ -30,7 +31,7 @@ struct HapticTarget;
 class PreferencesManager;
 
 struct HapticCommand {
-    enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION, GAIN, DUALSENSE_TRIGGER } type;
+    enum Type { RUMBLE, CONSTANT, PERIODIC, CONDITION, GAIN, DUALSENSE_TRIGGER, XBOX_TRIGGER } type;
     int virtual_id;
     float fParams[8]; // Generic float storage
     int iParams[10];  // Generic int storage - increased for more params
@@ -90,6 +91,7 @@ public:
     // these bypass QueueDualSenseTrigger/HapticCommand.
     void QueueDualSenseMultiPositionFeedback(int virtual_id, const char* trigger, const uint8_t strengths[10]);
     void QueueDualSenseMultiPositionVibration(int virtual_id, const char* trigger, uint8_t frequency, const uint8_t amplitudes[10]);
+    void QueueXboxTrigger(int virtual_id, int left_intensity, int right_intensity, int duration_ms);
 
 private:
     OutputMapper(const DeviceManager& deviceManager);
@@ -127,4 +129,5 @@ private:
                                  int amplitude_a, int amplitude_b);
     void TriggerDualSenseMultiPositionFeedback(int virtual_id, const char* trigger, const uint8_t* strengths);
     void TriggerDualSenseMultiPositionVibration(int virtual_id, const char* trigger, uint8_t frequency, const uint8_t* amplitudes);
+    void TriggerXboxTrigger(int virtual_id, int left_intensity, int right_intensity, int duration_ms);
 };

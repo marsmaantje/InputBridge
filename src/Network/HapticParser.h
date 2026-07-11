@@ -21,6 +21,7 @@ struct DetectedEffect {
         Periodic,
         Condition,
         DualSenseTrigger,
+        XboxTrigger,
     };
 
     Kind    kind    = Kind::Unknown;
@@ -54,6 +55,10 @@ struct DetectedEffect {
     // DualSense trigger
     std::string trigger;        // "left", "right", or "both"
     std::string effect_type;    // e.g. "feedback", "weapon", "vibration"
+
+    // Xbox impulse trigger
+    int left_intensity  = 0;
+    int right_intensity = 0;
 };
 
 class HapticParser {
@@ -77,10 +82,11 @@ public:
      *
      * Field priority (checked in order so the most-specific wins):
      *   1. DualSense trigger  - "trigger" + "effect_type"
-     *   2. Condition          - "right_sat" / "left_sat" / "condition_type"
-     *   3. Periodic           - "period" (or "magnitude" + "offset" together)
-     *   4. Constant           - "strength" alone
-     *   5. Rumble             - "low"/"high" or "large_magnitude"/"small_magnitude"
+     *   2. Xbox trigger       - "left_intensity" or "right_intensity"
+     *   3. Condition          - "right_sat" / "left_sat" / "condition_type"
+     *   4. Periodic           - "period" (or "magnitude" + "offset" together)
+     *   5. Constant           - "strength" alone
+     *   6. Rumble             - "low"/"high" or "large_magnitude"/"small_magnitude"
      *
      * If the message also carries an explicit "effect" field whose value
      * matches a known effect name, that takes precedence over field sniffing.

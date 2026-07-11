@@ -284,6 +284,7 @@ int HapticDevice::PlayPeriodic(int slot, HapticPeriodicType wave_type, float str
 int HapticDevice::PlayRumble(int slot, float large_magnitude, float small_magnitude, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayCondition(int slot, HapticConditionType type, float right_sat, float left_sat, float right_coeff, float left_coeff, float deadband, float center, uint32_t duration_ms) { return -1; }
 int HapticDevice::PlayDualSenseTrigger(const std::string& trigger, const std::string& effect_type, const std::map<std::string, int>& params) { return -1; }
+int HapticDevice::PlayXboxTrigger(uint8_t left_intensity, uint8_t right_intensity, uint32_t duration_ms) { return -1; }
 
 // --- Stop Methods (base stubs) ---
 
@@ -317,6 +318,11 @@ std::map<int, ActiveRumbleInfo> HapticDevice::GetActiveRumbles() {
 std::map<std::string, ActiveDualSenseTriggerInfo> HapticDevice::GetActiveDualSenseTriggers() {
     std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
     return m_activeDualSenseTriggers;
+}
+
+ActiveXboxTriggerInfo HapticDevice::GetActiveXboxTrigger() {
+    std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+    return m_activeXboxTrigger;
 }
 
 // --- Internal steering-wheel helpers (use kInternalSlot = -1 to avoid
@@ -501,6 +507,7 @@ void HapticDevice::StopAll() {
             m_activeConditions.clear();
             m_activeRumbles.clear();
             m_activeDualSenseTriggers.clear();
+            m_activeXboxTrigger = ActiveXboxTriggerInfo{};
         }
 
         SDL_StopHapticEffects(m_haptic.Get());

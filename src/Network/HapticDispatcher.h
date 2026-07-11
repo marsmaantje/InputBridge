@@ -18,6 +18,7 @@ class OutputMapper;
  * Condition iiiffffffi id, slot, ctype, right_sat, left_sat, right_coeff,
  *                      left_coeff, deadband, center, duration_ms
  * Gain      ii      id, gain
+ * Xbox      iiii    id, left_intensity, right_intensity, duration_ms
  *
  * DualSense adaptive trigger effects arrive on one fixed OSC path per
  * side x effect (see DispatchDualSense* below), each carrying only the
@@ -79,6 +80,13 @@ public:
      * Accepted format:  ii  (id, gain 0–100)
      */
     static void DispatchGain(lo_arg** argv, int argc, OutputMapper* mapper);
+
+    /**
+     * @brief Parse an Xbox impulse trigger message and queue it.
+     *
+     * Accepted format:  iiii  (id, left_intensity, right_intensity, duration_ms)
+     */
+    static void DispatchXboxTrigger(lo_arg** argv, int argc, OutputMapper* mapper);
 
     /**
      * @brief Parse a DualSense adaptive trigger "feedback" message and queue it.

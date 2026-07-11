@@ -924,6 +924,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     addIn("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
     addIn("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
     addIn("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
+    addIn("xbox_trigger",       "Xbox Impulse Trigger",    "Haptic", "/haptic/xbox/trigger", "xbox_trigger");
     // -- Adaptive Trigger (DualSense) ---------------------------------------
     // One field per trigger side x effect, since each combination is its
     // own OSC address/arg signature rather than a single message shape.

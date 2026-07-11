@@ -83,6 +83,7 @@ namespace {
         { "haptic_periodic",  "/haptic/periodic",  "iififfii",   OSCServer::HapticEffectKind::PeriodicLegacy, nullptr },
         { "haptic_condition", "/haptic/condition", "iiiffffffi", OSCServer::HapticEffectKind::Condition, nullptr },
         { "haptic_gain",      "/haptic/gain",      "ii",         OSCServer::HapticEffectKind::Gain,      nullptr },
+        { "xbox_trigger",     "/haptic/xbox/trigger", "iiii",    OSCServer::HapticEffectKind::XboxTrigger, nullptr },
 
         { "ds_trigger_left_feedback",   "/haptic/dualsense/trigger/left/feedback",   "iii",     OSCServer::HapticEffectKind::DsFeedback,  "left"  },
         { "ds_trigger_right_feedback",  "/haptic/dualsense/trigger/right/feedback",  "iii",     OSCServer::HapticEffectKind::DsFeedback,  "right" },
@@ -194,6 +195,7 @@ int OSCServer::dynamic_field_handler(const char* path, const char* types, lo_arg
             case HapticEffectKind::PeriodicLegacy:  HapticDispatcher::DispatchPeriodic(argv, argc, mapper); break;
             case HapticEffectKind::Condition:       HapticDispatcher::DispatchCondition(argv, argc, mapper); break;
             case HapticEffectKind::Gain:            HapticDispatcher::DispatchGain(argv, argc, mapper); break;
+            case HapticEffectKind::XboxTrigger:     HapticDispatcher::DispatchXboxTrigger(argv, argc, mapper); break;
             case HapticEffectKind::DsFeedback:      HapticDispatcher::DispatchDualSenseFeedback(argv, argc, mapper, ctx->side); break;
             case HapticEffectKind::DsWeapon:        HapticDispatcher::DispatchDualSenseWeapon(argv, argc, mapper, ctx->side); break;
             case HapticEffectKind::DsVibration:     HapticDispatcher::DispatchDualSenseVibration(argv, argc, mapper, ctx->side); break;

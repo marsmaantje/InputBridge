@@ -147,6 +147,23 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                 }
             }
 
+            // --- Xbox Impulse Trigger ---
+            if (gamepadHaptics->IsXboxController()) {
+                auto xbox_trigger = gamepadHaptics->GetActiveXboxTrigger();
+                if (xbox_trigger.active) {
+                    anyActive = true;
+                    if (ImGui::TreeNodeEx("Xbox Impulse Trigger", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Text("Left Intensity: %u", xbox_trigger.left_intensity);
+                        ImGui::Text("Right Intensity: %u", xbox_trigger.right_intensity);
+                        if (xbox_trigger.duration_ms == 0)
+                            ImGui::Text("Duration: Continuous");
+                        else
+                            ImGui::Text("Duration: %u ms", xbox_trigger.duration_ms);
+                        ImGui::TreePop();
+                    }
+                }
+            }
+
             // --- Constant force (per-slot) ---
             auto active_constants = gamepadHaptics->GetActiveConstants();
             for (const auto& [slot, info] : active_constants) {
@@ -405,6 +422,39 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                 
                 result = gamepadHaptics->PlayDualSenseTrigger("right", rightEffectName, rightParams);
                 LOG_DEBUG(kTag, "Right trigger effect '%s' result: %d", rightEffectName.c_str(), result);
+            }
+        }
+    }
+
+    // Only show Xbox impulse trigger UI if it's actually an Xbox controller
+    bool isXbox = false;
+    if (haptic) {
+        if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic))
+            isXbox = gamepadHaptics->IsXboxController();
+    }
+
+    if (isXbox) {
+        ImGui::Separator();
+        ImGui::Text("Xbox Impulse Triggers");
+        ImGui::TextDisabled("Routed through GamepadHaptics::PlayXboxTrigger - same path as OSC/WebSocket.");
+
+        ImGui::SliderInt("Left Intensity", &m_xbox_left_intensity, 0, 255);
+        ImGui::SliderInt("Right Intensity", &m_xbox_right_intensity, 0, 255);
+        ImGui::SliderInt("Duration (ms)", &m_xbox_trigger_duration, 0, 5000);
+
+        if (ImGui::Button("Play Xbox Trigger")) {
+            if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic)) {
+                int result = gamepadHaptics->PlayXboxTrigger(
+                    static_cast<uint8_t>(m_xbox_left_intensity),
+                    static_cast<uint8_t>(m_xbox_right_intensity),
+                    static_cast<uint32_t>(m_xbox_trigger_duration));
+                LOG_DEBUG(kTag, "Xbox trigger result: %d", result);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Stop Xbox Trigger")) {
+            if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic)) {
+                gamepadHaptics->PlayXboxTrigger(0, 0, 0);
             }
         }
     }

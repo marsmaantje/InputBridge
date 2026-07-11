@@ -88,6 +88,17 @@ void HapticDispatcher::DispatchGain(lo_arg** argv, int argc, OutputMapper* mappe
     mapper->QueueSetGain(id, gain);
 }
 
+void HapticDispatcher::DispatchXboxTrigger(lo_arg** argv, int argc, OutputMapper* mapper)
+{
+    if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
+    const int id              = argv[0]->i;
+    const int left_intensity  = argv[1]->i;
+    const int right_intensity = argv[2]->i;
+    const int duration        = argv[3]->i;
+    mapper->QueueXboxTrigger(id, left_intensity, right_intensity, duration);
+}
+
 void HapticDispatcher::DispatchDualSenseFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
 {
     if (!mapper || argc < 3) return;
