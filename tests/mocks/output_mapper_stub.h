@@ -16,6 +16,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <vector>
+#include <array>
+#include <string>
+#include <cstdint>
 #include "Haptics/HapticDevice.h"
 
 namespace HapticStub {
@@ -67,12 +70,21 @@ struct DualSenseArgs {
     int         p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11;
 };
 
+struct DualSenseArrayArgs {
+    int                      device;
+    std::string              trigger;
+    std::string              effect_type; // "multi_position_feedback" / "multi_position_vibration"
+    int                      frequency;   // only meaningful for vibration
+    std::array<uint8_t, 10>  values;      // per-position strength or amplitude
+};
+
 // Populated by the stub implementations in output_mapper_stub.cpp.
 extern std::vector<RumbleArgs>    rumbleCalls;
 extern std::vector<ConstantArgs>  constantCalls;
 extern std::vector<PeriodicArgs>  periodicCalls;
 extern std::vector<ConditionArgs> conditionCalls;
 extern std::vector<DualSenseArgs> dualSenseCalls;
+extern std::vector<DualSenseArrayArgs> dualSenseArrayCalls;
 
 /// Clear all recorded calls.  Call this in test SetUp().
 void Reset();

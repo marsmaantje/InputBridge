@@ -589,6 +589,51 @@ TEST_F(HapticParserTest, DualSenseTriggerSlopeFeedbackReadsStrengthAndAmplitude)
     EXPECT_EQ(call.p4, 8);  // amplitude (becomes end_strength downstream)
 }
 
+// multi_position_feedback/vibration bypass QueueDualSenseTrigger entirely
+// (see OutputMapper::DualSenseArrayCommand) and route through the dedicated
+// QueueDualSenseMultiPosition* methods instead - recorded in dualSenseArrayCalls.
+TEST_F(HapticParserTest, DualSenseTriggerMultiPositionFeedbackReadsStrengthsArray) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"left","effect_type":"multi_position_feedback",
+                                     "strengths":[0,0,0,0,0,3,0,0,0,0]}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseArrayCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseArrayCalls[0];
+    EXPECT_EQ(call.trigger, "left");
+    EXPECT_EQ(call.effect_type, "multi_position_feedback");
+    EXPECT_EQ(call.values[5], 3);
+    EXPECT_EQ(call.values[0], 0);
+}
+
+TEST_F(HapticParserTest, DualSenseTriggerMultiPositionVibrationReadsAmplitudesAndFrequency) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"right","effect_type":"multi_position_vibration",
+                                     "frequency":50,"amplitudes":[0,0,0,0,5,0,0,0,0,0]}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseArrayCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseArrayCalls[0];
+    EXPECT_EQ(call.trigger, "right");
+    EXPECT_EQ(call.effect_type, "multi_position_vibration");
+    EXPECT_EQ(call.frequency, 50);
+    EXPECT_EQ(call.values[4], 5);
+}
+
+// Missing/short arrays should not read out of bounds - remaining slots stay 0.
+TEST_F(HapticParserTest, DualSenseTriggerMultiPositionFeedbackHandlesShortArray) {
+    HapticParser::Parse(
+        R"({"type":"auto","params":{"trigger":"left","effect_type":"multi_position_feedback",
+                                     "strengths":[4,4]}})",
+        FakeMapper());
+
+    ASSERT_EQ(HapticStub::dualSenseArrayCalls.size(), 1u);
+    const auto& call = HapticStub::dualSenseArrayCalls[0];
+    EXPECT_EQ(call.values[0], 4);
+    EXPECT_EQ(call.values[1], 4);
+    EXPECT_EQ(call.values[9], 0);
+}
+
 // Condition must win over constant when both "strength" and sat fields co-exist.
 TEST_F(HapticParserTest, AutoDetectConditionBeatsConstantWhenSatPresent) {
     auto det = HapticParser::AutoDetect(

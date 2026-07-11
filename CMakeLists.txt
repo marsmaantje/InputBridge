@@ -40,6 +40,13 @@ set(WITH_STATIC ON CACHE BOOL "Enable liblo static lib" FORCE)
 set(WITH_SHARED OFF CACHE BOOL "Disable liblo shared lib" FORCE)
 
 # liblo's CMakeLists.txt is located in the 'cmake' subdirectory
+# CMP0218 (CMake >= 4.x): CMAKE_WARN_DEPRECATED/CMAKE_ERROR_DEPRECATED variables
+# are ignored unless this policy is explicitly OLD. We still rely on the
+# variable-based suppression below, so opt into OLD explicitly rather than
+# leaving the policy unset (which just warns while still behaving as OLD).
+if(POLICY CMP0218)
+    cmake_policy(SET CMP0218 OLD)
+endif()
 if(DEFINED CMAKE_WARN_DEPRECATED)
     set(CMAKE_WARN_DEPRECATED_OLD ${CMAKE_WARN_DEPRECATED})
 else()

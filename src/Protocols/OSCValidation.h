@@ -116,6 +116,11 @@ inline int ClampDSFrequency(int v, std::string_view p) { return ClampInt(v,   0,
 inline int ClampDSStartPos(int v, std::string_view p)  { return ClampInt(v,   2,   7, "start_position", p); }
 inline int ClampDSEndPos(int v, std::string_view p)    { return ClampInt(v,   0,   8, "end_position",   p); }
 
+// Multi-position feedback/vibration per-index strength/amplitude - 0-8, matches
+// ApplyTriggerEffect's "multi_position_feedback"/"multi_position_vibration" branches.
+inline int ClampDSMultiStrength(int v, std::string_view p)  { return ClampInt(v, 0, 8, "strength",  p); }
+inline int ClampDSMultiAmplitude(int v, std::string_view p) { return ClampInt(v, 0, 8, "amplitude", p); }
+
 // Slope feedback start/end position (0-8 / 0-9) and start/end strength (1-8, not 0-8 -
 // SlopeFeedback rejects a strength of 0) matches ApplyTriggerEffect's "slope_feedback" branch.
 inline int ClampDSSlopePos(int v, std::string_view p)      { return ClampInt(v, 0, 8, "start_position", p); }

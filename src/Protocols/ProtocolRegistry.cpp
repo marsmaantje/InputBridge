@@ -924,6 +924,7 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     addIn("haptic_periodic",    "Periodic Effect",         "Haptic", "/haptic/periodic",    "periodic");
     addIn("haptic_condition",   "Condition Effect",        "Haptic", "/haptic/condition",   "condition");
     addIn("haptic_gain",        "Global Gain",             "Haptic", "/haptic/gain",        "gain");
+    addIn("xbox_trigger",       "Xbox Impulse Trigger",    "Haptic", "/haptic/xbox/trigger", "xbox_trigger");
     // -- Adaptive Trigger (DualSense) ---------------------------------------
     // One field per trigger side x effect, since each combination is its
     // own OSC address/arg signature rather than a single message shape.
@@ -934,6 +935,8 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
     //   slope_feedback: iiiii (deviceId, start_position, end_position, start_strength, end_strength)
+    //   multi_position_feedback:  iiiiiiiiiii  (deviceId, strength_0..strength_9)
+    //   multi_position_vibration: iiiiiiiiiiii (deviceId, frequency, amplitude_0..amplitude_9)
     //   bow:       iiiii   (deviceId, start_position, end_position, strength, snap_force)
     //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
     //   machine:   iiiiiii (deviceId, start_position, end_position, amplitude_a, amplitude_b, frequency, period)
@@ -946,6 +949,10 @@ void ProtocolRegistry::LoadBuiltinCatalog() {
     addIn("ds_trigger_right_vibration", "Right Trigger: Vibration", "Adaptive Trigger", "/haptic/dualsense/trigger/right/vibration", "dualsense_trigger_right_vibration");
     addIn("ds_trigger_left_slope_feedback",  "Left Trigger: Slope Feedback",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/slope_feedback",  "dualsense_trigger_left_slope_feedback");
     addIn("ds_trigger_right_slope_feedback", "Right Trigger: Slope Feedback", "Adaptive Trigger", "/haptic/dualsense/trigger/right/slope_feedback", "dualsense_trigger_right_slope_feedback");
+    addIn("ds_trigger_left_multi_position_feedback",  "Left Trigger: Multi-Position Feedback",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/multi_position_feedback",  "dualsense_trigger_left_multi_position_feedback");
+    addIn("ds_trigger_right_multi_position_feedback", "Right Trigger: Multi-Position Feedback", "Adaptive Trigger", "/haptic/dualsense/trigger/right/multi_position_feedback", "dualsense_trigger_right_multi_position_feedback");
+    addIn("ds_trigger_left_multi_position_vibration",  "Left Trigger: Multi-Position Vibration",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/multi_position_vibration",  "dualsense_trigger_left_multi_position_vibration");
+    addIn("ds_trigger_right_multi_position_vibration", "Right Trigger: Multi-Position Vibration", "Adaptive Trigger", "/haptic/dualsense/trigger/right/multi_position_vibration", "dualsense_trigger_right_multi_position_vibration");
     addIn("ds_trigger_left_bow",        "Left Trigger: Bow",        "Adaptive Trigger", "/haptic/dualsense/trigger/left/bow",        "dualsense_trigger_left_bow");
     addIn("ds_trigger_right_bow",       "Right Trigger: Bow",       "Adaptive Trigger", "/haptic/dualsense/trigger/right/bow",       "dualsense_trigger_right_bow");
     addIn("ds_trigger_left_galloping",  "Left Trigger: Galloping",  "Adaptive Trigger", "/haptic/dualsense/trigger/left/galloping",  "dualsense_trigger_left_galloping");

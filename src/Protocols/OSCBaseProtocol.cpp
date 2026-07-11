@@ -8,6 +8,7 @@
 #include "Haptics/SteeringWheelHaptics.h"
 #include <cstring>
 #include <string_view>
+#include <string>
 #include <map>
 
 namespace {
@@ -54,6 +55,29 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     // by trigger side ("left"/"right"). Defined here so they're available to
     // the per-side/per-effect match() branches below (one Protocol Editor
     // field per side x effect, see "Adaptive Trigger" category).
+    auto sendMultiplePositionFeedback = [&](const char* trig) {
+        // iiiiiiiiiii = deviceId + 10 per-position strengths
+        if (std::strcmp(types, "iiiiiiiiiii") != 0 || argc != 11) return;
+        std::map<std::string, int> params;
+        for (int i = 0; i < 10; ++i) {
+            params["strength_" + std::to_string(i)] = ClampDSMultiStrength(argv[i + 1]->i, path_sv);
+        }
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "multi_position_feedback", params);
+        });
+    };
+    auto sendMultiplePositionVibration = [&](const char* trig) {
+        // iiiiiiiiiiii = deviceId + frequency + 10 per-position amplitudes
+        if (std::strcmp(types, "iiiiiiiiiiii") != 0 || argc != 12) return;
+        std::map<std::string, int> params;
+        params["frequency"] = ClampDSFrequency(argv[1]->i, path_sv);
+        for (int i = 0; i < 10; ++i) {
+            params["amplitude_" + std::to_string(i)] = ClampDSMultiAmplitude(argv[i + 2]->i, path_sv);
+        }
+        DispatchHapticCommand<GamepadHaptics>([&, trig](GamepadHaptics* gamepad) {
+            gamepad->SendDualSenseTrigger(trig, "multi_position_vibration", params);
+        });
+    };
     auto sendFeedback = [&](const char* trig) {
         if (std::strcmp(types, "iii") != 0 || argc != 3) return;
         std::map<std::string, int> params;
@@ -262,6 +286,8 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     //   feedback:  iii     (deviceId, position, strength)
     //   weapon:    iiii    (deviceId, start_position, end_position, strength)
     //   vibration: iiii    (deviceId, position, amplitude, frequency)
+    //   multi_position_feedback:  iiiiiiiiiii  (deviceId, strength_0..strength_9)
+    //   multi_position_vibration: iiiiiiiiiiii (deviceId, frequency, amplitude_0..amplitude_9)
     //   slope_feedback: iiiii (deviceId, start_position, end_position, start_strength, end_strength)
     //   bow:       iiiii   (deviceId, start_position, end_position, strength, snap_force)
     //   galloping: iiiiii  (deviceId, start_position, end_position, first_foot, second_foot, frequency)
@@ -273,6 +299,10 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     else if (match("/haptic/dualsense/trigger/right/weapon",    "ds_trigger_right_weapon"))    { handled = true; sendWeapon("right"); }
     else if (match("/haptic/dualsense/trigger/left/vibration",  "ds_trigger_left_vibration"))  { handled = true; sendVibration("left"); }
     else if (match("/haptic/dualsense/trigger/right/vibration", "ds_trigger_right_vibration")) { handled = true; sendVibration("right"); }
+    else if (match("/haptic/dualsense/trigger/left/multi_position_feedback",  "ds_trigger_left_multi_position_feedback"))  { handled = true; sendMultiplePositionFeedback("left"); }
+    else if (match("/haptic/dualsense/trigger/right/multi_position_feedback", "ds_trigger_right_multi_position_feedback")) { handled = true; sendMultiplePositionFeedback("right"); }
+    else if (match("/haptic/dualsense/trigger/left/multi_position_vibration",  "ds_trigger_left_multi_position_vibration"))  { handled = true; sendMultiplePositionVibration("left"); }
+    else if (match("/haptic/dualsense/trigger/right/multi_position_vibration", "ds_trigger_right_multi_position_vibration")) { handled = true; sendMultiplePositionVibration("right"); }
     else if (match("/haptic/dualsense/trigger/left/slope_feedback",  "ds_trigger_left_slope_feedback"))  { handled = true; sendSlopeFeedback("left"); }
     else if (match("/haptic/dualsense/trigger/right/slope_feedback", "ds_trigger_right_slope_feedback")) { handled = true; sendSlopeFeedback("right"); }
     else if (match("/haptic/dualsense/trigger/left/bow",        "ds_trigger_left_bow"))        { handled = true; sendBow("left"); }

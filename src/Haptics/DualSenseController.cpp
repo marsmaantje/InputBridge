@@ -223,6 +223,13 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
         uint8_t frequency = getParam("frequency", 10, 0, 255);
         return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::Vibration(triggerData, 0, position, amplitude, frequency);
     }
+    else if (effectType == "multi_position_feedback") {
+        uint8_t strengths[10];
+        for (int i = 0; i < 10; ++i) {
+            strengths[i] = getParam("strength_" + std::to_string(i), 0, 0, 8);
+        }
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::MultiplePositionFeedback(triggerData, 0, strengths);
+    }
     else if (effectType == "slope_feedback") {
         uint8_t startPos      = getParam("start_position", 0, 0, 8);
         uint8_t endPos        = getParam("end_position", 9, 0, 9);
@@ -230,6 +237,14 @@ bool DualSenseController::ApplyTriggerEffect(uint8_t* triggerData,
         uint8_t endStrength   = getParam("end_strength", 8, 1, 8);
         return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::SlopeFeedback(triggerData, 0, startPos, endPos,
                                                           startStrength, endStrength);
+    }
+    else if (effectType == "multi_position_vibration") {
+        uint8_t frequency = getParam("frequency", 10, 0, 255);
+        uint8_t amplitudes[10];
+        for (int i = 0; i < 10; ++i) {
+            amplitudes[i] = getParam("amplitude_" + std::to_string(i), 0, 0, 8);
+        }
+        return ExtendInput::DataTools::DualSense::DualSenseTriggerEffectGenerator::MultiplePositionVibration(triggerData, 0, frequency, amplitudes);
     }
     else if (effectType == "bow") {
         uint8_t startPos = getParam("start_position", 0, 0, 8);

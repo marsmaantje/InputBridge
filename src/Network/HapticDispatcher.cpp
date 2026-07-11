@@ -1,6 +1,7 @@
 #include "HapticDispatcher.h"
 #include "Haptics/HapticDevice.h"
 #include "../Mappers/OutputMapper.h"
+#include <cstdint>
 
 void HapticDispatcher::DispatchRumble(lo_arg** argv, int argc, OutputMapper* mapper)
 {
@@ -87,6 +88,17 @@ void HapticDispatcher::DispatchGain(lo_arg** argv, int argc, OutputMapper* mappe
     mapper->QueueSetGain(id, gain);
 }
 
+void HapticDispatcher::DispatchXboxTrigger(lo_arg** argv, int argc, OutputMapper* mapper)
+{
+    if (!mapper || argc < 4) return;
+    for (int i = 0; i < 4; ++i) { if (!argv[i]) return; }
+    const int id              = argv[0]->i;
+    const int left_intensity  = argv[1]->i;
+    const int right_intensity = argv[2]->i;
+    const int duration        = argv[3]->i;
+    mapper->QueueXboxTrigger(id, left_intensity, right_intensity, duration);
+}
+
 void HapticDispatcher::DispatchDualSenseFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
 {
     if (!mapper || argc < 3) return;
@@ -130,6 +142,34 @@ void HapticDispatcher::DispatchDualSenseVibration(lo_arg** argv, int argc, Outpu
                                    amplitude, frequency, /*snap_force*/0,
                                    /*first_foot*/0, /*second_foot*/0, /*period*/0,
                                    /*amplitude_a*/0, /*amplitude_b*/0);
+}
+
+void HapticDispatcher::DispatchDualSenseMultiPositionFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 11) return;
+    for (int i = 0; i < 11; ++i) { if (!argv[i]) return; }
+    const int id = argv[0]->i;
+    uint8_t strengths[10];
+    for (int i = 0; i < 10; ++i) {
+        int v = argv[i + 1]->i;
+        strengths[i] = static_cast<uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }
+    mapper->QueueDualSenseMultiPositionFeedback(id, trigger, strengths);
+}
+
+void HapticDispatcher::DispatchDualSenseMultiPositionVibration(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)
+{
+    if (!mapper || argc < 12) return;
+    for (int i = 0; i < 12; ++i) { if (!argv[i]) return; }
+    const int id = argv[0]->i;
+    int freq = argv[1]->i;
+    uint8_t frequency = static_cast<uint8_t>(freq < 0 ? 0 : (freq > 255 ? 255 : freq));
+    uint8_t amplitudes[10];
+    for (int i = 0; i < 10; ++i) {
+        int v = argv[i + 2]->i;
+        amplitudes[i] = static_cast<uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }
+    mapper->QueueDualSenseMultiPositionVibration(id, trigger, frequency, amplitudes);
 }
 
 void HapticDispatcher::DispatchDualSenseSlopeFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger)

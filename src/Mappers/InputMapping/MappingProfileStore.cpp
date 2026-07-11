@@ -99,6 +99,7 @@ void ParseHapticTargets(const json& data, MappingProfile& p) {
         t.enable_periodic = item.value("enable_periodic", true);
         t.enable_condition = item.value("enable_condition", true);
         t.enable_dualsense_trigger = item.value("enable_dualsense_trigger", true);
+        t.enable_xbox_trigger = item.value("enable_xbox_trigger", true);
         p.hapticTargets.push_back(t);
     }
 }
@@ -229,6 +230,7 @@ void SerializeHapticTargets(const MappingProfile& profile, json& data) {
             {"enable_rumble", t.enable_rumble}, {"enable_constant", t.enable_constant},
             {"enable_periodic", t.enable_periodic}, {"enable_condition", t.enable_condition},
             {"enable_dualsense_trigger", t.enable_dualsense_trigger},
+            {"enable_xbox_trigger", t.enable_xbox_trigger},
         });
     }
 }

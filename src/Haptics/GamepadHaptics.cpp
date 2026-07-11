@@ -23,12 +23,19 @@ void GamepadHaptics::StopAll() {
         PlayDualSenseTrigger("both", "off", {});
     }
 
+    // Zero both impulse trigger motors for the same reason - the base class
+    // only clears m_activeXboxTrigger for UI display, it never tells the
+    // controller hardware to stop the motors. No-op on non-Xbox controllers.
+    if (m_xbox) {
+        PlayXboxTrigger(0, 0, 0);
+    }
+
     // Clears rumble/constant/periodic/condition effects and their SDL
-    // effect IDs, plus the m_activeDualSenseTriggers tracking map. This
-    // runs asynchronously on the device's worker thread, so it's queued
-    // after (not before) the synchronous off-command above - otherwise the
-    // "off" entry PlayDualSenseTrigger just recorded could be cleared out
-    // of order and leave a stale entry in the tracking map.
+    // effect IDs, plus the m_activeDualSenseTriggers/m_activeXboxTrigger
+    // tracking state. This runs asynchronously on the device's worker
+    // thread, so it's queued after (not before) the synchronous off-commands
+    // above - otherwise the entries just recorded could be cleared out of
+    // order and leave stale entries in the tracking state.
     HapticDevice::StopAll();
 }
 
@@ -382,4 +389,27 @@ int GamepadHaptics::SendXboxImpulseTrigger(uint8_t leftIntensity,
     }
 
     return m_xbox->SetImpulseTriggers(leftIntensity, rightIntensity, durationMs);
+}
+
+int GamepadHaptics::PlayXboxTrigger(uint8_t left_intensity, uint8_t right_intensity, uint32_t duration_ms) {
+    if (!m_xbox) {
+        LOG_WARN(kTag, "PlayXboxTrigger - Not an Xbox controller");
+        return -1;
+    }
+
+    int result = m_xbox->SetImpulseTriggers(left_intensity, right_intensity, static_cast<uint16_t>(duration_ms));
+    if (result == 0) {
+        std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+        m_activeXboxTrigger.active          = (left_intensity != 0 || right_intensity != 0);
+        m_activeXboxTrigger.left_intensity  = left_intensity;
+        m_activeXboxTrigger.right_intensity = right_intensity;
+        m_activeXboxTrigger.duration_ms     = duration_ms;
+        m_activeXboxTrigger.last_updated    = SDL_GetTicks();
+    }
+    return result;
+}
+
+ActiveXboxTriggerInfo GamepadHaptics::GetActiveXboxTrigger() {
+    std::lock_guard<std::mutex> lock(m_activeEffectsMutex);
+    return m_activeXboxTrigger;
 }

@@ -50,7 +50,10 @@ public:
     // needs to name these values outside the class.
     enum class HapticEffectKind {
         Rumble, Constant, PeriodicNew, PeriodicLegacy, Condition, Gain,
-        DsFeedback, DsWeapon, DsVibration, DsSlopeFeedback, DsBow, DsGalloping, DsMachine, DsOff
+        XboxTrigger,
+        DsFeedback, DsWeapon, DsVibration, DsSlopeFeedback,
+        DsMultiPositionFeedback, DsMultiPositionVibration,
+        DsBow, DsGalloping, DsMachine, DsOff
     };
 
     OSCServer();

@@ -18,6 +18,7 @@ class OutputMapper;
  * Condition iiiffffffi id, slot, ctype, right_sat, left_sat, right_coeff,
  *                      left_coeff, deadband, center, duration_ms
  * Gain      ii      id, gain
+ * Xbox      iiii    id, left_intensity, right_intensity, duration_ms
  *
  * DualSense adaptive trigger effects arrive on one fixed OSC path per
  * side x effect (see DispatchDualSense* below), each carrying only the
@@ -25,6 +26,8 @@ class OutputMapper;
  *   feedback   iii       id, position, strength
  *   weapon     iiii      id, start_position, end_position, strength
  *   vibration  iiii      id, position, amplitude, frequency
+ *   multi_position_feedback  iiiiiiiiiii  id, strength_0..strength_9
+ *   multi_position_vibration iiiiiiiiiiii id, frequency, amplitude_0..amplitude_9
  *   slope_feedback iiiii id, start_position, end_position, start_strength, end_strength
  *   bow        iiiii     id, start_position, end_position, strength, snap_force
  *   galloping  iiiiii    id, start_position, end_position, first_foot, second_foot, frequency
@@ -79,6 +82,13 @@ public:
     static void DispatchGain(lo_arg** argv, int argc, OutputMapper* mapper);
 
     /**
+     * @brief Parse an Xbox impulse trigger message and queue it.
+     *
+     * Accepted format:  iiii  (id, left_intensity, right_intensity, duration_ms)
+     */
+    static void DispatchXboxTrigger(lo_arg** argv, int argc, OutputMapper* mapper);
+
+    /**
      * @brief Parse a DualSense adaptive trigger "feedback" message and queue it.
      *
      * Accepted format:  iii  (id, position, strength).  trigger must be
@@ -100,6 +110,20 @@ public:
      * Accepted format:  iiii  (id, position, amplitude, frequency)
      */
     static void DispatchDualSenseVibration(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger);
+
+    /**
+     * @brief Parse a DualSense adaptive trigger "multi_position_feedback" message and queue it.
+     *
+     * Accepted format:  iiiiiiiiiii  (id, strength_0..strength_9)
+     */
+    static void DispatchDualSenseMultiPositionFeedback(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger);
+
+    /**
+     * @brief Parse a DualSense adaptive trigger "multi_position_vibration" message and queue it.
+     *
+     * Accepted format:  iiiiiiiiiiii  (id, frequency, amplitude_0..amplitude_9)
+     */
+    static void DispatchDualSenseMultiPositionVibration(lo_arg** argv, int argc, OutputMapper* mapper, const char* trigger);
 
     /**
      * @brief Parse a DualSense adaptive trigger "slope_feedback" message and queue it.

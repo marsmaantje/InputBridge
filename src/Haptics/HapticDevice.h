@@ -146,6 +146,7 @@ struct HapticCapabilities {
     bool rumble          = false;  ///< Dual-motor gamepad rumble
     bool forceFeedback   = false;  ///< Constant / periodic / condition FF (wheel, flight stick)
     bool adaptiveTriggers= false;  ///< DualSense adaptive trigger effects
+    bool impulseTriggers = false;  ///< Xbox impulse trigger motors
     bool gainControl     = false;  ///< Per-device haptic gain (steering wheel, flight stick)
 };
 
@@ -192,6 +193,14 @@ struct ActiveRumbleInfo {
 struct ActiveDualSenseTriggerInfo {
     std::string effect_type;
     std::map<std::string, int> params;
+    uint64_t last_updated = 0;
+};
+
+struct ActiveXboxTriggerInfo {
+    bool active = false;
+    uint8_t left_intensity = 0;
+    uint8_t right_intensity = 0;
+    uint32_t duration_ms = 0;
     uint64_t last_updated = 0;
 };
 
@@ -246,6 +255,7 @@ public:
     virtual int StopCondition(int slot);
 
     virtual int PlayDualSenseTrigger(const std::string& trigger, const std::string& effect_type, const std::map<std::string, int>& params);
+    virtual int PlayXboxTrigger(uint8_t left_intensity, uint8_t right_intensity, uint32_t duration_ms);
 
     // --- State Getters (per-slot maps) ---
     virtual std::map<int, ActiveConstantInfo>  GetActiveConstants();
@@ -253,6 +263,7 @@ public:
     virtual std::map<int, ActiveConditionInfo> GetActiveConditions();
     virtual std::map<int, ActiveRumbleInfo>    GetActiveRumbles();
     virtual std::map<std::string, ActiveDualSenseTriggerInfo> GetActiveDualSenseTriggers();
+    virtual ActiveXboxTriggerInfo GetActiveXboxTrigger();
 
     // Steering Wheel Effects
     // level: -1.0 to 1.0
@@ -292,6 +303,7 @@ protected:
     std::map<int, ActiveConditionInfo> m_activeConditions;
     std::map<int, ActiveRumbleInfo>    m_activeRumbles;
     std::map<std::string, ActiveDualSenseTriggerInfo> m_activeDualSenseTriggers; // "left", "right"
+    ActiveXboxTriggerInfo m_activeXboxTrigger;
 
     // Slot -> SDL effect ID maps for all effect types.
     std::map<int, SDL_HapticEffectID> m_constantEffects;
