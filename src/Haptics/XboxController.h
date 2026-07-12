@@ -113,6 +113,20 @@ public:
      */
     bool IsXboxController() const;
 
+    /**
+     * @brief Check if a joystick handle is an Xbox controller with impulse triggers
+     *
+     * Static entry point for the same vendor/product-ID detection used by the
+     * instance method above. This is the single source of truth for "is this
+     * an Xbox controller" - callers that don't (yet) own an XboxController
+     * instance, such as GamepadHaptics deciding whether to construct one,
+     * should call this instead of re-implementing the product ID list.
+     *
+     * @param joystick SDL joystick handle to check
+     * @return true if Xbox controller with impulse triggers
+     */
+    static bool IsXboxController(SDL_Joystick* joystick);
+
 private:
     /**
      * @brief Detect specific Xbox controller model
@@ -133,17 +147,40 @@ private:
     static constexpr uint16_t MICROSOFT_VENDOR_ID = 0x045E;
     
     // Product IDs (controllers with impulse triggers)
-    static constexpr uint16_t XBOX_ONE_PRODUCT_ID = 0x02D1;        // Original Xbox One
-    static constexpr uint16_t XBOX_ONE_S_PRODUCT_ID = 0x02EA;      // Xbox One S
-    static constexpr uint16_t XBOX_ONE_ELITE_PRODUCT_ID = 0x02E3;  // Xbox One Elite
-    static constexpr uint16_t XBOX_ONE_ELITE2_PRODUCT_ID = 0x0B00; // Xbox One Elite 2
+    //
+    // Sourced against SDL upstream's authoritative list
+    // (src/joystick/usb_ids.h) to make sure every connection variant of
+    // each impulse-trigger-capable model is covered. Deliberately excluded:
+    //  - 0x02FF (XBOXGIP_CONTROLLER): a driver-software PID, not a distinct
+    //    hardware model, so it isn't a meaningful entry in a model table.
+    //  - Xbox Adaptive Controller (0x0B0A / 0x0B0C / 0x0B21): a hub for
+    //    external accessibility switches, has no trigger motors of its own.
+    static constexpr uint16_t XBOX_ONE_PRODUCT_ID = 0x02D1;        // Original Xbox One - USB
+    static constexpr uint16_t XBOX_ONE_2015FW_PRODUCT_ID = 0x02DD; // Original Xbox One - USB (2015 firmware revision)
+    static constexpr uint16_t XBOX_ONE_ELITE_PRODUCT_ID = 0x02E3;  // Xbox One Elite - USB
+
+    // Xbox One S reports a different product ID per connection type/firmware.
+    static constexpr uint16_t XBOX_ONE_S_PRODUCT_ID = 0x02EA;             // Xbox One S - USB
+    static constexpr uint16_t XBOX_ONE_S_BT_REV1_PRODUCT_ID = 0x02E0;     // Xbox One S - Bluetooth (older firmware)
+    static constexpr uint16_t XBOX_ONE_S_BT_REV2_PRODUCT_ID = 0x02FD;     // Xbox One S - Bluetooth (newer firmware)
+    static constexpr uint16_t XBOX_ONE_S_BLE_PRODUCT_ID = 0x0B20;         // Xbox One S - Bluetooth LE
+
+    // Xbox One Elite Series 2 likewise has separate wired/BT/BLE IDs.
+    static constexpr uint16_t XBOX_ONE_ELITE2_PRODUCT_ID = 0x0B00;        // Xbox One Elite 2 - USB
+    static constexpr uint16_t XBOX_ONE_ELITE2_BT_PRODUCT_ID = 0x0B05;     // Xbox One Elite 2 - Bluetooth
+    static constexpr uint16_t XBOX_ONE_ELITE2_BLE_PRODUCT_ID = 0x0B22;    // Xbox One Elite 2 - Bluetooth LE
+    // NOTE: 0x0B22 was previously (incorrectly) listed here as a Series X|S
+    // BLE id. Per SDL's usb_ids.h it's actually
+    // USB_PRODUCT_XBOX_ONE_ELITE_SERIES_2_BLE - Series X|S has no separate
+    // BLE-only PID; see XBOX_SERIES_X_PRODUCT_ID below.
+
     // Xbox Series X|S (model 1914) reports a different product ID per
     // connection type - USB and Bluetooth are NOT the same device ID here.
-    // Only 0x0B13 (Bluetooth) was previously listed, so wired controllers
-    // fell through IsXboxController() entirely.
-    static constexpr uint16_t XBOX_SERIES_X_PRODUCT_ID = 0x0B13;      // Xbox Series X|S - Bluetooth
+    // Unlike Xbox One S/Elite 2, Series X|S was never given a distinct
+    // BLE-only PID: 0x0B13 covers both classic Bluetooth and BLE.
+    static constexpr uint16_t XBOX_SERIES_X_PRODUCT_ID = 0x0B13;      // Xbox Series X|S - Bluetooth/BLE
     static constexpr uint16_t XBOX_SERIES_X_WIRED_PRODUCT_ID = 0x0B12; // Xbox Series X|S - USB (wired)
-    static constexpr uint16_t XBOX_SERIES_X_BLE_PRODUCT_ID = 0x0B22;   // Xbox Series X|S - Bluetooth LE (post firmware 5.x)
+
 
     // Impulse Trigger Protocol
     static constexpr uint8_t IMPULSE_TRIGGER_REPORT_ID = 0x03;

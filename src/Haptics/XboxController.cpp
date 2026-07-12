@@ -21,22 +21,31 @@ bool XboxController::IsReady() const {
 }
 
 bool XboxController::IsXboxController() const {
-    const Uint16 vendor = SDL_GetJoystickVendor(m_joystick);
-    
+    return IsXboxController(m_joystick);
+}
+
+bool XboxController::IsXboxController(SDL_Joystick* joystick) {
+    const Uint16 vendor = SDL_GetJoystickVendor(joystick);
+
     if (vendor != MICROSOFT_VENDOR_ID) {
         return false;
     }
-    
-    const Uint16 product = SDL_GetJoystickProduct(m_joystick);
-    
+
+    const Uint16 product = SDL_GetJoystickProduct(joystick);
+
     // Check if this is a known Xbox controller with impulse triggers
     return (product == XBOX_ONE_PRODUCT_ID ||
+            product == XBOX_ONE_2015FW_PRODUCT_ID ||
             product == XBOX_ONE_S_PRODUCT_ID ||
+            product == XBOX_ONE_S_BT_REV1_PRODUCT_ID ||
+            product == XBOX_ONE_S_BT_REV2_PRODUCT_ID ||
+            product == XBOX_ONE_S_BLE_PRODUCT_ID ||
             product == XBOX_ONE_ELITE_PRODUCT_ID ||
             product == XBOX_ONE_ELITE2_PRODUCT_ID ||
+            product == XBOX_ONE_ELITE2_BT_PRODUCT_ID ||
+            product == XBOX_ONE_ELITE2_BLE_PRODUCT_ID ||
             product == XBOX_SERIES_X_PRODUCT_ID ||
-            product == XBOX_SERIES_X_WIRED_PRODUCT_ID ||
-            product == XBOX_SERIES_X_BLE_PRODUCT_ID);
+            product == XBOX_SERIES_X_WIRED_PRODUCT_ID);
 }
 
 // ==================== Model Detection ====================
@@ -54,16 +63,21 @@ Xbox::ControllerModel XboxController::DetectModel() const {
     
     switch (product) {
         case XBOX_ONE_PRODUCT_ID:
+        case XBOX_ONE_2015FW_PRODUCT_ID:
             return Xbox::ControllerModel::XboxOne;
         case XBOX_ONE_S_PRODUCT_ID:
+        case XBOX_ONE_S_BT_REV1_PRODUCT_ID:
+        case XBOX_ONE_S_BT_REV2_PRODUCT_ID:
+        case XBOX_ONE_S_BLE_PRODUCT_ID:
             return Xbox::ControllerModel::XboxOneS;
         case XBOX_ONE_ELITE_PRODUCT_ID:
             return Xbox::ControllerModel::XboxOneElite;
         case XBOX_ONE_ELITE2_PRODUCT_ID:
+        case XBOX_ONE_ELITE2_BT_PRODUCT_ID:
+        case XBOX_ONE_ELITE2_BLE_PRODUCT_ID:
             return Xbox::ControllerModel::XboxOneElite2;
         case XBOX_SERIES_X_PRODUCT_ID:
         case XBOX_SERIES_X_WIRED_PRODUCT_ID:
-        case XBOX_SERIES_X_BLE_PRODUCT_ID:
             return Xbox::ControllerModel::XboxSeriesX;
         default:
             return Xbox::ControllerModel::Unknown;
