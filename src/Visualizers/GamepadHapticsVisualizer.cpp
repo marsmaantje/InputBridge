@@ -440,7 +440,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
 
         ImGui::SliderInt("Left Intensity", &m_xbox_left_intensity, 0, 255);
         ImGui::SliderInt("Right Intensity", &m_xbox_right_intensity, 0, 255);
-        ImGui::SliderInt("Duration (ms)", &m_xbox_trigger_duration, 0, 5000);
+        ImGui::SliderInt("Duration (ms)##xbox_trigger", &m_xbox_trigger_duration, 0, 5000);
 
         if (ImGui::Button("Play Xbox Trigger")) {
             if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic)) {
