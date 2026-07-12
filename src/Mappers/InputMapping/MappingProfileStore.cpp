@@ -555,6 +555,21 @@ void MappingProfileStore::UpdateActiveProtocols() {
 
     // ── OSC server ────────────────────────────────────────────────────────────
     auto& osc = OSCServer::GetInstance();
+
+    // Snapshot what the server is actually running on *before* touching the
+    // protocol definitions below. SetOutputDefinition()/SetInputDefinition()
+    // apply that definition's own host/port as a side effect (when it
+    // specifies one), overwriting the very fields GetSendHost()/GetSendPort()/
+    // GetReceivePort() read, so computing portChanged from those getters
+    // afterwards would compare the new profile's definition-port against the
+    // new profile's saved port (almost always equal, since the latter is
+    // usually derived from the former) instead of against what the server
+    // was actually still bound to. That silently skipped the restart
+    // whenever the old and new profile used different ports/host.
+    const std::string prevSendHost = osc.GetSendHost();
+    const int prevSendPort = osc.GetSendPort();
+    const int prevRecvPort = osc.GetReceivePort();
+
     osc.SetOutputDefinition(p.oscOutputProtocolId);
     osc.SetInputDefinition(p.oscInputProtocolId);
 
@@ -564,9 +579,9 @@ void MappingProfileStore::UpdateActiveProtocols() {
     // port after a profile switch.
     osc.SetOutputEnabled(p.oscOutputEnabled);
     osc.SetInputEnabled(p.oscInputEnabled);
-    const bool portChanged = (osc.GetSendPort()    != p.oscSendPort  ||
-                              osc.GetReceivePort() != p.oscRecvPort  ||
-                              osc.GetSendHost()    != p.oscSendHost);
+    const bool portChanged = (prevSendPort != p.oscSendPort  ||
+                              prevRecvPort != p.oscRecvPort  ||
+                              prevSendHost != p.oscSendHost);
     if (osc.IsRunning() && portChanged) {
         osc.Stop();
         // Block until the detached liblo cleanup thread releases the old port
