@@ -75,18 +75,27 @@ int XboxController::SetImpulseTriggers(uint8_t leftIntensity,
         LOG_WARN(kTag, "SetImpulseTriggers: Not an Xbox controller");
         return -1;
     }
-    
-    RunAsync([this, leftIntensity, rightIntensity, durationMs]() {
-        Xbox::ImpulseTriggerState state;
-        state.leftTriggerMotor = leftIntensity;
-        state.rightTriggerMotor = rightIntensity;
-        state.durationMs = durationMs;
-        
-        if (!SendImpulseTriggerCommand(state)) {
-            LOG_ERROR(kTag, "SetImpulseTriggers: Failed to send command");
-        }
-    });
-    
+
+    // Sent synchronously on the calling thread, matching
+    // GamepadHaptics::SendSteamControllerHaptic()'s SDL_SendJoystickEffect
+    // precedent it's a single raw HID output report, not a driver-side
+    // SDL_Haptic effect, so there's no need to hop onto the worker thread
+    // via RunAsync(). This also lets the actual send result (rather than an
+    // unconditional success) propagate back to the caller: PlayXboxTrigger()
+    // only marks the trigger active when this returns 0, so a failed send
+    // e.g. because the controller was opened via the XInput backend instead
+    // of SDL's HIDAPI Xbox driver, see Application::SetSDLHints()
+    // now shows up as a failure instead of silently doing nothing.
+    Xbox::ImpulseTriggerState state;
+    state.leftTriggerMotor = leftIntensity;
+    state.rightTriggerMotor = rightIntensity;
+    state.durationMs = durationMs;
+
+    if (!SendImpulseTriggerCommand(state)) {
+        LOG_ERROR(kTag, "SetImpulseTriggers: Failed to send command");
+        return -1;
+    }
+
     return 0;
 }
 

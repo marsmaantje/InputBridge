@@ -76,6 +76,16 @@ void Application::SetSDLHints()
     // are available even when connected over USB without Steam Input.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
+
+    // ── Xbox ─────────────────────────────────────────────────────────────────
+    // Without this, SDL may open Xbox controllers through the platform-native
+    // backend (e.g. XInput on Windows) instead of SDL's own HIDAPI Xbox
+    // driver. XboxController::SendImpulseTriggerCommand() sends a raw output
+    // report via SDL_SendJoystickEffect(), which only the HIDAPI Xbox driver
+    // implements - on the XInput backend it silently fails, so impulse
+    // triggers never actually move even though PlayXboxTrigger() reports
+    // success (see SetImpulseTriggers()'s early "return 0").
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_XBOX, "1");
 }
 
 // ── CreateWindow ─────────────────────────────────────────────────────────────
