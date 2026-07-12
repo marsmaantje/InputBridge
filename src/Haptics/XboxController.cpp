@@ -34,7 +34,9 @@ bool XboxController::IsXboxController() const {
             product == XBOX_ONE_S_PRODUCT_ID ||
             product == XBOX_ONE_ELITE_PRODUCT_ID ||
             product == XBOX_ONE_ELITE2_PRODUCT_ID ||
-            product == XBOX_SERIES_X_PRODUCT_ID);
+            product == XBOX_SERIES_X_PRODUCT_ID ||
+            product == XBOX_SERIES_X_WIRED_PRODUCT_ID ||
+            product == XBOX_SERIES_X_BLE_PRODUCT_ID);
 }
 
 // ==================== Model Detection ====================
@@ -60,6 +62,8 @@ Xbox::ControllerModel XboxController::DetectModel() const {
         case XBOX_ONE_ELITE2_PRODUCT_ID:
             return Xbox::ControllerModel::XboxOneElite2;
         case XBOX_SERIES_X_PRODUCT_ID:
+        case XBOX_SERIES_X_WIRED_PRODUCT_ID:
+        case XBOX_SERIES_X_BLE_PRODUCT_ID:
             return Xbox::ControllerModel::XboxSeriesX;
         default:
             return Xbox::ControllerModel::Unknown;
@@ -137,7 +141,19 @@ bool XboxController::SendImpulseTriggerCommand(const Xbox::ImpulseTriggerState& 
            data[0], state.leftTriggerMotor, state.rightTriggerMotor, state.durationMs);
     
     if (!SDL_SendJoystickEffect(m_joystick, data.data(), data.size())) {
-        LOG_ERROR(kTag, "Impulse: Send failed - %s", SDL_GetError());
+        // Impulse triggers require the full USB/Xbox-Wireless-Adapter HID
+        // report protocol. Standard Bluetooth (classic or BLE) doesn't
+        // expose this output report at all, so SDL correctly fails here
+        // this isn't a bug, it's a hardware/protocol limitation. 
+        // Downgrade to a clear warning instead of an alarming error when
+        // that's the likely cause, so it doesn't read as something broken.
+        if (SDL_GetJoystickConnectionState(m_joystick) == SDL_JOYSTICK_CONNECTION_WIRELESS) {
+            LOG_WARN(kTag, "Impulse: Not supported over Bluetooth on this controller - "
+                           "connect via USB or the Xbox Wireless Adapter for trigger haptics (SDL: %s)",
+                     SDL_GetError());
+        } else {
+            LOG_ERROR(kTag, "Impulse: Send failed - %s", SDL_GetError());
+        }
         return false;
     }
     

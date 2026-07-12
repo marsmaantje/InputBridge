@@ -137,7 +137,13 @@ private:
     static constexpr uint16_t XBOX_ONE_S_PRODUCT_ID = 0x02EA;      // Xbox One S
     static constexpr uint16_t XBOX_ONE_ELITE_PRODUCT_ID = 0x02E3;  // Xbox One Elite
     static constexpr uint16_t XBOX_ONE_ELITE2_PRODUCT_ID = 0x0B00; // Xbox One Elite 2
-    static constexpr uint16_t XBOX_SERIES_X_PRODUCT_ID = 0x0B13;   // Xbox Series X|S
+    // Xbox Series X|S (model 1914) reports a different product ID per
+    // connection type - USB and Bluetooth are NOT the same device ID here.
+    // Only 0x0B13 (Bluetooth) was previously listed, so wired controllers
+    // fell through IsXboxController() entirely.
+    static constexpr uint16_t XBOX_SERIES_X_PRODUCT_ID = 0x0B13;      // Xbox Series X|S - Bluetooth
+    static constexpr uint16_t XBOX_SERIES_X_WIRED_PRODUCT_ID = 0x0B12; // Xbox Series X|S - USB (wired)
+    static constexpr uint16_t XBOX_SERIES_X_BLE_PRODUCT_ID = 0x0B22;   // Xbox Series X|S - Bluetooth LE (post firmware 5.x)
 
     // Impulse Trigger Protocol
     static constexpr uint8_t IMPULSE_TRIGGER_REPORT_ID = 0x03;
