@@ -449,6 +449,22 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
                     static_cast<uint8_t>(m_xbox_right_intensity),
                     static_cast<uint32_t>(m_xbox_trigger_duration));
                 LOG_DEBUG(kTag, "Xbox trigger result: %d", result);
+
+                if (result != 0) {
+                    // SetImpulseTriggers() already logged the underlying SDL
+                    // error via LOG_WARN, but that's not visible anywhere in
+                    // the UI - grab it here too so the user isn't left
+                    // wondering why nothing happened (e.g. controller opened
+                    // via the XInput backend instead of SDL's HIDAPI Xbox
+                    // driver, or a third-party pad that reports as Xbox type
+                    // but doesn't actually implement trigger rumble).
+                    const char* sdlError = SDL_GetError();
+                    m_xbox_trigger_error = (sdlError && sdlError[0] != '\0')
+                        ? std::string("Impulse triggers not supported: ") + sdlError
+                        : std::string("Impulse triggers not supported on this controller/driver.");
+                } else {
+                    m_xbox_trigger_error.clear();
+                }
             }
         }
         ImGui::SameLine();
@@ -456,6 +472,10 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic)) {
                 gamepadHaptics->PlayXboxTrigger(0, 0, 0);
             }
+        }
+
+        if (!m_xbox_trigger_error.empty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%s", m_xbox_trigger_error.c_str());
         }
     }
 }

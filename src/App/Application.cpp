@@ -80,11 +80,14 @@ void Application::SetSDLHints()
     // ── Xbox ─────────────────────────────────────────────────────────────────
     // Without this, SDL may open Xbox controllers through the platform-native
     // backend (e.g. XInput on Windows) instead of SDL's own HIDAPI Xbox
-    // driver. XboxController::SendImpulseTriggerCommand() sends a raw output
-    // report via SDL_SendJoystickEffect(), which only the HIDAPI Xbox driver
-    // implements - on the XInput backend it silently fails, so impulse
-    // triggers never actually move even though PlayXboxTrigger() reports
-    // success (see SetImpulseTriggers()'s early "return 0").
+    // driver. XboxController::SetImpulseTriggers() delegates to
+    // SDL_RumbleJoystickTriggers(), which only the HIDAPI Xbox driver
+    // implements - on the XInput backend it returns false (SDL_Unsupported),
+    // so impulse triggers never actually move, but at least SetImpulseTriggers()
+    // now surfaces that as a real failure instead of reporting success.
+    // SDL_GetRealGamepadTypeForID() (used for Xbox controller detection - see
+    // XboxController::IsXboxController()) is unaffected by this hint either
+    // way, since it doesn't depend on which backend opened the device.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_XBOX, "1");
 }
 
@@ -567,16 +570,16 @@ void Application::Shutdown()
     // would be destroyed AFTER OSCServer during normal static teardown.
     // Protocol destructors (e.g. OSCProtocol::~OSCProtocol) call back into
     // OSCServer::GetInstance(), which would be a use-after-destruction crash.
-    // Clearing the protocol map now - while all singletons are still alive -
+    // Clearing the protocol map now, while all singletons are still alive
     // prevents that entire class of ordering bugs.
     ProtocolManager::GetInstance().Clear();
 
     // ── Stop network servers BEFORE destroying mappers ────────────────────────
     // Both OSCServer::Stop() and WebSocketServer::Stop() call
     // m_OutputMapper->StopAllHapticEffects() synchronously via their stored raw
-    // pointer.  If OutputMapper::Shutdown() runs first it frees the OutputMapper
+    // pointer. If OutputMapper::Shutdown() runs first it frees the OutputMapper
     // object, turning those calls into use-after-free crashes (segfault at
-    // OutputMapper.cpp StopAllHapticEffects).  Stopping the servers here -
+    // OutputMapper.cpp StopAllHapticEffects). Stopping the servers here
     // while OutputMapper is still alive - prevents that entirely.
     OSCServer::GetInstance().SaveConfig(m_prefs);
     WebSocketServer::GetInstance().SaveConfig(m_prefs);
@@ -584,7 +587,7 @@ void Application::Shutdown()
     WebSocketServer::GetInstance().Stop();
 
     // Wait for the OSC liblo cleanup thread and the uWS event-loop thread to
-    // fully exit before OutputMapper is destroyed.  Both Stop() calls above
+    // fully exit before OutputMapper is destroyed. Both Stop() calls above
     // return immediately and move their blocking teardown to background threads;
     // those threads hold raw OutputMapper* pointers and can still invoke
     // callbacks (e.g. StopAllHapticEffects) until they have fully terminated.
