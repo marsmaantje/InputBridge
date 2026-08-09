@@ -18,6 +18,7 @@
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
+#include "UI/EditableSlider.h"
 #include "UI/FontManager.h"
 #include "UI/SidebarLayout.h"
 #include "UI/ThemeManager.h"
@@ -260,6 +261,8 @@ void Application::RestorePreferences()
     m_fontScale       = m_prefs.GetFloat(PrefKeys::FontScale,         1.0f);
     m_scaleWithWindow = m_prefs.GetBool(PrefKeys::ScaleWithWindow,    false);
     m_showNamedInputs = m_prefs.GetBool("ShowNamedInputs",           false);
+    m_showSliderEditButtons = m_prefs.GetBool("ShowSliderEditButtons", true);
+    UI::SetSliderEditButtonsEnabled(m_showSliderEditButtons);
     m_serverUpdateRate  = m_prefs.GetInt(PrefKeys::NetworkSection, PrefKeys::UpdateRate, 60);
     m_serverDynamicRate = m_prefs.GetBool(PrefKeys::NetworkSection, PrefKeys::DynamicRate, false);
 
@@ -520,7 +523,8 @@ void Application::RenderFrame(Uint64 frame_start_time)
         k_InitialWidth,
         k_InitialHeight,
         m_running,
-        m_showNamedInputs
+        m_showNamedInputs,
+        m_showSliderEditButtons
     };
     DrawSidebarLayout(ctx);
 

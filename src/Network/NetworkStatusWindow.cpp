@@ -2,6 +2,7 @@
 #include "OSCServer.h"
 #include "WebSocketServer.h"
 #include "Mappers/OutputMapper.h"
+#include "UI/EditableSlider.h"
 #include "imgui.h"
 
 void NetworkStatusWindow::Draw(int& update_rate, bool& dynamic_rate, float messages_per_second) {
@@ -24,7 +25,7 @@ void NetworkStatusWindow::DrawContentOnly(int& update_rate, bool& dynamic_rate, 
         float width = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemInnerSpacing.x;
         if (width < 10.0f) width = 10.0f;
         ImGui::SetNextItemWidth(width);
-        ImGui::SliderInt(label, &update_rate, 1, 200);
+        UI::SliderInt(label, &update_rate, 1, 200);
     }
     ImGui::Separator();
 

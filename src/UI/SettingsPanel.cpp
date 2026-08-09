@@ -1,5 +1,6 @@
 #include "SettingsPanel.h"
 
+#include "UI/EditableSlider.h"
 #include "UI/FontManager.h"
 #include "UI/ThemeManager.h"
 #include "Devices/DeviceManager.h"
@@ -29,7 +30,8 @@ void DrawSettingsContent(float&              user_ui_scale,
                          bool&               disable_gamepad_nav,
                          bool&               disable_keyboard_nav,
                          DeviceManager&      deviceManager,
-                         bool&               show_named_inputs)
+                         bool&               show_named_inputs,
+                         bool&               show_slider_edit_buttons)
 {
     // ── Performance ────────────────────────────────────────────────────────
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
@@ -59,12 +61,12 @@ void DrawSettingsContent(float&              user_ui_scale,
 
     int batteryInterval = deviceManager.GetBatteryUpdateInterval();
     ImGui::SetNextItemWidth(200.0f);
-    if (ImGui::SliderInt("Battery Poll Interval (ms)", &batteryInterval, 1000, 60000)) {
+    if (UI::SliderInt("Battery Poll Interval (ms)", &batteryInterval, 1000, 60000, "%d",
+                       "How often to query battery status from the OS.\nIncreasing this saves CPU but makes indicators laggier.")) {
         deviceManager.SetBatteryUpdateInterval(batteryInterval);
         prefs.SetInt("BatteryUpdateIntervalMs", batteryInterval);
         prefs.Save();
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("How often to query battery status from the OS.\nIncreasing this saves CPU but makes indicators laggier.");
 
     if (ImGui::Checkbox("Disable Gamepad / Steering Wheel UI Navigation", &disable_gamepad_nav)) {
         prefs.SetBool("DisableGamepadNavigation", disable_gamepad_nav);
@@ -105,6 +107,16 @@ void DrawSettingsContent(float&              user_ui_scale,
             "Show known input names (Left Stick X, A, D-Pad Up, \xe2\x80\xa6)\n"
             "with matching controller icons where available.\n"
             "Applies to the Raw Inputs tab for devices recognised as gamepads by SDL.");
+
+    if (ImGui::Checkbox("Slider Edit Buttons", &show_slider_edit_buttons)) {
+        prefs.SetBool("ShowSliderEditButtons", show_slider_edit_buttons);
+        prefs.Save();
+        UI::SetSliderEditButtonsEnabled(show_slider_edit_buttons);
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Show a pen button next to sliders for typing an exact value.\n"
+            "Sliders can always be edited this way via Ctrl+Click as well.");
     ImGui::Separator();
 
     // ── UI Scale controls ──────────────────────────────────────────────────

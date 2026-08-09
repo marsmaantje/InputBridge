@@ -446,7 +446,8 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 s_DisableGamepadNav,
                 s_DisableKeyboardNav,
                 ctx.deviceManager,
-                ctx.show_named_inputs);
+                ctx.show_named_inputs,
+                ctx.show_slider_edit_buttons);
             break;
 
         case 6: // ── About ────────────────────────────────────────────────

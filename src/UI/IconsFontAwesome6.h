@@ -30,6 +30,8 @@
 //  U+F05A  →  \xEF\x81\x9A   info-circle
 //  U+F011  →  \xEF\x80\x91   power-off
 //  U+F188  →  \xEF\x86\x88   bug  (Debug Log)
+//  U+F304  →  \xEF\x8C\x84   pen  (Slider manual entry)
+//  U+F00C  →  \xEF\x80\x8C   check  (Confirm slider manual entry)
 
 #define ICON_FA_GAMEPAD       "\xEF\x84\x9B"   // Devices
 #define ICON_FA_SLIDERS       "\xEF\x87\x9E"   // Input Mapper / Analog axis
@@ -41,3 +43,5 @@
 #define ICON_FA_INFO_CIRCLE   "\xEF\x81\x9A"   // About
 #define ICON_FA_POWER_OFF     "\xEF\x80\x91"   // Exit
 #define ICON_FA_BUG           "\xEF\x86\x88"   // Debug Log
+#define ICON_FA_PEN           "\xEF\x8C\x84"   // Slider manual entry
+#define ICON_FA_CHECK         "\xEF\x80\x8C"   // Confirm slider manual entry

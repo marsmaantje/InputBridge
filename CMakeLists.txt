@@ -299,6 +299,7 @@ add_executable(InputBridge
     src/UI/SettingsPanel.cpp
     src/UI/SidebarLayout.cpp
     src/UI/InputLabelProvider.cpp
+    src/UI/EditableSlider.cpp
     # Steering wheel RPM LED support (formerly lib/wheel-rpm-lib)
     src/WheelRpm/src/core/sdl_transport.cpp
     src/WheelRpm/src/core/wheel_manager.cpp
