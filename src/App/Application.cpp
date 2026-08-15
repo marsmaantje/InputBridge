@@ -64,6 +64,12 @@ void Application::SetSDLHints()
     // Switch Pro Controllers and Joy-Cons.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
 
+    // ── Nintendo Wii / Wii U ─────────────────────────────────────────────────
+    // Enable the HIDAPI driver and player status LED
+    // for Nintendo Wii and Wii U Controllers.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII_PLAYER_LED, "1");
+
     // When a Left and Right Joy-Con are both connected, merge them into a
     // single virtual gamepad.  In merged mode SDL exposes SDL_SENSOR_GYRO_L
     // and SDL_SENSOR_GYRO_R (one per physical controller) rather than two
