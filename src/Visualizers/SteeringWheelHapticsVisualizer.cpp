@@ -1,6 +1,7 @@
 #include "SteeringWheelHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/SteeringWheelHaptics.h"
+#include "UI/EditableSlider.h"
 #include "wheel/utils/rpm_mapper.hpp"
 #include <SDL3/SDL.h>
 
@@ -107,7 +108,7 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             // When the user moves the slot selector, load the live values for
             // that slot (if it's running) so they're editing real state.
             int prev_const_slot = m_constant_slot;
-            ImGui::SliderInt("Slot##const", &m_constant_slot, 0, 7);
+            UI::SliderInt("Slot##const", &m_constant_slot, 0, 7);
             if (m_constant_slot != prev_const_slot) {
                 auto it = active_constants.find(m_constant_slot);
                 if (it != active_constants.end() && it->second.active)
@@ -115,10 +116,10 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             }
 
             bool const_changed = false;
-            const_changed |= ImGui::SliderFloat("Strength", &m_constant_strength, -1.0f, 1.0f);
+            const_changed |= UI::SliderFloat("Strength", &m_constant_strength, -1.0f, 1.0f);
             const_changed |= ImGui::Checkbox("Infinite Duration##const", &m_constant_infinite_duration);
             if (!m_constant_infinite_duration)
-                const_changed |= ImGui::SliderInt("Duration (ms)##const", &m_constant_duration, 0, 5000);
+                const_changed |= UI::SliderInt("Duration (ms)##const", &m_constant_duration, 0, 5000);
 
             // Live-update if this slot is already running and any value changed.
             bool slot_is_active = false;
@@ -154,7 +155,7 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             auto active_periodics = wheelHaptics->GetActivePeriodicEffects();
 
             int prev_periodic_slot = m_periodic_slot;
-            ImGui::SliderInt("Slot##periodic", &m_periodic_slot, 0, 7);
+            UI::SliderInt("Slot##periodic", &m_periodic_slot, 0, 7);
             if (m_periodic_slot != prev_periodic_slot) {
                 auto it = active_periodics.find(m_periodic_slot);
                 if (it != active_periodics.end() && it->second.active)
@@ -164,14 +165,14 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             const char* wave_types[] = { "Sine", "Square", "Triangle", "Sawtooth Up", "Sawtooth Down" };
             bool periodic_changed = false;
             periodic_changed |= ImGui::Combo("Wave Type##p", &m_periodic_wave_type, wave_types, IM_ARRAYSIZE(wave_types));
-            periodic_changed |= ImGui::SliderFloat("Strength##p", &m_periodic_strength, 0.0f, 1.0f);
-            periodic_changed |= ImGui::SliderInt("Period (ms)", &m_periodic_period, 1, 5000);
-            periodic_changed |= ImGui::SliderFloat("Magnitude", &m_periodic_magnitude, 0.0f, 1.0f);
-            periodic_changed |= ImGui::SliderFloat("Offset", &m_periodic_offset, -1.0f, 1.0f);
-            periodic_changed |= ImGui::SliderInt("Phase", &m_periodic_phase, 0, 36000);
+            periodic_changed |= UI::SliderFloat("Strength##p", &m_periodic_strength, 0.0f, 1.0f);
+            periodic_changed |= UI::SliderInt("Period (ms)", &m_periodic_period, 1, 5000);
+            periodic_changed |= UI::SliderFloat("Magnitude", &m_periodic_magnitude, 0.0f, 1.0f);
+            periodic_changed |= UI::SliderFloat("Offset", &m_periodic_offset, -1.0f, 1.0f);
+            periodic_changed |= UI::SliderInt("Phase", &m_periodic_phase, 0, 36000);
             periodic_changed |= ImGui::Checkbox("Infinite Duration##periodic", &m_periodic_infinite_duration);
             if (!m_periodic_infinite_duration)
-                periodic_changed |= ImGui::SliderInt("Duration (ms)##periodic", &m_periodic_duration, 0, 5000);
+                periodic_changed |= UI::SliderInt("Duration (ms)##periodic", &m_periodic_duration, 0, 5000);
 
             bool slot_is_active = false;
             {
@@ -223,7 +224,7 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             }
 
             int prev_cond_slot = m_condition_slot;
-            ImGui::SliderInt("Slot##cond", &m_condition_slot, 0, max_slots > 0 ? max_slots - 1 : 0);
+            UI::SliderInt("Slot##cond", &m_condition_slot, 0, max_slots > 0 ? max_slots - 1 : 0);
             if (m_condition_slot != prev_cond_slot) {
                 auto it = active_conditions.find(m_condition_slot);
                 if (it != active_conditions.end())
@@ -234,15 +235,15 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
             bool cond_changed = false;
             cond_changed |= ImGui::Combo("Type", &m_condition_type, condition_types, IM_ARRAYSIZE(condition_types));
             ImGui::Separator();
-            cond_changed |= ImGui::SliderFloat("Right Sat",   &m_condition_right_sat,   0.0f,  1.0f);
-            cond_changed |= ImGui::SliderFloat("Left Sat",    &m_condition_left_sat,    0.0f,  1.0f);
-            cond_changed |= ImGui::SliderFloat("Right Coeff", &m_condition_right_coeff, -1.0f, 1.0f);
-            cond_changed |= ImGui::SliderFloat("Left Coeff",  &m_condition_left_coeff,  -1.0f, 1.0f);
-            cond_changed |= ImGui::SliderFloat("Deadband",    &m_condition_deadband,    0.0f,  1.0f);
-            cond_changed |= ImGui::SliderFloat("Center",      &m_condition_center,      -1.0f, 1.0f);
+            cond_changed |= UI::SliderFloat("Right Sat",   &m_condition_right_sat,   0.0f,  1.0f);
+            cond_changed |= UI::SliderFloat("Left Sat",    &m_condition_left_sat,    0.0f,  1.0f);
+            cond_changed |= UI::SliderFloat("Right Coeff", &m_condition_right_coeff, -1.0f, 1.0f);
+            cond_changed |= UI::SliderFloat("Left Coeff",  &m_condition_left_coeff,  -1.0f, 1.0f);
+            cond_changed |= UI::SliderFloat("Deadband",    &m_condition_deadband,    0.0f,  1.0f);
+            cond_changed |= UI::SliderFloat("Center",      &m_condition_center,      -1.0f, 1.0f);
             cond_changed |= ImGui::Checkbox("Infinite Duration##cond", &m_condition_infinite_duration);
             if (!m_condition_infinite_duration)
-                cond_changed |= ImGui::SliderInt("Duration (ms)##cond", &m_condition_duration, 0, 10000);
+                cond_changed |= UI::SliderInt("Duration (ms)##cond", &m_condition_duration, 0, 10000);
 
             bool slot_is_active = (active_conditions.count(m_condition_slot) > 0);
             if (cond_changed && slot_is_active) {
@@ -280,12 +281,12 @@ void SteeringWheelHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager&
         if (ImGui::TreeNode("Rumble (Impact)")) {
             ImGui::TextDisabled("Steering wheels have no rumble motors; this is simulated\n"
                                 "as a low-frequency vibration burst on the wheel's force feedback.");
-            ImGui::SliderInt("Slot##rum", &m_rumble_slot, 0, 7);
-            ImGui::SliderFloat("Large Motor##rum", &m_rumble_large, 0.0f, 1.0f);
-            ImGui::SliderFloat("Small Motor##rum", &m_rumble_small, 0.0f, 1.0f);
+            UI::SliderInt("Slot##rum", &m_rumble_slot, 0, 7);
+            UI::SliderFloat("Large Motor##rum", &m_rumble_large, 0.0f, 1.0f);
+            UI::SliderFloat("Small Motor##rum", &m_rumble_small, 0.0f, 1.0f);
             ImGui::Checkbox("Infinite Duration##rum", &m_rumble_infinite_duration);
             if (!m_rumble_infinite_duration)
-                ImGui::SliderInt("Duration (ms)##rum", &m_rumble_duration, 0, 2000);
+                UI::SliderInt("Duration (ms)##rum", &m_rumble_duration, 0, 2000);
 
             if (ImGui::Button("Play Rumble##wheel")) {
                 wheelHaptics->PlayRumble(
@@ -423,7 +424,7 @@ void SteeringWheelHapticsVisualizer::DrawLEDs(DeviceManager& deviceManager) {
         ImGui::TextDisabled("Connect a supported wheel and press Scan, or check");
         ImGui::TextDisabled("that the wheel is powered on.");
     } else {
-        ImGui::SliderFloat("RPM %%", &m_rpm_percent, 0.0f, 1.0f, "%.2f");
+        UI::SliderFloat("RPM %%", &m_rpm_percent, 0.0f, 1.0f, "%.2f");
 
         for (const auto& wheel : rpmWheels) {
             ImGui::PushID(wheel.get());

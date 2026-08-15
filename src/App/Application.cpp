@@ -18,6 +18,7 @@
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
+#include "UI/EditableSlider.h"
 #include "UI/FontManager.h"
 #include "UI/SidebarLayout.h"
 #include "UI/ThemeManager.h"
@@ -62,6 +63,12 @@ void Application::SetSDLHints()
     // Enable the HIDAPI driver so gyro, accel, and rumble are accessible on
     // Switch Pro Controllers and Joy-Cons.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
+
+    // ── Nintendo Wii / Wii U ─────────────────────────────────────────────────
+    // Enable the HIDAPI driver and player status LED
+    // for Nintendo Wii and Wii U Controllers.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII_PLAYER_LED, "1");
 
     // When a Left and Right Joy-Con are both connected, merge them into a
     // single virtual gamepad.  In merged mode SDL exposes SDL_SENSOR_GYRO_L
@@ -260,6 +267,8 @@ void Application::RestorePreferences()
     m_fontScale       = m_prefs.GetFloat(PrefKeys::FontScale,         1.0f);
     m_scaleWithWindow = m_prefs.GetBool(PrefKeys::ScaleWithWindow,    false);
     m_showNamedInputs = m_prefs.GetBool("ShowNamedInputs",           false);
+    m_showSliderEditButtons = m_prefs.GetBool("ShowSliderEditButtons", true);
+    UI::SetSliderEditButtonsEnabled(m_showSliderEditButtons);
     m_serverUpdateRate  = m_prefs.GetInt(PrefKeys::NetworkSection, PrefKeys::UpdateRate, 60);
     m_serverDynamicRate = m_prefs.GetBool(PrefKeys::NetworkSection, PrefKeys::DynamicRate, false);
 
@@ -520,7 +529,8 @@ void Application::RenderFrame(Uint64 frame_start_time)
         k_InitialWidth,
         k_InitialHeight,
         m_running,
-        m_showNamedInputs
+        m_showNamedInputs,
+        m_showSliderEditButtons
     };
     DrawSidebarLayout(ctx);
 

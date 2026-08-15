@@ -2,6 +2,7 @@
 #include "GamepadHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/GamepadHaptics.h"
+#include "UI/EditableSlider.h"
 #include <SDL3/SDL.h>
 #include <string>
 
@@ -43,7 +44,7 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
 
     // Slot selector: when it changes, populate fields from the running state.
     int prev_rumble_slot = m_rumble_slot;
-    ImGui::SliderInt("Slot##rumble", &m_rumble_slot, 0, 7);
+    UI::SliderInt("Slot##rumble", &m_rumble_slot, 0, 7);
     if (gamepadHaptics && m_rumble_slot != prev_rumble_slot) {
         auto active_rumbles = gamepadHaptics->GetActiveRumbles();
         auto it = active_rumbles.find(m_rumble_slot);
@@ -57,11 +58,11 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
     }
 
     bool rumble_changed = false;
-    rumble_changed |= ImGui::SliderFloat("Low Freq",  &m_low_freq,  0.0f, 1.0f);
-    rumble_changed |= ImGui::SliderFloat("High Freq", &m_high_freq, 0.0f, 1.0f);
+    rumble_changed |= UI::SliderFloat("Low Freq",  &m_low_freq,  0.0f, 1.0f);
+    rumble_changed |= UI::SliderFloat("High Freq", &m_high_freq, 0.0f, 1.0f);
     rumble_changed |= ImGui::Checkbox("Infinite Duration", &m_infinite_duration);
     if (!m_infinite_duration)
-        rumble_changed |= ImGui::SliderInt("Duration (ms)", &m_duration, 0, 5000);
+        rumble_changed |= UI::SliderInt("Duration (ms)", &m_duration, 0, 5000);
 
     // Live-update if this slot is already active and any value changed.
     if (gamepadHaptics && rumble_changed) {
@@ -195,9 +196,9 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
             ImGui::Separator();
             ImGui::Text("Trigger Rumble");
 
-            ImGui::SliderInt("Left Trigger", &m_left_trigger, 0, 65535);
-            ImGui::SliderInt("Right Trigger", &m_right_trigger, 0, 65535);
-            ImGui::SliderInt("Trig Duration (ms)", &m_trigger_duration, 0, 5000);
+            UI::SliderInt("Left Trigger", &m_left_trigger, 0, 65535);
+            UI::SliderInt("Right Trigger", &m_right_trigger, 0, 65535);
+            UI::SliderInt("Trig Duration (ms)", &m_trigger_duration, 0, 5000);
 
             if (ImGui::Button("Play Trigger Rumble")) {
                 SDL_RumbleGamepadTriggers(pad, (Uint16)m_left_trigger, (Uint16)m_right_trigger, (Uint32)m_trigger_duration);
@@ -232,60 +233,60 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
 
             switch (effect_type) {
                 case 1: // Feedback
-                    ImGui::SliderInt("Position", &params[0], 0, 9);
-                    ImGui::SliderInt("Strength", &params[1], 0, 8);
+                    UI::SliderInt("Position", &params[0], 0, 9);
+                    UI::SliderInt("Strength", &params[1], 0, 8);
                     break;
                 case 2: // Weapon
-                    ImGui::SliderInt("Start Position", &params[0], 2, 7);
-                    ImGui::SliderInt("End Position", &params[1], 0, 8);
-                    ImGui::SliderInt("Strength", &params[2], 0, 8);
+                    UI::SliderInt("Start Position", &params[0], 2, 7);
+                    UI::SliderInt("End Position", &params[1], 0, 8);
+                    UI::SliderInt("Strength", &params[2], 0, 8);
                     break;
                 case 3: // Vibration
-                    ImGui::SliderInt("Position", &params[0], 0, 9);
-                    ImGui::SliderInt("Amplitude", &params[1], 0, 8);
-                    ImGui::SliderInt("Frequency", &params[2], 0, 255);
+                    UI::SliderInt("Position", &params[0], 0, 9);
+                    UI::SliderInt("Amplitude", &params[1], 0, 8);
+                    UI::SliderInt("Frequency", &params[2], 0, 255);
                     break;
                 case 4: // Multi-Position Feedback - one strength per trigger position (0-9)
                     for (int i = 0; i < 10; ++i) {
                         ImGui::PushID(i);
-                        ImGui::SliderInt(("Strength " + std::to_string(i)).c_str(), &params[i], 0, 8);
+                        UI::SliderInt(("Strength " + std::to_string(i)).c_str(), &params[i], 0, 8);
                         ImGui::PopID();
                     }
                     break;
                 case 5: // Slope Feedback
-                    ImGui::SliderInt("Start Position", &params[0], 0, 8);
-                    ImGui::SliderInt("End Position", &params[1], 0, 9);
-                    ImGui::SliderInt("Start Strength", &params[2], 1, 8);
-                    ImGui::SliderInt("End Strength", &params[3], 1, 8);
+                    UI::SliderInt("Start Position", &params[0], 0, 8);
+                    UI::SliderInt("End Position", &params[1], 0, 9);
+                    UI::SliderInt("Start Strength", &params[2], 1, 8);
+                    UI::SliderInt("End Strength", &params[3], 1, 8);
                     break;
                 case 6: // Multi-Position Vibration - shared frequency + one amplitude per position (0-9)
-                    ImGui::SliderInt("Frequency", &mp_freq, 0, 255);
+                    UI::SliderInt("Frequency", &mp_freq, 0, 255);
                     for (int i = 0; i < 10; ++i) {
                         ImGui::PushID(i);
-                        ImGui::SliderInt(("Amplitude " + std::to_string(i)).c_str(), &params[i], 0, 8);
+                        UI::SliderInt(("Amplitude " + std::to_string(i)).c_str(), &params[i], 0, 8);
                         ImGui::PopID();
                     }
                     break;
                 case 7: // Bow
-                    ImGui::SliderInt("Start Position", &params[0], 0, 8);
-                    ImGui::SliderInt("End Position", &params[1], 0, 8);
-                    ImGui::SliderInt("Strength", &params[2], 0, 8);
-                    ImGui::SliderInt("Snap Force", &params[3], 0, 8);
+                    UI::SliderInt("Start Position", &params[0], 0, 8);
+                    UI::SliderInt("End Position", &params[1], 0, 8);
+                    UI::SliderInt("Strength", &params[2], 0, 8);
+                    UI::SliderInt("Snap Force", &params[3], 0, 8);
                     break;
                 case 8: // Galloping
-                    ImGui::SliderInt("Start Position", &params[0], 0, 9);
-                    ImGui::SliderInt("End Position", &params[1], 0, 9);
-                    ImGui::SliderInt("First Foot", &params[2], 0, 6);
-                    ImGui::SliderInt("Second Foot", &params[3], 0, 7);
-                    ImGui::SliderInt("Frequency", &params[4], 0, 255);
+                    UI::SliderInt("Start Position", &params[0], 0, 9);
+                    UI::SliderInt("End Position", &params[1], 0, 9);
+                    UI::SliderInt("First Foot", &params[2], 0, 6);
+                    UI::SliderInt("Second Foot", &params[3], 0, 7);
+                    UI::SliderInt("Frequency", &params[4], 0, 255);
                     break;
                 case 9: // Machine
-                    ImGui::SliderInt("Start Position", &params[0], 0, 9);
-                    ImGui::SliderInt("End Position", &params[1], 0, 9);
-                    ImGui::SliderInt("Amplitude A", &params[2], 0, 7);
-                    ImGui::SliderInt("Amplitude B", &params[3], 0, 7);
-                    ImGui::SliderInt("Frequency", &params[4], 0, 255);
-                    ImGui::SliderInt("Period", &params[5], 0, 2);
+                    UI::SliderInt("Start Position", &params[0], 0, 9);
+                    UI::SliderInt("End Position", &params[1], 0, 9);
+                    UI::SliderInt("Amplitude A", &params[2], 0, 7);
+                    UI::SliderInt("Amplitude B", &params[3], 0, 7);
+                    UI::SliderInt("Frequency", &params[4], 0, 255);
+                    UI::SliderInt("Period", &params[5], 0, 2);
                     break;
             }
             ImGui::PopID();
@@ -438,9 +439,9 @@ void GamepadHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& devic
         ImGui::Text("Xbox Impulse Triggers");
         ImGui::TextDisabled("Routed through GamepadHaptics::PlayXboxTrigger - same path as OSC/WebSocket.");
 
-        ImGui::SliderInt("Left Intensity", &m_xbox_left_intensity, 0, 255);
-        ImGui::SliderInt("Right Intensity", &m_xbox_right_intensity, 0, 255);
-        ImGui::SliderInt("Duration (ms)##xbox_trigger", &m_xbox_trigger_duration, 0, 5000);
+        UI::SliderInt("Left Intensity", &m_xbox_left_intensity, 0, 255);
+        UI::SliderInt("Right Intensity", &m_xbox_right_intensity, 0, 255);
+        UI::SliderInt("Duration (ms)##xbox_trigger", &m_xbox_trigger_duration, 0, 5000);
 
         if (ImGui::Button("Play Xbox Trigger")) {
             if (auto* gamepadHaptics = dynamic_cast<GamepadHaptics*>(haptic)) {

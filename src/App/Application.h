@@ -66,6 +66,7 @@ private:
     float m_fontScale       = 1.0f;
     bool  m_scaleWithWindow = false;
     bool  m_showNamedInputs = false;
+    bool  m_showSliderEditButtons = true;
 
     // ── Render settings ───────────────────────────────────────────────────
     bool m_running        = true;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.11.0)
+project(InputBridge VERSION 0.11.2)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -299,6 +299,7 @@ add_executable(InputBridge
     src/UI/SettingsPanel.cpp
     src/UI/SidebarLayout.cpp
     src/UI/InputLabelProvider.cpp
+    src/UI/EditableSlider.cpp
     # Steering wheel RPM LED support (formerly lib/wheel-rpm-lib)
     src/WheelRpm/src/core/sdl_transport.cpp
     src/WheelRpm/src/core/wheel_manager.cpp

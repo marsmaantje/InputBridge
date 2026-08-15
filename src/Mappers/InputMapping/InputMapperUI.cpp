@@ -10,6 +10,7 @@
 #include "Network/WebSocketServer.h"
 #include "Protocols/ProtocolDefinition.h"
 #include "Protocols/ProtocolRegistry.h"
+#include "UI/EditableSlider.h"
 
 #include "imgui.h"
 
@@ -480,9 +481,9 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
         ImGui::SetItemTooltip("Invert");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(dw);
-        if (ImGui::SliderFloat("DZ", &src.deadzone, 0.f, 1.0f, "%.3f")) changed = true;
-        ImGui::SetItemTooltip("Deadzone: axis input below this absolute value is zeroed out.\nOrange lines on the "
-                               "value bar show the deadzone boundary on each side of centre.");
+        if (UI::SliderFloat("DZ", &src.deadzone, 0.f, 1.0f, "%.3f",
+                             "Deadzone: axis input below this absolute value is zeroed out.\nOrange lines on the "
+                             "value bar show the deadzone boundary on each side of centre.")) changed = true;
         ImGui::SameLine();
         ImGui::SetNextItemWidth(rw);
         const char* ranges[] = {"-1..1", "0..1", "-1..0", "+half (0..1)", "-half (0..1)", "Custom..."};
@@ -1065,9 +1066,9 @@ void InputMapperUI::DrawChannelMixSection(MappingProfile& profile, const Protoco
 
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
-                    if (ImGui::SliderFloat("##mixw", &ms.weight, -2.f, 2.f, "%.2f")) rc = true;
-                    ImGui::SetItemTooltip("Weight applied to this source before summing. -1 inverts the axis, 0 "
-                                           "mutes it, 1 passes through.");
+                    if (UI::SliderFloat("##mixw", &ms.weight, -2.f, 2.f, "%.2f",
+                                         "Weight applied to this source before summing. -1 inverts the axis, 0 "
+                                         "mutes it, 1 passes through.")) rc = true;
 
                     ImGui::TableSetColumnIndex(2);
                     if (ImGui::Button("Del")) srcToDelete = si;
@@ -1191,6 +1192,12 @@ void InputMapperUI::DrawAnalogToDigitalSection(MappingProfile& profile, const Pr
                 float liveVal = hasSrc ? ReadInputSourceValue(am.source, m_DeviceManager) : 0.f;
 
                 ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                // Deliberately left as a plain ImGui::SliderFloat rather than
+                // UI::SliderFloat: the live-input bar and threshold marker
+                // below are drawn directly onto this slider's rect via
+                // GetItemRectMin()/Max(), which would instead capture the
+                // pen button's (much smaller) rect if this went through the
+                // wrapper. Ctrl+Click still works here for manual entry.
                 if (ImGui::SliderFloat("##a2dthr", &am.threshold, -1.f, 1.f, "Thr: %.2f")) rc = true;
                 ImGui::SetItemTooltip("Threshold: axis must cross this value to activate.\nGreen bar = current "
                                        "live input level.");

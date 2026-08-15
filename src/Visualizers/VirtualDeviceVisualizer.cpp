@@ -1,5 +1,6 @@
 #include "VirtualDeviceVisualizer.h"
 #include "imgui.h"
+#include "UI/EditableSlider.h"
 #include <SDL3/SDL.h>
 
 // Hat direction names and SDL_HAT_* constant pairs.
@@ -74,7 +75,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
 
             // Slider
             ImGui::SetNextItemWidth(sliderW > 50.0f ? sliderW : 50.0f);
-            if (ImGui::SliderFloat("##ax", &state->axes[i], -1.0f, 1.0f, "%.3f"))
+            if (UI::SliderFloat("##ax", &state->axes[i], -1.0f, 1.0f, "%.3f"))
                 dirty = true;
 
             // Reset button
