@@ -22,20 +22,35 @@
 #include <algorithm>
 
 void WiimoteVisualizer::Draw(const DeviceState &dev) {
+    // The body graphic and the info panel are two side-by-side "columns".
+    // Previously this function reserved layout space with a single
+    // fixed-size Dummy sized only for the body graphic (height + 20 =
+    // 220px), then drew the info panel as free-standing text positioned
+    // with SetCursorScreenPos - outside normal layout flow entirely. Text
+    // panel height grows with how many buttons/axes are present, so it
+    // regularly exceeded that fixed reservation and visually overlapped
+    // whatever ImGui laid out next (e.g. the following device's collapsing
+    // header). Wrapping the whole widget in one group and reserving space
+    // via BeginGroup/EndGroup (which measures actual drawn content) instead
+    // of a hardcoded guess fixes that for any button/axis count.
     ImDrawList *drawList = ImGui::GetWindowDrawList();
-    ImVec2 p = ImGui::GetCursorScreenPos();
-    
+
     // Wiimote dimensions (more accurate proportions)
     const float width = 50.0f;
     const float height = 200.0f;
-    
-    ImGui::Dummy(ImVec2(width + 180, height + 20));
 
     // Colors
     const ImU32 colBody = IM_COL32(240, 240, 240, 255);
     const ImU32 colOutline = IM_COL32(100, 100, 100, 255);
     const ImU32 colBtnNormal = IM_COL32(200, 200, 200, 255);
     const ImU32 colBtnPressed = IM_COL32(100, 200, 255, 255);  // Blue when pressed
+
+    ImGui::BeginGroup(); // outer group: reserves the widget's REAL total height
+
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImGui::BeginGroup(); // left column: just the body graphic
+    ImGui::Dummy(ImVec2(width + 20, height + 20));
+    ImGui::EndGroup();
 
     const ImVec2 center = p + ImVec2(width / 2 + 20, height / 2 + 10);
     const ImVec2 topLeft = center - ImVec2(width / 2, height / 2);
@@ -108,10 +123,12 @@ void WiimoteVisualizer::Draw(const DeviceState &dev) {
     drawList->AddCircleFilled(twoPos, 7.0f, twoCol);
     drawList->AddCircle(twoPos, 7.0f, colOutline);
 
-    // Info panel
-    ImGui::SetCursorScreenPos(p + ImVec2(width + 35, 10));
+    // Info panel - placed via SameLine() so it participates in normal
+    // layout flow (and therefore in the outer group's measured height)
+    // instead of being positioned absolutely and independently of it.
+    ImGui::SameLine(0.0f, 35.0f);
     ImGui::BeginGroup();
-    
+
     ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "Wiimote");
     ImGui::Separator();
     
@@ -143,7 +160,9 @@ void WiimoteVisualizer::Draw(const DeviceState &dev) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "  (none)");
     }
     
-    ImGui::EndGroup();
+    ImGui::EndGroup(); // end info panel column
+
+    ImGui::EndGroup(); // end outer group - reserves max(body, info panel) height
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -163,7 +182,7 @@ const char *ExtensionName(ExtensionType t) {
         case ExtensionType::BalanceBoard:           return "Balance Board";
         case ExtensionType::GuitarHeroGuitar:       return "Guitar Hero Guitar";
         case ExtensionType::GuitarHeroDrums:        return "Guitar Hero Drums";
-        case ExtensionType::MotionPlus:             return "Motion Plus (unsupported)";
+        case ExtensionType::MotionPlus:             return "Motion Plus";
         default:                                    return "Unknown";
     }
 }
@@ -213,6 +232,25 @@ void DrawIRPanel(const IRState &ir, bool ir_enabled) {
         const float y = p.y + (float(dot.y) / 767.0f) * h;
         dl->AddCircleFilled(ImVec2(x, y), 4.0f, IM_COL32(255, 80, 80, 255));
     }
+}
+
+void DrawMotionPlus(const MotionPlusState &mp) {
+    if (!mp.connected) return;
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.4f, 1.0f), "Motion Plus");
+    if (mp.is_nunchuk_passthrough) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(+ Nunchuk passthrough)");
+    } else if (mp.is_classic_passthrough) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(+ Classic Controller passthrough)");
+    }
+    ImGui::Text("Gyro (deg/s): Yaw=%.1f Pitch=%.1f Roll=%.1f",
+                mp.deg_s_yaw, mp.deg_s_pitch, mp.deg_s_roll);
+    ImGui::TextDisabled("  precision: yaw=%s pitch=%s roll=%s",
+                         mp.slow_yaw ? "high" : "normal",
+                         mp.slow_pitch ? "high" : "normal",
+                         mp.slow_roll ? "high" : "normal");
 }
 
 void DrawNunchuk(const NunchukState &n) {
@@ -321,14 +359,24 @@ void WiimoteVisualizer::Draw(const WiimoteSnapshot &snap) {
 
     DrawIRPanel(snap.ir, snap.ir_enabled);
 
+    if (snap.motion_plus.connected) {
+        DrawMotionPlus(snap.motion_plus);
+    }
+
     ImGui::Separator();
     ImGui::Text("Extension: %s", ExtensionName(snap.extension));
-    switch (snap.extension) {
-        case ExtensionType::Nunchuk:              DrawNunchuk(snap.nunchuk); break;
-        case ExtensionType::ClassicController:
-        case ExtensionType::ClassicControllerPro: DrawClassic(snap.classic); break;
-        case ExtensionType::GuitarHeroGuitar:
-        case ExtensionType::GuitarHeroDrums:      DrawGuitar(snap.guitar); break;
-        default: break;
+    // When Motion Plus is active it occupies the extension byte slot itself
+    // (see WiimoteDevice::DecodeCoreAccelIR10Ext6), so its passthrough
+    // Nunchuk/Classic Controller data isn't separately decoded yet - avoid
+    // drawing a stale/zeroed Nunchuk or Classic panel underneath it.
+    if (!snap.motion_plus.connected) {
+        switch (snap.extension) {
+            case ExtensionType::Nunchuk:              DrawNunchuk(snap.nunchuk); break;
+            case ExtensionType::ClassicController:
+            case ExtensionType::ClassicControllerPro: DrawClassic(snap.classic); break;
+            case ExtensionType::GuitarHeroGuitar:
+            case ExtensionType::GuitarHeroDrums:      DrawGuitar(snap.guitar); break;
+            default: break;
+        }
     }
 }

@@ -188,3 +188,77 @@ TEST(WiimoteDecoder, ClassicControllerAPressed) {
     EXPECT_TRUE(c.a);
     EXPECT_FALSE(c.b);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Extension classification - Wii Motion Plus
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(WiimoteDecoder, ClassifyMotionPlusStandalone) {
+    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x00, 0x05}};
+    EXPECT_EQ(ClassifyExtension(id), ExtensionType::MotionPlus);
+    EXPECT_EQ(ClassifyMotionPlusPassthrough(id), MotionPlusPassthrough::None);
+}
+
+TEST(WiimoteDecoder, ClassifyMotionPlusNunchukPassthrough) {
+    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x04, 0x05}};
+    EXPECT_EQ(ClassifyExtension(id), ExtensionType::MotionPlus);
+    EXPECT_EQ(ClassifyMotionPlusPassthrough(id), MotionPlusPassthrough::Nunchuk);
+}
+
+TEST(WiimoteDecoder, ClassifyMotionPlusClassicPassthrough) {
+    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x05, 0x05}};
+    EXPECT_EQ(ClassifyExtension(id), ExtensionType::MotionPlus);
+    EXPECT_EQ(ClassifyMotionPlusPassthrough(id), MotionPlusPassthrough::Classic);
+}
+
+TEST(WiimoteDecoder, ClassifyBalanceBoardStillWorksAlongsideMotionPlus) {
+    // Regression guard: adding MotionPlus's 0x0005/0x0405/0x0505/0x0705
+    // cases must not shadow the pre-existing Balance Board (0x0402) case.
+    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x04, 0x02}};
+    EXPECT_EQ(ClassifyExtension(id), ExtensionType::BalanceBoard);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Wii Motion Plus gyro decode
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(WiimoteDecoder, MotionPlusZeroRateAtNominalCenter) {
+    // raw = 8192 (0x2000) on all three axes, "fast"/normal precision range,
+    // no passthrough extension attached.
+    uint8_t ext[6] = {
+        0x00,       // yaw low
+        0x00,       // roll low
+        0x00,       // pitch low
+        0x80,       // yaw high bits (0x2000 >> 6 = 0x80), slow_yaw=0, slow_pitch=0
+        0x80,       // roll high bits, extension_connected=0
+        0x80,       // pitch high bits, slow_roll=0
+    };
+    auto mp = Decode::MotionPlus(ext, 6);
+    ASSERT_TRUE(mp.connected);
+    EXPECT_EQ(mp.raw_yaw, 8192);
+    EXPECT_EQ(mp.raw_pitch, 8192);
+    EXPECT_EQ(mp.raw_roll, 8192);
+    EXPECT_NEAR(mp.deg_s_yaw, 0.f, 0.001f);
+    EXPECT_NEAR(mp.deg_s_pitch, 0.f, 0.001f);
+    EXPECT_NEAR(mp.deg_s_roll, 0.f, 0.001f);
+    EXPECT_FALSE(mp.slow_yaw);
+    EXPECT_FALSE(mp.slow_pitch);
+    EXPECT_FALSE(mp.slow_roll);
+    EXPECT_FALSE(mp.extension_connected);
+}
+
+TEST(WiimoteDecoder, MotionPlusExtensionConnectedBitAndSlowFlags) {
+    uint8_t ext[6] = {0x00, 0x00, 0x00, 0x83, 0x83, 0x80};
+    // ext[3] bit0 (slow_yaw)=1, bit1 (slow_pitch)=1              -> 0x83
+    // ext[4] bit0 (extension_connected)=1, bit1 (slow_roll)=1    -> 0x83
+    auto mp = Decode::MotionPlus(ext, 6);
+    EXPECT_TRUE(mp.slow_yaw);
+    EXPECT_TRUE(mp.slow_pitch);
+    EXPECT_TRUE(mp.slow_roll);
+    EXPECT_TRUE(mp.extension_connected);
+}
+
+TEST(WiimoteDecoder, MotionPlusDisconnectedWithInsufficientData) {
+    auto mp = Decode::MotionPlus(nullptr, 0);
+    EXPECT_FALSE(mp.connected);
+}

@@ -38,6 +38,7 @@ struct WiimoteSnapshot {
     ClassicControllerState   classic;
     GuitarHeroState          guitar;
     BalanceBoardState        balance_board;
+    MotionPlusState          motion_plus;
 
     BatteryBars battery = BatteryBars::Four;
     uint8_t     led_mask = 0;
@@ -98,12 +99,30 @@ private:
     bool InitExtension();       // "new way" unencrypted init + ID read
     bool LoadBalanceBoardCalibration();
 
+    // Wii Motion Plus lives at its own register base (0xA60000) separate
+    // from the regular extension port (0xA40000) and must be explicitly
+    // activated before it starts feeding gyro data into the extension byte
+    // slot of normal input reports. DetectMotionPlus() probes for it
+    // (harmless no-op if nothing answers - a bare Wiimote or one with only
+    // a Nunchuk/Classic Controller simply won't have anything at 0xA600FA);
+    // ActivateMotionPlus() performs the write that switches it into
+    // reporting mode, using passthrough if a Nunchuk/Classic Controller was
+    // already detected on the regular extension port so both keep working
+    // at once (per WiiBrew, this is the only way to get MotionPlus + an
+    // extension simultaneously - the MotionPlus intercepts and re-encodes
+    // the passthrough device's data alongside its own gyro bytes).
+    bool DetectMotionPlus();
+    bool ActivateMotionPlus();
+
     SDL_hid_device *m_Dev = nullptr;
     std::string m_Path;
     WiimoteSnapshot m_Snapshot;
 
     bool m_RumbleBit = false; // must be OR'd into every single output report
     std::optional<BalanceBoardCalibration> m_BalanceCal;
+
+    bool m_MotionPlusPresent = false;   // detected at 0xA600FA
+    bool m_MotionPlusActive = false;    // activation write sent + acknowledged by data arriving
 
     // Re-request extension identification a short time after the status
     // report flags a connect/disconnect - the extension needs a moment to

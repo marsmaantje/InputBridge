@@ -108,6 +108,33 @@ struct BalanceBoardCalibration {
     uint16_t kg34[4] = {0, 0, 0, 0};
 };
 
+// Wii Motion Plus, read via its 6-byte extension-format passthrough report
+// (the "DE" data format, WiiBrew "Wiimote/Extension Controllers/Wii Motion
+// Plus"). Yaw/pitch/roll are angular *rates* (deg/s), not absolute
+// orientation - integrate over time yourself if you need an angle.
+// `slow_*` flags mark which axes were captured at the "slow"/high-precision
+// gyroscope range for that sample (WiiBrew: ~440 deg/s full-scale vs. the
+// "fast" range's ~2000 deg/s, both over the same 14-bit code space), needed
+// to pick the right zero-offset/scale when converting.
+struct MotionPlusState {
+    bool connected = false;
+    bool is_nunchuk_passthrough = false;  // MotionPlus + Nunchuk daisy-chained
+    bool is_classic_passthrough = false;  // MotionPlus + Classic Controller daisy-chained
+    bool extension_connected = false;     // bit reported by MotionPlus itself (byte 4 bit 0)
+
+    uint16_t raw_yaw = 8192, raw_pitch = 8192, raw_roll = 8192; // 14-bit, ~8192 = 0 deg/s
+    bool slow_yaw = false, slow_pitch = false, slow_roll = false;
+
+    // Best-effort deg/s conversion using WiiBrew's documented nominal
+    // zero-offset (8192, though real hardware idles closer to ~8063 - worth
+    // a runtime calibration pass) and its documented voltage-reference-
+    // derived scale (~13.768 counts/deg/s in the slow/high-precision range,
+    // scaled by 2000/440 for the fast range). Per-device zero calibration
+    // lives in the MotionPlus's own calibration registers (0xA60020) if
+    // precise drift-free readings are needed later.
+    float deg_s_yaw = 0.f, deg_s_pitch = 0.f, deg_s_roll = 0.f;
+};
+
 enum class BatteryBars { Empty, One, Two, Three, Four };
 inline BatteryBars ClassifyWiimoteBattery(uint8_t raw) {
     // Thresholds from WiiBrew's Balance Board page; same scale is used by

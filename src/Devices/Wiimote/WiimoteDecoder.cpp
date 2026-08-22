@@ -212,4 +212,57 @@ BalanceBoardState BalanceBoard(const uint8_t ext[11], const BalanceBoardCalibrat
     return s;
 }
 
+MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
+    // Byte layout, cross-checked against two independently-written reference
+    // implementations (FreeIMU's Wii Motion Plus support, and the Adafruit/
+    // Arduino I2C sample referenced from WiiBrew) since WiiBrew's own bit
+    // table for this section is easy to mis-transcribe by hand:
+    //   ext[0] = Yaw   low 8 bits      ext[3] bits 7:2 = Yaw   high 6 bits
+    //   ext[1] = Roll  low 8 bits      ext[4] bits 7:2 = Roll  high 6 bits
+    //   ext[2] = Pitch low 8 bits      ext[5] bits 7:2 = Pitch high 6 bits
+    //   ext[3] bit 1 = slow_yaw     (1 = yaw axis in slow/high-precision range)
+    //   ext[3] bit 0 = slow_pitch   (1 = pitch axis in slow/high-precision range)
+    //   ext[4] bit 1 = slow_roll    (1 = roll axis in slow/high-precision range)
+    //   ext[4] bit 0 = extension_connected (per WiiBrew: "usually 1" - a
+    //                  passthrough Nunchuk/Classic Controller is present)
+    //   ext[5] bit 1 = report-type discriminator: 1 = this IS MotionPlus
+    //                  data, 0 = regular extension data snuck through in
+    //                  the same byte slot. WiimoteDevice checks this bit
+    //                  BEFORE calling this decoder, so it's not re-checked
+    //                  here, but note it for anyone reading raw captures.
+    MotionPlusState s;
+    if (len < 6) return s; // disconnected/insufficient data
+    s.connected = true;
+
+    s.raw_yaw   = uint16_t(ext[0]) | (uint16_t(ext[3] & 0xFC) << 6);
+    s.raw_roll  = uint16_t(ext[1]) | (uint16_t(ext[4] & 0xFC) << 6);
+    s.raw_pitch = uint16_t(ext[2]) | (uint16_t(ext[5] & 0xFC) << 6);
+
+    s.slow_yaw   = ext[3] & 0x02;
+    s.slow_pitch = ext[3] & 0x01;
+    s.slow_roll  = ext[4] & 0x02;
+
+    s.extension_connected = ext[4] & 0x01;
+
+    // Nominal conversion: zero-rate offset ~8192 (14-bit centre - WiiBrew
+    // documents the real still-state reading as closer to 0x1F7F/8063, so
+    // recalibrate at startup for drift-free readings if precision matters).
+    // Scale: ~13.768 counts/deg/s in the "slow"/high-precision range; the
+    // "fast" range covers a wider deg/s span (2000 vs 440 deg/s full-scale)
+    // over the same 14-bit code space, so its counts/deg/s is smaller by
+    // that 2000/440 ratio.
+    constexpr float kZero = 8192.f;
+    constexpr float kSlowCountsPerDegS = 8192.f / 595.f; // ~13.768
+    constexpr float kFastCountsPerDegS = kSlowCountsPerDegS * 440.f / 2000.f;
+    auto toDegS = [&](uint16_t raw, bool slow) {
+        const float countsPerDegS = slow ? kSlowCountsPerDegS : kFastCountsPerDegS;
+        return (float(raw) - kZero) / countsPerDegS;
+    };
+    s.deg_s_yaw   = toDegS(s.raw_yaw,   s.slow_yaw);
+    s.deg_s_pitch = toDegS(s.raw_pitch, s.slow_pitch);
+    s.deg_s_roll  = toDegS(s.raw_roll,  s.slow_roll);
+
+    return s;
+}
+
 } // namespace InputBridge::Wiimote::Decode

@@ -67,6 +67,10 @@ namespace Registers {
     constexpr uint32_t ExtensionId       = 0xA400FA; // 6-byte extension ID (Wiimote) / 0xA400FE 2-byte (Balance Board)
     constexpr uint32_t ExtensionIdShort  = 0xA400FE; // 2-byte short form, also the "data format" byte pair
     constexpr uint32_t MotionPlusBase    = 0xA60000; // - 0xA600FF
+    constexpr uint32_t MotionPlusId      = 0xA600FA; // 6-byte ID, same shape as ExtensionId
+    constexpr uint32_t MotionPlusInit    = 0xA600F0; // write 0x55 (activate, "standalone" mode)
+    constexpr uint32_t MotionPlusInitNunchukPass  = 0xA600FE; // write 0x05 (activate w/ Nunchuk passthrough)
+    constexpr uint32_t MotionPlusInitClassicPass  = 0xA600FE; // write 0x07 (activate w/ Classic passthrough)
     constexpr uint32_t IRCameraBase      = 0xB00000; // - 0xB00033
     constexpr uint32_t IRSensitivity1    = 0xB00000; // 9-byte block
     constexpr uint32_t IRSensitivity2    = 0xB0001A; // 2-byte block
@@ -113,6 +117,22 @@ inline ExtensionType ClassifyExtension(const ExtensionId6 &id) {
         return ExtensionType::MotionPlus;
 
     return ExtensionType::Unknown;
+}
+
+// Which passthrough mode a detected MotionPlus ID indicates, per WiiBrew's
+// "Wii Motion Plus#Identifying" table. Only meaningful when
+// ClassifyExtension() above returned ExtensionType::MotionPlus.
+enum class MotionPlusPassthrough { None, Nunchuk, Classic, Unknown };
+
+inline MotionPlusPassthrough ClassifyMotionPlusPassthrough(const ExtensionId6 &id) {
+    const auto &b = id.bytes;
+    const uint16_t typ = (uint16_t(b[4]) << 8) | b[5];
+    switch (typ) {
+        case 0x0005: return MotionPlusPassthrough::None;
+        case 0x0405: return MotionPlusPassthrough::Nunchuk;
+        case 0x0505: return MotionPlusPassthrough::Classic;
+        default:     return MotionPlusPassthrough::Unknown;
+    }
 }
 
 // ── IR camera sensitivity blocks (from WiiBrew "Sensitivity Settings") ─────

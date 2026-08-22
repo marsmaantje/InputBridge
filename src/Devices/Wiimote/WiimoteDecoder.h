@@ -43,4 +43,15 @@ BalanceBoardState BalanceBoard(const uint8_t ext[11], const BalanceBoardCalibrat
 // add verification.
 BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32]);
 
+// Wii Motion Plus, 6-byte extension-format ("DE") passthrough report, per
+// WiiBrew "Wiimote/Extension Controllers/Wii Motion Plus#Data Format".
+// `ext` is the same extension-offset pointer used by Nunchuk()/Classic()
+// above (6 bytes required). This is the MotionPlus's OWN data - when it's
+// running in Nunchuk/Classic passthrough mode, the low bits of some
+// extension axes are stolen to carry the passthrough device's buttons,
+// which WiimoteDevice is responsible for re-merging into the Nunchuk/
+// Classic decode separately; this function only concerns itself with the
+// gyro rates + connection bits.
+MotionPlusState MotionPlus(const uint8_t *ext, size_t len);
+
 } // namespace InputBridge::Wiimote::Decode

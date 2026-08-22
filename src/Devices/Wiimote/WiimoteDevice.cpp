@@ -120,16 +120,97 @@ bool WiimoteDevice::InitExtension() {
     ExtensionId6 id{};
     if (!ReadRegister(Registers::ExtensionId, 6, id.bytes.data())) {
         m_Snapshot.extension = ExtensionType::None;
+    } else {
+        m_Snapshot.extension = ClassifyExtension(id);
+    }
+
+    // A physical Balance Board's load sensors are wired through the regular
+    // extension port and self-identify with type 0x0402, so this branch is
+    // sufficient on its own - is_balance_board (the HID product-string
+    // hint) is unreliable over Bluetooth (many stacks report a blank or
+    // generic product string) and must never gate this. Correct the hint
+    // here from the authoritative extension ID so every other is_balance_board
+    // check downstream (report mode, IR camera, UI) also self-heals even if
+    // enumeration got it wrong.
+    if (m_Snapshot.extension == ExtensionType::BalanceBoard) {
+        const bool was_already_known = m_Snapshot.is_balance_board;
+        m_Snapshot.is_balance_board = true;
+        LoadBalanceBoardCalibration();
+
+        // If enumeration's HID-product-string hint missed this (common over
+        // Bluetooth, where the string is frequently blank or generic), we
+        // only just now learned it's a Balance Board. Init() already ran
+        // with the wrong assumption - it will have left the IR camera on
+        // and selected the buttons+accel+IR+6ext report mode instead of the
+        // 19-ext-byte mode the Balance Board's 11 weight-sensor bytes need.
+        // Redo the parts of Init() that depend on this flag now that it's
+        // correct, and re-send the data report mode so real weight reports
+        // (0x34) start arriving instead of the wrong ones (0x37).
+        if (!was_already_known) {
+            uint8_t irOff[1] = {0x00};
+            SendReport(m_Dev, OutReport::IRCameraEnable1, m_RumbleBit, irOff, 1);
+            SendReport(m_Dev, OutReport::IRCameraEnable2, m_RumbleBit, irOff, 1);
+            m_Snapshot.ir_enabled = false;
+            m_Snapshot.ir = {};
+
+            uint8_t p[2] = {0x04, PreferredReportMode()};
+            SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+        }
+    }
+
+    // Probe for a Wii Motion Plus regardless of what's on the regular
+    // extension port - it lives at its own register base (0xA60000) and
+    // isn't mutually exclusive with a Nunchuk/Classic Controller (which it
+    // can passthrough). Skip the probe on Balance Boards, which have no
+    // MotionPlus port.
+    if (!m_Snapshot.is_balance_board) {
+        DetectMotionPlus();
+    }
+
+    return true;
+}
+
+bool WiimoteDevice::DetectMotionPlus() {
+    ExtensionId6 id{};
+    if (!ReadRegister(Registers::MotionPlusId, 6, id.bytes.data())) {
+        m_MotionPlusPresent = false;
+        m_MotionPlusActive = false;
+        m_Snapshot.motion_plus = {};
         return false;
     }
-
-    m_Snapshot.extension = ClassifyExtension(id);
-
-    if (m_Snapshot.extension == ExtensionType::BalanceBoard ||
-        m_Snapshot.is_balance_board) {
-        LoadBalanceBoardCalibration();
+    const ExtensionType classified = ClassifyExtension(id);
+    if (classified != ExtensionType::MotionPlus) {
+        m_MotionPlusPresent = false;
+        m_MotionPlusActive = false;
+        m_Snapshot.motion_plus = {};
+        return false;
     }
-    return true;
+    m_MotionPlusPresent = true;
+    return ActivateMotionPlus();
+}
+
+bool WiimoteDevice::ActivateMotionPlus() {
+    // Activation mode depends on whether something is already plugged into
+    // the regular extension port: passthrough keeps that device's data
+    // flowing (re-encoded by the MotionPlus) alongside the new gyro bytes;
+    // plain activation is used when the extension port is empty.
+    uint8_t mode = 0x55;
+    uint32_t reg = Registers::MotionPlusInit;
+    if (m_Snapshot.extension == ExtensionType::Nunchuk) {
+        mode = 0x05;
+        reg = Registers::MotionPlusInitNunchukPass;
+    } else if (m_Snapshot.extension == ExtensionType::ClassicController ||
+               m_Snapshot.extension == ExtensionType::ClassicControllerPro) {
+        mode = 0x07;
+        reg = Registers::MotionPlusInitClassicPass;
+    }
+    const bool ok = WriteRegister(reg, &mode, 1);
+    m_MotionPlusActive = ok;
+    if (ok) {
+        m_Snapshot.motion_plus.is_nunchuk_passthrough = (mode == 0x05);
+        m_Snapshot.motion_plus.is_classic_passthrough = (mode == 0x07);
+    }
+    return ok;
 }
 
 bool WiimoteDevice::LoadBalanceBoardCalibration() {
@@ -310,7 +391,10 @@ void WiimoteDevice::HandleExtensionChanged() {
     m_Snapshot.classic = {};
     m_Snapshot.guitar = {};
     m_Snapshot.balance_board = {};
+    m_Snapshot.motion_plus = {};
     m_BalanceCal.reset();
+    m_MotionPlusPresent = false;
+    m_MotionPlusActive = false;
 }
 
 void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
@@ -324,6 +408,24 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
     m_Snapshot.core  = Decode::Buttons(bb);
     m_Snapshot.accel = Decode::Accel(bb, aa);
     m_Snapshot.ir    = Decode::IRBasic(ir);
+
+    // Once active, the MotionPlus takes over the extension byte slot: its
+    // own gyro data is distinguished from a regular extension's data by
+    // ee[5] bit 1 == 1 (the "extension identifier" bit WiiBrew documents
+    // for the DE data format). Passthrough Nunchuk/Classic data, if any,
+    // rides alongside inside the same 6 bytes (some button/axis LSBs are
+    // stolen to make room) - re-decoding those precisely is a known gap;
+    // for now we surface the MotionPlus gyro data itself, which is the
+    // feature being added here.
+    if (m_MotionPlusActive && (ee[5] & 0x02)) {
+        m_Snapshot.motion_plus = Decode::MotionPlus(ee, 6);
+        m_Snapshot.motion_plus.is_nunchuk_passthrough =
+            (m_Snapshot.extension == ExtensionType::Nunchuk);
+        m_Snapshot.motion_plus.is_classic_passthrough =
+            (m_Snapshot.extension == ExtensionType::ClassicController ||
+             m_Snapshot.extension == ExtensionType::ClassicControllerPro);
+        return;
+    }
 
     switch (m_Snapshot.extension) {
         case ExtensionType::Nunchuk:
