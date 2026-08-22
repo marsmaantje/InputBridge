@@ -22,13 +22,13 @@ static constexpr const char* kTag = "ExclusiveMode";
 #define EVIOCGRAB _IOW('E', 0x90, int)
 #endif
 
-// ─── IsAvailable ──────────────────────────────────────────────────────────────
+// --- IsAvailable --------------------------------------------------------------
 
 bool LinuxExclusiveMode::IsAvailable() const {
     return std::filesystem::exists("/dev/input");
 }
 
-// ─── FindAllInputDevicePaths ──────────────────────────────────────────────────
+// --- FindAllInputDevicePaths --------------------------------------------------
 //
 // Returns every /dev/input/eventN AND /dev/input/jsN node that belongs to the
 // same physical device as `joystick`.
@@ -93,7 +93,7 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
         }
     };
 
-    // ── Case 1: hidraw path (/dev/hidrawN) ────────────────────────────────
+    // -- Case 1: hidraw path (/dev/hidrawN) --------------------------------
     if (strncmp(sdlPath, "/dev/hidraw", 11) == 0) {
         int num = std::atoi(sdlPath + 11);
         char sysPath[256];
@@ -118,7 +118,7 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
             LOG_ERROR(kTag, "LinuxExclusiveMode: hidraw sysfs walk error: %s", ex.what());
         }
     }
-    // ── Case 2: legacy joydev path (/dev/input/jsN) ───────────────────────
+    // -- Case 2: legacy joydev path (/dev/input/jsN) -----------------------
     else if (strncmp(sdlPath, "/dev/input/js", 13) == 0) {
         // Add the js node itself first.
         result.push_back(sdlPath);
@@ -135,7 +135,7 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
             LOG_ERROR(kTag, "LinuxExclusiveMode: js%d sysfs walk failed.", num);
         }
     }
-    // ── Case 3: evdev path (/dev/input/eventN) ────────────────────────────
+    // -- Case 3: evdev path (/dev/input/eventN) ----------------------------
     else if (strncmp(sdlPath, "/dev/input/event", 16) == 0) {
         // Add the event node itself.
         result.push_back(sdlPath);
@@ -167,7 +167,7 @@ std::vector<std::string> LinuxExclusiveMode::FindAllInputDevicePaths(SDL_Joystic
     return result;
 }
 
-// ─── HideDevice ───────────────────────────────────────────────────────────────
+// --- HideDevice ---------------------------------------------------------------
 
 bool LinuxExclusiveMode::HideDevice(SDL_Joystick* joystick) {
     SDL_JoystickID id = SDL_GetJoystickID(joystick);
@@ -224,7 +224,7 @@ bool LinuxExclusiveMode::HideDevice(SDL_Joystick* joystick) {
     return true;
 }
 
-// ─── UnhideDevice ─────────────────────────────────────────────────────────────
+// --- UnhideDevice -------------------------------------------------------------
 
 bool LinuxExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
     SDL_JoystickID id = SDL_GetJoystickID(joystick);
@@ -245,7 +245,7 @@ void LinuxExclusiveMode::ReleaseInstance(SDL_JoystickID id) {
     m_GrabbedDevices.erase(it);
 }
 
-// ─── Destructor ───────────────────────────────────────────────────────────────
+// --- Destructor ---------------------------------------------------------------
 
 LinuxExclusiveMode::~LinuxExclusiveMode() {
     for (auto& [id, entries] : m_GrabbedDevices) {

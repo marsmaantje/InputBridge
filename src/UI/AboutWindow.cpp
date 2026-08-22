@@ -2,7 +2,7 @@
 #include "imgui.h"
 
 void AboutWindow::DrawContent() {
-    // ── Title ────────────────────────────────────────────────────────────────
+    // -- Title ----------------------------------------------------------------
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.2f, 1.0f));
     ImGui::PushFont(NULL, ImGui::GetFontSize() * 1.4f); // Use PushFont with NULL to scale current font
     ImGui::Text("InputBridge");
@@ -13,7 +13,7 @@ void AboutWindow::DrawContent() {
 
     ImGui::Spacing();
 
-    // ── Description ─────────────────────────────────────────────────────────
+    // -- Description ---------------------------------------------------------
     if (ImGui::BeginTable("##description", 1)) {
         ImGui::TableNextColumn();
         ImGui::TextWrapped(
@@ -47,7 +47,7 @@ void AboutWindow::DrawContent() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── The Science Team ────────────────────────────────────────────────────
+    // -- The Science Team ----------------------------------------------------
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
     ImGui::Text("The Science Team");
     ImGui::PopStyleColor();
@@ -74,7 +74,7 @@ void AboutWindow::DrawContent() {
 
     if (ImGui::BeginTable("##testers", 2)) {
         ImGui::TableNextColumn();
-        // ── Alpha Testers ────────────────────────────────────────────────────
+        // -- Alpha Testers ----------------------------------------------------
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
         ImGui::Text("Alpha Testers");
         ImGui::PopStyleColor();
@@ -92,7 +92,7 @@ void AboutWindow::DrawContent() {
         ImGui::Unindent(8.0f);
 
         ImGui::TableNextColumn();
-        // ── Beta Testers ─────────────────────────────────────────────────────
+        // -- Beta Testers -----------------------------------------------------
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
         ImGui::Text("Beta Testers");
         ImGui::PopStyleColor();
@@ -115,7 +115,7 @@ void AboutWindow::DrawContent() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── Libraries ────────────────────────────────────────────────────────────
+    // -- Libraries ------------------------------------------------------------
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
     ImGui::Text("Open-Source Libraries and Resources used");
     ImGui::PopStyleColor();

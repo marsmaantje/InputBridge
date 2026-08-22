@@ -2,14 +2,14 @@
 #include <SDL3/SDL_log.h>
 #include <cstdio>
 
-// ── Singleton ─────────────────────────────────────────────────────────────────
+// -- Singleton -----------------------------------------------------------------
 
 AppLog& AppLog::Get() {
     static AppLog instance;
     return instance;
 }
 
-// ── SDL callback ──────────────────────────────────────────────────────────────
+// -- SDL callback --------------------------------------------------------------
 
 static void SDLLogCallback(void* /*userdata*/,
                             int             category,
@@ -52,13 +52,13 @@ static void SDLLogCallback(void* /*userdata*/,
     AppLog::Get().Push(level, buf);
 }
 
-// ── Install ───────────────────────────────────────────────────────────────────
+// -- Install -------------------------------------------------------------------
 
 void AppLog::Install() {
     SDL_SetLogOutputFunction(SDLLogCallback, nullptr);
 }
 
-// ── Push ──────────────────────────────────────────────────────────────────────
+// -- Push ----------------------------------------------------------------------
 
 void AppLog::Push(AppLogLevel level, const char* message) {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -70,7 +70,7 @@ void AppLog::Push(AppLogLevel level, const char* message) {
     m_scrollToBottom = true;
 }
 
-// ── Clear ─────────────────────────────────────────────────────────────────────
+// -- Clear ---------------------------------------------------------------------
 
 void AppLog::Clear() {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -78,7 +78,7 @@ void AppLog::Clear() {
     m_scrollToBottom = false;
 }
 
-// ── Scroll state ──────────────────────────────────────────────────────────────
+// -- Scroll state --------------------------------------------------------------
 
 bool AppLog::HasNewEntries() const {
     std::lock_guard<std::mutex> lock(m_mutex);

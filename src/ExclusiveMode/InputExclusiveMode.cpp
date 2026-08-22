@@ -14,7 +14,7 @@ static constexpr const char* kTag = "ExclusiveMode";
 #  endif
 #endif
 
-// ─── Dummy fallback ──────────────────────────────────────────────────────────
+// --- Dummy fallback ----------------------------------------------------------
 
 class DummyExclusiveMode : public InputExclusiveModeImpl {
 public:
@@ -26,7 +26,7 @@ public:
     bool IsAvailable() const override { return false; }
 };
 
-// ─── InputExclusiveMode ───────────────────────────────────────────────────────
+// --- InputExclusiveMode -------------------------------------------------------
 
 InputExclusiveMode::InputExclusiveMode() {
 #ifdef ENABLE_EXCLUSIVE_INPUT

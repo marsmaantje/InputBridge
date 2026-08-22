@@ -23,7 +23,7 @@ WiimoteDevice::~WiimoteDevice() {
     if (m_Dev) SDL_hid_close(m_Dev);
 }
 
-// ── Output report helpers ───────────────────────────────────────────────
+// -- Output report helpers -----------------------------------------------
 
 namespace {
 // Every output report's first payload byte carries the rumble bit in bit 0.
@@ -220,7 +220,7 @@ bool WiimoteDevice::LoadBalanceBoardCalibration() {
     return true;
 }
 
-// ── Feedback ─────────────────────────────────────────────────────────────
+// -- Feedback -------------------------------------------------------------
 
 void WiimoteDevice::SetPlayerLED(int player_1to4) {
     const uint8_t bit = uint8_t(0x10 << std::clamp(player_1to4 - 1, 0, 3));
@@ -242,7 +242,7 @@ void WiimoteDevice::SetRumble(bool on) {
     SendReport(m_Dev, OutReport::Rumble, m_RumbleBit, p, 1);
 }
 
-// ── Register read/write (synchronous, bounded wait) ─────────────────────
+// -- Register read/write (synchronous, bounded wait) ---------------------
 
 bool WiimoteDevice::WriteRegister(uint32_t address, const uint8_t *data, uint8_t size) {
     if (!m_Dev || size > 16) return false;
@@ -314,7 +314,7 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
     return true;
 }
 
-// ── Input report handling ───────────────────────────────────────────────
+// -- Input report handling -----------------------------------------------
 
 void WiimoteDevice::Poll() {
     if (!m_Dev) return;
@@ -456,6 +456,66 @@ void WiimoteDevice::DecodeCoreExt19(const uint8_t *buf) {
     std::memcpy(ext11, ee, 11);
     m_Snapshot.balance_board = Decode::BalanceBoard(ext11, m_BalanceCal.value_or(BalanceBoardCalibration{}));
     m_Snapshot.balance_board.button_a = m_Snapshot.core.a;
+
+    CheckBalanceBoardStuckSensors();
+}
+
+void WiimoteDevice::CheckBalanceBoardStuckSensors() {
+    // Thresholds are deliberately loose: this only needs to catch the
+    // "person is standing on it but 3 corners read 0" pattern from the
+    // photo, not fine-grained gently-shifted weight during normal use.
+    constexpr float kNearZeroKg   = 0.3f;   // "this corner reads nothing"
+    constexpr float kMeaningfulKg = 3.0f;   // "someone/something is on the board"
+    constexpr Uint64 kStuckHoldMs = 1500;   // how long the pattern must persist
+    constexpr Uint64 kCooldownMs  = 4000;   // don't hammer re-init back-to-back
+    constexpr int kMaxAttempts    = 4;      // give up and just flag it after this
+
+    const auto &bb = m_Snapshot.balance_board;
+    int near_zero_count = 0;
+    if (bb.kg_top_right    < kNearZeroKg) ++near_zero_count;
+    if (bb.kg_top_left     < kNearZeroKg) ++near_zero_count;
+    if (bb.kg_bottom_right < kNearZeroKg) ++near_zero_count;
+    if (bb.kg_bottom_left  < kNearZeroKg) ++near_zero_count;
+
+    const bool looks_stuck = m_BalanceCal.has_value() &&
+                              near_zero_count >= 3 &&
+                              bb.kg_total >= kMeaningfulKg;
+
+    const Uint64 now = SDL_GetTicks();
+    if (!looks_stuck) {
+        m_BalanceStuckSinceMs = 0;
+        // A clean, all-sensors-alive reading means we recovered (or never
+        // had the problem); stop flagging it and reset the attempt count
+        // so a *future* occurrence gets the full retry budget again.
+        m_Snapshot.balance_board_recovering = false;
+        m_BalanceRecoveryAttempts = 0;
+        return;
+    }
+
+    if (m_BalanceStuckSinceMs == 0) {
+        m_BalanceStuckSinceMs = now; // pattern just started
+        return;
+    }
+
+    if (now - m_BalanceStuckSinceMs < kStuckHoldMs) return; // not persistent yet
+    if (now - m_BalanceLastRecoveryAtMs < kCooldownMs) return; // still cooling down
+    if (m_BalanceRecoveryAttempts >= kMaxAttempts) {
+        // Out of automatic retries - this is the "several power/connect
+        // cycles may be necessary" case WiiBrew describes. Leave the flag
+        // set so the UI can tell the user to power-cycle the board.
+        m_Snapshot.balance_board_recovering = true;
+        m_Snapshot.balance_board_recovery_attempts = m_BalanceRecoveryAttempts;
+        return;
+    }
+
+    // Re-run the extension init dance. This is the same fix WiiBrew
+    // documents for their PC interface hitting this exact symptom.
+    ++m_BalanceRecoveryAttempts;
+    m_BalanceLastRecoveryAtMs = now;
+    m_Snapshot.balance_board_recovering = true;
+    m_Snapshot.balance_board_recovery_attempts = m_BalanceRecoveryAttempts;
+    m_BalanceStuckSinceMs = 0; // give the retry a fresh window to prove itself
+    InitExtension();
 }
 
 } // namespace InputBridge::Wiimote

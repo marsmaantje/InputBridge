@@ -4,7 +4,7 @@
 
 static constexpr const char* kTag = "SensorReader";
 
-// ── Private helpers ───────────────────────────────────────────────────────────
+// -- Private helpers -----------------------------------------------------------
 //
 // All six Read*Gyro / Read*Accel public methods previously duplicated the same
 // three-line read-and-normalise body.  A single private implementation per
@@ -48,7 +48,7 @@ AccelState SensorReader::ReadAccelSensor(SDL_Gamepad* gamepad, SDL_SensorType ty
     return state;
 }
 
-// ── Capability query ──────────────────────────────────────────────────────────
+// -- Capability query ----------------------------------------------------------
 
 SensorCapabilities SensorReader::QueryCapabilities(SDL_Gamepad* gamepad) {
     SensorCapabilities caps;
@@ -70,7 +70,7 @@ SensorCapabilities SensorReader::QueryCapabilities(SDL_Gamepad* gamepad) {
     return caps;
 }
 
-// ── Enable ────────────────────────────────────────────────────────────────────
+// -- Enable --------------------------------------------------------------------
 
 void SensorReader::Enable(SDL_Gamepad* gamepad, const SensorCapabilities& caps) {
     if (!gamepad) return;
@@ -103,7 +103,7 @@ SensorCapabilities SensorReader::EnableAll(SDL_Gamepad* gamepad) {
     return caps;
 }
 
-// ── Public read interface - delegates to shared helpers ───────────────────────
+// -- Public read interface - delegates to shared helpers -----------------------
 
 GyroState  SensorReader::ReadGyro (SDL_Gamepad* g) { return ReadGyroSensor (g, SDL_SENSOR_GYRO);    }
 AccelState SensorReader::ReadAccel(SDL_Gamepad* g) { return ReadAccelSensor(g, SDL_SENSOR_ACCEL);   }
@@ -112,7 +112,7 @@ AccelState SensorReader::ReadAccelL(SDL_Gamepad* g) { return ReadAccelSensor(g, 
 GyroState  SensorReader::ReadGyroR(SDL_Gamepad* g) { return ReadGyroSensor (g, SDL_SENSOR_GYRO_R);  }
 AccelState SensorReader::ReadAccelR(SDL_Gamepad* g) { return ReadAccelSensor(g, SDL_SENSOR_ACCEL_R); }
 
-// ── Touch ─────────────────────────────────────────────────────────────────────
+// -- Touch ---------------------------------------------------------------------
 
 TouchState SensorReader::ReadTouch(SDL_Gamepad* gamepad) {
     TouchState state;

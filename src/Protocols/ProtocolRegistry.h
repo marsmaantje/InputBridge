@@ -28,11 +28,11 @@ class ProtocolRegistry {
 public:
     static ProtocolRegistry& GetInstance();
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
+    // -- Lifecycle ------------------------------------------------------------
     void LoadAll();   // load field catalog + all definition files
     void SaveAll();   // persist every dirty definition to disk
 
-    // ── Field catalog ────────────────────────────────────────────────────────
+    // -- Field catalog --------------------------------------------------------
     const std::vector<FieldDescriptor>& GetOutputFields() const;  // input data → sent to client
     const std::vector<FieldDescriptor>& GetInputFields()  const;  // haptic/rumble ← received from client
     void ReloadFieldCatalog(); // re-read input_fields.json without touching definitions
@@ -42,7 +42,7 @@ public:
     void DeleteOutputField(const std::string& id);
     void SaveFieldCatalog();
 
-    // ── Presets ──────────────────────────────────────────────────────────────
+    // -- Presets --------------------------------------------------------------
     const std::vector<FieldPreset>& GetPresets() const;
     // Re-scans protocols/templates/ and rebuilds m_presets.  Call after saving
     // a new template so the "New Protocol" combo reflects it immediately.
@@ -50,7 +50,7 @@ public:
     void SavePreset(const std::string& name, const std::vector<std::string>& fieldIds);
     void DeletePreset(const std::string& name);
 
-    // ── Protocol definitions ─────────────────────────────────────────────────
+    // -- Protocol definitions -------------------------------------------------
     std::vector<ProtocolDefinition>&       GetDefinitions();
     const std::vector<ProtocolDefinition>& GetDefinitions() const;
 
@@ -73,7 +73,7 @@ public:
     /** Persist a single definition (call after editing). */
     void SaveDefinition(const ProtocolDefinition& def);
 
-    // ── Utility ──────────────────────────────────────────────────────────────
+    // -- Utility --------------------------------------------------------------
     static std::string GetProtocolsDir();   // writable pref dir / "protocols/"
     static std::string GetDefsDir();        // writable pref dir / "protocols/definitions/"
 

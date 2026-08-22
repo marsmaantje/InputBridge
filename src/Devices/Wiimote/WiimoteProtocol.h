@@ -13,12 +13,12 @@
 
 namespace InputBridge::Wiimote {
 
-// ── USB VID/PID (also used over the Bluetooth HID transport) ──────────────
+// -- USB VID/PID (also used over the Bluetooth HID transport) --------------
 constexpr uint16_t kVendorNintendo        = 0x057e;
 constexpr uint16_t kProductWiimote        = 0x0306; // RVL-CNT-01
 constexpr uint16_t kProductWiimotePlus    = 0x0330; // RVL-CNT-01-TR (incl. Balance Board)
 
-// ── Output report IDs (host -> Wiimote) ────────────────────────────────────
+// -- Output report IDs (host -> Wiimote) ------------------------------------
 namespace OutReport {
     constexpr uint8_t Rumble          = 0x10;
     constexpr uint8_t LEDs            = 0x11;
@@ -33,7 +33,7 @@ namespace OutReport {
     constexpr uint8_t IRCameraEnable2 = 0x1a;
 }
 
-// ── Input report IDs (Wiimote -> host) ──────────────────────────────────────
+// -- Input report IDs (Wiimote -> host) --------------------------------------
 namespace InReport {
     constexpr uint8_t Status          = 0x20;
     constexpr uint8_t ReadMemoryData  = 0x21;
@@ -52,7 +52,7 @@ namespace InReport {
     constexpr uint8_t InterleavedB                = 0x3f; // interleaved accel+IR (full mode), half 2
 }
 
-// ── Memory / register address space ────────────────────────────────────────
+// -- Memory / register address space ----------------------------------------
 // Bit 2 (0x04) of the flags byte in ReadMemory/WriteMemory selects Control
 // Registers instead of EEPROM. Must always be set for anything below.
 constexpr uint8_t kRegisterFlag = 0x04;
@@ -78,7 +78,7 @@ namespace Registers {
     constexpr uint32_t IRModeToggle      = 0xB00030; // write 0x08 (or 0x01 per "Wii" sequence variant)
 }
 
-// ── Extension identification ────────────────────────────────────────────────
+// -- Extension identification ------------------------------------------------
 // Read 6 bytes from Registers::ExtensionId after the "new way" init
 // (write 0x55 -> 0xA400F0, then 0x00 -> 0xA400FB). These bytes come back
 // UNENCRYPTED with that init method, so no decrypt step is required.
@@ -99,10 +99,15 @@ struct ExtensionId6 { std::array<uint8_t, 6> bytes; };
 
 inline ExtensionType ClassifyExtension(const ExtensionId6 &id) {
     const auto &b = id.bytes;
-    // Guard: must look like a real ID (bytes[2..3] == A4 20), otherwise treat
-    // as none/unknown - avoids misclassifying a disconnected slot (all 0xFF)
-    // or a mid-handshake read.
-    if (b[2] != 0xA4 || b[3] != 0x20) return ExtensionType::Unknown;
+    // Guard: must look like a real ID (bytes[2..3] == A4 20 or A6 20),
+    // otherwise treat as none/unknown - avoids misclassifying a disconnected
+    // slot (all 0xFF) or a mid-handshake read. Regular extensions (Nunchuk,
+    // Classic Controller, Balance Board, ...) live at 0xA4xxxx and report
+    // A4 20 here; a Motion Plus, however, is read from its own register
+    // base at 0xA6xxxx and reports A6 20 in this same position (see
+    // WiiBrew "Wii Motion Plus#Identifying" - this is not a typo/alias of
+    // A4, the hardware genuinely answers with A6 here).
+    if ((b[2] != 0xA4 && b[2] != 0xA6) || b[3] != 0x20) return ExtensionType::Unknown;
 
     const uint16_t sub = (uint16_t(b[0]) << 8) | b[1]; // XXXX
     const uint16_t typ = (uint16_t(b[4]) << 8) | b[5]; // ZZZZ
@@ -135,7 +140,7 @@ inline MotionPlusPassthrough ClassifyMotionPlusPassthrough(const ExtensionId6 &i
     }
 }
 
-// ── IR camera sensitivity blocks (from WiiBrew "Sensitivity Settings") ─────
+// -- IR camera sensitivity blocks (from WiiBrew "Sensitivity Settings") -----
 // Block1 is 9 bytes -> Registers::IRSensitivity1, Block2 is 2 bytes ->
 // Registers::IRSensitivity2. "Wii level 3" is what the console itself
 // defaults to and is a safe general-purpose choice.

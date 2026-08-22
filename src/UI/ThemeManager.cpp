@@ -223,13 +223,13 @@ static std::string SanitizeThemePath(const std::string& raw) {
 void ThemeManager::LoadFromPreferences(PreferencesManager& prefs) {
     std::string path = prefs.GetString("Theme", "ThemePath", "");
 
-    // ── Sentinel for Default (Light) ─────────────────────────────────────────
+    // -- Sentinel for Default (Light) -----------------------------------------
     if (path == "__default_light__") {
         ApplyDefaultLight();
         return;
     }
 
-    // ── No saved preference → auto-load Resonite as the default theme ────────
+    // -- No saved preference → auto-load Resonite as the default theme --------
     if (path.empty()) {
         if (!m_scanBasePath.empty()) {
             fs::path resonitePath = fs::path(m_scanBasePath) / "themes" / "resonite.json";

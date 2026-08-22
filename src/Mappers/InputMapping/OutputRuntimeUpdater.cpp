@@ -42,7 +42,7 @@ bool IsAnalogToDigitalActive(const AnalogToDigitalMapping& am, const DeviceManag
     return am.invert_threshold ? (val < am.threshold) : (val >= am.threshold);
 }
 
-// ── Analog values ───────────────────────────────────────────────────────────
+// -- Analog values -----------------------------------------------------------
 
 void ApplyButtonOverrides(const MappingProfile& profile, const DeviceManager& dm,
                            std::map<std::string, float>& analogValues) {
@@ -86,7 +86,7 @@ std::map<std::string, float> ComputeAnalogValues(const MappingProfile& profile, 
     return analogValues;
 }
 
-// ── Digital values ──────────────────────────────────────────────────────────
+// -- Digital values ----------------------------------------------------------
 
 // Mutates last_physical_state / last_state and digitalToggleStates: rising
 // edges on a Toggle/SetOn/SetOff mapping flip the field's persistent toggle
@@ -192,7 +192,7 @@ std::map<std::string, bool> ResolveDigitalValues(const MappingProfile& profile,
     return digitalValues;
 }
 
-// ── "Does this field have any device input assigned at all" ────────────────
+// -- "Does this field have any device input assigned at all" ----------------
 // Determines whether a field should be sent/previewed: a field with no
 // device input bound is silently skipped rather than sent as 0/false.
 
@@ -214,7 +214,7 @@ bool HasDigitalFieldSource(const MappingProfile& profile, const std::string& fie
     return false;
 }
 
-// ── Live OSC output-definition resolution ──────────────────────────────────
+// -- Live OSC output-definition resolution ----------------------------------
 // Resolves the OSC server's *actual current* output definition: its
 // explicitly-selected id if set, falling back to mapping OSCServer's older
 // protocol-name selector onto the now-JSON-backed SteamLink/Project Babble
@@ -236,7 +236,7 @@ const ProtocolDefinition* ResolveLiveOscOutputDefinition() {
     return nullptr;
 }
 
-// ── Broadcasting (Update) ───────────────────────────────────────────────────
+// -- Broadcasting (Update) ---------------------------------------------------
 
 void BroadcastViaDefinition(const MappingProfile& profile, const ProtocolDefinition& outDef,
                              int selectedProtocolView, const std::map<std::string, float>& analogValues,
@@ -303,7 +303,7 @@ void BroadcastValues(const MappingProfile& profile, const ProtocolDefinition* ou
     else BroadcastLegacyWheel(analogValues);
 }
 
-// ── Preview text ─────────────────────────────────────────────────────────────
+// -- Preview text -------------------------------------------------------------
 
 void AppendOscPreview(std::stringstream& ss, const MappingProfile& profile, const ProtocolDefinition& outDef,
                        const std::map<std::string, float>& analogValues,

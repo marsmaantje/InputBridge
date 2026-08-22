@@ -39,7 +39,7 @@ public:
     void Shutdown();
 
 private:
-    // ── Initialisation helpers (called once from Init) ────────────────────
+    // -- Initialisation helpers (called once from Init) --------------------
     void RegisterProtocols();
     void SetSDLHints();
     [[nodiscard]] bool CreateAppWindow();
@@ -48,27 +48,27 @@ private:
     void MigrateUserData();   // one-time migration from pre-XDG SDL pref paths
     void RestorePreferences();
 
-    // ── Per-frame helpers (called from Run) ───────────────────────────────
+    // -- Per-frame helpers (called from Run) -------------------------------
     void ProcessEvents();
     void UpdateLogic(Uint64 frame_start_time);
     void RenderFrame(Uint64 frame_start_time);
 
-    // ── SDL / ImGui objects ───────────────────────────────────────────────
+    // -- SDL / ImGui objects -----------------------------------------------
     SDL_Window*   m_window   = nullptr;
     SDL_Renderer* m_renderer = nullptr;
     std::string   m_iniFilename;   // storage for ImGuiIO::IniFilename
 
-    // ── Preferences ───────────────────────────────────────────────────────
+    // -- Preferences -------------------------------------------------------
     PreferencesManager m_prefs;
 
-    // ── UI scale (persisted) ──────────────────────────────────────────────
+    // -- UI scale (persisted) ----------------------------------------------
     float m_uiScale         = 1.3f;
     float m_fontScale       = 1.0f;
     bool  m_scaleWithWindow = false;
     bool  m_showNamedInputs = false;
     bool  m_showSliderEditButtons = true;
 
-    // ── Render settings ───────────────────────────────────────────────────
+    // -- Render settings ---------------------------------------------------
     bool m_running        = true;
     bool m_vsync          = true;
     int  m_framerateLimit = 60;
@@ -77,7 +77,7 @@ private:
     // exactly once on the transition from clients-present to no-clients.
     bool m_hadNoClients = false;
 
-    // ── Network update-rate tracking ──────────────────────────────────────
+    // -- Network update-rate tracking --------------------------------------
     int    m_serverUpdateRate  = 60;
     bool   m_serverDynamicRate = false;
     Uint64 m_lastServerUpdate  = 0;
@@ -85,13 +85,13 @@ private:
     float  m_currentMPS        = 0.0f;
     Uint64 m_lastMpsUpdate     = 0;
 
-    // ── Sensor health ─────────────────────────────────────────────────────
+    // -- Sensor health -----------------------------------------------------
     // Timestamp of the last periodic sensor re-enable sweep.  Steam Input can
     // silently reset SDL_SetGamepadSensorEnabled without triggering any event,
     // so UpdateLogic polls this every 2 s and restores the enabled state.
     Uint64 m_lastSensorReenable = 0;
 
-    // ── Window geometry ───────────────────────────────────────────────────
+    // -- Window geometry ---------------------------------------------------
     static constexpr int k_InitialWidth  = 1280;
     static constexpr int k_InitialHeight = 720;
 };

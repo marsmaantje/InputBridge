@@ -165,9 +165,9 @@ void WiimoteVisualizer::Draw(const DeviceState &dev) {
     ImGui::EndGroup(); // end outer group - reserves max(body, info panel) height
 }
 
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 // Real raw-HID Wiimote rendering
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 
 using namespace InputBridge::Wiimote;
 
@@ -303,7 +303,7 @@ void DrawGuitar(const GuitarHeroState &g) {
                 g.strum_up ? "Up " : "", g.strum_down ? "Down" : "");
 }
 
-void DrawBalanceBoard(const BalanceBoardState &bb) {
+void DrawBalanceBoard(const BalanceBoardState &bb, bool recovering, int recovery_attempts) {
     ImGui::Separator();
     ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.4f, 1.0f), "Balance Board");
     ImGui::Text("Total weight: %.1f kg", bb.kg_total);
@@ -311,6 +311,21 @@ void DrawBalanceBoard(const BalanceBoardState &bb) {
     ImGui::Text("  BL: %.1f  BR: %.1f", bb.kg_bottom_left, bb.kg_bottom_right);
     ImGui::Text("Center of gravity: %.2f, %.2f", bb.cog_x, bb.cog_y);
     ImGui::Text("Button: %s", bb.button_a ? "pressed" : "-");
+
+    if (recovering) {
+        // See WiimoteDevice::CheckBalanceBoardStuckSensors - this is the
+        // known WiiBrew-documented "one or more sensors disabled" quirk.
+        if (recovery_attempts >= 4) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.2f, 1.0f),
+                "Some sensors still stuck after %d retries - try removing "
+                "the batteries for ~30s and reconnecting.",
+                recovery_attempts);
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
+                "Some sensors look stuck - retrying (%d)...",
+                recovery_attempts);
+        }
+    }
 
     // Small 4-corner weight readout, scaled by fraction of total weight.
     ImDrawList *dl = ImGui::GetWindowDrawList();
@@ -348,7 +363,8 @@ void WiimoteVisualizer::Draw(const WiimoteSnapshot &snap) {
     ImGui::NewLine();
 
     if (snap.is_balance_board) {
-        DrawBalanceBoard(snap.balance_board);
+        DrawBalanceBoard(snap.balance_board, snap.balance_board_recovering,
+                          snap.balance_board_recovery_attempts);
         return;
     }
 

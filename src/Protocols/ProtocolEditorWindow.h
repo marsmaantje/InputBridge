@@ -63,10 +63,10 @@ public:
     static void HandleDroppedFile(const std::string& filePath);
 
 private:
-    // ── Left panel ───────────────────────────────────────────────────────────
+    // -- Left panel -----------------------------------------------------------
     static void DrawProtocolList();
 
-    // ── Right panel ──────────────────────────────────────────────────────────
+    // -- Right panel ----------------------------------------------------------
     static void DrawEditor();
     static void DrawOutputFieldPicker();
     static void DrawInputFieldPicker();
@@ -76,7 +76,7 @@ private:
                                const char* filter,
                                bool& pendingSave);
 
-    // ── Modals ───────────────────────────────────────────────────────────────
+    // -- Modals ---------------------------------------------------------------
     static void DrawNewProtocolModal();
     static void DrawDeleteProtocolModal();
     static void DrawDuplicateProtocolModal();
@@ -91,7 +91,7 @@ private:
     static void DrawValidationResultModal();
     static void DrawBackupManagerModal();
 
-    // ── Helper functions ─────────────────────────────────────────────────────
+    // -- Helper functions -----------------------------------------------------
     static void LoadSettings();
     static void SaveSettings();
     static bool DrawFileBrowser(std::string& currentDir, char* pathBuf, size_t pathBufSize);
@@ -99,13 +99,13 @@ private:
     static void CreateBackupBeforeOperation(const std::string& operationName);
     static bool ValidateAndImportProtocol(const std::string& filePath);
 
-    // ── Undo/Redo command executors ──────────────────────────────────────────
+    // -- Undo/Redo command executors ------------------------------------------
     static void ExecuteDeleteField(const FieldDescriptor& fieldToDelete, std::vector<RemovedProtocolField>&& removedFields);
     static void ExecuteDeleteCategory(const std::string& categoryName);
     static void ExecuteRenameCategory(const std::string& oldName, const std::string& newName);
     static void ExecuteMergeCategories(const std::string& sourceCategory, const std::string& targetCategory);
 
-    // ── State variables ──────────────────────────────────────────────────────
+    // -- State variables ------------------------------------------------------
 
     // Core managers
     static inline UndoRedoManager s_undoManager{50};
@@ -204,7 +204,7 @@ private:
     // Filter / search state
     static inline char  s_fieldFilter[128] = {};
 
-    // ── File Browser state (ImGui fallback) ──────────────────────────────────
+    // -- File Browser state (ImGui fallback) ----------------------------------
     static inline std::vector<std::string> s_fbBackHistory;
     static inline std::vector<std::string> s_fbForwardHistory;
     static inline char   s_fbSearch[128]    = {};

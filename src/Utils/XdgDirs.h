@@ -1,6 +1,6 @@
 #pragma once
 
-// ── XDG Base Directory helpers ────────────────────────────────────────────────
+// -- XDG Base Directory helpers ------------------------------------------------
 //
 // On Linux (including AppImage and Flatpak), user files must follow the XDG
 // Base Directory Specification so the application behaves like a well-mannered

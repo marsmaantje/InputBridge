@@ -1,10 +1,10 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Per-frame output computation: reads the active profile's mappings against
 // live hardware state, then either broadcasts the result over OSC/WebSocket
 // (Update) or formats it as human-readable text (GetOutputPreview).
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include "MappingTypes.h"
 #include <SDL3/SDL.h>

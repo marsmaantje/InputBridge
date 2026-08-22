@@ -33,7 +33,7 @@ void DrawSettingsContent(float&              user_ui_scale,
                          bool&               show_named_inputs,
                          bool&               show_slider_edit_buttons)
 {
-    // ── Performance ────────────────────────────────────────────────────────
+    // -- Performance --------------------------------------------------------
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                 1000.0f / io.Framerate, io.Framerate);
 
@@ -53,7 +53,7 @@ void DrawSettingsContent(float&              user_ui_scale,
     }
     ImGui::Separator();
 
-    // ── Device Settings ────────────────────────────────────────────────────
+    // -- Device Settings ----------------------------------------------------
     if (ImGui::Checkbox("Battery LED Indicator", &enable_battery_led)) {
         prefs.SetBool("EnableBatteryLED", enable_battery_led);
         prefs.Save();
@@ -119,7 +119,7 @@ void DrawSettingsContent(float&              user_ui_scale,
             "Sliders can always be edited this way via Ctrl+Click as well.");
     ImGui::Separator();
 
-    // ── UI Scale controls ──────────────────────────────────────────────────
+    // -- UI Scale controls --------------------------------------------------
     bool changed       = false;
     bool scale_changed = false;
 
@@ -149,7 +149,7 @@ void DrawSettingsContent(float&              user_ui_scale,
     SameLineIfFits(textWUI);
     ImGui::Text("UI Scale: %.2f", user_ui_scale);
 
-    // ── Font Scale controls ────────────────────────────────────────────────
+    // -- Font Scale controls ------------------------------------------------
     bool font_scale_changed = false;
 
     if (ImGui::Button("-##Font")) {
@@ -191,7 +191,7 @@ void DrawSettingsContent(float&              user_ui_scale,
                       scale_with_window, initial_width, prefs);
     }
 
-    // ── Colour Theme dropdown ──────────────────────────────────────────────
+    // -- Colour Theme dropdown ----------------------------------------------
     ImGui::Separator();
     ImGui::Text("Colour Theme");
 
@@ -262,7 +262,7 @@ void DrawSettingsContent(float&              user_ui_scale,
     }
 
     
-    // ── External Folders ───────────────────────────────────────────────────
+    // -- External Folders ---------------------------------------------------
     // One button per folder InputBridge reads/writes outside of itself, so
     // users can find, back up, or hand-edit files without hunting through
     // platform-specific config/data locations.

@@ -43,7 +43,7 @@ class WindowsExclusiveMode : public InputExclusiveModeImpl {
     void SetSteamInputCompatible(bool enabled) override;
 
   private:
-    // ── HidHide IOCTL interface ──────────────────────────────────────────
+    // -- HidHide IOCTL interface ------------------------------------------
     // The actual IOCTL codes live as file-local constexprs at the top of
     // WindowsExclusiveMode.cpp, verified against HidHide's shared contract
     // header (Shared/HidHideIoctlContract.h in nefarius/HidHide on GitHub).
@@ -51,7 +51,7 @@ class WindowsExclusiveMode : public InputExclusiveModeImpl {
     // Device path of the HidHide control device.
     static constexpr const wchar_t *kHidHideDevice = L"\\\\.\\HidHide";
 
-    // ── helpers ─────────────────────────────────────────────────────────
+    // -- helpers ---------------------------------------------------------
 
     // Open the HidHide control handle (caller must CloseHandle).
     HANDLE OpenControlDevice() const;

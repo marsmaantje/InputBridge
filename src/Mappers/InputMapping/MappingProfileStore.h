@@ -1,10 +1,10 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Owns the list of mapping profiles, which one is active, persistence
 // (load/save JSON files), and pushing the active profile's settings out to
 // the OSC/WebSocket servers and ProtocolManager.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include "MappingTypes.h"
 #include <filesystem>
@@ -21,7 +21,7 @@ class MappingProfileStore {
   public:
     explicit MappingProfileStore(const DeviceManager& deviceManager);
 
-    // ── Persistence ──────────────────────────────────────────────────────
+    // -- Persistence ------------------------------------------------------
     void LoadProfiles();
     void SaveProfile(const MappingProfile& profile) const;
     void SaveCurrentProfile();
@@ -29,7 +29,7 @@ class MappingProfileStore {
     void LoadConfig(PreferencesManager& prefs);
     void SaveConfig(PreferencesManager& prefs) const;
 
-    // ── Profile lifecycle ────────────────────────────────────────────────
+    // -- Profile lifecycle ------------------------------------------------
     // Creates a new profile named `name`, snapshots current server settings
     // into it, persists it, and activates it. Returns its index.
     int CreateProfile(const std::string& name);
@@ -59,7 +59,7 @@ class MappingProfileStore {
     // inherits the currently-running server configuration).
     void SnapshotServerSettings(MappingProfile& profile) const;
 
-    // ── Accessors ────────────────────────────────────────────────────────
+    // -- Accessors --------------------------------------------------------
     std::vector<MappingProfile>&       Profiles()       { return m_Profiles; }
     const std::vector<MappingProfile>& Profiles() const { return m_Profiles; }
 

@@ -44,7 +44,7 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     // Initialize battery info for the new device
     UpdateBatteryInfo(m_Devices.back());
     
-    // ── Enable all IMU sensors at connect-time ──────────────────────────────
+    // -- Enable all IMU sensors at connect-time ------------------------------
     // SDL3 requires sensors to be enabled before the first read. For a combined
     // Joy-Con pair, SDL_SENSOR_GYRO_L and SDL_SENSOR_ACCEL_L (left Joy-Con)
     // are separate streams from SDL_SENSOR_GYRO_R / SDL_SENSOR_ACCEL_R (right).
@@ -52,7 +52,7 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     // available=false because SDL never starts the left-side sensor pipeline.
     if (m_Devices.back().gamepad)
         SensorReader::EnableAll(m_Devices.back().gamepad);
-    // ── End sensor enable ─────────────────────────────────────────────────── 
+    // -- End sensor enable --------------------------------------------------- 
 
     if (result->haptic) {
         m_HapticDevices[instance_id] = std::move(result->haptic);
@@ -183,7 +183,7 @@ void DeviceManager::Update(bool isMinimized) {
         lastBatteryUpdate = now;
     }
 
-    // ── Wiimote polling ──────────────────────────────────────────────────
+    // -- Wiimote polling --------------------------------------------------
     // Unlike SDL_Joystick devices, Wiimotes pair over Bluetooth outside
     // SDL's own joystick hotplug events, so we periodically re-scan for new
     // ones rather than relying solely on HandleDeviceAdded(). Every tracked
@@ -196,7 +196,7 @@ void DeviceManager::Update(bool isMinimized) {
     for (auto &dev : m_Wiimotes) {
         dev->Poll();
     }
-    // ── End Wiimote polling ──────────────────────────────────────────────
+    // -- End Wiimote polling ----------------------------------------------
 }
 
 HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
@@ -249,7 +249,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
         }
 
-        // ── Left Joy-Con battery (combined pair only) ─────────────────────
+        // -- Left Joy-Con battery (combined pair only) ---------------------
         // When two Joy-Cons are merged into one virtual gamepad, SDL exposes
         // SDL_SENSOR_GYRO_L on the combined handle.  In that case we find the
         // left Joy-Con's physical joystick by scanning all connected joystick
@@ -293,7 +293,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             dev.battery_state_L   = SDL_POWERSTATE_UNKNOWN;
             dev.battery_percent_L = -1;
         }
-        // ── End Left Joy-Con battery ──────────────────────────────────────
+        // -- End Left Joy-Con battery --------------------------------------
     } else if (dev.joystick) {
         int percent = 0;
         dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);

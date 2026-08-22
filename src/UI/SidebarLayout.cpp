@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-// ── Persistent sidebar state ─────────────────────────────────────────────────
+// -- Persistent sidebar state -------------------------------------------------
 // Section IDs: 0=Devices  1=Input  2=Output  3=Network
 //              4=Protocols  5=Settings  6=About  7=DebugLog
 static int   g_ActiveSection   = 0;
@@ -39,7 +39,7 @@ static bool  s_BatteryIntervalLoaded = false;
 
 void DrawSidebarLayout(SidebarContext& ctx)
 {
-    // ── Sizing (adapts to font / DPI) ─────────────────────────────────────
+    // -- Sizing (adapts to font / DPI) -------------------------------------
     const float FONT_SZ        = ImGui::GetFontSize();
     const float PAD            = ImGui::GetStyle().WindowPadding.x;
     const float ITEM_SPC       = ImGui::GetStyle().ItemSpacing.y;
@@ -54,7 +54,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     const float sidebar_w = g_SidebarExpanded ? g_SidebarW : SIDEBAR_W_SML;
 
-    // ── Full-screen host window ───────────────────────────────────────────
+    // -- Full-screen host window -------------------------------------------
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
     ImGui::SetNextWindowSize(vp->WorkSize);
@@ -76,7 +76,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
     const float total_w   = ImGui::GetContentRegionAvail().x;
     const float content_w = total_w - sidebar_w - SPLITTER_W;
 
-    // ── LEFT SIDEBAR ──────────────────────────────────────────────────────
+    // -- LEFT SIDEBAR ------------------------------------------------------
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(PAD, PAD));
     ImGui::BeginChild("##Sidebar", ImVec2(sidebar_w, total_h),
                       ImGuiChildFlags_Borders,
@@ -102,7 +102,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── Scrollable navigation + utility area ──────────────────────────────
+    // -- Scrollable navigation + utility area ------------------------------
     const float sep_h    = ITEM_SPC * 2.0f + 1.0f;
     const float bottom_h = BTN_H + ITEM_SPC + sep_h + ITEM_SPC;
     float       scroll_h = ImGui::GetContentRegionAvail().y - bottom_h;
@@ -194,7 +194,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     ImGui::EndChild(); // ##NavScroll
 
-    // ── Pinned Exit button ────────────────────────────────────────────────
+    // -- Pinned Exit button ------------------------------------------------
     ImGui::Separator();
     ImGui::Spacing();
     {
@@ -239,7 +239,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     ImGui::EndChild(); // ##Sidebar
 
-    // ── Drag-to-resize splitter ───────────────────────────────────────────
+    // -- Drag-to-resize splitter -------------------------------------------
     ImGui::SameLine(0, 0);
     ImGui::InvisibleButton("##splitter", { SPLITTER_W, total_h });
     if (ImGui::IsItemActive()) {
@@ -254,7 +254,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     ImGui::SameLine(0, 0);
 
-    // ── RIGHT CONTENT AREA ────────────────────────────────────────────────
+    // -- RIGHT CONTENT AREA ------------------------------------------------
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
     ImGui::BeginChild("##ContentArea", { content_w, total_h },
                       ImGuiChildFlags_Borders,
@@ -278,7 +278,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     switch (g_ActiveSection) {
 
-        case 0: { // ── Devices ─────────────────────────────────────────────
+        case 0: { // -- Devices ---------------------------------------------
             // Load battery LED preference once on first entry.
             if (!s_BatteryLEDLoaded) {
                 s_EnableBatteryLED = ctx.prefs.GetBool("EnableBatteryLED", true);
@@ -426,26 +426,26 @@ void DrawSidebarLayout(SidebarContext& ctx)
             break;
         }
 
-        case 1: // ── Input Mapper ─────────────────────────────────────────
+        case 1: // -- Input Mapper -----------------------------------------
             ctx.inputMapper.DrawMappingContent();
             break;
 
-        case 2: // ── Output Mapper ────────────────────────────────────────
+        case 2: // -- Output Mapper ----------------------------------------
             ctx.outputMapper.DrawContentOnly();
             break;
 
-        case 3: // ── Network ──────────────────────────────────────────────
+        case 3: // -- Network ----------------------------------------------
             NetworkStatusWindow::DrawContentOnly(
                 ctx.server_update_rate,
                 ctx.server_dynamic_rate,
                 ctx.current_messages_per_second);
             break;
 
-        case 4: // ── Protocol Editor ──────────────────────────────────────
+        case 4: // -- Protocol Editor --------------------------------------
             ProtocolEditorWindow::DrawContent();
             break;
 
-        case 5: // ── Settings ─────────────────────────────────────────────
+        case 5: // -- Settings ---------------------------------------------
             if (!s_BatteryIntervalLoaded) {
                 int interval = ctx.prefs.GetInt("BatteryUpdateIntervalMs", 5000);
                 ctx.deviceManager.SetBatteryUpdateInterval(interval);
@@ -464,11 +464,11 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 ctx.show_slider_edit_buttons);
             break;
 
-        case 6: // ── About ────────────────────────────────────────────────
+        case 6: // -- About ------------------------------------------------
             AboutWindow::DrawContent();
             break;
 
-        case 7: // ── Debug Log ────────────────────────────────────────────
+        case 7: // -- Debug Log --------------------------------------------
             DrawDebugLogContent();
             break;
     }

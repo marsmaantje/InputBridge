@@ -97,7 +97,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
 
     ImGui::Text("Name: %s", SDL_GetJoystickName(dev.joystick));
 
-    // ── Axes ─────────────────────────────────────────────────────────────
+    // -- Axes -------------------------------------------------------------
     if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (m_showLabels) {
             // Size the label column from real text metrics so values are never
@@ -161,7 +161,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
         }
     }
 
-    // ── Buttons ──────────────────────────────────────────────────────────
+    // -- Buttons ----------------------------------------------------------
     if (ImGui::CollapsingHeader("Buttons", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (m_showLabels) {
             // Named mode: icons flow inline just like the numbered compact
@@ -175,7 +175,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                 const bool pressed = SDL_GetJoystickButton(dev.joystick, i) != 0;
                 InputLabel lbl     = InputLabelProvider::GetButtonLabel(dev, i);
 
-                // ── Per-glyph size probe ──────────────────────────────────
+                // -- Per-glyph size probe ----------------------------------
                 // We must know the slot width *before* the wrap/SameLine
                 // decision, so probe the glyph metrics up front and reuse
                 // the results when drawing.
@@ -207,7 +207,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                 const float slotSizeActual = std::max(renderSize, cellSize);
                 const float slotW          = slotSizeActual + itemSpacing;
 
-                // ── Wrap / SameLine ───────────────────────────────────────
+                // -- Wrap / SameLine ---------------------------------------
                 if (i > 0) {
                     float curX = ImGui::GetCursorScreenPos().x
                                  - ImGui::GetWindowPos().x
@@ -221,7 +221,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                     ? ImVec4(0.2f, 1.0f, 0.2f, 1.0f)
                     : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
-                // ── Draw ─────────────────────────────────────────────────
+                // -- Draw -------------------------------------------------
                 if (lbl.icon.IsValid()) {
                     const ImVec2 cursor = ImGui::GetCursorScreenPos();
                     const float  iconX  = cursor.x + (slotSizeActual - renderSize) * 0.5f;
@@ -256,7 +256,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
         }
     }
 
-    // ── Hats ─────────────────────────────────────────────────────────────
+    // -- Hats -------------------------------------------------------------
     if (ImGui::CollapsingHeader("Hats", ImGuiTreeNodeFlags_DefaultOpen)) {
         for (int i = 0; i < dev.num_hats; ++i) {
             Uint8       hat = SDL_GetJoystickHat(dev.joystick, i);

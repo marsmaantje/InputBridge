@@ -6,7 +6,7 @@
 #include <sstream>
 #include <vector>
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// -- Helpers -------------------------------------------------------------------
 
 static ImVec4 LevelColour(AppLogLevel level) {
     switch (level) {
@@ -32,7 +32,7 @@ static const char* LevelName(AppLogLevel level) {
     }
 }
 
-// ── Panel state ───────────────────────────────────────────────────────────────
+// -- Panel state ---------------------------------------------------------------
 
 static char  s_filterBuf[256]          = "";
 static bool  s_autoScroll              = true;
@@ -40,12 +40,12 @@ static bool  s_wordWrap                = false;
 static bool  s_levelFilter[6]          = { true, true, true, true, true, true };
 static bool  s_showLevelFilterPopup    = false;
 
-// ── DrawDebugLogContent ───────────────────────────────────────────────────────
+// -- DrawDebugLogContent -------------------------------------------------------
 
 void DrawDebugLogContent() {
     AppLog& log = AppLog::Get();
 
-    // ── Toolbar ───────────────────────────────────────────────────────────────
+    // -- Toolbar ---------------------------------------------------------------
     ImGui::Text("Debug Log");
     ImGui::SameLine();
     ImGui::TextDisabled("(%zu entries)", log.Entries().size());
@@ -109,7 +109,7 @@ void DrawDebugLogContent() {
 
     ImGui::Separator();
 
-    // ── Log area ──────────────────────────────────────────────────────────────
+    // -- Log area --------------------------------------------------------------
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));

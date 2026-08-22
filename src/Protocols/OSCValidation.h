@@ -21,7 +21,7 @@ namespace OscValidation {
 
 static constexpr const char* kTag = "OSCValidation";
 
-// ── Pointer safety ────────────────────────────────────────────────────────────
+// -- Pointer safety ------------------------------------------------------------
 
 inline bool CheckPointers(const char* path, const char* types, lo_arg** argv, int argc) {
     if (!path) {
@@ -45,7 +45,7 @@ inline bool CheckPointers(const char* path, const char* types, lo_arg** argv, in
     return true;
 }
 
-// ── Slot ─────────────────────────────────────────────────────────────────────
+// -- Slot ---------------------------------------------------------------------
 
 static constexpr int kMaxSlot = 255;
 
@@ -58,7 +58,7 @@ inline bool ValidateSlot(int slot, std::string_view path) {
     return true;
 }
 
-// ── Float clamping ────────────────────────────────────────────────────────────
+// -- Float clamping ------------------------------------------------------------
 
 inline float Clamp(float v, float lo, float hi, const char* paramName, std::string_view path) {
     if (v < lo || v > hi) {
@@ -74,7 +74,7 @@ inline float ClampNorm(float v, const char* n, std::string_view p)     { return 
 inline float ClampSigned(float v, const char* n, std::string_view p)   { return Clamp(v, -1.0f,  1.0f, n, p); }
 inline float ClampStrength(float v, const char* n, std::string_view p) { return Clamp(v, -1.0f,  1.0f, n, p); }
 
-// ── Int enum guards ───────────────────────────────────────────────────────────
+// -- Int enum guards -----------------------------------------------------------
 
 inline bool ValidateWaveType(int idx, std::string_view path) {
     if (idx < 0 || idx > 4) {
@@ -94,7 +94,7 @@ inline bool ValidateConditionType(int idx, std::string_view path) {
     return true;
 }
 
-// ── DualSense-specific int clamps ─────────────────────────────────────────────
+// -- DualSense-specific int clamps ---------------------------------------------
 
 inline int ClampInt(int v, int lo, int hi, const char* paramName, std::string_view path) {
     if (v < lo || v > hi) {

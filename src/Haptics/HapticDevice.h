@@ -10,7 +10,7 @@
 #include "Utils/SDLHandles.h"
 #include "Core/Result.h"
 
-// ─── Condition effect type ────────────────────────────────────────────────────
+// --- Condition effect type ----------------------------------------------------
 //
 // User-facing index (0–3) that maps to the four SDL condition effect types.
 // Using a clean 0-based enum everywhere avoids exposing SDL's internal bitmask
@@ -66,7 +66,7 @@ inline const char* ConditionTypeName(HapticConditionType t) {
     }
 }
 
-// ─── Periodic effect wave type ────────────────────────────────────────────────
+// --- Periodic effect wave type ------------------------------------------------
 //
 // User-facing index (0–4) for the five supported periodic waveform types.
 // The order matches the SDL3 SDL_HapticType enumeration:
@@ -131,7 +131,7 @@ inline const char* PeriodicTypeName(HapticPeriodicType t) {
     }
 }
 
-// ─── Device Capability Flags ─────────────────────────────────────────────────
+// --- Device Capability Flags -------------------------------------------------
 //
 // A bitmask describing which haptic effect families a device supports.
 // Callers query caps() and gate UI and network dispatch on it instead of
@@ -150,7 +150,7 @@ struct HapticCapabilities {
     bool gainControl     = false;  ///< Per-device haptic gain (steering wheel, flight stick)
 };
 
-// ─── Active Effect Info Structs ───────────────────────────────────────────────
+// --- Active Effect Info Structs -----------------------------------------------
 struct ActiveConstantInfo {
     bool active = false;
     float strength = 0.0f;

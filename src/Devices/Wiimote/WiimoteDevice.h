@@ -44,6 +44,15 @@ struct WiimoteSnapshot {
     uint8_t     led_mask = 0;
     bool        rumble_on = false;
 
+    // Set while WiimoteDevice is actively retrying the extension-init dance
+    // to clear a known Balance Board firmware quirk where one or more of
+    // the 4 weight sensors report a flat 0 (see WiiBrew Wii_Balance_Board
+    // "Wii Initialisation Sequence" section - this is a real hardware/
+    // firmware behavior, not a decoding bug). UI can surface this so the
+    // user isn't confused by weight readings jumping while it self-heals.
+    bool balance_board_recovering = false;
+    int  balance_board_recovery_attempts = 0;
+
     TimestampMs last_report_ms = 0; // see TimestampMs comment in WiimoteState.h
 };
 
@@ -73,13 +82,13 @@ public:
     // Point-in-time read of everything decoded so far.
     const WiimoteSnapshot &Snapshot() const { return m_Snapshot; }
 
-    // ── Feedback ────────────────────────────────────────────────────────
+    // -- Feedback --------------------------------------------------------
     void SetPlayerLED(int player_1to4);   // lights exactly one LED, 1-4
     void SetLEDMask(uint8_t mask4bits);   // bits 4-7, arbitrary pattern
     void SetRumble(bool on);
 
-    // ── Low-level register access (exposed for advanced/experimental use,
-    //    same rationale as WiimoteLib exposing raw read/write) ────────────
+    // -- Low-level register access (exposed for advanced/experimental use,
+    //    same rationale as WiimoteLib exposing raw read/write) ------------
     // Synchronous: blocks (bounded, ~200ms timeout) waiting for the 0x21
     // reply. Returns false on timeout/error. `out` must have room for `size`
     // bytes (size <= 16 per WiiBrew's Read Memory and Registers Data limit
@@ -114,6 +123,13 @@ private:
     bool DetectMotionPlus();
     bool ActivateMotionPlus();
 
+    // Watchdog for the "one or more sensors disabled" Balance Board quirk
+    // documented on WiiBrew: detects the pattern (most corners flatlined
+    // while real weight is on the board) and re-runs InitExtension() to
+    // try to clear it, the same fix WiiBrew describes working for their
+    // PC interface. Cheap no-op for anything that isn't a Balance Board.
+    void CheckBalanceBoardStuckSensors();
+
     SDL_hid_device *m_Dev = nullptr;
     std::string m_Path;
     WiimoteSnapshot m_Snapshot;
@@ -129,6 +145,11 @@ private:
     // settle before it will answer ID reads reliably.
     Uint64 m_ExtensionSettleAtMs = 0;
     bool m_ExtensionPendingInit = false;
+
+    // Balance Board stuck-sensor watchdog state.
+    Uint64 m_BalanceStuckSinceMs = 0;          // 0 == not currently stuck
+    Uint64 m_BalanceLastRecoveryAtMs = 0;      // cooldown between retries
+    int    m_BalanceRecoveryAttempts = 0;      // capped so we don't spam re-init forever
 };
 
 } // namespace InputBridge::Wiimote

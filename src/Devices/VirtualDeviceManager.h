@@ -4,11 +4,11 @@
 #include <vector>
 #include <memory>
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Preset device types offered in the "Add Virtual Device" UI.
 // Each maps to an SDL joystick type so DeviceManager / DeviceFactory route it
 // correctly (e.g. WHEEL → SteeringWheelHaptics path).
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 enum class VirtualDeviceType {
     Gamepad,        // SDL_JOYSTICK_TYPE_GAMEPAD
     SteeringWheel,  // SDL_JOYSTICK_TYPE_WHEEL
@@ -31,9 +31,9 @@ struct VirtualAxisInfo {
     float       defaultValue; // 0.0 for most axes, -1.0 for triggers that rest low
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Holds the writable state for one virtual SDL joystick.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 struct VirtualDeviceState {
     SDL_JoystickID joystick_id = 0;
     SDL_Joystick*  joystick    = nullptr;
@@ -55,7 +55,7 @@ struct VirtualDeviceState {
     std::vector<VirtualAxisInfo> axisInfo;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Manages the lifetime and state of all virtual SDL joysticks.
 //
 // Usage:
@@ -65,7 +65,7 @@ struct VirtualDeviceState {
 //   // Existing visualisers / InputMapper work with no changes.
 //   ...
 //   VirtualDeviceManager::GetInstance().PushState(id);   // each frame
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 class VirtualDeviceManager {
 public:
     static VirtualDeviceManager& GetInstance();

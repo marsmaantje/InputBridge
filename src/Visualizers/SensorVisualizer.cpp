@@ -5,7 +5,7 @@
 #include <SDL3/SDL.h>
 #include <cmath>
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// -- Helpers -------------------------------------------------------------------
 
 void SensorVisualizer::DrawAxisBar(const char* label, float value, float width) {
     ImDrawList* dl  = ImGui::GetWindowDrawList();
@@ -37,7 +37,7 @@ void SensorVisualizer::DrawAxisBar(const char* label, float value, float width) 
     ImGui::Text("%-6s %+.3f", label, value);
 }
 
-// ── CapSense helpers ──────────────────────────────────────────────────────────
+// -- CapSense helpers ----------------------------------------------------------
 
 void SensorVisualizer::DrawCapSenseButton(const char* label, bool active) {
     ImDrawList* dl  = ImGui::GetWindowDrawList();
@@ -127,7 +127,7 @@ void SensorVisualizer::DrawGyro(SDL_Gamepad* gamepad) {
     ImGui::PopID();
 }
 
-// ── Accelerometer ─────────────────────────────────────────────────────────────
+// -- Accelerometer -------------------------------------------------------------
 
 void SensorVisualizer::DrawAccel(SDL_Gamepad* gamepad) {
     AccelState a = SensorReader::ReadAccel(gamepad);
@@ -147,7 +147,7 @@ void SensorVisualizer::DrawAccel(SDL_Gamepad* gamepad) {
     ImGui::PopID();
 }
 
-// ── Left-side sensors (Joy-Con L / Steam Deck L half) ─────────────────────────
+// -- Left-side sensors (Joy-Con L / Steam Deck L half) -------------------------
 
 void SensorVisualizer::DrawGyroL(SDL_Gamepad* gamepad) {
     GyroState g = SensorReader::ReadGyroL(gamepad);
@@ -185,7 +185,7 @@ void SensorVisualizer::DrawAccelL(SDL_Gamepad* gamepad) {
     ImGui::PopID();
 }
 
-// ── Right-side sensors (Joy-Con R / Steam Deck R half) ────────────────────────
+// -- Right-side sensors (Joy-Con R / Steam Deck R half) ------------------------
 
 void SensorVisualizer::DrawGyroR(SDL_Gamepad* gamepad) {
     GyroState g = SensorReader::ReadGyroR(gamepad);
@@ -223,7 +223,7 @@ void SensorVisualizer::DrawAccelR(SDL_Gamepad* gamepad) {
     ImGui::PopID();
 }
 
-// ── Touchpad ──────────────────────────────────────────────────────────────────
+// -- Touchpad ------------------------------------------------------------------
 
 void SensorVisualizer::DrawTouch(SDL_Gamepad* gamepad) {
     TouchState t = SensorReader::ReadTouch(gamepad);
@@ -288,7 +288,7 @@ void SensorVisualizer::DrawTouch(SDL_Gamepad* gamepad) {
     ImGui::PopID();
 }
 
-// ── Main draw ─────────────────────────────────────────────────────────────────
+// -- Main draw -----------------------------------------------------------------
 
 void SensorVisualizer::Draw(const DeviceState& dev) {
     if (!dev.gamepad) {
@@ -298,7 +298,7 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
 
     ImGui::PushID("sensor_viz");
 
-    // ── Reset Sensors button ──────────────────────────────────────────────────
+    // -- Reset Sensors button --------------------------------------------------
     // Manually re-enables all IMU sensors on this gamepad.  Useful when Steam
     // Input has taken control and silently reset sensor state, causing gyro and
     // accel readings to stall even though the device is still connected.
@@ -314,7 +314,7 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── Split sensors: Joy-Con pair / Steam Deck L+R halves ───────────────────
+    // -- Split sensors: Joy-Con pair / Steam Deck L+R halves -------------------
     const bool hasGyroL  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L);
     const bool hasAccelL = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_ACCEL_L);
     const bool hasGyroR  = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_R);
@@ -369,7 +369,7 @@ void SensorVisualizer::Draw(const DeviceState& dev) {
 
         ImGui::Spacing();
     }
-    // ── End split sensors ─────────────────────────────────────────────────────
+    // -- End split sensors -----------------------------------------------------
 
     if (ImGui::CollapsingHeader("Touchpad", ImGuiTreeNodeFlags_DefaultOpen))
         DrawTouch(dev.gamepad);

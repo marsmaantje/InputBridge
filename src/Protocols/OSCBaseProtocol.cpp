@@ -314,7 +314,7 @@ bool OSCBaseProtocol::handle_osc_message(const char* path, const char* types, lo
     else if (match("/haptic/dualsense/trigger/left/off",        "ds_trigger_left_off"))        { handled = true; sendOff("left"); }
     else if (match("/haptic/dualsense/trigger/right/off",       "ds_trigger_right_off"))       { handled = true; sendOff("right"); }
 
-    // ── Subchannel paths: /haptic/<effect>/<slot> ───────────────
+    // -- Subchannel paths: /haptic/<effect>/<slot> ---------------
     // The slot is encoded as the trailing decimal path component instead of
     // being passed as a message argument.  This lets hosts that can send only
     // one OSC message per frame per path (e.g. Resonite) address multiple

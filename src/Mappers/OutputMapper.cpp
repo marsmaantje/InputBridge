@@ -79,7 +79,7 @@ void OutputMapper::DrawContent() {
 void OutputMapper::DrawContentOnly() {
     HandleDeviceConnectionChange();
 
-    // ── Input Protocol Selection ──────────────────────────────────────────────
+    // -- Input Protocol Selection ----------------------------------------------
     InputMapper::GetInstance().DrawInputProtocolSelector();
     ImGui::Separator();
 

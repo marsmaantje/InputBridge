@@ -1,6 +1,6 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // OutputMapper provides the central interface for output-device haptics.
 //
 // Features:
@@ -17,7 +17,7 @@
 //
 // All haptic effects are queued from external callers and executed on
 // the main thread to ensure safe interaction with underlying devices.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include <vector>
 #include <memory>

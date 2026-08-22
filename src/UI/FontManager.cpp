@@ -108,7 +108,7 @@ void RebuildFontAtlas()
                     iconFontPath.c_str());
     }
 
-    // ── Kenney Input Prompt fonts ─────────────────────────────────────────
+    // -- Kenney Input Prompt fonts -----------------------------------------
     // Each Kenney font occupies the same Private Use Area block (U+E000+),
     // so they cannot be merged into the base font.  Instead each is loaded as
     // a separate ImFont* stored in KenneyFonts.  DeviceIconProvider pushes the

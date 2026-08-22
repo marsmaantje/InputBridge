@@ -35,7 +35,7 @@ class DeviceManager {
 
     void UpdateBatteryInfo(DeviceState& dev);
 
-    // ── Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero ──
+    // -- Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero --
     // Driven directly over raw HID (see Devices/Wiimote/README.md) - these
     // are NOT SDL_Joystick-backed DeviceState entries in m_Devices, since
     // IR/Balance-Board/Guitar data has no representation in SDL's gamepad
@@ -44,7 +44,7 @@ class DeviceManager {
     void ScanWiimotes();
     const std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>>& GetWiimotes() const;
 
-    // ── Device hide (HidHide / evdev grab / IOKit seize) ─────────────────────
+    // -- Device hide (HidHide / evdev grab / IOKit seize) ---------------------
     // Toggle the hide state for a single device.  Updates dev.hide_from_other_apps
     // and calls through to the platform backend.
     // Returns true on success; false when the backend is unavailable or fails.

@@ -1,10 +1,10 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Stateless device-reading helpers: turn a raw SDL joystick/gamepad/sensor
 // reading into the normalised [-1,1] (or [0,1]) values the rest of the
 // mapping system works with.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include "MappingTypes.h"
 #include <SDL3/SDL.h>

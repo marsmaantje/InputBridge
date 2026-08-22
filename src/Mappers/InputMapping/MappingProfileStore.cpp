@@ -46,7 +46,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(AnalogToDigitalMapping::Mode, {
 
 namespace {
 
-// ── JSON ⇄ InputSource ──────────────────────────────────────────────────────
+// -- JSON ⇄ InputSource ------------------------------------------------------
 // All three places an InputSource is embedded in the profile JSON (the
 // top-level "mappings" map, an analog→digital mapping's "source", and a
 // channel-mix source) use the exact same key names, so one pair of
@@ -79,7 +79,7 @@ json SerializeInputSource(const InputSource& src) {
     };
 }
 
-// ── JSON ⇄ MappingProfile, one collection at a time ────────────────────────
+// -- JSON ⇄ MappingProfile, one collection at a time ------------------------
 
 void ParseOutputMappings(const json& data, MappingProfile& p) {
     if (!data.contains("mappings")) return;
@@ -553,7 +553,7 @@ void MappingProfileStore::UpdateActiveProtocols() {
     const auto& p = m_Profiles[m_SelectedProfileIndex];
     ProtocolManager::GetInstance().SetActiveInputProtocolId(p.oscInputProtocolId);
 
-    // ── OSC server ────────────────────────────────────────────────────────────
+    // -- OSC server ------------------------------------------------------------
     auto& osc = OSCServer::GetInstance();
 
     // Snapshot what the server is actually running on *before* touching the
@@ -594,7 +594,7 @@ void MappingProfileStore::UpdateActiveProtocols() {
     }
 
 #ifdef ENABLE_WEBSOCKETS
-    // ── WebSocket server ──────────────────────────────────────────────────────
+    // -- WebSocket server ------------------------------------------------------
     auto& ws = WebSocketServer::GetInstance();
     ws.SetOutputDefinition(p.wsOutputProtocolId);
     ws.SetInputDefinition(p.wsInputProtocolId);
