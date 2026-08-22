@@ -170,13 +170,27 @@ namespace {
 // two nearest calibration points that bracket the reading, or the top two
 // if the reading exceeds the highest calibration point (extrapolate).
 float InterpolateWeight(uint16_t raw, uint16_t c0, uint16_t c17, uint16_t c34) {
-    if (raw < c0) return 0.f;
+    // Do the whole computation in the signed/float domain and don't clamp
+    // a sub-c0 reading to a hard 0. That clamp used to pin a corner at a
+    // flat, unmoving 0.0 kg the instant its raw value dipped even slightly
+    // below the stored 0kg calibration point - which happens constantly,
+    // both from ordinary sensor drift AND from real physics (the board
+    // flexes: when weight shifts toward one corner, the diagonally
+    // opposite corner's compression can genuinely drop below its "empty"
+    // baseline). WiiBalanceWalker doesn't clamp this either - it just
+    // shows the signed raw-vs-baseline delta - which is why its readings
+    // stay "alive" on all four corners while ours pinned three of them at
+    // exactly 0. Extrapolating below c0 the same way we already
+    // extrapolate above c34 fixes that; a final small negative kg reading
+    // is expected/harmless (it means "slightly unloaded relative to
+    // calibration", not a sensor fault) and callers can clamp for display
+    // if they want a strictly-non-negative number.
     if (raw <= c17) {
         if (c17 == c0) return 0.f;
-        return 17.f * float(raw - c0) / float(c17 - c0);
+        return 17.f * (float(raw) - float(c0)) / float(c17 - c0);
     }
     if (c34 == c17) return 17.f;
-    return 17.f + 17.f * float(raw - c17) / float(c34 - c17);
+    return 17.f + 17.f * (float(raw) - float(c17)) / float(c34 - c17);
 }
 } // namespace
 

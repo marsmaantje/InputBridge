@@ -39,17 +39,17 @@ namespace InReport {
     constexpr uint8_t ReadMemoryData  = 0x21;
     constexpr uint8_t Acknowledge     = 0x22;
 
-    constexpr uint8_t Core                       = 0x30; // buttons only
-    constexpr uint8_t CoreAccel                  = 0x31; // buttons + accel
-    constexpr uint8_t CoreExt8                   = 0x32; // buttons + 8 ext bytes (Balance Board default)
-    constexpr uint8_t CoreAccelIR12               = 0x33; // buttons + accel + 12 IR bytes (basic/ext IR)
-    constexpr uint8_t CoreExt19                   = 0x34; // buttons + 19 ext bytes (Balance Board + battery)
-    constexpr uint8_t CoreAccelExt16               = 0x35; // buttons + accel + 16 ext bytes
-    constexpr uint8_t CoreIR10Ext9                 = 0x36; // buttons + 10 IR + 9 ext
-    constexpr uint8_t CoreAccelIR10Ext6            = 0x37; // buttons + accel + 10 IR (basic mode) + 6 ext  <- primary mode we use
-    constexpr uint8_t Ext21                       = 0x3d; // 21 ext bytes only
-    constexpr uint8_t InterleavedA                = 0x3e; // interleaved accel+IR (full mode), half 1
-    constexpr uint8_t InterleavedB                = 0x3f; // interleaved accel+IR (full mode), half 2
+    constexpr uint8_t Core              = 0x30; // buttons only
+    constexpr uint8_t CoreAccel         = 0x31; // buttons + accel
+    constexpr uint8_t CoreExt8          = 0x32; // buttons + 8 ext bytes (Balance Board default)
+    constexpr uint8_t CoreAccelIR12     = 0x33; // buttons + accel + 12 IR bytes (basic/ext IR)
+    constexpr uint8_t CoreExt19         = 0x34; // buttons + 19 ext bytes (Balance Board + battery)
+    constexpr uint8_t CoreAccelExt16    = 0x35; // buttons + accel + 16 ext bytes
+    constexpr uint8_t CoreIR10Ext9      = 0x36; // buttons + 10 IR + 9 ext
+    constexpr uint8_t CoreAccelIR10Ext6 = 0x37; // buttons + accel + 10 IR (basic mode) + 6 ext  <- primary mode we use
+    constexpr uint8_t Ext21             = 0x3d; // 21 ext bytes only
+    constexpr uint8_t InterleavedA      = 0x3e; // interleaved accel+IR (full mode), half 1
+    constexpr uint8_t InterleavedB      = 0x3f; // interleaved accel+IR (full mode), half 2
 }
 
 // -- Memory / register address space ----------------------------------------

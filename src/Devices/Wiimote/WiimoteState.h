@@ -7,7 +7,6 @@
 #include "WiimoteProtocol.h"
 #include <cstdint>
 #include <array>
-#include <string>
 
 namespace InputBridge::Wiimote {
 
