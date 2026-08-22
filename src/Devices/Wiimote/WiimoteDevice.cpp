@@ -454,10 +454,57 @@ void WiimoteDevice::DecodeCoreExt19(const uint8_t *buf) {
 
     uint8_t ext11[11];
     std::memcpy(ext11, ee, 11);
-    m_Snapshot.balance_board = Decode::BalanceBoard(ext11, m_BalanceCal.value_or(BalanceBoardCalibration{}));
+    BalanceBoardState raw = Decode::BalanceBoard(ext11, m_BalanceCal.value_or(BalanceBoardCalibration{}));
+
+    // Stash the pre-tare reading so TareBalanceBoard() has something to
+    // capture, then hand the snapshot the tared version.
+    m_BalanceRawKg[0] = raw.kg_top_right;
+    m_BalanceRawKg[1] = raw.kg_bottom_right;
+    m_BalanceRawKg[2] = raw.kg_top_left;
+    m_BalanceRawKg[3] = raw.kg_bottom_left;
+    m_BalanceHasRawReading = true;
+
+    ApplyBalanceBoardTare(raw);
+    m_Snapshot.balance_board = raw;
     m_Snapshot.balance_board.button_a = m_Snapshot.core.a;
+    m_Snapshot.balance_board_tared = (m_BalanceTareKg[0] != 0.f || m_BalanceTareKg[1] != 0.f ||
+                                       m_BalanceTareKg[2] != 0.f || m_BalanceTareKg[3] != 0.f);
 
     CheckBalanceBoardStuckSensors();
+}
+
+void WiimoteDevice::ApplyBalanceBoardTare(BalanceBoardState &bb) {
+    bb.kg_top_right    -= m_BalanceTareKg[0];
+    bb.kg_bottom_right -= m_BalanceTareKg[1];
+    bb.kg_top_left     -= m_BalanceTareKg[2];
+    bb.kg_bottom_left  -= m_BalanceTareKg[3];
+    bb.kg_total = bb.kg_top_right + bb.kg_bottom_right + bb.kg_top_left + bb.kg_bottom_left;
+
+    // Recompute center of gravity from the tared values - same formula as
+    // Decode::BalanceBoard(), duplicated here rather than shared because it
+    // needs to run on the post-tare numbers, not the raw decode output.
+    if (bb.kg_total > 0.01f) {
+        const float right = bb.kg_top_right + bb.kg_bottom_right;
+        const float left  = bb.kg_top_left  + bb.kg_bottom_left;
+        const float front = bb.kg_top_right + bb.kg_top_left;
+        const float back  = bb.kg_bottom_right + bb.kg_bottom_left;
+        bb.cog_x = (right - left) / bb.kg_total;
+        bb.cog_y = (front - back) / bb.kg_total;
+    } else {
+        bb.cog_x = 0.f;
+        bb.cog_y = 0.f;
+    }
+}
+
+void WiimoteDevice::TareBalanceBoard() {
+    if (!m_BalanceHasRawReading) return; // nothing decoded yet - no-op
+    for (int i = 0; i < 4; ++i) m_BalanceTareKg[i] = m_BalanceRawKg[i];
+    m_Snapshot.balance_board_tared = true;
+}
+
+void WiimoteDevice::ClearBalanceBoardTare() {
+    for (int i = 0; i < 4; ++i) m_BalanceTareKg[i] = 0.f;
+    m_Snapshot.balance_board_tared = false;
 }
 
 void WiimoteDevice::CheckBalanceBoardStuckSensors() {

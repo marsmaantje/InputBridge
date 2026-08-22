@@ -562,6 +562,20 @@ void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index) {
             bool &rumble = s_rumble[index % 8];
             if (ImGui::Checkbox("Rumble", &rumble))
                 dev.SetRumble(rumble);
+        } else {
+            // Software zero point: subtracts whatever the board currently
+            // reads from every future reading, without touching its own
+            // factory calibration. Useful for a rug/mount/uneven floor
+            // adding a fixed offset, or just to zero out before stepping on.
+            if (ImGui::Button("Tare / Zero"))
+                dev.TareBalanceBoard();
+            if (snap.balance_board_tared) {
+                ImGui::SameLine();
+                if (ImGui::Button("Clear Tare"))
+                    dev.ClearBalanceBoardTare();
+                ImGui::SameLine();
+                ImGui::TextDisabled("(tared)");
+            }
         }
         ImGui::Unindent();
     }
