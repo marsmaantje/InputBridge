@@ -239,6 +239,12 @@ add_executable(InputBridge
     src/Devices/DeviceManager.cpp
     src/Devices/DeviceFactory.cpp
     src/Devices/VirtualDeviceManager.cpp
+    # Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero
+    # (raw-HID, parallel to the SDL_Joystick-based devices above - see
+    # src/Devices/Wiimote/README.md)
+    src/Devices/Wiimote/WiimoteDecoder.cpp
+    src/Devices/Wiimote/WiimoteDevice.cpp
+    src/Devices/Wiimote/WiimoteManager.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp

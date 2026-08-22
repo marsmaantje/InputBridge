@@ -107,6 +107,9 @@ void DeviceManager::CloseAllDevices() {
     }
     m_HapticDevices.clear();
 
+    // Release Wiimotes (each destructor closes its HID handle)
+    m_Wiimotes.clear();
+
     // Now close SDL devices
     for (auto &dev : m_Devices) {
         if (dev.gamepad)
@@ -115,6 +118,50 @@ void DeviceManager::CloseAllDevices() {
             SDL_CloseJoystick(dev.joystick);
     }
     m_Devices.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero
+// ---------------------------------------------------------------------------
+
+void DeviceManager::ScanWiimotes() {
+    auto found = InputBridge::Wiimote::WiimoteManager::Scan();
+
+    for (auto &dev : found) {
+        const std::string path = dev->Snapshot().hid_path;
+        bool already_tracked = std::any_of(m_Wiimotes.begin(), m_Wiimotes.end(),
+            [&](const auto &existing) { return existing->Snapshot().hid_path == path; });
+
+        if (already_tracked) {
+            // `dev` goes out of scope here and its destructor closes the
+            // just-opened duplicate HID handle - the existing tracked
+            // instance is left untouched.
+            continue;
+        }
+        LOG_INFO(kTag, "Wiimote found: %s", path.c_str());
+        m_Wiimotes.push_back(std::move(dev));
+    }
+
+    // Prune entries that have gone quiet - SDL_hid has no disconnect
+    // callback, so staleness (no input report for a while, after having
+    // received at least one) is the only signal available. See
+    // Devices/Wiimote/README.md for the platform-specific alternative
+    // (evdev hotplug on Linux, etc) if more immediate detection is needed.
+    constexpr Uint64 kStaleTimeoutMs = 5000;
+    const Uint64 now = SDL_GetTicks();
+    auto it = std::remove_if(m_Wiimotes.begin(), m_Wiimotes.end(), [&](const auto &dev) {
+        const auto &snap = dev->Snapshot();
+        return snap.last_report_ms != 0 && (now - snap.last_report_ms) > kStaleTimeoutMs;
+    });
+    if (it != m_Wiimotes.end()) {
+        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(it, m_Wiimotes.end()));
+        m_Wiimotes.erase(it, m_Wiimotes.end());
+    }
+}
+
+const std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>>&
+DeviceManager::GetWiimotes() const {
+    return m_Wiimotes;
 }
 
 void DeviceManager::Update(bool isMinimized) {
@@ -135,6 +182,21 @@ void DeviceManager::Update(bool isMinimized) {
         }
         lastBatteryUpdate = now;
     }
+
+    // ── Wiimote polling ──────────────────────────────────────────────────
+    // Unlike SDL_Joystick devices, Wiimotes pair over Bluetooth outside
+    // SDL's own joystick hotplug events, so we periodically re-scan for new
+    // ones rather than relying solely on HandleDeviceAdded(). Every tracked
+    // device gets drained every frame (each Poll() is a cheap no-op when
+    // nothing is pending, since the underlying handle is non-blocking).
+    if (m_LastWiimoteScanMs == 0 || now - m_LastWiimoteScanMs > kWiimoteScanIntervalMs) {
+        ScanWiimotes();
+        m_LastWiimoteScanMs = now;
+    }
+    for (auto &dev : m_Wiimotes) {
+        dev->Poll();
+    }
+    // ── End Wiimote polling ──────────────────────────────────────────────
 }
 
 HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {

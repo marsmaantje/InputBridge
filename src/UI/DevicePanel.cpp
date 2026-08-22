@@ -527,3 +527,44 @@ void DrawDeviceItem(DeviceState&        dev,
 
     ImGui::PopID();
 }
+
+// ---------------------------------------------------------------------------
+// DrawWiimoteItem
+// ---------------------------------------------------------------------------
+
+void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index) {
+    using namespace InputBridge::Wiimote;
+    static WiimoteVisualizer wiimote_viz;
+
+    const WiimoteSnapshot &snap = dev.Snapshot();
+
+    ImGui::PushID(index);
+
+    std::string label = snap.is_balance_board ? "Wii Balance Board" : "Wii Remote";
+    label += " [" + std::to_string(index) + "]";
+    if (!snap.connected) label += "  [no data yet]";
+
+    const bool header_open = ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+    if (header_open) {
+        ImGui::Indent();
+        wiimote_viz.Draw(snap);
+
+        ImGui::Separator();
+        if (!snap.is_balance_board) {
+            static int s_player[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
+            int &player = s_player[index % 8];
+            ImGui::SetNextItemWidth(120.0f);
+            if (ImGui::SliderInt("Player LED", &player, 1, 4))
+                dev.SetPlayerLED(player);
+
+            static bool s_rumble[8] = {};
+            bool &rumble = s_rumble[index % 8];
+            if (ImGui::Checkbox("Rumble", &rumble))
+                dev.SetRumble(rumble);
+        }
+        ImGui::Unindent();
+    }
+
+    ImGui::PopID();
+}

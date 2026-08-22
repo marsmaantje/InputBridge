@@ -65,10 +65,23 @@ void Application::SetSDLHints()
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
 
     // ── Nintendo Wii / Wii U ─────────────────────────────────────────────────
-    // Enable the HIDAPI driver and player status LED
-    // for Nintendo Wii and Wii U Controllers.
-    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "1");
-    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII_PLAYER_LED, "1");
+    // Deliberately left OFF (was "1"). Wii Remote / Wii Remote Plus / Wii
+    // Balance Board are now driven directly over raw HID by
+    // Devices/Wiimote/WiimoteManager, which exposes buttons, accelerometer,
+    // IR camera, Nunchuk, Classic Controller, Guitar Hero, and Balance Board
+    // weight data - none of which fit through SDL_Gamepad's generic
+    // abstraction. Leaving this hint on would race WiimoteManager for the
+    // same HID handle (whichever opens first wins; the other gets nothing).
+    //
+    // Trade-off: if a bare Wii U Pro Controller (not a Wiimote) is ever
+    // plugged in, it will also stop being claimed by SDL's HIDAPI Wii
+    // driver and currently isn't handled by WiimoteManager either (its
+    // report format differs from a Wiimote's and isn't implemented yet
+    // Re-enable this hint and special-case
+    // Wiimote-only PIDs in WiimoteManager::Scan() if Wii U Pro Controller
+    // support turns out to matter.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "0");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII_PLAYER_LED, "0");
 
     // When a Left and Right Joy-Con are both connected, merge them into a
     // single virtual gamepad.  In merged mode SDL exposes SDL_SENSOR_GYRO_L

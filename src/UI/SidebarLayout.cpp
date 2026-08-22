@@ -406,6 +406,20 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 }
             }
 
+            // Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero.
+            // Not SDL_Joystick-backed (see Devices/Wiimote/README.md), so they
+            // live in their own list rather than `devices` above.
+            {
+                const auto& wiimotes = ctx.deviceManager.GetWiimotes();
+                if (!wiimotes.empty()) {
+                    ImGui::Separator();
+                    ImGui::Text("Wiimotes: %d", static_cast<int>(wiimotes.size()));
+                    int idx = 0;
+                    for (auto& w : wiimotes)
+                        DrawWiimoteItem(*w, idx++);
+                }
+            }
+
             ImGui::Separator();
             for (auto& dev : devices)
                 DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs, ctx.show_named_inputs);

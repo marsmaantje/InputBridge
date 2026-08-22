@@ -7,6 +7,7 @@
 #include <map>
 
 #include "Haptics/HapticDevice.h"
+#include "Devices/Wiimote/WiimoteManager.h"
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
 #include "ExclusiveMode/InputExclusiveMode.h"
@@ -34,6 +35,15 @@ class DeviceManager {
 
     void UpdateBatteryInfo(DeviceState& dev);
 
+    // ── Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero ──
+    // Driven directly over raw HID (see Devices/Wiimote/README.md) - these
+    // are NOT SDL_Joystick-backed DeviceState entries in m_Devices, since
+    // IR/Balance-Board/Guitar data has no representation in SDL's gamepad
+    // abstraction. ScanWiimotes() is idempotent: already-tracked devices
+    // (matched by HID path) are left alone, new ones are appended.
+    void ScanWiimotes();
+    const std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>>& GetWiimotes() const;
+
     // ── Device hide (HidHide / evdev grab / IOKit seize) ─────────────────────
     // Toggle the hide state for a single device.  Updates dev.hide_from_other_apps
     // and calls through to the platform backend.
@@ -54,6 +64,10 @@ class DeviceManager {
     std::vector<DeviceState> m_Devices;
     std::map<SDL_JoystickID, std::unique_ptr<HapticDevice>> m_HapticDevices;
     Uint64 m_BatteryUpdateIntervalMs = 5000;
+
+    std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>> m_Wiimotes;
+    Uint64 m_LastWiimoteScanMs = 0;
+    static constexpr Uint64 kWiimoteScanIntervalMs = 3000; // BT pairing happens outside SDL's joystick events
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_HideManager;

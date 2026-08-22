@@ -152,3 +152,19 @@ add_executable(test_input_source
 target_include_directories(test_input_source PRIVATE ${IB_SRC} ${IB_WHEELRPM})
 target_link_libraries(test_input_source PRIVATE GTest::gtest_main SDL3::SDL3)
 gtest_discover_tests(test_input_source)
+
+# 12. test_wiimote_decoder ─────────────────────────────────────────────────────
+# Tests the pure byte->struct decode functions in Devices/Wiimote/WiimoteDecoder.*
+# (buttons, accelerometer LSB packing, IR basic-mode bit packing, extension-ID
+# classification, Nunchuk/Classic Controller/Balance Board payload decoding,
+# and Balance Board calibration + weight interpolation). No SDL_hid_* I/O is
+# exercised here - WiimoteDevice/WiimoteManager (the raw-HID layer) are
+# intentionally left untested until an injectable HID transport exists for
+# them (see Devices/Wiimote/README.md's gap list).
+add_executable(test_wiimote_decoder
+    test_wiimote_decoder.cpp
+    ${IB_SRC}/Devices/Wiimote/WiimoteDecoder.cpp
+)
+target_include_directories(test_wiimote_decoder PRIVATE ${IB_SRC})
+target_link_libraries(test_wiimote_decoder PRIVATE GTest::gtest_main)
+gtest_discover_tests(test_wiimote_decoder)
