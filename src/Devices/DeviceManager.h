@@ -7,7 +7,6 @@
 #include <map>
 
 #include "Haptics/HapticDevice.h"
-#include "wheel/wheel_manager.hpp"
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
 #include "ExclusiveMode/InputExclusiveMode.h"
@@ -35,10 +34,6 @@ class DeviceManager {
 
     void UpdateBatteryInfo(DeviceState& dev);
 
-    // ── Wheel RPM ────────────────────────────────────────────────────────────
-    void ScanWheelRPMDevices();
-    const std::vector<std::unique_ptr<wheel::Wheel>>& GetWheelRPMDevices() const;
-
     // ── Device hide (HidHide / evdev grab / IOKit seize) ─────────────────────
     // Toggle the hide state for a single device.  Updates dev.hide_from_other_apps
     // and calls through to the platform backend.
@@ -59,8 +54,6 @@ class DeviceManager {
     std::vector<DeviceState> m_Devices;
     std::map<SDL_JoystickID, std::unique_ptr<HapticDevice>> m_HapticDevices;
     Uint64 m_BatteryUpdateIntervalMs = 5000;
-
-    std::vector<std::unique_ptr<wheel::Wheel>> m_WheelRPMDevices;
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_HideManager;

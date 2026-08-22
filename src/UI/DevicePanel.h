@@ -5,7 +5,7 @@
 class DeviceManager;
 class PreferencesManager;
 
-/// Draws the tab bar of visualizers (Raw Inputs, Haptic Test, RPM LEDs, etc.)
+/// Draws the tab bar of visualizers (Raw Inputs, Haptic Test, etc.)
 /// for a single connected device.  Restores and persists the user's preferred
 /// tab via PreferencesManager.
 void DrawDeviceVisualizer(DeviceState&         dev,

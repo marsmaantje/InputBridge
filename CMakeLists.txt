@@ -300,22 +300,6 @@ add_executable(InputBridge
     src/UI/SidebarLayout.cpp
     src/UI/InputLabelProvider.cpp
     src/UI/EditableSlider.cpp
-    # Steering wheel RPM LED support (formerly lib/wheel-rpm-lib)
-    src/WheelRpm/src/core/sdl_transport.cpp
-    src/WheelRpm/src/core/wheel_manager.cpp
-    src/WheelRpm/src/fanatec/csl_dd.cpp
-    src/WheelRpm/src/fanatec/csl_elite.cpp
-    src/WheelRpm/src/fanatec/csw_v25.cpp
-    src/WheelRpm/src/fanatec/podium_dd1.cpp
-    src/WheelRpm/src/fanatec/podium_dd2.cpp
-    src/WheelRpm/src/logitech/g27.cpp
-    src/WheelRpm/src/logitech/g29.cpp
-    src/WheelRpm/src/logitech/g923.cpp
-    src/WheelRpm/src/logitech/pro.cpp
-    src/WheelRpm/src/thrustmaster/sf1000.cpp
-    src/WheelRpm/src/thrustmaster/t300.cpp
-    src/WheelRpm/src/thrustmaster/t818.cpp
-    src/WheelRpm/src/thrustmaster/ts_pc.cpp
 )
 
 if(ENABLE_WEBSOCKETS)
@@ -335,7 +319,6 @@ endif()
 
 target_include_directories(InputBridge PRIVATE
     src
-    src/WheelRpm/include
 )
 
 if(ENABLE_EXCLUSIVE_INPUT)

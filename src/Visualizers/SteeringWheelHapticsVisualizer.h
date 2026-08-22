@@ -9,10 +9,6 @@ public:
     void Draw(const DeviceState& dev, DeviceManager& deviceManager,
               PreferencesManager& prefs, const std::string& guid);
 
-    // Draw only the RPM LED controls - independent of haptics availability.
-    // Safe to call even when the device has no SDL haptic support.
-    void DrawLEDs(DeviceManager& deviceManager);
-
 private:
     // Populate edit fields from the recorded live state of an active slot.
     // Called when the user moves the slot selector onto a running slot, or
@@ -49,9 +45,6 @@ private:
     float m_condition_center = 0.0f;
     int m_condition_duration = 5000;
     bool m_condition_infinite_duration = false;
-
-    // RPM LEDs (wheel-rpm-lib)
-    float m_rpm_percent = 0.0f;
 
     // Rumble (simulated via periodic)
     int   m_rumble_slot              = 0;

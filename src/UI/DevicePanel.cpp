@@ -204,17 +204,6 @@ void DrawDeviceVisualizer(DeviceState&         dev,
                 }
             }
 
-            {
-                const bool hasRPM = !deviceManager.GetWheelRPMDevices().empty();
-                if (hasRPM || type == SDL_JOYSTICK_TYPE_WHEEL
-                    || type == SDL_JOYSTICK_TYPE_UNKNOWN) {
-                    if (ImGui::BeginTabItem("RPM LEDs")) {
-                        wheel_haptics_viz.DrawLEDs(deviceManager);
-                        ImGui::EndTabItem();
-                    }
-                }
-            }
-
             if (ImGui::BeginTabItem("Settings")) {
                 DrawDeviceSettingsTab(dev, deviceManager, prefs, guid);
                 ImGui::EndTabItem();

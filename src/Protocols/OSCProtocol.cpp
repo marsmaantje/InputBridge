@@ -335,16 +335,6 @@ bool OSCProtocol::handle_osc_message(const char* path, const char* types, lo_arg
     else if (match("/haptic/dualsense/trigger/right/machine",   "ds_trigger_right_machine"))   { handled = true; sendMachine("right"); }
     else if (match("/haptic/dualsense/trigger/left/off",        "ds_trigger_left_off"))        { handled = true; sendOff("left"); }
     else if (match("/haptic/dualsense/trigger/right/off",       "ds_trigger_right_off"))       { handled = true; sendOff("right"); }
-    // /inputbridge/wheel/led_rpm  f  (rpm_percent 0.0–1.0)
-    else if (path_sv == "/inputbridge/wheel/led_rpm" && std::strcmp(types, "f") == 0 && argc == 1) {
-        handled = true;
-        float rpm_percent = ClampNorm(argv[0]->f, "rpm_percent", path_sv);
-
-        auto& deviceManager = DeviceManager::GetInstance();
-        for (const auto& wheel : deviceManager.GetWheelRPMDevices()) {
-            wheel->setRPM(rpm_percent);
-        }
-    }
 
     // ── Subchannel paths: /haptic/<effect>/<slot> ───────────────
     // The slot is encoded as the trailing decimal path component instead of

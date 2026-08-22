@@ -57,12 +57,6 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     if (result->haptic) {
         m_HapticDevices[instance_id] = std::move(result->haptic);
     }
-
-    // When a steering wheel is connected, re-scan for RPM-capable devices via
-    // wheel-rpm-lib so the visualizer can immediately offer LED control.
-    if (SDL_GetJoystickTypeForID(instance_id) == SDL_JOYSTICK_TYPE_WHEEL) {
-        ScanWheelRPMDevices();
-    }
 }
 
 void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
@@ -94,16 +88,13 @@ void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
         m_Devices.erase(it, m_Devices.end());
     }
 
-    // If no steering wheels remain, clear the RPM device list.
+    // If no steering wheels remain, clear the device list.
     bool anyWheelLeft = false;
     for (const auto& dev : m_Devices) {
         if (SDL_GetJoystickTypeForID(dev.instance_id) == SDL_JOYSTICK_TYPE_WHEEL) {
             anyWheelLeft = true;
             break;
         }
-    }
-    if (!anyWheelLeft) {
-        m_WheelRPMDevices.clear();
     }
 }
 
@@ -115,9 +106,6 @@ void DeviceManager::CloseAllDevices() {
         }
     }
     m_HapticDevices.clear();
-    
-    // Release wheel RPM devices
-    m_WheelRPMDevices.clear();
 
     // Now close SDL devices
     for (auto &dev : m_Devices) {
@@ -147,21 +135,6 @@ void DeviceManager::Update(bool isMinimized) {
         }
         lastBatteryUpdate = now;
     }
-}
-
-// ---------------------------------------------------------------------------
-// wheel-rpm-lib integration
-// ---------------------------------------------------------------------------
-
-void DeviceManager::ScanWheelRPMDevices() {
-    m_WheelRPMDevices = wheel::WheelManager::scan();
-    LOG_INFO(kTag, "WheelRPM scan complete: %zu device(s) found",
-            m_WheelRPMDevices.size());
-}
-
-const std::vector<std::unique_ptr<wheel::Wheel>>&
-DeviceManager::GetWheelRPMDevices() const {
-    return m_WheelRPMDevices;
 }
 
 HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
