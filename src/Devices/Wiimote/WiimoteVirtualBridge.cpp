@@ -79,10 +79,6 @@ const char *WiimoteBridgeButtonName(int button) {
         case Btn_Plus:         return "+";
         case Btn_Minus:        return "-";
         case Btn_Home:         return "Home";
-        case Btn_Up:           return "D-Pad Up";
-        case Btn_Down:         return "D-Pad Down";
-        case Btn_Left:         return "D-Pad Left";
-        case Btn_Right:        return "D-Pad Right";
         case Btn_NunchukC:     return "Nunchuk C";
         case Btn_NunchukZ:     return "Nunchuk Z";
         case Btn_ClassicA:     return "Classic A";
@@ -97,6 +93,13 @@ const char *WiimoteBridgeButtonName(int button) {
         case Btn_ClassicDown:  return "Classic D-Pad Down";
         case Btn_ClassicLeft:  return "Classic D-Pad Left";
         case Btn_ClassicRight: return "Classic D-Pad Right";
+        default: return nullptr;
+    }
+}
+
+const char *WiimoteBridgeHatName(int hat) {
+    switch (hat) {
+        case Hat_DPad: return "D-Pad";
         default: return nullptr;
     }
 }
@@ -156,7 +159,7 @@ void WiimoteVirtualBridge::Attach(const WiimoteDevice &dev) {
     desc.type     = static_cast<Uint16>(SDL_JOYSTICK_TYPE_UNKNOWN);
     desc.naxes    = static_cast<Uint16>(balance ? kBalanceNumAxes : kWiimoteNumAxes);
     desc.nbuttons = static_cast<Uint16>(balance ? kBalanceNumButtons : kWiimoteNumButtons);
-    desc.nhats    = 0;
+    desc.nhats    = static_cast<Uint16>(balance ? 0 : kWiimoteNumHats); // Balance Board has no D-Pad
 
     // See the file-level comment for why these exact strings matter. Also
     // referenced by name (not substring) from InputLabelProvider's
@@ -234,7 +237,6 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         auto setBtn = [&](int idx, bool v) {
             SDL_SetJoystickVirtualButton(e->joystick, idx, v);
         };
-
         if (snap.is_balance_board) {
             const auto &bb = snap.balance_board;
             setAxis(BAxis_TopLeft,     Norm01ToBipolar(bb.kg_top_left,     0.f, kBalanceMaxKgPerCorner));
@@ -282,8 +284,17 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setBtn(Btn_One, snap.core.one);     setBtn(Btn_Two, snap.core.two);
         setBtn(Btn_Plus, snap.core.plus);   setBtn(Btn_Minus, snap.core.minus);
         setBtn(Btn_Home, snap.core.home);
-        setBtn(Btn_Up, snap.core.up);       setBtn(Btn_Down, snap.core.down);
-        setBtn(Btn_Left, snap.core.left);   setBtn(Btn_Right, snap.core.right);
+
+        // D-Pad as a hat (see WiimoteHat's comment) - bits are ORable
+        // directly into SDL's own hat bitmask (SDL_HAT_UP/DOWN/LEFT/RIGHT),
+        // so a diagonal reads as e.g. SDL_HAT_LEFTUP automatically without
+        // needing to special-case it here.
+        Uint8 dpad_hat = SDL_HAT_CENTERED;
+        if (snap.core.up)    dpad_hat |= SDL_HAT_UP;
+        if (snap.core.down)  dpad_hat |= SDL_HAT_DOWN;
+        if (snap.core.left)  dpad_hat |= SDL_HAT_LEFT;
+        if (snap.core.right) dpad_hat |= SDL_HAT_RIGHT;
+        SDL_SetJoystickVirtualHat(e->joystick, Hat_DPad, dpad_hat);
 
         setBtn(Btn_NunchukC, snap.nunchuk.button_c);
         setBtn(Btn_NunchukZ, snap.nunchuk.button_z);

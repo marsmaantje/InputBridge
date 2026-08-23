@@ -27,10 +27,10 @@ namespace InputBridge::Wiimote {
 // and InputLabelProvider.cpp (which needs the matching names for the "Raw
 // Inputs" tab - see WiimoteVirtualBridge.cpp's Attach() for why that tab
 // can't just use SDL's gamepad binding tables here). Order and count MUST
-// stay in sync with the setAxis/setBtn calls in PushAllStates() - there's
-// no way to derive one from the other automatically since SDL only wants a
-// count at attach time, so both consumers include this header rather than
-// keeping their own copies.
+// stay in sync with the setAxis/setBtn calls and the D-Pad hat push in
+// PushAllStates() - there's no way to derive one from the other
+// automatically since SDL only wants a count at attach time, so both
+// consumers include this header rather than keeping their own copies.
 constexpr int kWiimoteNumAxes = 14;
 enum WiimoteAxis {
     Axis_AccelX = 0, Axis_AccelY, Axis_AccelZ,
@@ -40,10 +40,20 @@ enum WiimoteAxis {
     Axis_MotionPlusYaw, Axis_MotionPlusPitch, Axis_MotionPlusRoll,
 };
 
-constexpr int kWiimoteNumButtons = 25;
+// The main D-Pad is exposed as a hat (not 4 separate buttons) so it maps
+// and displays the same way a regular gamepad's D-Pad does - diagonal
+// presses collapse to a single hat state instead of two simultaneous
+// button events, and InputMapper/InputBindingListener already understand
+// hats generically (see MappingTypes.h's hat_index/hat_mask), so no
+// Wiimote-specific mapping code is needed. The Classic Controller
+// extension's D-Pad is a separate physical pad on a separate device and
+// stays as plain buttons (Btn_ClassicUp/Down/Left/Right below).
+constexpr int kWiimoteNumHats = 1;
+enum WiimoteHat { Hat_DPad = 0 };
+
+constexpr int kWiimoteNumButtons = 21;
 enum WiimoteButton {
     Btn_A = 0, Btn_B, Btn_One, Btn_Two, Btn_Plus, Btn_Minus, Btn_Home,
-    Btn_Up, Btn_Down, Btn_Left, Btn_Right,
     Btn_NunchukC, Btn_NunchukZ,
     Btn_ClassicA, Btn_ClassicB, Btn_ClassicX, Btn_ClassicY,
     Btn_ClassicL, Btn_ClassicR, Btn_ClassicZL, Btn_ClassicZR,
@@ -71,6 +81,7 @@ constexpr const char *kBalanceBoardBridgeDeviceName  = "Wii Balance Board (Mappe
 // label in that case, same as any other unbound axis/button).
 const char *WiimoteBridgeAxisName(int axis);
 const char *WiimoteBridgeButtonName(int button);
+const char *WiimoteBridgeHatName(int hat);
 const char *BalanceBoardBridgeAxisName(int axis);
 const char *BalanceBoardBridgeButtonName(int button);
 

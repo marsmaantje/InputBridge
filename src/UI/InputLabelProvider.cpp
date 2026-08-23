@@ -565,14 +565,22 @@ InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button
 
 InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint8_t hatValue)
 {
-    // WiimoteVirtualBridge attaches with nhats=0 (Wiimote/Balance Board data
-    // has no natural D-Pad-hat representation - the real Wiimote's D-Pad is
-    // exposed as ordinary buttons instead, see WiimoteButton), so
-    // dev.num_hats is always 0 for those devices and this function's caller
-    // (GenericVisualizer's `for (i < dev.num_hats)` loop) never invokes it
-    // for them. No Wiimote-bridge branch needed here.
     InputLabel result;
     result.name = "Hat " + std::to_string(hat);
+
+    // WiimoteVirtualBridge attaches a real Wiimote's bridge joystick with
+    // nhats=1 for its main D-Pad (Balance Boards have no D-Pad and stay at
+    // nhats=0 - see Attach()), so this can be reached for that device;
+    // override the numbered fallback name with the real label the same way
+    // GetAxisLabel/GetButtonLabel do. Icon selection below already produces
+    // a reasonable generic D-Pad glyph for this device family, so only the
+    // name needs the Wiimote-aware override.
+    bool isBalance = false;
+    if (IsWiimoteBridgeDevice(dev, &isBalance) && !isBalance)
+    {
+        const char* n = InputBridge::Wiimote::WiimoteBridgeHatName(hat);
+        if (n) result.name = n;
+    }
 
     const FontFamily fam = GetFontFamily(dev);
 
