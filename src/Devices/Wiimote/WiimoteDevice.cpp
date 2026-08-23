@@ -1,6 +1,7 @@
 // src/Devices/Wiimote/WiimoteDevice.cpp
 #include "WiimoteDevice.h"
 #include "WiimoteDecoder.h"
+#include "App/Log.h"
 #include <SDL3/SDL.h>
 #include <cstring>
 #include <algorithm>
@@ -8,8 +9,16 @@
 namespace InputBridge::Wiimote {
 
 namespace {
+constexpr const char *kTag = "WiimoteDevice";
 constexpr int kReportBufSize = 22; // largest fixed report we consume (0x37 = 22 incl. report ID)
 constexpr int kRegisterReadTimeoutMs = 250;
+
+// WiiBrew "IR Camera#Initialization": "To avoid the random state put a
+// delay of at least 50ms between every single byte transmission." Used as
+// an enforced SDL_Delay() between every write in EnableIRCameraOnce() -
+// see that function's comment for why this must be an actual sleep rather
+// than relying on incidental Bluetooth/HID scheduling latency.
+constexpr Uint32 kIRInitStepDelayMs = 50;
 }
 
 WiimoteDevice::WiimoteDevice(SDL_hid_device *dev, std::string hid_path, bool is_balance_board_hint)
@@ -81,30 +90,158 @@ uint8_t WiimoteDevice::PreferredReportMode() const {
 }
 
 bool WiimoteDevice::EnableIRCamera() {
+    // WiiBrew's IR Camera#Initialization section is explicit that this
+    // sequence is inherently flaky on real hardware: "After these steps,
+    // the Wii Remote will be in one of 3 states: IR camera on but not
+    // taking data, IR camera on and taking data at half sensitivity, IR
+    // camera on and taking data at full sensitivity. Which state you end
+    // up in appears to be pretty much random... To avoid the random state
+    // put a delay of at least 50ms between every single byte transmission"
+    // - and even then, its own recommendation is "repeat the steps until
+    // you're in the desired state", not just "add delays and hope". This
+    // implements both halves: an enforced inter-write delay (previously
+    // relied on incidental SDL_hid_write/Bluetooth scheduling latency,
+    // which is exactly the kind of unenforced timing that produces
+    // intermittent failures under different loads/stacks/link quality),
+    // and a bounded retry of the whole sequence with a real verification
+    // check (status report bit 3, "IR camera enabled") rather than just
+    // trusting that 7 writes returning success means the camera is
+    // actually producing data.
+    //
+    // Cost/tradeoff: this runs synchronously inside Init(), itself called
+    // once per newly-connected Wiimote from WiimoteManager::Scan() on the
+    // main thread - not from the per-frame Poll() loop, so it doesn't cost
+    // anything on frames where no new Wiimote just connected, but a worst
+    // case of all kMaxAttempts failing is a genuine multi-second stall
+    // (kMaxAttempts * (7 writes * kIRInitStepDelayMs + up to
+    // kRegisterReadTimeoutMs for verification) - with the values below,
+    // up to roughly 1.8s). That's judged an acceptable, infrequent cost
+    // for turning "IR camera silently doesn't work about a third of the
+    // time" into "IR camera reliably works, connecting takes a bit longer
+    // on the unlucky runs" - reducing kMaxAttempts trades reliability back
+    // for a shorter worst case if that tradeoff ever needs revisiting.
+    constexpr int kMaxAttempts = 3;
+    for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+        if (EnableIRCameraOnce() && VerifyIRCameraEnabled()) {
+            m_Snapshot.ir_enabled = true;
+            if (attempt > 0) {
+                LOG_INFO(kTag, "IR camera enabled on attempt %d/%d for %s",
+                         attempt + 1, kMaxAttempts, m_Path.c_str());
+            }
+            return true;
+        }
+        LOG_WARN(kTag, "IR camera enable attempt %d/%d failed verification for %s%s",
+                 attempt + 1, kMaxAttempts, m_Path.c_str(),
+                 (attempt + 1 < kMaxAttempts) ? " - retrying" : " - giving up");
+    }
+    // Exhausted retries - leave whatever state the hardware landed in
+    // (still probably "on" per WiiBrew's own list of 3 possible outcomes,
+    // just possibly not producing data) but don't claim success.
+    m_Snapshot.ir_enabled = false;
+    LOG_ERROR(kTag, "IR camera failed to enable after %d attempts for %s - "
+                     "IR data will not be available this session",
+              kMaxAttempts, m_Path.c_str());
+    return false;
+}
+
+bool WiimoteDevice::EnableIRCameraOnce() {
     bool ok = true;
     uint8_t enable[1] = {0x04};
     ok &= SendReport(m_Dev, OutReport::IRCameraEnable1, m_RumbleBit, enable, 1);
+    SDL_Delay(kIRInitStepDelayMs);
     ok &= SendReport(m_Dev, OutReport::IRCameraEnable2, m_RumbleBit, enable, 1);
+    SDL_Delay(kIRInitStepDelayMs);
 
-    // Per WiiBrew: toggle -> sensitivity block 1 -> block 2 -> mode -> toggle
-    // again, each as a register write. A ~50ms gap between writes is
-    // recommended to avoid landing in an inconsistent camera state; we rely
-    // on SDL_hid_write's inherent USB/BT scheduling latency here rather than
-    // sleeping the caller's thread explicitly. If dots don't show up
-    // reliably in testing, add small delays between these WriteRegister
-    // calls or retry Init() once.
+    // toggle -> sensitivity block 1 -> block 2 -> mode -> toggle again,
+    // each as a register write, each separated by the WiiBrew-recommended
+    // >=50ms gap (kIRInitStepDelayMs). WriteRegister() itself is a single
+    // blocking HID write (not a read-back), so the delay has to be enforced
+    // here explicitly between calls rather than being any part of
+    // WriteRegister()'s own timeout/wait logic.
     uint8_t toggle08 = 0x08;
     ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
+    SDL_Delay(kIRInitStepDelayMs);
     ok &= WriteRegister(Registers::IRSensitivity1, kIRSensitivityWiiLevel3.block1.data(),
                          uint8_t(kIRSensitivityWiiLevel3.block1.size()));
+    SDL_Delay(kIRInitStepDelayMs);
     ok &= WriteRegister(Registers::IRSensitivity2, kIRSensitivityWiiLevel3.block2.data(),
                          uint8_t(kIRSensitivityWiiLevel3.block2.size()));
+    SDL_Delay(kIRInitStepDelayMs);
     uint8_t mode = IRMode::Basic; // matches report 0x37's 10 IR bytes
     ok &= WriteRegister(Registers::IRMode, &mode, 1);
+    SDL_Delay(kIRInitStepDelayMs);
     ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
+    SDL_Delay(kIRInitStepDelayMs);
 
-    m_Snapshot.ir_enabled = ok;
     return ok;
+}
+
+bool WiimoteDevice::VerifyIRCameraEnabled() {
+    // Request a fresh status report and block briefly for the reply,
+    // mirroring ReadRegister()'s existing spin-wait-with-deadline pattern.
+    // Status report byte 3 ("LF") bit 3 (0x08) is WiiBrew-documented as
+    // "IR camera enabled" - this is the ground truth for whether the
+    // sequence above actually landed in a working state, as opposed to
+    // just trusting that every write's own HID-level send succeeded (which
+    // per WiiBrew's own account can still randomly land in "on but not
+    // taking data").
+    //
+    // CRITICAL: Init() sends its own fire-and-forget StatusRequest before
+    // EnableIRCamera() ever runs (to learn battery/extension state up
+    // front), and never reads that reply - it's still sitting in the HID
+    // read queue, generated by the Wiimote before the IR camera was ever
+    // touched, so its IR-enabled bit is necessarily 0 regardless of how
+    // this attempt goes. The same applies to a status reply left over from
+    // a PREVIOUS failed attempt in EnableIRCamera()'s retry loop, if one
+    // hasn't been fully drained. Bluetooth HID reports are a FIFO queue
+    // decoupled from which request "caused" them - SDL_hid_read() has no
+    // way to know which reply belongs to which request, so accepting
+    // whichever status report arrives first (as an earlier version of this
+    // function did) can silently consume one of these stale replies and
+    // report a false "not enabled" even when this attempt's sequence
+    // genuinely succeeded. Fully drain the queue immediately before
+    // sending the request - with nothing else writing to this device
+    // concurrently (Init()/EnableIRCamera() run synchronously on one
+    // thread), anything already queued at this exact point is guaranteed
+    // to predate the request about to be sent, so it's always safe to
+    // discard.
+    {
+        uint8_t drain[kReportBufSize];
+        while (SDL_hid_read(m_Dev, drain, sizeof(drain)) > 0) {
+            // Discard, except keep buttons fresh from whatever's flushed,
+            // same courtesy as the main wait loop below.
+            if (drain[0] >= InReport::Core && drain[0] <= InReport::InterleavedB) {
+                m_Snapshot.core = Decode::Buttons(drain + 1);
+            }
+        }
+    }
+
+    uint8_t p[1] = {0x00};
+    if (!SendReport(m_Dev, OutReport::StatusRequest, m_RumbleBit, p, 1)) return false;
+
+    const Uint64 deadline = SDL_GetTicks() + kRegisterReadTimeoutMs;
+    while (SDL_GetTicks() < deadline) {
+        uint8_t buf[kReportBufSize] = {};
+        const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));
+        if (n <= 0) continue;
+        if (buf[0] == InReport::Status) {
+            // (a1) 20 BB BB LF 00 00 VV - still route it through the normal
+            // handler so battery/extension state stays current rather than
+            // being silently consumed here.
+            HandleStatusReport(buf);
+            const bool ir_bit = (buf[3] & 0x08) != 0;
+            LOG_VERBOSE(kTag, "IR verification status reply: LF=0x%02x -> IR bit %s",
+                        buf[3], ir_bit ? "SET" : "clear");
+            return ir_bit;
+        }
+        // Anything else arriving while we wait: at minimum keep buttons
+        // fresh, matching ReadRegister()'s same fallback.
+        if (buf[0] >= InReport::Core && buf[0] <= InReport::InterleavedB) {
+            m_Snapshot.core = Decode::Buttons(buf + 1);
+        }
+    }
+    LOG_WARN(kTag, "Timed out waiting for status reply during IR verification for %s", m_Path.c_str());
+    return false; // timed out waiting for the status reply
 }
 
 bool WiimoteDevice::InitExtension() {

@@ -157,7 +157,22 @@ private:
     void DecodeCoreExt19(const uint8_t *buf);          // report 0x34, Balance Board steady-state mode
 
     uint8_t PreferredReportMode() const;
+
+    // EnableIRCamera() runs EnableIRCameraOnce() + VerifyIRCameraEnabled()
+    // in a bounded retry loop - WiiBrew documents the raw init sequence as
+    // landing in a working state only "pretty much random[ly]" even with
+    // correct inter-write delays, and explicitly recommends repeating the
+    // whole sequence rather than trusting a single pass. EnableIRCameraOnce()
+    // is one attempt at the 7-step WiiBrew sequence, with the recommended
+    // >=50ms delay enforced between every write. VerifyIRCameraEnabled()
+    // confirms the attempt actually worked by requesting a fresh status
+    // report and checking its "IR camera enabled" bit, rather than treating
+    // "every HID write returned success" as proof the camera is producing
+    // data.
     bool EnableIRCamera();
+    bool EnableIRCameraOnce();
+    bool VerifyIRCameraEnabled();
+
     bool InitExtension();       // "new way" unencrypted init + ID read
     bool LoadBalanceBoardCalibration();
 
