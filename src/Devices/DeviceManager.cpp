@@ -2,6 +2,7 @@
 #include "DeviceManager.h"
 #include "DeviceFactory.h"
 #include "SensorReader.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 #include "SDL3/SDL_joystick.h"
 #include <algorithm>
 #include <cstdlib>
@@ -210,6 +211,16 @@ void DeviceManager::CloseAllDevices() {
     }
     m_HapticDevices.clear();
 
+    // Note: bridge virtual joysticks are deliberately NOT explicitly
+    // detached here. VirtualDeviceManager's own virtual joysticks (see
+    // VirtualDeviceManager.cpp) follow the same pattern - neither is torn
+    // down proactively on shutdown; both rely on the m_Devices bulk-close
+    // loop below plus SDL_Quit() at process exit. Calling
+    // SDL_DetachVirtualJoystick() here, immediately before that loop closes
+    // the same handle via SDL_CloseGamepad/SDL_CloseJoystick, would risk a
+    // double-close/use-after-detach with no precedent elsewhere in this
+    // codebase to confirm it's safe.
+
     // Release Wiimotes (each destructor closes its HID handle)
     m_Wiimotes.clear();
 
@@ -296,6 +307,15 @@ void DeviceManager::Update(bool isMinimized) {
     for (auto &dev : m_Wiimotes) {
         dev->Poll();
     }
+
+    // Bridge each Wiimote into a real (virtual) SDL_Joystick so InputMapper
+    // can address it - see Devices/Wiimote/WiimoteVirtualBridge.h for why
+    // this exists instead of teaching the mapping system a second device
+    // type. Sync() first so a just-connected Wiimote's bridge joystick
+    // exists before PushAllStates() writes into it; PushAllStates() after
+    // Poll() above so it reflects this frame's freshest decoded data.
+    InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().Sync(m_Wiimotes);
+    InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().PushAllStates(m_Wiimotes);
     // -- End Wiimote polling ----------------------------------------------
 }
 

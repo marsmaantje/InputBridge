@@ -1,6 +1,7 @@
 #include "InputLabelProvider.h"
 
 #include "Devices/DeviceState.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 #include "SDL3/SDL_gamepad.h"
 #include "UI/DeviceIconProvider.h"
 #include "UI/KenneyIcons.h"
@@ -413,12 +414,49 @@ ImFont* InputFont(const DeviceState& dev, FontFamily fam)
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
+// Wiimote virtual-bridge naming
+// ---------------------------------------------------------------------------
+// WiimoteVirtualBridge (Devices/Wiimote/WiimoteVirtualBridge.h) creates a
+// virtual joystick per connected Wiimote/Balance Board whose axis/button
+// indices hold Wiimote-specific data (accelerometer, IR, Nunchuk, Classic
+// Controller, Motion Plus, or Balance Board corner weights) rather than a
+// standard gamepad's sticks/triggers/face buttons. It's intentionally NOT
+// typed as SDL_JOYSTICK_TYPE_GAMEPAD (see its Attach()), so dev.gamepad is
+// null here and this never collides with the SDL_GamepadBinding path below
+// - but the exact-name match is checked first regardless, so this stays
+// correct even if that ever changes.
+namespace {
+bool IsWiimoteBridgeDevice(const DeviceState& dev, bool* isBalance)
+{
+    if (dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName) { *isBalance = false; return true; }
+    if (dev.name == InputBridge::Wiimote::kBalanceBoardBridgeDeviceName) { *isBalance = true; return true; }
+    return false;
+}
+} // anonymous namespace
+
+// ---------------------------------------------------------------------------
 // InputLabelProvider - public API
 // ---------------------------------------------------------------------------
 
 InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
 {
     InputLabel result;
+
+    bool isBalance = false;
+    if (IsWiimoteBridgeDevice(dev, &isBalance))
+    {
+        const char* n = isBalance
+            ? InputBridge::Wiimote::BalanceBoardBridgeAxisName(axis)
+            : InputBridge::Wiimote::WiimoteBridgeAxisName(axis);
+        result.name = n ? n : ("Axis " + std::to_string(axis));
+        // No Kenney glyphs exist for Wiimote-specific inputs (accelerometer,
+        // IR position, Motion Plus gyro axes) - the generic stick icon is a
+        // reasonable stand-in for anything analog, same choice the
+        // non-gamepad fallback below makes for real unnamed joysticks.
+        const ImWchar cp = (axis % 2 == 0) ? 0xE01D : 0xE023; // generic_stick_horizontal / _vertical
+        result.icon = MakeIcon(KenneyFonts::Get().generic, cp);
+        return result;
+    }
 
     if (dev.gamepad)
     {
@@ -473,6 +511,17 @@ InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button
 {
     InputLabel result;
 
+    bool isBalance = false;
+    if (IsWiimoteBridgeDevice(dev, &isBalance))
+    {
+        const char* n = isBalance
+            ? InputBridge::Wiimote::BalanceBoardBridgeButtonName(button)
+            : InputBridge::Wiimote::WiimoteBridgeButtonName(button);
+        result.name = n ? n : ("Button " + std::to_string(button));
+        result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE000); // generic_button
+        return result;
+    }
+
     if (dev.gamepad)
     {
         const FontFamily fam  = GetFontFamily(dev);
@@ -516,6 +565,12 @@ InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button
 
 InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint8_t hatValue)
 {
+    // WiimoteVirtualBridge attaches with nhats=0 (Wiimote/Balance Board data
+    // has no natural D-Pad-hat representation - the real Wiimote's D-Pad is
+    // exposed as ordinary buttons instead, see WiimoteButton), so
+    // dev.num_hats is always 0 for those devices and this function's caller
+    // (GenericVisualizer's `for (i < dev.num_hats)` loop) never invokes it
+    // for them. No Wiimote-bridge branch needed here.
     InputLabel result;
     result.name = "Hat " + std::to_string(hat);
 

@@ -1,0 +1,118 @@
+// src/Devices/Wiimote/WiimoteVirtualBridge.h
+//
+// Bridges WiimoteDevice's decoded state into a real (virtual) SDL_Joystick,
+// so every Wiimote/Balance Board becomes mappable through InputMapper with
+// ZERO changes to InputMapper/InputMapperUI/InputBindingListener/
+// OutputRuntimeUpdater/MappingProfileStore - all of those already work with
+// any SDL_Joystick uniformly, since the entire mapping data model
+// (InputSource, ButtonToDigitalMapping, etc, see MappingTypes.h) addresses
+// devices via SDL_JoystickID + axis/button index, not our own WiimoteDevice
+// type. Mirrors VirtualDeviceManager's SDL_AttachVirtualJoystick +
+// SDL_SetJoystickVirtual{Axis,Button} pattern (see
+// Devices/VirtualDeviceManager.cpp) - same mechanism, just with a
+// Wiimote-specific axis/button layout instead of a generic gamepad/wheel/
+// flight-stick preset.
+#pragma once
+#include "WiimoteDevice.h"
+#include <SDL3/SDL.h>
+#include <vector>
+#include <string>
+#include <memory>
+
+namespace InputBridge::Wiimote {
+
+// -- Bridge joystick axis/button layout --------------------------------------
+// Single source of truth for the virtual joystick's channel layout, shared
+// between WiimoteVirtualBridge.cpp (which pushes values at these indices)
+// and InputLabelProvider.cpp (which needs the matching names for the "Raw
+// Inputs" tab - see WiimoteVirtualBridge.cpp's Attach() for why that tab
+// can't just use SDL's gamepad binding tables here). Order and count MUST
+// stay in sync with the setAxis/setBtn calls in PushAllStates() - there's
+// no way to derive one from the other automatically since SDL only wants a
+// count at attach time, so both consumers include this header rather than
+// keeping their own copies.
+constexpr int kWiimoteNumAxes = 14;
+enum WiimoteAxis {
+    Axis_AccelX = 0, Axis_AccelY, Axis_AccelZ,
+    Axis_IRX, Axis_IRY,
+    Axis_NunchukX, Axis_NunchukY,
+    Axis_ClassicLX, Axis_ClassicLY, Axis_ClassicRX, Axis_ClassicRY,
+    Axis_MotionPlusYaw, Axis_MotionPlusPitch, Axis_MotionPlusRoll,
+};
+
+constexpr int kWiimoteNumButtons = 25;
+enum WiimoteButton {
+    Btn_A = 0, Btn_B, Btn_One, Btn_Two, Btn_Plus, Btn_Minus, Btn_Home,
+    Btn_Up, Btn_Down, Btn_Left, Btn_Right,
+    Btn_NunchukC, Btn_NunchukZ,
+    Btn_ClassicA, Btn_ClassicB, Btn_ClassicX, Btn_ClassicY,
+    Btn_ClassicL, Btn_ClassicR, Btn_ClassicZL, Btn_ClassicZR,
+    Btn_ClassicUp, Btn_ClassicDown, Btn_ClassicLeft, Btn_ClassicRight,
+};
+
+constexpr int kBalanceNumAxes = 7;
+enum BalanceAxis {
+    BAxis_TopLeft = 0, BAxis_TopRight, BAxis_BottomLeft, BAxis_BottomRight,
+    BAxis_Total, BAxis_CoGX, BAxis_CoGY,
+};
+constexpr int kBalanceNumButtons = 1;
+enum BalanceButton { BBtn_A = 0 };
+
+// The exact device names Attach() gives the two bridge joystick kinds -
+// InputLabelProvider matches on these (exact match, not substring) to
+// decide whether to use the tables below instead of SDL's gamepad binding
+// walk. Exposed here so both sides reference the same string constants
+// rather than each hardcoding a copy that could drift.
+constexpr const char *kWiimoteBridgeDeviceName       = "Wii Controller (Mapped Inputs)";
+constexpr const char *kBalanceBoardBridgeDeviceName  = "Wii Balance Board (Mapped Inputs)";
+
+// Human-readable names for the layouts above, in index order. Returns
+// nullptr for an out-of-range index (caller should fall back to a numbered
+// label in that case, same as any other unbound axis/button).
+const char *WiimoteBridgeAxisName(int axis);
+const char *WiimoteBridgeButtonName(int button);
+const char *BalanceBoardBridgeAxisName(int axis);
+const char *BalanceBoardBridgeButtonName(int button);
+
+class WiimoteVirtualBridge {
+public:
+    static WiimoteVirtualBridge &GetInstance();
+
+    WiimoteVirtualBridge(const WiimoteVirtualBridge &) = delete;
+    WiimoteVirtualBridge &operator=(const WiimoteVirtualBridge &) = delete;
+
+    // Creates a bridge joystick for any WiimoteDevice not yet bridged, and
+    // detaches bridge joysticks whose underlying WiimoteDevice is gone
+    // (matched by hid_path). Call once per frame - cheap no-op when nothing
+    // changed since the last call.
+    void Sync(const std::vector<std::unique_ptr<WiimoteDevice>> &wiimotes);
+
+    // Pushes each tracked WiimoteDevice's current snapshot into its bridge
+    // joystick's axes/buttons so SDL_GetJoystickAxis/Button (and therefore
+    // InputMapper) see current values. Call once per frame, after Sync()
+    // and after the WiimoteDevices themselves have been polled for the
+    // frame - same ordering VirtualDeviceManager::PushAllStates() uses
+    // relative to InputMapper::Update().
+    void PushAllStates(const std::vector<std::unique_ptr<WiimoteDevice>> &wiimotes);
+
+    // Detaches every bridge joystick. Call on shutdown, alongside
+    // DeviceManager::CloseAllDevices().
+    void RemoveAll();
+
+private:
+    WiimoteVirtualBridge() = default;
+
+    struct Entry {
+        std::string hid_path;
+        SDL_JoystickID joystick_id = 0;
+        SDL_Joystick *joystick = nullptr;
+        bool is_balance_board = false;
+    };
+    std::vector<Entry> m_Entries;
+
+    Entry *Find(const std::string &hid_path);
+    void Attach(const WiimoteDevice &dev);
+    void Detach(Entry &entry);
+};
+
+} // namespace InputBridge::Wiimote

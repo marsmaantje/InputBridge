@@ -245,6 +245,7 @@ add_executable(InputBridge
     src/Devices/Wiimote/WiimoteDecoder.cpp
     src/Devices/Wiimote/WiimoteDevice.cpp
     src/Devices/Wiimote/WiimoteManager.cpp
+    src/Devices/Wiimote/WiimoteVirtualBridge.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
