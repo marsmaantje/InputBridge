@@ -1,6 +1,7 @@
 // src/Devices/Wiimote/WiimoteManager.cpp
 #include "WiimoteManager.h"
 #include <SDL3/SDL_hidapi.h>
+#include <algorithm>
 #include <cstring>
 
 namespace InputBridge::Wiimote {
@@ -13,13 +14,20 @@ bool WiimoteManager::IsWiimoteProductString(const char *product) {
            std::strstr(product, "RVL-WBC-01") != nullptr;
 }
 
-std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan() {
+std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
+    const std::vector<std::string> &already_open_paths) {
     std::vector<std::unique_ptr<WiimoteDevice>> out;
 
     SDL_hid_device_info *devs = SDL_hid_enumerate(kVendorNintendo, 0);
     for (auto d = devs; d; d = d->next) {
         if (d->product_id != kProductWiimote && d->product_id != kProductWiimotePlus)
             continue;
+
+        const std::string path = d->path ? d->path : "";
+        const bool already_tracked = !path.empty() &&
+            std::find(already_open_paths.begin(), already_open_paths.end(), path) != already_open_paths.end();
+        if (already_tracked)
+            continue; // see the Init()-races-Init() hazard documented in the header
 
         SDL_hid_device *hdev = SDL_hid_open_path(d->path);
         if (!hdev)
@@ -36,7 +44,7 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan() {
                                 std::strstr(product_utf8, "WBC") != nullptr;
         }
 
-        auto device = std::make_unique<WiimoteDevice>(hdev, d->path ? d->path : "", is_balance_board);
+        auto device = std::make_unique<WiimoteDevice>(hdev, path, is_balance_board);
         if (!device->Init()) {
             // Keep it anyway - Init() partially failing (e.g. one register
             // write dropped) shouldn't hide the device; Poll() will keep

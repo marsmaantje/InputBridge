@@ -548,7 +548,7 @@ void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index) {
 
     if (header_open) {
         ImGui::Indent();
-        wiimote_viz.Draw(snap);
+        wiimote_viz.Draw(snap, index);
 
         ImGui::Separator();
         if (!snap.is_balance_board) {

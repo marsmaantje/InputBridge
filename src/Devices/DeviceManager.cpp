@@ -5,6 +5,7 @@
 #include "SDL3/SDL_joystick.h"
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 static constexpr const char* kTag = "DeviceManager";
 
@@ -33,12 +34,98 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
 }
 
 void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
+    // Wii Remote / Wii Remote Plus / Wii Balance Board are owned exclusively
+    // by WiimoteManager over raw HID (see Devices/Wiimote/README.md) - they
+    // expose IR/extension/Balance-Board data that has no representation in
+    // SDL_Gamepad, so a generic DeviceState for them is actively wrong, not
+    // just redundant.
+    //
+    // Disabling SDL_HINT_JOYSTICK_HIDAPI_WII in Application.cpp does NOT
+    // reliably stop SDL from creating a joystick for these VID/PIDs - that
+    // hint only opts out of SDL's *own* dedicated Wii HIDAPI driver, but
+    // other SDL backends (raw HID gamepad heuristics, platform joystick
+    // subsystems, etc, depending on OS/SDL version) can still pick the
+    // device up and hand it to us as a plain "Gamepad" with none of its
+    // real capabilities decoded. Worse, if we call SDL_OpenJoystick() on it
+    // here (which CreateDevice() below does), that open can win the race
+    // for the underlying HID handle before WiimoteManager::Scan() gets to
+    // it, silently starving the real Wiimote support entirely - which is
+    // exactly the "generic gamepad only, no real Wiimote panel" symptom
+    // this filter fixes.
+    //
+    // VID/PID alone isn't reliable enough to catch this pre-open, in
+    // practice: on at least one real-world Linux setup (CachyOS, Wiimote
+    // over Bluetooth) SDL_GetJoystickVendorForID/ProductForID did NOT match
+    // the expected 057e:0306/0330 for this device, even though the device
+    // is genuinely a Wii Remote (its post-open SDL_GetJoystickName clearly
+    // reads "Nintendo Wii Remote" - that's what ends up in the generic
+    // panel's title when this filter fails to catch it). Root cause not
+    // fully pinned down (likely a Linux joystick-backend quirk where
+    // extended HID identifiers aren't populated until first open, possibly
+    // specific to this BlueZ/hid-wiimote path) - rather than chase the
+    // exact backend behavior, fall back to a name-based check too, since
+    // the name is clearly available pre-open on every backend we've seen
+    // (it's what's rendering in the screenshot that reported this bug).
+    // Excludes "Wii U Pro Controller" deliberately - that's a distinct
+    // device WiimoteManager doesn't implement (see README's gap list), and
+    // works fine through SDL's normal gamepad path.
+    const Uint16 vendor  = SDL_GetJoystickVendorForID(instance_id);
+    const Uint16 product = SDL_GetJoystickProductForID(instance_id);
+    const char  *name    = SDL_GetJoystickNameForID(instance_id);
+
+    const bool vidpid_match = (vendor == InputBridge::Wiimote::kVendorNintendo) &&
+        (product == InputBridge::Wiimote::kProductWiimote ||
+         product == InputBridge::Wiimote::kProductWiimotePlus);
+    const bool name_match = name && (
+        std::strstr(name, "Wii Remote") != nullptr ||
+        std::strstr(name, "RVL-CNT")    != nullptr ||
+        std::strstr(name, "RVL-WBC")    != nullptr);
+    const bool is_wii_u_pro = name && std::strstr(name, "Wii U Pro") != nullptr;
+
+    if ((vidpid_match || name_match) && !is_wii_u_pro) {
+        LOG_INFO(kTag, "Ignoring SDL joystick %d '%s' (vendor=0x%04x product=0x%04x, vidpid_match=%d name_match=%d) - handled by WiimoteManager",
+                  instance_id, name ? name : "(null)", vendor, product, vidpid_match, name_match);
+        return;
+    }
+
     auto result = InputBridge::DeviceFactory::CreateDevice(instance_id);
     if (!result) {
         LOG_ERROR(kTag, "Failed to create device %d", instance_id);
         return;
     }
-    
+
+    // Defense-in-depth: the pre-open filter above depends on SDL_hid/SDL
+    // capability queries that are, in practice, not reliably populated
+    // pre-open on every backend (confirmed on at least one real Linux/
+    // Bluetooth setup, where vendor/product came back wrong for a genuine
+    // Wiimote even though its post-open name was correct). Now that
+    // CreateDevice() has actually opened it, result->state.name comes from
+    // SDL_GetJoystickName() - the same call DeviceFactory already uses and
+    // that reliably returns "Nintendo Wii Remote" etc, per the report that
+    // led to this check. Catch it here too and back the open out, rather
+    // than leaving a wrong DeviceState in place until the next restart.
+    {
+        const std::string &n = result->state.name;
+        const bool post_open_match =
+            (n.find("Wii Remote") != std::string::npos ||
+             n.find("RVL-CNT")    != std::string::npos ||
+             n.find("RVL-WBC")    != std::string::npos) &&
+            n.find("Wii U Pro") == std::string::npos;
+        if (post_open_match) {
+            LOG_INFO(kTag, "Joystick %d ('%s') slipped past the pre-open Wiimote filter - "
+                             "closing it now and leaving it for WiimoteManager", instance_id, n.c_str());
+            // Mirrors CloseAllDevices()'s close order below: a gamepad
+            // handle owns its underlying joystick, so closing the joystick
+            // directly when it was opened via SDL_OpenGamepad (state.gamepad
+            // set) would be wrong - close whichever one was actually opened.
+            if (result->state.gamepad)
+                SDL_CloseGamepad(result->state.gamepad);
+            else if (result->state.joystick)
+                SDL_CloseJoystick(result->state.joystick);
+            return;
+        }
+    }
+
     m_Devices.push_back(std::move(result->state));
     
     // Initialize battery info for the new device
@@ -125,37 +212,34 @@ void DeviceManager::CloseAllDevices() {
 // ---------------------------------------------------------------------------
 
 void DeviceManager::ScanWiimotes() {
-    auto found = InputBridge::Wiimote::WiimoteManager::Scan();
-
-    for (auto &dev : found) {
-        const std::string path = dev->Snapshot().hid_path;
-        bool already_tracked = std::any_of(m_Wiimotes.begin(), m_Wiimotes.end(),
-            [&](const auto &existing) { return existing->Snapshot().hid_path == path; });
-
-        if (already_tracked) {
-            // `dev` goes out of scope here and its destructor closes the
-            // just-opened duplicate HID handle - the existing tracked
-            // instance is left untouched.
-            continue;
-        }
-        LOG_INFO(kTag, "Wiimote found: %s", path.c_str());
-        m_Wiimotes.push_back(std::move(dev));
-    }
-
-    // Prune entries that have gone quiet - SDL_hid has no disconnect
-    // callback, so staleness (no input report for a while, after having
-    // received at least one) is the only signal available. See
-    // Devices/Wiimote/README.md for the platform-specific alternative
-    // (evdev hotplug on Linux, etc) if more immediate detection is needed.
+    // Prune stale entries FIRST, so a since-vanished path frees up before we
+    // build the "don't touch these" list below - otherwise a genuinely
+    // reconnected device (same path, new physical pairing) could be kept
+    // out of Scan() by its own stale ghost entry until the next cycle.
     constexpr Uint64 kStaleTimeoutMs = 5000;
     const Uint64 now = SDL_GetTicks();
-    auto it = std::remove_if(m_Wiimotes.begin(), m_Wiimotes.end(), [&](const auto &dev) {
+    auto stale_it = std::remove_if(m_Wiimotes.begin(), m_Wiimotes.end(), [&](const auto &dev) {
         const auto &snap = dev->Snapshot();
         return snap.last_report_ms != 0 && (now - snap.last_report_ms) > kStaleTimeoutMs;
     });
-    if (it != m_Wiimotes.end()) {
-        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(it, m_Wiimotes.end()));
-        m_Wiimotes.erase(it, m_Wiimotes.end());
+    if (stale_it != m_Wiimotes.end()) {
+        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(stale_it, m_Wiimotes.end()));
+        m_Wiimotes.erase(stale_it, m_Wiimotes.end());
+    }
+
+    // Tell Scan() which HID paths we already have open, so it never opens a
+    // second concurrent handle to a device we're already tracking - see the
+    // hazard documented on WiimoteManager::Scan() (races Init() against
+    // itself on the same physical device, which is the kind of thing that
+    // can crash rather than just misbehave on some Bluetooth HID stacks).
+    std::vector<std::string> already_open;
+    already_open.reserve(m_Wiimotes.size());
+    for (auto &dev : m_Wiimotes) already_open.push_back(dev->Snapshot().hid_path);
+
+    auto found = InputBridge::Wiimote::WiimoteManager::Scan(already_open);
+    for (auto &dev : found) {
+        LOG_INFO(kTag, "Wiimote found: %s", dev->Snapshot().hid_path.c_str());
+        m_Wiimotes.push_back(std::move(dev));
     }
 }
 

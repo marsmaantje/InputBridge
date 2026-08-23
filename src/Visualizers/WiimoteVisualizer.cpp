@@ -303,7 +303,7 @@ void DrawGuitar(const GuitarHeroState &g) {
                 g.strum_up ? "Up " : "", g.strum_down ? "Down" : "");
 }
 
-void DrawBalanceBoard(const BalanceBoardState &bb, bool recovering, int recovery_attempts) {
+void DrawBalanceBoard(const BalanceBoardState &bb, bool recovering, int recovery_attempts, int index) {
     ImGui::Separator();
     ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.4f, 1.0f), "Balance Board");
     ImGui::Text("Total weight: %.1f kg", bb.kg_total);
@@ -327,14 +327,51 @@ void DrawBalanceBoard(const BalanceBoardState &bb, bool recovering, int recovery
         }
     }
 
-    // Small 4-corner weight readout, scaled by fraction of total weight.
+    // Dot-size mode. Relative mode (fraction of total per corner) flickers
+    // wildly when nobody's on the board: at near-zero total weight, tiny
+    // sensor noise on each of the 4 corners dominates the ratio, so dot
+    // radii swing between "smallest" and "largest" from frame to frame even
+    // though nothing physically changed. Absolute mode (each corner scaled
+    // against a fixed kg reference, independent of the others) doesn't have
+    // that failure mode, so it's the default; Relative is opt-in for anyone
+    // who specifically wants to see weight *distribution* rather than
+    // *magnitude*, and gets a deadband below to tame (not fully eliminate -
+    // it's inherent to ratios of small numbers) its own flicker.
+    static bool s_absolute_mode[8] = { true, true, true, true, true, true, true, true };
+    bool &absolute_mode = s_absolute_mode[index % 8];
+
+    ImGui::Text("Dot size:");
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Absolute (kg)", absolute_mode)) absolute_mode = true;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Relative (%)", !absolute_mode)) absolute_mode = false;
+
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
     const float size = 100.0f;
     ImGui::Dummy(ImVec2(size, size));
     dl->AddRect(p, p + ImVec2(size, size), IM_COL32(100, 100, 100, 255));
+
+    // Per-corner reference max for absolute mode. A board tops out around
+    // ~135kg total; a single corner realistically maxes out well below
+    // that (weight shifts, it doesn't fully concentrate on one sensor even
+    // when leaning), so 50kg/corner gives reasonable visual range without
+    // every normal standing position pinning all four dots to full size.
+    constexpr float kAbsoluteRefKg = 50.0f;
+    // Below this total, relative mode's ratio is dominated by sensor noise
+    // rather than real weight distribution - collapse to minimum dot size
+    // instead of showing meaningless (and flickering) proportions.
+    constexpr float kRelativeMinTotalKg = 2.0f;
+
     auto corner = [&](float fx, float fy, float kg) {
-        const float t = bb.kg_total > 0.1f ? std::clamp(kg / bb.kg_total, 0.f, 1.f) : 0.f;
+        float t;
+        if (absolute_mode) {
+            t = std::clamp(kg / kAbsoluteRefKg, 0.f, 1.f);
+        } else {
+            t = (bb.kg_total > kRelativeMinTotalKg)
+                    ? std::clamp(kg / bb.kg_total, 0.f, 1.f)
+                    : 0.f;
+        }
         const float r = 4.0f + t * 14.0f;
         dl->AddCircleFilled(p + ImVec2(fx * size, fy * size), r, IM_COL32(80, 160, 255, 220));
     };
@@ -346,7 +383,7 @@ void DrawBalanceBoard(const BalanceBoardState &bb, bool recovering, int recovery
 
 } // namespace
 
-void WiimoteVisualizer::Draw(const WiimoteSnapshot &snap) {
+void WiimoteVisualizer::Draw(const WiimoteSnapshot &snap, int index) {
     ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "%s",
                         snap.is_balance_board ? "Wii Balance Board" : "Wii Remote");
     ImGui::SameLine();
@@ -364,7 +401,7 @@ void WiimoteVisualizer::Draw(const WiimoteSnapshot &snap) {
 
     if (snap.is_balance_board) {
         DrawBalanceBoard(snap.balance_board, snap.balance_board_recovering,
-                          snap.balance_board_recovery_attempts);
+                          snap.balance_board_recovery_attempts, index);
         return;
     }
 
