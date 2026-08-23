@@ -214,6 +214,48 @@ bool WiimoteDevice::ActivateMotionPlus() {
 }
 
 bool WiimoteDevice::LoadBalanceBoardCalibration() {
+    // Plain single read (previous behavior) works on *some* physical
+    // boards, but WiiBrew's captured Wii-console init trace shows the real
+    // Wii performs a specific "wake" sequence - several writes of 0xAA to
+    // register 0xf1, interleaved with reads of the calibration block and a
+    // short wait - before trusting the board's 4 weight sensors. Skipping
+    // this is a documented, reproducible cause of one or more sensors
+    // reading back a constant raw value (and therefore ~0kg after
+    // calibration) until the next power/connect cycle; WiiBrew explicitly
+    // notes this sequence "is found to correct the problem with disabled
+    // weight sensors" in PC-side (non-console) interfaces. Meaning of the
+    // 0xf1 writes themselves isn't documented (WiiBrew speculates
+    // calibration-related) - this reproduces the trace's shape rather than
+    // claiming to explain it.
+    uint8_t aa1[1] = {0xAA};
+    WriteRegister(Registers::BalanceBoardWake, aa1, 1);
+    WriteRegister(Registers::BalanceBoardWake, aa1, 1);
+    WriteRegister(Registers::BalanceBoardWake, aa1, 1);
+
+    // One throwaway read of the calibration block's first half at this
+    // point, matching the trace's interleaved reads - some boards appear to
+    // need a register access in between the initial writes and the final
+    // 7-byte burst below to actually start responding on all 4 sensors.
+    uint8_t discard[16] = {};
+    ReadRegister(Registers::ExtensionCalib, 16, discard);
+
+    // The trace's "Write f1: aa aa aa 55 aa aa aa" burst - a single write
+    // spanning 7 bytes, not 7 separate single-byte writes (single-byte
+    // writes of just 0xAA were already sent above; this is the distinct
+    // longer write that follows in the captured sequence).
+    uint8_t burst[7] = {0xAA, 0xAA, 0xAA, 0x55, 0xAA, 0xAA, 0xAA};
+    WriteRegister(Registers::BalanceBoardWake, burst, 7);
+
+    WriteRegister(Registers::BalanceBoardWake, aa1, 1);
+    WriteRegister(Registers::BalanceBoardWake, aa1, 1);
+
+    // The trace waits here before the sensors settle; 50ms is a
+    // conservative margin over what's needed in practice without adding
+    // noticeable connect-time latency.
+    SDL_Delay(50);
+
+    WriteRegister(Registers::BalanceBoardWake, aa1, 1);
+
     uint8_t block[32] = {};
     if (!ReadRegister(Registers::ExtensionCalib, 32, block)) return false;
     m_BalanceCal = Decode::ParseBalanceBoardCalibration(block);

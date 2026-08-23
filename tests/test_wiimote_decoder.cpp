@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "Devices/Wiimote/WiimoteDecoder.h"
+#include "Devices/Wiimote/WiimoteProtocol.h"
 
 using namespace InputBridge::Wiimote;
 
@@ -119,6 +120,17 @@ TEST(WiimoteDecoder, BalanceBoardCalibrationParsesUSBoardSample) {
     EXPECT_EQ(cal.kg17[0], 0x0E6E); // TR 17kg
     EXPECT_EQ(cal.kg34[0], 0x152E); // TR 34kg
     EXPECT_EQ(cal.kg0[3],  0x4652); // BL 0kg (last pair in the 0kg row)
+}
+
+// Register value from WiiBrew's "Wii Initialisation Sequence" trace: the
+// "Write f1: ..." lines are, at PC-interface addressing (0xa40000 + the
+// listed byte), register 0xa400f1. WiimoteDevice::LoadBalanceBoardCalibration()
+// writes to this register to reproduce the wake sequence the real Wii
+// performs before trusting all 4 weight sensors - pin the constant here so
+// a future refactor can't silently drift it away from the documented
+// address without a test noticing.
+TEST(WiimoteDecoder, BalanceBoardWakeRegisterMatchesWiiBrewTrace) {
+    EXPECT_EQ(Registers::BalanceBoardWake, 0xA400F1u);
 }
 
 TEST(WiimoteDecoder, BalanceBoardInterpolatesWeightAtCalibrationPoints) {

@@ -85,6 +85,14 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     if ((vidpid_match || name_match) && !is_wii_u_pro) {
         LOG_INFO(kTag, "Ignoring SDL joystick %d '%s' (vendor=0x%04x product=0x%04x, vidpid_match=%d name_match=%d) - handled by WiimoteManager",
                   instance_id, name ? name : "(null)", vendor, product, vidpid_match, name_match);
+        // Don't wait for the next periodic ScanWiimotes() tick (up to
+        // kWiimoteScanIntervalMs away) to pick this device up over raw
+        // HID - scan right now, while SDL hasn't opened a joystick/gamepad
+        // handle for it (this filter fired BEFORE CreateDevice() below),
+        // so WiimoteManager gets the earliest possible shot at the node
+        // before anything else has a chance to grab it.
+        ScanWiimotes();
+        m_LastWiimoteScanMs = SDL_GetTicks();
         return;
     }
 
@@ -122,6 +130,14 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
                 SDL_CloseGamepad(result->state.gamepad);
             else if (result->state.joystick)
                 SDL_CloseJoystick(result->state.joystick);
+            // Retry the raw-HID scan now that SDL's own handle on this node
+            // has just been released - WiimoteManager's SDL_hid_open_path()
+            // was very likely failing against that still-open handle until
+            // this exact point, so waiting for the next periodic tick would
+            // just repeat the same failure for up to kWiimoteScanIntervalMs
+            // longer than necessary.
+            ScanWiimotes();
+            m_LastWiimoteScanMs = SDL_GetTicks();
             return;
         }
     }

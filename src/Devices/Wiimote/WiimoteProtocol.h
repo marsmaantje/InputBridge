@@ -66,6 +66,16 @@ namespace Registers {
     constexpr uint32_t ExtensionData     = 0xA40000; // live data, 11 bytes for Balance Board / 6-8 for others
     constexpr uint32_t ExtensionId       = 0xA400FA; // 6-byte extension ID (Wiimote) / 0xA400FE 2-byte (Balance Board)
     constexpr uint32_t ExtensionIdShort  = 0xA400FE; // 2-byte short form, also the "data format" byte pair
+    // Balance Board "wake" register (WiiBrew's captured Wii init trace,
+    // "Wii Initialisation Sequence" section): writing 0xAA here several
+    // times, interspersed with reads of the calibration block, is what the
+    // real Wii does before trusting the board's 4 weight sensors - skip it
+    // and one or more sensors are commonly reported stuck near a constant
+    // raw value (reads as ~0kg after calibration) until the next power/
+    // connect cycle. Undocumented meaning; WiiBrew speculates calibration-
+    // related. Present on the Balance Board only - writing it to a regular
+    // Wiimote/extension is a documented no-op there.
+    constexpr uint32_t BalanceBoardWake  = 0xA400F1;
     constexpr uint32_t MotionPlusBase    = 0xA60000; // - 0xA600FF
     constexpr uint32_t MotionPlusId      = 0xA600FA; // 6-byte ID, same shape as ExtensionId
     constexpr uint32_t MotionPlusInit    = 0xA600F0; // write 0x55 (activate, "standalone" mode)
