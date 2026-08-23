@@ -596,9 +596,13 @@ void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index) {
 // ---------------------------------------------------------------------------
 // DrawWiimoteHapticTestTab
 // ---------------------------------------------------------------------------
-// A Wiimote's "haptics" is a single fixed-frequency motor with only an
-// on/off state - no SDL_Haptic effects, no amplitude control - so this is
-// deliberately much simpler than GamepadHapticsVisualizer/etc. It still
+// A Wiimote's rumble motor has only an on/off drive line in hardware - no
+// SDL_Haptic effects, no native amplitude control - so this is deliberately
+// much simpler than GamepadHapticsVisualizer/etc. Variable strength is
+// still offered here: WiimoteDevice::SetRumble(float) approximates it with
+// software PWM (rapidly toggling the on/off line - see its comment for
+// details), so the slider below is a real, if motor-inertia-smoothed,
+// strength control rather than just a relabeled on/off switch. This still
 // lives under the same "Haptic Test" tab name for layout consistency.
 
 static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
@@ -610,12 +614,14 @@ static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
         return;
     }
 
-    ImGui::TextDisabled("The Wiimote has a single on/off rumble motor - no variable-strength effects.");
+    ImGui::TextDisabled("The Wiimote's rumble motor is on/off only in hardware - "
+                         "strength below is approximated with software PWM.");
     ImGui::Spacing();
 
-    static bool s_rumble[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
-    bool &rumble = s_rumble[index % 8];
-    if (ImGui::Checkbox("Rumble", &rumble))
+    static float s_rumble[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
+    float &rumble = s_rumble[index % 8];
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::SliderFloat("Rumble Strength", &rumble, 0.0f, 1.0f, "%.2f"))
         dev.SetRumble(rumble);
 }
 

@@ -275,9 +275,35 @@ void WiimoteDevice::SetLEDMask(uint8_t mask4bits) {
     m_Snapshot.led_mask = mask4bits;
 }
 
-void WiimoteDevice::SetRumble(bool on) {
-    m_RumbleBit = on;
-    m_Snapshot.rumble_on = on;
+void WiimoteDevice::SetRumble(float intensity) {
+    m_RumbleIntensity = std::clamp(intensity, 0.0f, 1.0f);
+    m_Snapshot.rumble_intensity = m_RumbleIntensity;
+    // Restart the PWM period so a fresh SetRumble() call always begins at
+    // phase 0 (motor on, for any nonzero intensity) instead of wherever the
+    // previous target's cycle happened to be - otherwise a call that lands
+    // late in a period could immediately read as "off" for up to
+    // kRumblePwmPeriodMs even though the new intensity is nonzero.
+    m_RumbleCycleStartMs = SDL_GetTicks();
+    UpdateRumblePWM(); // apply immediately rather than waiting for the next Poll()
+}
+
+void WiimoteDevice::UpdateRumblePWM() {
+    bool desired_bit;
+    if (m_RumbleIntensity <= 0.0f) {
+        desired_bit = false;
+    } else if (m_RumbleIntensity >= 1.0f) {
+        desired_bit = true;
+    } else {
+        const Uint64 now = SDL_GetTicks();
+        const Uint64 phase = (now - m_RumbleCycleStartMs) % kRumblePwmPeriodMs;
+        const Uint64 on_duration_ms = Uint64(m_RumbleIntensity * float(kRumblePwmPeriodMs));
+        desired_bit = phase < on_duration_ms;
+    }
+
+    if (desired_bit == m_RumbleBit) return; // no edge to act on - skip the HID write
+
+    m_RumbleBit = desired_bit;
+    m_Snapshot.rumble_on = desired_bit;
     // Any report re-asserts the rumble bit; a dedicated Rumble (0x10) report
     // with an otherwise-empty payload is the lightest way to do that on demand.
     uint8_t p[1] = {0x00};
@@ -360,6 +386,12 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
 
 void WiimoteDevice::Poll() {
     if (!m_Dev) return;
+
+    // Keep the rumble PWM's on/off line current every tick, independent of
+    // whether any input reports arrived this frame - it has its own timing
+    // (kRumblePwmPeriodMs) unrelated to the Wiimote's own report cadence.
+    UpdateRumblePWM();
+
     uint8_t buf[kReportBufSize];
     for (;;) {
         const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));

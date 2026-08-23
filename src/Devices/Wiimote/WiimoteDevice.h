@@ -42,6 +42,17 @@ struct WiimoteSnapshot {
 
     BatteryBars battery = BatteryBars::Four;
     uint8_t     led_mask = 0;
+
+    // Target strength last passed to SetRumble(), 0..1. The physical motor
+    // itself only has an on/off drive line - see SetRumble()'s comment -
+    // so this is the *requested* strength, not necessarily what the motor
+    // is doing at this exact instant.
+    float       rumble_intensity = 0.0f;
+    // Instantaneous physical state of the on/off drive line right now,
+    // i.e. what UpdateRumblePWM() last actually wrote to the hardware.
+    // For rumble_intensity == 0 or 1 this is constant; for anything in
+    // between it flips at the ~50 Hz PWM carrier rate, so a UI polling
+    // this every frame will see it toggling - that's expected, not a bug.
     bool        rumble_on = false;
 
     // Set while WiimoteDevice is actively retrying the extension-init dance
@@ -92,7 +103,25 @@ public:
     // -- Feedback --------------------------------------------------------
     void SetPlayerLED(int player_1to4);   // lights exactly one LED, 1-4
     void SetLEDMask(uint8_t mask4bits);   // bits 4-7, arbitrary pattern
-    void SetRumble(bool on);
+
+    // Sets the rumble motor's requested strength, 0.0 (off) - 1.0 (full).
+    // A Wii Remote's rumble motor has no amplitude control in hardware -
+    // it's a single on/off drive line (see the rumble bit OR'd into every
+    // output report in WiimoteDevice.cpp) - so intermediate strengths are
+    // approximated in software with PWM: Poll() rapidly switches the line
+    // on and off at a fixed carrier (kRumblePwmPeriodMs, ~50 Hz) with a
+    // duty cycle equal to `intensity`. That's fast enough that the motor's
+    // own spin-up/spin-down inertia blurs the on/off switching into a
+    // perceived amplitude change (the same trick used to dim an LED with a
+    // GPIO pin that only has HIGH/LOW), rather than feeling like distinct
+    // buzzes. intensity is clamped to [0,1]; exactly 0 or 1 skip PWM
+    // entirely and just hold the line at the corresponding fixed state,
+    // which is both the strongest possible rumble and the case that avoids
+    // the extra HID write traffic PWM would otherwise add.
+    void SetRumble(float intensity);
+
+    // Back-compat convenience for simple on/off callers.
+    void SetRumble(bool on) { SetRumble(on ? 1.0f : 0.0f); }
 
     // -- Low-level register access (exposed for advanced/experimental use,
     //    same rationale as WiimoteLib exposing raw read/write) ------------
@@ -154,6 +183,15 @@ private:
     // PC interface. Cheap no-op for anything that isn't a Balance Board.
     void CheckBalanceBoardStuckSensors();
 
+    // Drives the software-PWM approximation described on SetRumble(float).
+    // Called once per Poll() (so at whatever cadence DeviceManager polls
+    // Wiimotes at - see WiimoteDevice.cpp for why that's fine even though
+    // it's not a hard real-time scheduler) and also once immediately from
+    // SetRumble() itself so a new intensity takes effect right away rather
+    // than waiting up to one Poll() tick. Only writes to the device when
+    // the on/off line actually needs to change state, not every call.
+    void UpdateRumblePWM();
+
     // Subtracts m_BalanceTareKg from a freshly-decoded BalanceBoardState's
     // four corners in place and recomputes kg_total/cog_x/cog_y from the
     // tared values. No-op (all offsets 0) until TareBalanceBoard() is
@@ -165,6 +203,12 @@ private:
     WiimoteSnapshot m_Snapshot;
 
     bool m_RumbleBit = false; // must be OR'd into every single output report
+
+    // Software-PWM rumble state (see SetRumble(float) / UpdateRumblePWM()).
+    float m_RumbleIntensity = 0.0f;   // target strength, 0..1, set by SetRumble()
+    Uint64 m_RumbleCycleStartMs = 0;  // start of the current PWM period, reset on every SetRumble() call
+    static constexpr Uint64 kRumblePwmPeriodMs = 20; // ~50 Hz carrier, see SetRumble(float)
+
     std::optional<BalanceBoardCalibration> m_BalanceCal;
 
     bool m_MotionPlusPresent = false;   // detected at 0xA600FA
