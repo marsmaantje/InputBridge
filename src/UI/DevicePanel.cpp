@@ -25,6 +25,12 @@
 static constexpr const char* kTag = "DevicePanel";
 
 static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManager);
+static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                      const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                      int index);
+static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                    const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                    int index);
 
 // ---------------------------------------------------------------------------
 // DrawDeviceSettingsTab
@@ -540,45 +546,107 @@ void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index) {
 
     ImGui::PushID(index);
 
+    // Mirrors DrawDeviceItem's header format ("<name> [ID: N] (Gamepad)") so
+    // a Wiimote reads as the same class of entry as any other connected
+    // device in the sidebar, rather than a visually distinct special case.
+    // `index` (this device's position in DeviceManager::GetWiimotes(), not
+    // an SDL_JoystickID) fills the [ID: N] slot, since Wiimotes aren't
+    // SDL_Joystick-backed and have no instance_id of their own.
     std::string label = snap.is_balance_board ? "Wii Balance Board" : "Wii Remote";
-    label += " [" + std::to_string(index) + "]";
+    label += " [ID: " + std::to_string(index) + "] (Gamepad)";
     if (!snap.connected) label += "  [no data yet]";
 
     const bool header_open = ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
 
     if (header_open) {
         ImGui::Indent();
-        wiimote_viz.Draw(snap, index);
 
-        ImGui::Separator();
-        if (!snap.is_balance_board) {
-            static int s_player[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
-            int &player = s_player[index % 8];
-            ImGui::SetNextItemWidth(120.0f);
-            if (ImGui::SliderInt("Player LED", &player, 1, 4))
-                dev.SetPlayerLED(player);
-
-            static bool s_rumble[8] = {};
-            bool &rumble = s_rumble[index % 8];
-            if (ImGui::Checkbox("Rumble", &rumble))
-                dev.SetRumble(rumble);
-        } else {
-            // Software zero point: subtracts whatever the board currently
-            // reads from every future reading, without touching its own
-            // factory calibration. Useful for a rug/mount/uneven floor
-            // adding a fixed offset, or just to zero out before stepping on.
-            if (ImGui::Button("Tare / Zero"))
-                dev.TareBalanceBoard();
-            if (snap.balance_board_tared) {
-                ImGui::SameLine();
-                if (ImGui::Button("Clear Tare"))
-                    dev.ClearBalanceBoardTare();
-                ImGui::SameLine();
-                ImGui::TextDisabled("(tared)");
+        // Same tab bar ID/structure as DrawDeviceVisualizer's "DeviceMode"
+        // bar for ordinary gamepads/joysticks - Raw Inputs shows live data,
+        // Haptic Test exercises feedback, Settings holds device config.
+        // Reusing the identical label set (rather than Wiimote-specific
+        // names) is the point: the person switching between a regular
+        // gamepad and a Wiimote in the sidebar shouldn't have to learn a
+        // different tab layout for one device.
+        if (ImGui::BeginTabBar("DeviceMode")) {
+            if (ImGui::BeginTabItem("Raw Inputs")) {
+                wiimote_viz.Draw(snap, index);
+                ImGui::EndTabItem();
             }
+
+            if (ImGui::BeginTabItem("Haptic Test")) {
+                DrawWiimoteHapticTestTab(dev, snap, index);
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Settings")) {
+                DrawWiimoteSettingsTab(dev, snap, index);
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
         }
+
         ImGui::Unindent();
     }
 
     ImGui::PopID();
+}
+
+// ---------------------------------------------------------------------------
+// DrawWiimoteHapticTestTab
+// ---------------------------------------------------------------------------
+// A Wiimote's "haptics" is a single fixed-frequency motor with only an
+// on/off state - no SDL_Haptic effects, no amplitude control - so this is
+// deliberately much simpler than GamepadHapticsVisualizer/etc. It still
+// lives under the same "Haptic Test" tab name for layout consistency.
+
+static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                      const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                      int index)
+{
+    if (snap.is_balance_board) {
+        ImGui::TextDisabled("No haptic feedback on the Wii Balance Board.");
+        return;
+    }
+
+    ImGui::TextDisabled("The Wiimote has a single on/off rumble motor - no variable-strength effects.");
+    ImGui::Spacing();
+
+    static bool s_rumble[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
+    bool &rumble = s_rumble[index % 8];
+    if (ImGui::Checkbox("Rumble", &rumble))
+        dev.SetRumble(rumble);
+}
+
+// ---------------------------------------------------------------------------
+// DrawWiimoteSettingsTab
+// ---------------------------------------------------------------------------
+
+static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                    const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                    int index)
+{
+    if (!snap.is_balance_board) {
+        static int s_player[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
+        int &player = s_player[index % 8];
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::SliderInt("Player LED", &player, 1, 4))
+            dev.SetPlayerLED(player);
+        return;
+    }
+
+    // Software zero point: subtracts whatever the board currently reads
+    // from every future reading, without touching its own factory
+    // calibration. Useful for a rug/mount/uneven floor adding a fixed
+    // offset, or just to zero out before stepping on.
+    if (ImGui::Button("Tare / Zero"))
+        dev.TareBalanceBoard();
+    if (snap.balance_board_tared) {
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Tare"))
+            dev.ClearBalanceBoardTare();
+        ImGui::SameLine();
+        ImGui::TextDisabled("(tared)");
+    }
 }
