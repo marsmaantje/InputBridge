@@ -91,11 +91,26 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
     }
 
     // -- Nintendo Wii / Wiimote ---------------------------------------------
+    // Includes WiimoteVirtualBridge's own bridge device names ("Wii
+    // Controller (Mapped Inputs)" / "Wii Balance Board (Mapped Inputs)") -
+    // see Devices/Wiimote/WiimoteVirtualBridge.h. Those are what actually
+    // show up in the device list now (real Wiimotes/Balance Boards are
+    // filtered out of DeviceManager::GetDevices() entirely - see
+    // DeviceManager::HandleDeviceAdded's Wiimote-family filter), so without
+    // this branch matching them, both fell through to the generic
+    // "Nintendo" -> Switch icon below instead of a Wii one.
     if (lower.find("wiimote") != std::string::npos
         || lower.find("wii remote") != std::string::npos
         || lower.find("nintendo wii") != std::string::npos
-        || lower.find("wii u") != std::string::npos)
+        || lower.find("wii u") != std::string::npos
+        || lower.find("wii controller") != std::string::npos
+        || lower.find("wii balance board") != std::string::npos)
     {
+        // The Balance Board is flat and wide rather than held upright -
+        // wii_controller_horizontal is the closest fit in this font (there
+        // is no dedicated Balance Board glyph).
+        if (lower.find("balance board") != std::string::npos)
+            return { fonts.nintendoWii, KENNEY_WII_CONTROLLER_HORIZONTAL, KENNEY_WII_CONTROLLER_HORIZONTAL_CP };
         return { fonts.nintendoWii, KENNEY_WII_CONTROLLER, KENNEY_WII_CONTROLLER_CP };
     }
 

@@ -120,12 +120,203 @@ constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
 
 // ---------------------------------------------------------------------------
 // Nintendo Wii icons  (kenney_input_nintendo_wii.ttf)
+// Controller-body variants. Per-button/D-Pad/stick/extension glyphs are
+// further down in the "Nintendo Wii per-input icons" section, alongside the
+// other families' per-input tables.
 // ---------------------------------------------------------------------------
-#define KENNEY_WII_CONTROLLER_CLASSIC_CP  0xE000  // controller_wii_classic
-#define KENNEY_WII_CONTROLLER_CLASSIC     KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_CLASSIC_CP)
+#define KENNEY_WII_CONTROLLER_CLASSIC_CP            0xE000  // controller_wii_classic
+#define KENNEY_WII_CONTROLLER_CLASSIC                KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_CLASSIC_CP)
+#define KENNEY_WII_CONTROLLER_CLASSIC_PRO_CP        0xE001  // controller_wii_classic_pro
+#define KENNEY_WII_CONTROLLER_CLASSIC_PRO             KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_CLASSIC_PRO_CP)
 
-#define KENNEY_WII_CONTROLLER_CP          0xE022  // wii_controller
-#define KENNEY_WII_CONTROLLER             KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_CP)
+#define KENNEY_WII_CONTROLLER_CP                     0xE022  // wii_controller (Wii Remote, held upright)
+#define KENNEY_WII_CONTROLLER                         KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_CP)
+#define KENNEY_WII_CONTROLLER_DIAGONAL_CP            0xE023  // wii_controller_diagonal
+#define KENNEY_WII_CONTROLLER_DIAGONAL                KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_DIAGONAL_CP)
+#define KENNEY_WII_CONTROLLER_DIAGONAL_OUTLINE_CP    0xE024  // wii_controller_diagonal_outline
+#define KENNEY_WII_CONTROLLER_DIAGONAL_OUTLINE        KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_DIAGONAL_OUTLINE_CP)
+#define KENNEY_WII_CONTROLLER_HORIZONTAL_CP          0xE025  // wii_controller_horizontal (Wii Remote on its side - also used for Balance Board, see DeviceIconProvider.cpp)
+#define KENNEY_WII_CONTROLLER_HORIZONTAL              KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_HORIZONTAL_CP)
+#define KENNEY_WII_CONTROLLER_HORIZONTAL_OUTLINE_CP  0xE026  // wii_controller_horizontal_outline
+#define KENNEY_WII_CONTROLLER_HORIZONTAL_OUTLINE      KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_HORIZONTAL_OUTLINE_CP)
+#define KENNEY_WII_CONTROLLER_NUNCHUK_CP             0xE027  // wii_controller_nunchuk
+#define KENNEY_WII_CONTROLLER_NUNCHUK                 KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_NUNCHUK_CP)
+#define KENNEY_WII_CONTROLLER_NUNCHUK_WIRE_CP        0xE028  // wii_controller_nunchuk_wire (Remote + Nunchuk, wired together)
+#define KENNEY_WII_CONTROLLER_NUNCHUK_WIRE            KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_NUNCHUK_WIRE_CP)
+#define KENNEY_WII_CONTROLLER_OUTLINE_CP             0xE029  // wii_controller_outline
+#define KENNEY_WII_CONTROLLER_OUTLINE                 KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_OUTLINE_CP)
+#define KENNEY_WII_CONTROLLER_ROTATE_CP              0xE02A  // wii_controller_rotate
+#define KENNEY_WII_CONTROLLER_ROTATE                  KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_ROTATE_CP)
+#define KENNEY_WII_CONTROLLER_ROTATE_OUTLINE_CP      0xE02B  // wii_controller_rotate_outline
+#define KENNEY_WII_CONTROLLER_ROTATE_OUTLINE          KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_ROTATE_OUTLINE_CP)
+#define KENNEY_WII_CONTROLLER_VERTICAL_CP            0xE02C  // wii_controller_vertical
+#define KENNEY_WII_CONTROLLER_VERTICAL                KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_VERTICAL_CP)
+#define KENNEY_WII_CONTROLLER_VERTICAL_OUTLINE_CP    0xE02D  // wii_controller_vertical_outline
+#define KENNEY_WII_CONTROLLER_VERTICAL_OUTLINE        KENNEY_ICON_STR(KENNEY_WII_CONTROLLER_VERTICAL_OUTLINE_CP)
+
+// ---------------------------------------------------------------------------
+// Nintendo Wii per-input icons  (kenney_input_nintendo_wii.ttf)
+//
+// Covers the Wii Remote's own buttons/D-Pad, plus the Nunchuk (C/Z), the
+// Classic Controller/Pro (A/B/X/Y/L/R/ZL/ZR + its own D-Pad + sticks), and
+// power/home. Every glyph in this font has a paired "_outline" twin at the
+// next codepoint - filled variants are used below as the default "button"
+// look (matching how Xbox/PlayStation entries pick one style each); the
+// _OUTLINE constants are defined too in case a "pressed vs. released" or
+// "bound vs. unbound" visual distinction is wanted later.
+//
+// There is no dedicated Balance Board glyph in this font - DeviceIconProvider
+// uses KENNEY_WII_CONTROLLER_HORIZONTAL for it (see the controller-body
+// section above) as the closest fit for a flat, wide device.
+// ---------------------------------------------------------------------------
+#define KENNEY_WII_BUTTON_1_CP                0xE002  // wii_button_1
+#define KENNEY_WII_BUTTON_1                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_1_CP)
+#define KENNEY_WII_BUTTON_1_OUTLINE_CP        0xE003  // wii_button_1_outline
+#define KENNEY_WII_BUTTON_1_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_1_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_2_CP                0xE004  // wii_button_2
+#define KENNEY_WII_BUTTON_2                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_2_CP)
+#define KENNEY_WII_BUTTON_2_OUTLINE_CP        0xE005  // wii_button_2_outline
+#define KENNEY_WII_BUTTON_2_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_2_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_A_CP                0xE006  // wii_button_a
+#define KENNEY_WII_BUTTON_A                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_A_CP)
+#define KENNEY_WII_BUTTON_A_OUTLINE_CP        0xE007  // wii_button_a_outline
+#define KENNEY_WII_BUTTON_A_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_A_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_B_CP                0xE008  // wii_button_b
+#define KENNEY_WII_BUTTON_B                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_B_CP)
+#define KENNEY_WII_BUTTON_B_OUTLINE_CP        0xE009  // wii_button_b_outline
+#define KENNEY_WII_BUTTON_B_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_B_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_C_CP                0xE00A  // wii_button_c (Nunchuk C)
+#define KENNEY_WII_BUTTON_C                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_C_CP)
+#define KENNEY_WII_BUTTON_C_OUTLINE_CP        0xE00B  // wii_button_c_outline
+#define KENNEY_WII_BUTTON_C_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_C_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_HOME_CP             0xE00C  // wii_button_home
+#define KENNEY_WII_BUTTON_HOME                 KENNEY_ICON_STR(KENNEY_WII_BUTTON_HOME_CP)
+#define KENNEY_WII_BUTTON_HOME_OUTLINE_CP     0xE00D  // wii_button_home_outline
+#define KENNEY_WII_BUTTON_HOME_OUTLINE         KENNEY_ICON_STR(KENNEY_WII_BUTTON_HOME_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_L_CP                0xE00E  // wii_button_l (Classic Controller)
+#define KENNEY_WII_BUTTON_L                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_L_CP)
+#define KENNEY_WII_BUTTON_L_OUTLINE_CP        0xE00F  // wii_button_l_outline
+#define KENNEY_WII_BUTTON_L_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_L_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_MINUS_CP            0xE010  // wii_button_minus
+#define KENNEY_WII_BUTTON_MINUS                KENNEY_ICON_STR(KENNEY_WII_BUTTON_MINUS_CP)
+#define KENNEY_WII_BUTTON_MINUS_OUTLINE_CP    0xE011  // wii_button_minus_outline
+#define KENNEY_WII_BUTTON_MINUS_OUTLINE        KENNEY_ICON_STR(KENNEY_WII_BUTTON_MINUS_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_PLUS_CP             0xE012  // wii_button_plus
+#define KENNEY_WII_BUTTON_PLUS                 KENNEY_ICON_STR(KENNEY_WII_BUTTON_PLUS_CP)
+#define KENNEY_WII_BUTTON_PLUS_OUTLINE_CP     0xE013  // wii_button_plus_outline
+#define KENNEY_WII_BUTTON_PLUS_OUTLINE         KENNEY_ICON_STR(KENNEY_WII_BUTTON_PLUS_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_POWER_CP            0xE014  // wii_button_power
+#define KENNEY_WII_BUTTON_POWER                KENNEY_ICON_STR(KENNEY_WII_BUTTON_POWER_CP)
+#define KENNEY_WII_BUTTON_POWER_OUTLINE_CP    0xE015  // wii_button_power_outline
+#define KENNEY_WII_BUTTON_POWER_OUTLINE        KENNEY_ICON_STR(KENNEY_WII_BUTTON_POWER_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_R_CP                0xE016  // wii_button_r (Classic Controller)
+#define KENNEY_WII_BUTTON_R                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_R_CP)
+#define KENNEY_WII_BUTTON_R_OUTLINE_CP        0xE017  // wii_button_r_outline
+#define KENNEY_WII_BUTTON_R_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_R_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_X_CP                0xE018  // wii_button_x (Classic Controller)
+#define KENNEY_WII_BUTTON_X                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_X_CP)
+#define KENNEY_WII_BUTTON_X_OUTLINE_CP        0xE019  // wii_button_x_outline
+#define KENNEY_WII_BUTTON_X_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_X_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_Y_CP                0xE01A  // wii_button_y (Classic Controller)
+#define KENNEY_WII_BUTTON_Y                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_Y_CP)
+#define KENNEY_WII_BUTTON_Y_OUTLINE_CP        0xE01B  // wii_button_y_outline
+#define KENNEY_WII_BUTTON_Y_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_Y_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_Z_CP                0xE01C  // wii_button_z (Nunchuk Z)
+#define KENNEY_WII_BUTTON_Z                    KENNEY_ICON_STR(KENNEY_WII_BUTTON_Z_CP)
+#define KENNEY_WII_BUTTON_Z_OUTLINE_CP        0xE01D  // wii_button_z_outline
+#define KENNEY_WII_BUTTON_Z_OUTLINE            KENNEY_ICON_STR(KENNEY_WII_BUTTON_Z_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_ZL_CP               0xE01E  // wii_button_zl (Classic Controller)
+#define KENNEY_WII_BUTTON_ZL                   KENNEY_ICON_STR(KENNEY_WII_BUTTON_ZL_CP)
+#define KENNEY_WII_BUTTON_ZL_OUTLINE_CP       0xE01F  // wii_button_zl_outline
+#define KENNEY_WII_BUTTON_ZL_OUTLINE           KENNEY_ICON_STR(KENNEY_WII_BUTTON_ZL_OUTLINE_CP)
+#define KENNEY_WII_BUTTON_ZR_CP               0xE020  // wii_button_zr (Classic Controller)
+#define KENNEY_WII_BUTTON_ZR                   KENNEY_ICON_STR(KENNEY_WII_BUTTON_ZR_CP)
+#define KENNEY_WII_BUTTON_ZR_OUTLINE_CP       0xE021  // wii_button_zr_outline
+#define KENNEY_WII_BUTTON_ZR_OUTLINE           KENNEY_ICON_STR(KENNEY_WII_BUTTON_ZR_OUTLINE_CP)
+
+#define KENNEY_WII_DPAD_CP                    0xE02E  // wii_dpad (neutral/centered)
+#define KENNEY_WII_DPAD                        KENNEY_ICON_STR(KENNEY_WII_DPAD_CP)
+#define KENNEY_WII_DPAD_ALL_CP                0xE02F  // wii_dpad_all (all 4 directions highlighted)
+#define KENNEY_WII_DPAD_ALL                    KENNEY_ICON_STR(KENNEY_WII_DPAD_ALL_CP)
+#define KENNEY_WII_DPAD_DOWN_CP               0xE030  // wii_dpad_down
+#define KENNEY_WII_DPAD_DOWN                   KENNEY_ICON_STR(KENNEY_WII_DPAD_DOWN_CP)
+#define KENNEY_WII_DPAD_DOWN_OUTLINE_CP       0xE031  // wii_dpad_down_outline
+#define KENNEY_WII_DPAD_DOWN_OUTLINE           KENNEY_ICON_STR(KENNEY_WII_DPAD_DOWN_OUTLINE_CP)
+#define KENNEY_WII_DPAD_HORIZONTAL_CP         0xE032  // wii_dpad_horizontal (left+right highlighted)
+#define KENNEY_WII_DPAD_HORIZONTAL             KENNEY_ICON_STR(KENNEY_WII_DPAD_HORIZONTAL_CP)
+#define KENNEY_WII_DPAD_HORIZONTAL_OUTLINE_CP 0xE033  // wii_dpad_horizontal_outline
+#define KENNEY_WII_DPAD_HORIZONTAL_OUTLINE     KENNEY_ICON_STR(KENNEY_WII_DPAD_HORIZONTAL_OUTLINE_CP)
+#define KENNEY_WII_DPAD_LEFT_CP               0xE034  // wii_dpad_left
+#define KENNEY_WII_DPAD_LEFT                   KENNEY_ICON_STR(KENNEY_WII_DPAD_LEFT_CP)
+#define KENNEY_WII_DPAD_LEFT_OUTLINE_CP       0xE035  // wii_dpad_left_outline
+#define KENNEY_WII_DPAD_LEFT_OUTLINE           KENNEY_ICON_STR(KENNEY_WII_DPAD_LEFT_OUTLINE_CP)
+#define KENNEY_WII_DPAD_NONE_CP               0xE036  // wii_dpad_none (no direction highlighted)
+#define KENNEY_WII_DPAD_NONE                   KENNEY_ICON_STR(KENNEY_WII_DPAD_NONE_CP)
+#define KENNEY_WII_DPAD_RIGHT_CP              0xE037  // wii_dpad_right
+#define KENNEY_WII_DPAD_RIGHT                  KENNEY_ICON_STR(KENNEY_WII_DPAD_RIGHT_CP)
+#define KENNEY_WII_DPAD_RIGHT_OUTLINE_CP      0xE038  // wii_dpad_right_outline
+#define KENNEY_WII_DPAD_RIGHT_OUTLINE          KENNEY_ICON_STR(KENNEY_WII_DPAD_RIGHT_OUTLINE_CP)
+#define KENNEY_WII_DPAD_UP_CP                 0xE039  // wii_dpad_up
+#define KENNEY_WII_DPAD_UP                     KENNEY_ICON_STR(KENNEY_WII_DPAD_UP_CP)
+#define KENNEY_WII_DPAD_UP_OUTLINE_CP         0xE03A  // wii_dpad_up_outline
+#define KENNEY_WII_DPAD_UP_OUTLINE             KENNEY_ICON_STR(KENNEY_WII_DPAD_UP_OUTLINE_CP)
+#define KENNEY_WII_DPAD_VERTICAL_CP           0xE03B  // wii_dpad_vertical (up+down highlighted)
+#define KENNEY_WII_DPAD_VERTICAL               KENNEY_ICON_STR(KENNEY_WII_DPAD_VERTICAL_CP)
+#define KENNEY_WII_DPAD_VERTICAL_OUTLINE_CP   0xE03C  // wii_dpad_vertical_outline
+#define KENNEY_WII_DPAD_VERTICAL_OUTLINE       KENNEY_ICON_STR(KENNEY_WII_DPAD_VERTICAL_OUTLINE_CP)
+
+// Generic stick glyphs (no L/R variant) - not used by the Wii Remote itself,
+// kept for completeness/parity with the map file.
+#define KENNEY_WII_STICK_CP                   0xE03D  // wii_stick
+#define KENNEY_WII_STICK                       KENNEY_ICON_STR(KENNEY_WII_STICK_CP)
+#define KENNEY_WII_STICK_DOWN_CP              0xE03E  // wii_stick_down
+#define KENNEY_WII_STICK_DOWN                  KENNEY_ICON_STR(KENNEY_WII_STICK_DOWN_CP)
+#define KENNEY_WII_STICK_HORIZONTAL_CP        0xE03F  // wii_stick_horizontal
+#define KENNEY_WII_STICK_HORIZONTAL            KENNEY_ICON_STR(KENNEY_WII_STICK_HORIZONTAL_CP)
+#define KENNEY_WII_STICK_LEFT_CP              0xE047  // wii_stick_left
+#define KENNEY_WII_STICK_LEFT                  KENNEY_ICON_STR(KENNEY_WII_STICK_LEFT_CP)
+#define KENNEY_WII_STICK_RIGHT_CP             0xE04F  // wii_stick_right
+#define KENNEY_WII_STICK_RIGHT                 KENNEY_ICON_STR(KENNEY_WII_STICK_RIGHT_CP)
+#define KENNEY_WII_STICK_UP_CP                0xE052  // wii_stick_up
+#define KENNEY_WII_STICK_UP                    KENNEY_ICON_STR(KENNEY_WII_STICK_UP_CP)
+#define KENNEY_WII_STICK_VERTICAL_CP          0xE053  // wii_stick_vertical
+#define KENNEY_WII_STICK_VERTICAL              KENNEY_ICON_STR(KENNEY_WII_STICK_VERTICAL_CP)
+
+// Classic Controller left stick.
+#define KENNEY_WII_STICK_L_CP                 0xE040  // wii_stick_l
+#define KENNEY_WII_STICK_L                     KENNEY_ICON_STR(KENNEY_WII_STICK_L_CP)
+#define KENNEY_WII_STICK_L_DOWN_CP            0xE041  // wii_stick_l_down
+#define KENNEY_WII_STICK_L_DOWN                KENNEY_ICON_STR(KENNEY_WII_STICK_L_DOWN_CP)
+#define KENNEY_WII_STICK_L_HORIZONTAL_CP      0xE042  // wii_stick_l_horizontal
+#define KENNEY_WII_STICK_L_HORIZONTAL          KENNEY_ICON_STR(KENNEY_WII_STICK_L_HORIZONTAL_CP)
+#define KENNEY_WII_STICK_L_LEFT_CP            0xE043  // wii_stick_l_left
+#define KENNEY_WII_STICK_L_LEFT                KENNEY_ICON_STR(KENNEY_WII_STICK_L_LEFT_CP)
+#define KENNEY_WII_STICK_L_RIGHT_CP           0xE044  // wii_stick_l_right
+#define KENNEY_WII_STICK_L_RIGHT               KENNEY_ICON_STR(KENNEY_WII_STICK_L_RIGHT_CP)
+#define KENNEY_WII_STICK_L_UP_CP              0xE045  // wii_stick_l_up
+#define KENNEY_WII_STICK_L_UP                  KENNEY_ICON_STR(KENNEY_WII_STICK_L_UP_CP)
+#define KENNEY_WII_STICK_L_VERTICAL_CP        0xE046  // wii_stick_l_vertical
+#define KENNEY_WII_STICK_L_VERTICAL            KENNEY_ICON_STR(KENNEY_WII_STICK_L_VERTICAL_CP)
+#define KENNEY_WII_STICK_TOP_L_CP             0xE050  // wii_stick_top_l (top-down view)
+#define KENNEY_WII_STICK_TOP_L                 KENNEY_ICON_STR(KENNEY_WII_STICK_TOP_L_CP)
+
+// Classic Controller right stick.
+#define KENNEY_WII_STICK_R_CP                 0xE048  // wii_stick_r
+#define KENNEY_WII_STICK_R                     KENNEY_ICON_STR(KENNEY_WII_STICK_R_CP)
+#define KENNEY_WII_STICK_R_DOWN_CP            0xE049  // wii_stick_r_down
+#define KENNEY_WII_STICK_R_DOWN                KENNEY_ICON_STR(KENNEY_WII_STICK_R_DOWN_CP)
+#define KENNEY_WII_STICK_R_HORIZONTAL_CP      0xE04A  // wii_stick_r_horizontal
+#define KENNEY_WII_STICK_R_HORIZONTAL          KENNEY_ICON_STR(KENNEY_WII_STICK_R_HORIZONTAL_CP)
+#define KENNEY_WII_STICK_R_LEFT_CP            0xE04B  // wii_stick_r_left
+#define KENNEY_WII_STICK_R_LEFT                KENNEY_ICON_STR(KENNEY_WII_STICK_R_LEFT_CP)
+#define KENNEY_WII_STICK_R_RIGHT_CP           0xE04C  // wii_stick_r_right
+#define KENNEY_WII_STICK_R_RIGHT               KENNEY_ICON_STR(KENNEY_WII_STICK_R_RIGHT_CP)
+#define KENNEY_WII_STICK_R_UP_CP              0xE04D  // wii_stick_r_up
+#define KENNEY_WII_STICK_R_UP                  KENNEY_ICON_STR(KENNEY_WII_STICK_R_UP_CP)
+#define KENNEY_WII_STICK_R_VERTICAL_CP        0xE04E  // wii_stick_r_vertical
+#define KENNEY_WII_STICK_R_VERTICAL            KENNEY_ICON_STR(KENNEY_WII_STICK_R_VERTICAL_CP)
+#define KENNEY_WII_STICK_TOP_R_CP             0xE051  // wii_stick_top_r (top-down view)
+#define KENNEY_WII_STICK_TOP_R                 KENNEY_ICON_STR(KENNEY_WII_STICK_TOP_R_CP)
 
 // ---------------------------------------------------------------------------
 // Nintendo GameCube icons  (kenney_input_nintendo_gamecube.ttf)

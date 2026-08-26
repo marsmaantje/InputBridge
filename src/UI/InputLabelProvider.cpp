@@ -21,10 +21,19 @@ namespace {
 // SteamController because the V2 (HEADCRAB) hardware swapped several inputs
 // for ones with no equivalent glyph in the Steam Controller font - those are
 // resolved from the Steam Deck font instead (see AxisInfoFor/ButtonInfoFor).
-enum class FontFamily { Xbox, PlayStation, Switch, SteamDeck, SteamController, SteamControllerV2, Generic, Unknown };
+enum class FontFamily { Xbox, PlayStation, Switch, SteamDeck, SteamController, SteamControllerV2, Wii, Generic, Unknown };
 
 FontFamily GetFontFamily(const DeviceState& dev)
 {
+    // Checked first: WiimoteVirtualBridge's own virtual joysticks (see
+    // Devices/Wiimote/WiimoteVirtualBridge.h), matched by exact name so
+    // nothing else can accidentally take this path. These are declared
+    // SDL_JOYSTICK_TYPE_UNKNOWN (dev.gamepad is null), so they'd otherwise
+    // fall into the "Unknown" bucket below with no per-input icons at all.
+    if (dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName ||
+        dev.name == InputBridge::Wiimote::kBalanceBoardBridgeDeviceName)
+        return FontFamily::Wii;
+
     std::string lower = dev.name;
     for (char& c : lower) c = (char)SDL_tolower(c);
 
@@ -317,6 +326,23 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         }
         break;
 
+    case FontFamily::Wii:
+        // Only the D-Pad directions are needed here: GetHatLabel() is the
+        // only caller that reaches this table for FontFamily::Wii (via the
+        // SDL_GamepadButton translation below), since GetAxisLabel/
+        // GetButtonLabel resolve Wiimote face buttons directly by raw
+        // bridge index instead (see WiimoteBridgeButtonIcon() below) - this
+        // bridge device was deliberately NOT typed as a gamepad, so there's
+        // no SDL_GamepadButton semantic for its other inputs to key off of.
+        switch (gb) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      KENNEY_WII_DPAD_UP_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    KENNEY_WII_DPAD_DOWN_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    KENNEY_WII_DPAD_LEFT_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   KENNEY_WII_DPAD_RIGHT_CP);
+        default: break;
+        }
+        break;
+
     default:
         break;
     }
@@ -394,6 +420,7 @@ ImFont* FontForFamily(FontFamily fam)
     case FontFamily::SteamDeck:       return fonts.steamDeck;
     case FontFamily::SteamController:
     case FontFamily::SteamControllerV2: return fonts.steamController;
+    case FontFamily::Wii:              return fonts.nintendoWii;
     case FontFamily::Generic:
     case FontFamily::Unknown:
     default:                          return fonts.generic;
@@ -432,6 +459,80 @@ bool IsWiimoteBridgeDevice(const DeviceState& dev, bool* isBalance)
     if (dev.name == InputBridge::Wiimote::kBalanceBoardBridgeDeviceName) { *isBalance = true; return true; }
     return false;
 }
+
+// -- Wiimote bridge icon lookup ---------------------------------------------
+// Parallel to WiimoteBridgeAxisName()/WiimoteBridgeButtonName()/etc in
+// WiimoteVirtualBridge.cpp (which supply the *names* GetAxisLabel/
+// GetButtonLabel use below), keyed by the same raw bridge index rather than
+// an SDL_GamepadAxis/Button - this bridge isn't gamepad-typed, so there's no
+// SDL enum to translate through the way every other family in this file
+// does. Kept here instead of in WiimoteVirtualBridge.cpp since icon choice
+// is a UI-layer concern (that file has no KenneyIcons.h dependency).
+//
+// cp == 0 means "no matching glyph in the Wii font" - accelerometer, IR
+// position, Motion Plus gyro axes, and Balance Board weight/CoG axes have
+// no icon equivalent in kenney_input_nintendo_wii.ttf. Callers fall back to
+// a plain text label with no icon, same convention used everywhere else in
+// this file for untagged inputs.
+using InputBridge::Wiimote::WiimoteAxis;
+using InputBridge::Wiimote::WiimoteButton;
+using InputBridge::Wiimote::BalanceButton;
+
+ImWchar WiimoteBridgeAxisIcon(int axis)
+{
+    switch (axis) {
+    case WiimoteAxis::Axis_NunchukX:  return KENNEY_WII_STICK_HORIZONTAL_CP;
+    case WiimoteAxis::Axis_NunchukY:  return KENNEY_WII_STICK_VERTICAL_CP;
+    case WiimoteAxis::Axis_ClassicLX: return KENNEY_WII_STICK_L_HORIZONTAL_CP;
+    case WiimoteAxis::Axis_ClassicLY: return KENNEY_WII_STICK_L_VERTICAL_CP;
+    case WiimoteAxis::Axis_ClassicRX: return KENNEY_WII_STICK_R_HORIZONTAL_CP;
+    case WiimoteAxis::Axis_ClassicRY: return KENNEY_WII_STICK_R_VERTICAL_CP;
+    // Axis_AccelX/Y/Z, Axis_IRX/Y, Axis_MotionPlusYaw/Pitch/Roll: no icon.
+    default: return 0;
+    }
+}
+
+ImWchar WiimoteBridgeButtonIcon(int button)
+{
+    switch (button) {
+    case WiimoteButton::Btn_A:            return KENNEY_WII_BUTTON_A_CP;
+    case WiimoteButton::Btn_B:            return KENNEY_WII_BUTTON_B_CP;
+    case WiimoteButton::Btn_One:          return KENNEY_WII_BUTTON_1_CP;
+    case WiimoteButton::Btn_Two:          return KENNEY_WII_BUTTON_2_CP;
+    case WiimoteButton::Btn_Plus:         return KENNEY_WII_BUTTON_PLUS_CP;
+    case WiimoteButton::Btn_Minus:        return KENNEY_WII_BUTTON_MINUS_CP;
+    case WiimoteButton::Btn_Home:         return KENNEY_WII_BUTTON_HOME_CP;
+    case WiimoteButton::Btn_NunchukC:     return KENNEY_WII_BUTTON_C_CP;
+    case WiimoteButton::Btn_NunchukZ:     return KENNEY_WII_BUTTON_Z_CP;
+    case WiimoteButton::Btn_ClassicA:     return KENNEY_WII_BUTTON_A_CP;
+    case WiimoteButton::Btn_ClassicB:     return KENNEY_WII_BUTTON_B_CP;
+    case WiimoteButton::Btn_ClassicX:     return KENNEY_WII_BUTTON_X_CP;
+    case WiimoteButton::Btn_ClassicY:     return KENNEY_WII_BUTTON_Y_CP;
+    case WiimoteButton::Btn_ClassicL:     return KENNEY_WII_BUTTON_L_CP;
+    case WiimoteButton::Btn_ClassicR:     return KENNEY_WII_BUTTON_R_CP;
+    case WiimoteButton::Btn_ClassicZL:    return KENNEY_WII_BUTTON_ZL_CP;
+    case WiimoteButton::Btn_ClassicZR:    return KENNEY_WII_BUTTON_ZR_CP;
+    case WiimoteButton::Btn_ClassicUp:    return KENNEY_WII_DPAD_UP_CP;
+    case WiimoteButton::Btn_ClassicDown:  return KENNEY_WII_DPAD_DOWN_CP;
+    case WiimoteButton::Btn_ClassicLeft:  return KENNEY_WII_DPAD_LEFT_CP;
+    case WiimoteButton::Btn_ClassicRight: return KENNEY_WII_DPAD_RIGHT_CP;
+    default: return 0;
+    }
+}
+
+ImWchar BalanceBoardBridgeButtonIcon(int button)
+{
+    switch (button) {
+    // The Balance Board's single physical button is silkscreened "A" on
+    // the hardware - reuse that glyph.
+    case BalanceButton::BBtn_A: return KENNEY_WII_BUTTON_A_CP;
+    default: return 0;
+    }
+}
+// BalanceAxisIcon intentionally omitted - every Balance Board axis (corner
+// weights, total, center of gravity) has no Wii-font equivalent, so it
+// would just be "default: return 0;" for every case.
+
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -449,12 +550,15 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
             ? InputBridge::Wiimote::BalanceBoardBridgeAxisName(axis)
             : InputBridge::Wiimote::WiimoteBridgeAxisName(axis);
         result.name = n ? n : ("Axis " + std::to_string(axis));
-        // No Kenney glyphs exist for Wiimote-specific inputs (accelerometer,
-        // IR position, Motion Plus gyro axes) - the generic stick icon is a
-        // reasonable stand-in for anything analog, same choice the
-        // non-gamepad fallback below makes for real unnamed joysticks.
-        const ImWchar cp = (axis % 2 == 0) ? 0xE01D : 0xE023; // generic_stick_horizontal / _vertical
-        result.icon = MakeIcon(KenneyFonts::Get().generic, cp);
+        // Balance Board axes (corner weights, total, center of gravity)
+        // have no Wii-font equivalent at all - WiimoteBridgeAxisIcon()
+        // covers the Wiimote's own Nunchuk/Classic Controller stick axes
+        // (which do have real glyphs) and returns 0 for its accelerometer/
+        // IR/Motion Plus axes, which don't. cp==0 -> MakeIcon() returns an
+        // invalid icon and the caller shows text only, same as every other
+        // genuinely icon-less input in this file.
+        const ImWchar cp = isBalance ? 0 : WiimoteBridgeAxisIcon(axis);
+        result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), cp);
         return result;
     }
 
@@ -518,7 +622,9 @@ InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button
             ? InputBridge::Wiimote::BalanceBoardBridgeButtonName(button)
             : InputBridge::Wiimote::WiimoteBridgeButtonName(button);
         result.name = n ? n : ("Button " + std::to_string(button));
-        result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE000); // generic_button
+        const ImWchar cp = isBalance ? BalanceBoardBridgeButtonIcon(button)
+                                      : WiimoteBridgeButtonIcon(button);
+        result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), cp);
         return result;
     }
 
@@ -597,12 +703,15 @@ InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint
     else
     {
         // Centered - no direction held. Steam Controller V2 has a dedicated
-        // neutral D-Pad glyph in the Steam Deck font; everyone else falls
-        // back to the generic joystick glyph.
+        // neutral D-Pad glyph in the Steam Deck font, and the Wii font has
+        // its own neutral glyph too; everyone else falls back to the
+        // generic joystick glyph.
         if (fam == FontFamily::SteamController)
             result.icon = MakeIcon(InputFont(dev, FontFamily::SteamController), 0xE03A); // steam_dpad
         else if (fam == FontFamily::SteamControllerV2)
             result.icon = MakeIcon(InputFont(dev, FontFamily::SteamDeck), 0xE021); // steamdeck_dpad
+        else if (fam == FontFamily::Wii)
+            result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), KENNEY_WII_DPAD_CP); // wii_dpad (neutral)
         else
             result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE013); // generic_joystick
         return result;
