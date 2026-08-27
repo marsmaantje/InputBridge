@@ -124,6 +124,15 @@ bool WiimoteDevice::EnableIRCamera() {
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
         if (EnableIRCameraOnce() && VerifyIRCameraEnabled()) {
             m_Snapshot.ir_enabled = true;
+            // Give TickIRWatchdog() a clean slate: m_LastIRReportMs == 0
+            // means "no IR report seen yet, don't flag as hijacked" until
+            // the first real one arrives (which VerifyIRCameraEnabled()'s
+            // status-report check does NOT count as - status reports don't
+            // carry IR data). Also clear any stale hijack flag/attempt
+            // count left over from a previous enable cycle.
+            m_LastIRReportMs = 0;
+            m_Snapshot.ir_possibly_hijacked = false;
+            m_IRReassertAttempts = 0;
             if (attempt > 0) {
                 LOG_INFO(kTag, "IR camera enabled on attempt %d/%d for %s",
                          attempt + 1, kMaxAttempts, m_Path.c_str());
@@ -542,6 +551,11 @@ void WiimoteDevice::Poll() {
         m_ExtensionPendingInit = false;
         InitExtension();
     }
+
+    // Detect and correct for a second process (typically Steam Input - see
+    // TickIRWatchdog()'s comment) silently changing our data reporting
+    // mode after the fact.
+    TickIRWatchdog();
 }
 
 void WiimoteDevice::HandleReport(const uint8_t *buf, int len) {
@@ -619,6 +633,8 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
     m_Snapshot.core  = Decode::Buttons(bb);
     m_Snapshot.accel = Decode::Accel(bb, aa);
     m_Snapshot.ir    = Decode::IRBasic(ir);
+    m_LastIRReportMs = SDL_GetTicks(); // fed to TickIRWatchdog() - see its comment
+    m_Snapshot.ir_possibly_hijacked = false; // this report proves our mode is still in effect right now
 
     // Once active, the MotionPlus takes over the extension byte slot: its
     // own gyro data is distinguished from a regular extension's data by
@@ -775,5 +791,93 @@ void WiimoteDevice::CheckBalanceBoardStuckSensors() {
     m_BalanceStuckSinceMs = 0; // give the retry a fresh window to prove itself
     InitExtension();
 }
+
+void WiimoteDevice::TickIRWatchdog() {
+    // WiiBrew documents that ANY status report - "requested or
+    // unsolicited" - resets the Wiimote's data reporting mode, and the
+    // Wiimote answers status requests from WHOEVER sends them, not just
+    // us. A second process also talking to the same Wiimote (in practice,
+    // almost always Steam Input - it's documented, including in Valve's
+    // own bug tracker, to open and actively drive Wiimotes even though
+    // they're not an officially supported controller type, and to not
+    // relinquish control even when asked) will routinely poll it with its
+    // own status requests as part of normal controller-detection/polling
+    // behavior. Each one silently resets OUR previously-configured
+    // IR-carrying report mode as a side effect, at the firmware level,
+    // regardless of which process asked. We already react correctly to
+    // status reports WE ourselves triggered (see HandleStatusReport()),
+    // but a status reply triggered by someone else's request updates the
+    // SAME firmware state without us necessarily reacting fast enough - if
+    // the other process is polling aggressively, it can win a continuous
+    // back-and-forth we only fight reactively.
+    //
+    // This is a best-effort mitigation, not a fix: we cannot make Steam
+    // Input relax its grip from inside our own process (see
+    // Devices/Wiimote/README.md for the user-facing workaround - Steam's
+    // controller_blacklist). What this CAN do is notice when IR data has
+    // gone quiet despite us believing IR is enabled, and proactively
+    // re-assert our report mode rather than waiting to react to our own
+    // next status request (which might not come for a while, since we
+    // only request status ourselves around connect/extension-change
+    // events) - this at least closes the gap to "as fast as this watchdog
+    // runs" instead of "whenever we happen to ask again", and flags the
+    // situation for the UI either way.
+    if (!m_Snapshot.ir_enabled || m_Snapshot.is_balance_board) return;
+
+    constexpr Uint64 kStaleThresholdMs = 500;  // a healthy link reports far faster than this
+    constexpr Uint64 kCooldownMs       = 1000; // don't hammer re-sends back-to-back
+    constexpr int kLogEveryNAttempts   = 5;    // periodic re-log cadence while this persists -
+                                                 // NOT a retry cap (see the loop below): a
+                                                 // competing process can keep interfering
+                                                 // indefinitely, so we keep re-asserting for as
+                                                 // long as that's happening rather than giving up.
+
+    const Uint64 now = SDL_GetTicks();
+    // m_LastIRReportMs == 0 means we've never seen one yet (e.g. right
+    // after Init() succeeded, before the first 0x37 has had time to
+    // arrive) - don't flag that as hijacked, just wait.
+    if (m_LastIRReportMs == 0) return;
+
+    const bool stale = (now - m_LastIRReportMs) > kStaleThresholdMs;
+    if (!stale) {
+        m_IRReassertAttempts = 0; // healthy again - reset so a future recurrence gets a full budget
+        return;
+    }
+
+    m_Snapshot.ir_possibly_hijacked = true;
+
+    if (now - m_LastIRReassertAtMs < kCooldownMs) return; // still cooling down
+
+    // Log only on the first detection and then periodically (every
+    // kLogEveryNAttempts-th re-assert) rather than every single cooldown-period
+    // re-send, which would otherwise spam the log for as long as another
+    // process keeps interfering (potentially the whole session).
+    if (m_IRReassertAttempts == 0) {
+        LOG_WARN(kTag, "IR data stopped arriving for %s despite IR being enabled - "
+                        "another process (commonly Steam Input) may have changed this "
+                        "Wiimote's report mode; re-asserting ours. If this repeats, see "
+                        "Devices/Wiimote/README.md for how to exclude the device from "
+                        "Steam Input's controller_blacklist.", m_Path.c_str());
+    } else if (m_IRReassertAttempts % kLogEveryNAttempts == 0) {
+        LOG_WARN(kTag, "IR data for %s is still being interfered with after %d re-assert "
+                        "attempts - this looks like an ongoing conflict with another "
+                        "process, not a one-off glitch.", m_Path.c_str(), m_IRReassertAttempts);
+    }
+
+    // Past kLogEveryNAttempts, keep re-asserting but only at the cooldown's pace
+    // (no faster) rather than stopping - unlike the balance board's
+    // hardware-quirk retry (bounded, because retrying an already-completed
+    // action indefinitely wouldn't help), a competing process can keep
+    // interfering indefinitely, so periodically re-asserting for as long
+    // as that's happening is the correct steady-state behavior, not a
+    // one-time recovery. Keep incrementing past kLogEveryNAttempts too (no
+    // cap) purely so the modulo check above can keep logging periodically.
+    ++m_IRReassertAttempts;
+    m_LastIRReassertAtMs = now;
+
+    uint8_t p[2] = {0x04, PreferredReportMode()};
+    SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+}
+
 
 } // namespace InputBridge::Wiimote

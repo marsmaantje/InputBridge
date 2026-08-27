@@ -32,6 +32,15 @@ struct WiimoteSnapshot {
     AccelState  accel;
     IRState     ir;
     bool        ir_enabled = false;
+    // True if ir_enabled is true but no IR-carrying report has been
+    // decoded in longer than expected - see WiimoteDevice::TickIRWatchdog()
+    // for the mechanism and why this can happen (a second process, most
+    // notoriously Steam Input, silently reconfiguring the Wiimote's data
+    // reporting mode out from under us). UI can use this to warn the user
+    // separately from a hard "IR failed to enable" error, since the fix
+    // (excluding the device from whatever else is grabbing it) is
+    // different from anything wrong with our own init sequence.
+    bool        ir_possibly_hijacked = false;
 
     ExtensionType extension = ExtensionType::None;
     NunchukState             nunchuk;
@@ -198,6 +207,15 @@ private:
     // PC interface. Cheap no-op for anything that isn't a Balance Board.
     void CheckBalanceBoardStuckSensors();
 
+    // Watchdog for a second process (in practice, almost always Steam
+    // Input - see TickIRWatchdog()'s comment for why) silently changing
+    // the Wiimote's data reporting mode after we've successfully enabled
+    // and configured the IR camera. Detects the resulting "IR data just
+    // stops arriving" pattern and re-asserts our mode; also flags
+    // ir_possibly_hijacked so the UI can tell the user this isn't the same
+    // failure as EnableIRCamera() itself failing.
+    void TickIRWatchdog();
+
     // Drives the software-PWM approximation described on SetRumble(float).
     // Called once per Poll() (so at whatever cadence DeviceManager polls
     // Wiimotes at - see WiimoteDevice.cpp for why that's fine even though
@@ -239,6 +257,14 @@ private:
     Uint64 m_BalanceStuckSinceMs = 0;          // 0 == not currently stuck
     Uint64 m_BalanceLastRecoveryAtMs = 0;      // cooldown between retries
     int    m_BalanceRecoveryAttempts = 0;      // capped so we don't spam re-init forever
+
+    // IR-hijack watchdog state (see TickIRWatchdog()). Tracks the last
+    // time an IR-carrying report (0x37) was actually decoded, separately
+    // from last_report_ms (which updates for ANY report, including ones a
+    // competing process's reconfiguration switched us to).
+    Uint64 m_LastIRReportMs = 0;
+    Uint64 m_LastIRReassertAtMs = 0;    // cooldown between corrective re-sends
+    int    m_IRReassertAttempts = 0;    // capped, same rationale as balance board recovery
 
     // Balance Board software tare/zero. m_BalanceRawKg holds the most
     // recent PRE-tare corner readings (factory-calibrated, offset not yet

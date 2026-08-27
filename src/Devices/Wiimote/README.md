@@ -94,12 +94,6 @@ test binary without pulling in real HID I/O.)
 
 ## Known gaps / before you ship this
 
-- **IR init timing is unverified on real hardware.** WiiBrew notes the
-  camera can land in a random state (on/off/half-sensitivity/full) and
-  recommends 50ms between each register write during init, repeating until
-  the right state is observed. `WiimoteDevice::EnableIRCamera()` currently
-  fires the writes back-to-back with no delay/retry loop - add one if dots
-  don't show up reliably in testing.
 - **Extension encryption.** This uses the documented "new way" init (write
   `0x55`→`0xA400F0`, `0x00`→`0xA400FB`), which leaves data unencrypted on all
   known official and most third-party extensions. Some wireless/third-party
@@ -117,3 +111,49 @@ test binary without pulling in real HID I/O.)
   need a fake `SDL_hid_device*` / injectable transport to be testable
   without hardware - e.g. a thin interface wrapping `SDL_hid_write`/
   `SDL_hid_read` that a test can substitute with canned byte sequences).
+
+## IR camera doesn't work while Steam is running
+
+This is a known, well-documented conflict between Steam Input and Wiimotes,
+not a bug in this module - see e.g. Valve's own bug tracker
+("Cannot have steam input release control of the wii remote for dolphin
+emulator") and multiple Steam Community reports of Steam Input opening and
+actively driving Wiimotes even though they're not an officially supported
+controller type, and not relinquishing control when asked.
+
+**Mechanism:** WiiBrew documents that *any* status report - "requested or
+unsolicited" - resets the Wiimote's data reporting mode at the firmware
+level, regardless of which process's request triggered it. If Steam Input
+is also polling the same Wiimote (which it does by default whenever it's
+running, unless the device is excluded), its status requests silently reset
+whichever report mode we most recently configured, including the
+IR-carrying one - so IR data can stop arriving even though our own
+`EnableIRCamera()` sequence succeeded and nothing is wrong with it.
+
+**What this module does about it:** `WiimoteDevice::TickIRWatchdog()`
+detects when IR data has gone stale despite `ir_enabled` being true, and
+proactively re-asserts the report mode rather than waiting to notice via
+our own next status request. This narrows the outage window but cannot
+fully eliminate it if Steam is polling aggressively enough to win the race
+repeatedly - the UI surfaces `WiimoteSnapshot::ir_possibly_hijacked` in that
+case so the user isn't left wondering why IR silently stopped working, but
+that flag can flicker rather than resolve, on a bad enough conflict.
+
+**Actual fix (user-side, not code-side):** exclude the Wiimote from Steam
+Input using Steam's `controller_blacklist` setting:
+
+1. Fully quit Steam.
+2. Find the Wiimote's VID/PID: `057e`/`0306` for the original Wii Remote,
+   `057e`/`0330` for the Wii Remote Plus (see `WiimoteProtocol.h`'s
+   `kVendorNintendo`/`kProductWiimote`/`kProductWiimotePlus`).
+3. Edit `[Steam install]/config/config.vdf`, find (or add) the
+   `controller_blacklist` entry, and add `"057e/0306"` (and/or
+   `"057e/0330"`) to it.
+4. Restart Steam.
+
+Note some Steam client versions have shipped with this blacklist broken or
+its UI removed entirely (multiple Steam Community bug reports referenced
+above) - if it doesn't take effect, that's a Steam-side regression, not
+something fixable from this module. The most reliable fallback in that case
+is fully closing Steam while using the Wiimote's IR camera.
+

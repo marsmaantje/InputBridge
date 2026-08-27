@@ -213,11 +213,18 @@ void DrawCoreButtons(const CoreButtons &b) {
     if (!any) { ImGui::SameLine(); ImGui::TextDisabled("(none)"); }
 }
 
-void DrawIRPanel(const IRState &ir, bool ir_enabled) {
+void DrawIRPanel(const IRState &ir, bool ir_enabled, bool ir_possibly_hijacked) {
     ImGui::Separator();
     ImGui::Text("IR Camera:");
     ImGui::SameLine();
     if (!ir_enabled) { ImGui::TextDisabled("disabled"); return; }
+
+    if (ir_possibly_hijacked) {
+        ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.0f, 1.0f), "no data - another app may be interfering");
+        ImGui::TextDisabled("(commonly Steam Input; see Devices/Wiimote/README.md)");
+    } else {
+        ImGui::TextDisabled("enabled");
+    }
 
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -410,7 +417,7 @@ void WiimoteVisualizer::Draw(const WiimoteSnapshot &snap, int index) {
     ImGui::Separator();
     ImGui::Text("Accel (g): X=%.2f Y=%.2f Z=%.2f", snap.accel.g_x, snap.accel.g_y, snap.accel.g_z);
 
-    DrawIRPanel(snap.ir, snap.ir_enabled);
+    DrawIRPanel(snap.ir, snap.ir_enabled, snap.ir_possibly_hijacked);
 
     if (snap.motion_plus.connected) {
         DrawMotionPlus(snap.motion_plus);
