@@ -232,7 +232,24 @@ bool WiimoteDevice::VerifyIRCameraEnabled() {
     while (SDL_GetTicks() < deadline) {
         uint8_t buf[kReportBufSize] = {};
         const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));
-        if (n <= 0) continue;
+        if (n <= 0) {
+            // m_Dev is opened non-blocking, so a "nothing pending" read
+            // returns immediately (0), not after waiting for data - without
+            // a sleep here this becomes an unthrottled busy-spin calling
+            // SDL_hid_read() as fast as the CPU allows for up to
+            // kRegisterReadTimeoutMs. Confirmed on Linux/BlueZ in
+            // particular: a tight spin like that from a non-realtime
+            // userspace thread can starve the Bluetooth stack's own
+            // request/response servicing of CPU time, which is directly
+            // self-defeating here - the very reply this loop is waiting
+            // for can be delayed by the loop's own spinning. A short sleep
+            // between empty reads costs negligible latency (worst case
+            // adds one sleep interval to how quickly a reply that arrived
+            // right after a failed read gets noticed) but avoids
+            // pegging a core and competing with the transport it depends on.
+            SDL_Delay(1);
+            continue;
+        }
         if (buf[0] == InReport::Status) {
             // (a1) 20 BB BB LF 00 00 VV - still route it through the normal
             // handler so battery/extension state stays current rather than
@@ -500,7 +517,18 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
         while (SDL_GetTicks() < deadline) {
             uint8_t buf[kReportBufSize] = {};
             const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));
-            if (n <= 0) continue;
+            if (n <= 0) {
+                // Same unthrottled-busy-spin hazard as VerifyIRCameraEnabled()'s
+                // wait loop - see its comment. m_Dev is non-blocking, so
+                // without this sleep a failed read returns instantly and
+                // this loop would call SDL_hid_read() as fast as the CPU
+                // allows for up to kRegisterReadTimeoutMs, which on Linux/
+                // BlueZ in particular can starve the Bluetooth stack of the
+                // CPU time it needs to actually deliver the reply this loop
+                // is waiting for.
+                SDL_Delay(1);
+                continue;
+            }
             if (buf[0] == InReport::ReadMemoryData) {
                 // (a1) 21 BB BB SE FF FF DD..DD
                 const uint8_t se = buf[3];
