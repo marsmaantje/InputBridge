@@ -31,13 +31,23 @@ namespace InputBridge::Wiimote {
 // PushAllStates() - there's no way to derive one from the other
 // automatically since SDL only wants a count at attach time, so both
 // consumers include this header rather than keeping their own copies.
-constexpr int kWiimoteNumAxes = 14;
+// NOTE on ordering: MappingProfileStore persists bindings by raw axis
+// index (see MappingProfileStore.h/.cpp), not by enum name, so existing
+// saved profiles would silently rebind to the wrong physical input if an
+// index already in use ever shifted. Axis_IRX/Axis_IRY (indices 3/4) are
+// therefore kept in place as Axis_IR1X/Axis_IR1Y - just a rename, same
+// slot, same values a saved profile already expects there - and the 3 new
+// dots are appended after the existing layout (indices 14-19) rather than
+// inserted inline. Any future additions should do the same: append, don't
+// insert.
+constexpr int kWiimoteNumAxes = 20;
 enum WiimoteAxis {
     Axis_AccelX = 0, Axis_AccelY, Axis_AccelZ,
-    Axis_IRX, Axis_IRY,
+    Axis_IR1X, Axis_IR1Y,
     Axis_NunchukX, Axis_NunchukY,
     Axis_ClassicLX, Axis_ClassicLY, Axis_ClassicRX, Axis_ClassicRY,
     Axis_MotionPlusYaw, Axis_MotionPlusPitch, Axis_MotionPlusRoll,
+    Axis_IR2X, Axis_IR2Y, Axis_IR3X, Axis_IR3Y, Axis_IR4X, Axis_IR4Y,
 };
 
 // The main D-Pad is exposed as a hat (not 4 separate buttons) so it maps

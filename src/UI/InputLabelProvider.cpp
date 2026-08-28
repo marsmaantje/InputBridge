@@ -487,7 +487,7 @@ ImWchar WiimoteBridgeAxisIcon(int axis)
     case WiimoteAxis::Axis_ClassicLY: return KENNEY_WII_STICK_L_VERTICAL_CP;
     case WiimoteAxis::Axis_ClassicRX: return KENNEY_WII_STICK_R_HORIZONTAL_CP;
     case WiimoteAxis::Axis_ClassicRY: return KENNEY_WII_STICK_R_VERTICAL_CP;
-    // Axis_AccelX/Y/Z, Axis_IRX/Y, Axis_MotionPlusYaw/Pitch/Roll: no icon.
+    // Axis_AccelX/Y/Z, Axis_IR1X/Y..Axis_IR4X/Y, Axis_MotionPlusYaw/Pitch/Roll: no icon.
     default: return 0;
     }
 }

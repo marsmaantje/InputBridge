@@ -55,8 +55,14 @@ const char *WiimoteBridgeAxisName(int axis) {
         case Axis_AccelX:         return "Accel X";
         case Axis_AccelY:         return "Accel Y";
         case Axis_AccelZ:         return "Accel Z";
-        case Axis_IRX:            return "IR X";
-        case Axis_IRY:            return "IR Y";
+        case Axis_IR1X:           return "IR Dot 1 X";
+        case Axis_IR1Y:           return "IR Dot 1 Y";
+        case Axis_IR2X:           return "IR Dot 2 X";
+        case Axis_IR2Y:           return "IR Dot 2 Y";
+        case Axis_IR3X:           return "IR Dot 3 X";
+        case Axis_IR3Y:           return "IR Dot 3 Y";
+        case Axis_IR4X:           return "IR Dot 4 X";
+        case Axis_IR4Y:           return "IR Dot 4 Y";
         case Axis_NunchukX:       return "Nunchuk Stick X";
         case Axis_NunchukY:       return "Nunchuk Stick Y";
         case Axis_ClassicLX:      return "Classic Left Stick X";
@@ -254,14 +260,21 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setAxis(Axis_AccelY, NormSymmetric(snap.accel.g_y, kAccelMaxG));
         setAxis(Axis_AccelZ, NormSymmetric(snap.accel.g_z, kAccelMaxG));
 
-        // IR: only the primary (first-detected) point is bridged - multi-
-        // dot IR tracking has no natural single-axis representation and
-        // isn't a typical mapping target. Rests at center (0) when no dot
-        // is visible, rather than snapping to a rail, so an unmapped/empty
-        // camera view doesn't read as "full deflection".
-        const bool irVisible = snap.ir[0].visible;
-        setAxis(Axis_IRX, irVisible ? (float(snap.ir[0].x) / 1023.0f) * 2.f - 1.f : 0.f);
-        setAxis(Axis_IRY, irVisible ? (float(snap.ir[0].y) / 767.0f)  * 2.f - 1.f : 0.f);
+        // IR: all 4 tracked points are bridged, each as its own X/Y axis
+        // pair (Axis_IR1X/Y .. Axis_IR4X/Y), in the same slot order the
+        // Wiimote report delivers them (see IRState/WiimoteDecoder.cpp) -
+        // there's no persistent identity across frames beyond that slot
+        // index, so "dot 1" simply means "whatever is in ir[0] right now".
+        // Each rests at center (0) when its slot isn't visible, rather than
+        // snapping to a rail, so an empty/unmapped camera view doesn't read
+        // as "full deflection".
+        static constexpr int kIRAxisX[4] = {Axis_IR1X, Axis_IR2X, Axis_IR3X, Axis_IR4X};
+        static constexpr int kIRAxisY[4] = {Axis_IR1Y, Axis_IR2Y, Axis_IR3Y, Axis_IR4Y};
+        for (int i = 0; i < 4; ++i) {
+            const auto &dot = snap.ir[i];
+            setAxis(kIRAxisX[i], dot.visible ? (float(dot.x) / 1023.0f) * 2.f - 1.f : 0.f);
+            setAxis(kIRAxisY[i], dot.visible ? (float(dot.y) / 767.0f)  * 2.f - 1.f : 0.f);
+        }
 
         // Nunchuk stick: 8-bit, documented center ~128, physical range
         // roughly 35-228 (WiiBrew) - +-100 as the working half-range keeps

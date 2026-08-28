@@ -232,12 +232,31 @@ void DrawIRPanel(const IRState &ir, bool ir_enabled, bool ir_possibly_hijacked) 
     ImGui::Dummy(ImVec2(w, h));
     dl->AddRect(p, p + ImVec2(w, h), IM_COL32(100, 100, 100, 255));
 
-    for (const auto &dot : ir) {
+    for (size_t i = 0; i < ir.size(); ++i) {
+        const auto &dot = ir[i];
         if (!dot.visible) continue;
         // Camera reports X in 0-1023, Y in 0-767 (10-bit/~9.5-bit range).
         const float x = p.x + (float(dot.x) / 1023.0f) * w;
         const float y = p.y + (float(dot.y) / 767.0f) * h;
         dl->AddCircleFilled(ImVec2(x, y), 4.0f, IM_COL32(255, 80, 80, 255));
+        char label[2] = {char('1' + i), '\0'};
+        dl->AddText(ImVec2(x + 5.0f, y - 6.0f), IM_COL32(255, 255, 255, 200), label);
+    }
+
+    // Numeric readout of the same 4 slots that get bridged into the mapper
+    // as Axis_IR1X/Y..Axis_IR4X/Y (see WiimoteVirtualBridge.cpp) - shown
+    // both as raw camera coordinates and as the normalized [-1,1] value the
+    // mapper actually sees, so what you bind matches what you're looking at.
+    for (size_t i = 0; i < ir.size(); ++i) {
+        const auto &dot = ir[i];
+        if (dot.visible) {
+            const float nx = (float(dot.x) / 1023.0f) * 2.f - 1.f;
+            const float ny = (float(dot.y) / 767.0f)  * 2.f - 1.f;
+            ImGui::Text("Dot %zu: x=%4u y=%4u  (axis: %.2f, %.2f)",
+                        i + 1, dot.x, dot.y, nx, ny);
+        } else {
+            ImGui::TextDisabled("Dot %zu: not visible  (axis: 0.00, 0.00)", i + 1);
+        }
     }
 }
 
