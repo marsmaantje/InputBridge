@@ -99,9 +99,6 @@ test binary without pulling in real HID I/O.)
   known official and most third-party extensions. Some wireless/third-party
   Nunchuks need the encrypted path instead (see WiiBrew's Nunchuk page,
   "Wireless Nunchuks" section) - not implemented here.
-- **Balance Board calibration CRC32 is not verified** (see comment in
-  `WiimoteDecoder.h`) - a corrupted read would silently use bad calibration
-  until the next successful read.
 - **`ReadRegister()`'s inline report-draining** (in the "wait for 0x21"
   loop) only refreshes buttons for reports it swallows during a register
   read; accel/IR/extension updates are briefly stalled during any read

@@ -108,6 +108,12 @@ struct BalanceBoardState {
 
 // Per-sensor 3-point calibration used for the interpolation above.
 struct BalanceBoardCalibration {
+    // True only once a calibration block has been parsed AND its trailing
+    // CRC32 has been checked against the board's own checksum (see
+    // ParseBalanceBoardCalibration() in WiimoteDecoder.h/.cpp). A block that
+    // fails the CRC leaves this false rather than handing back possibly-
+    // corrupted numbers - BalanceBoard() below zeroes the kg fields whenever
+    // `valid` is false.
     bool valid = false;
     uint16_t kg0[4]  = {0, 0, 0, 0}; // order: TR, BR, TL, BL
     uint16_t kg17[4] = {0, 0, 0, 0};

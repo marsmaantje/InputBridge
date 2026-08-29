@@ -428,7 +428,26 @@ bool WiimoteDevice::LoadBalanceBoardCalibration() {
 
     uint8_t block[32] = {};
     if (!ReadRegister(Registers::ExtensionCalib, 32, block)) return false;
-    m_BalanceCal = Decode::ParseBalanceBoardCalibration(block);
+
+    // Reference Temperature + the unknown byte after it (0xA40060/61) - not
+    // part of the 32-byte block above, but required to reproduce the
+    // board's CRC32 (see ParseBalanceBoardCalibration()). If this read
+    // fails, fall through with zeroed bytes; that just means the CRC won't
+    // match (extremely unlikely to accidentally match) and we correctly
+    // treat it as a bad read rather than risk misreporting a real failure
+    // as a corrupted calibration block.
+    uint8_t ref_temp[2] = {};
+    ReadRegister(Registers::ExtensionCalibRefTemp, 2, ref_temp);
+
+    BalanceBoardCalibration parsed = Decode::ParseBalanceBoardCalibration(block, ref_temp);
+    if (!parsed.valid) {
+        // CRC32 mismatch: the read was corrupted. Don't clobber whatever
+        // calibration we already have (if any) with bad/zeroed data - keep
+        // using the last known-good calibration and let a future call to
+        // this function (e.g. on reconnect) get a clean read instead.
+        return false;
+    }
+    m_BalanceCal = parsed;
     return true;
 }
 

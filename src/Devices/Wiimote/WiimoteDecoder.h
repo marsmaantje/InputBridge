@@ -54,12 +54,27 @@ GuitarHeroState GuitarFromClassic(const ClassicControllerState &cc, bool is_drum
 // ParseBalanceBoardCalibration() from the 32-byte block at 0xA40020.
 BalanceBoardState BalanceBoard(const uint8_t ext[11], const BalanceBoardCalibration &cal);
 
-// Parses the 32-byte calibration block read from register 0xA40020.
-// Does NOT verify the trailing CRC32 (harmless to skip - worst case is
-// using slightly-off factory calibration on a corrupted read, which a
-// re-read will fix); see WiiBrew for the CRC32 polynomial if you want to
-// add verification.
-BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32]);
+// Parses the 32-byte calibration block read from register 0xA40020, and
+// verifies it against its trailing CRC32 before trusting it.
+//
+// Per WiiBrew's "Wii Balance Board#Calibration Data": the checksum is a
+// standard CRC32 (reversed polynomial 0xEDB88320, i.e. the same variant as
+// zlib/PNG/Ethernet - init 0xFFFFFFFF, final XOR 0xFFFFFFFF), computed over
+// 28 bytes in this exact order: the 24 calibration bytes at 0x24-0x3B, then
+// the 2 bytes at 0x20-0x21, then the 2 "Reference Temperature" bytes at
+// 0x60-0x61 - which live outside this 32-byte block, hence the separate
+// `ref_temp2` parameter. The result is stored big-endian in block32's last
+// 4 bytes (0x3C-0x3F).
+//
+// On a CRC mismatch, returns a struct with `valid = false` and all-zero
+// calibration arrays rather than the parsed (and possibly corrupted)
+// values - a corrupted read must not silently masquerade as good
+// calibration data. Callers should keep using the previous known-good
+// BalanceBoardCalibration (if any) when this happens rather than
+// overwriting it, since the whole point is that a bad read shouldn't
+// clobber good data; see WimoteDevice::LoadBalanceBoardCalibration().
+BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32],
+                                                      const uint8_t ref_temp2[2]);
 
 // Wii Motion Plus, 6-byte extension-format ("DE") passthrough report, per
 // WiiBrew "Wiimote/Extension Controllers/Wii Motion Plus#Data Format".

@@ -4,6 +4,25 @@
 
 namespace InputBridge::Wiimote::Decode {
 
+namespace {
+// Standard CRC32 (reversed polynomial 0xEDB88320 - the zlib/PNG/Ethernet
+// variant: init 0xFFFFFFFF, final XOR 0xFFFFFFFF), computed byte-at-a-time
+// so this file stays free of any zlib/external dependency. Only used for
+// Balance Board calibration verification below; not performance-sensitive
+// (28 bytes, once per calibration load), so no lookup table.
+uint32_t Crc32(const uint8_t *data, size_t len) {
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < len; ++i) {
+        crc ^= data[i];
+        for (int bit = 0; bit < 8; ++bit) {
+            const uint32_t mask = -(crc & 1u);
+            crc = (crc >> 1) ^ (0xEDB88320u & mask);
+        }
+    }
+    return ~crc;
+}
+} // namespace
+
 CoreButtons Buttons(const uint8_t bb[2]) {
     CoreButtons s;
     s.left  = bb[0] & 0x01;
@@ -163,8 +182,35 @@ GuitarHeroState Guitar(const uint8_t *ext, size_t len, bool is_drums) {
     return GuitarFromClassic(Classic(ext, len, /*is_pro=*/false), is_drums);
 }
 
-BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32]) {
+BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32],
+                                                      const uint8_t ref_temp2[2]) {
     BalanceBoardCalibration c;
+
+    // Checksum input, built in the exact (non-contiguous) order WiiBrew
+    // documents: 0x24-0x3B (24 bytes), then 0x20-0x21 (2 bytes), then the
+    // Reference Temperature bytes at 0x60-0x61 (2 bytes) - 28 bytes total.
+    // block32[] is register-relative to 0x20, so 0x24-0x3B is block32[4..27]
+    // and 0x20-0x21 is block32[0..1].
+    uint8_t crc_input[28];
+    std::memcpy(crc_input, block32 + 4, 24);
+    crc_input[24] = block32[0];
+    crc_input[25] = block32[1];
+    crc_input[26] = ref_temp2[0];
+    crc_input[27] = ref_temp2[1];
+
+    const uint32_t computed = Crc32(crc_input, sizeof(crc_input));
+    const uint32_t stored = (uint32_t(block32[0x3C - 0x20]) << 24) |
+                             (uint32_t(block32[0x3D - 0x20]) << 16) |
+                             (uint32_t(block32[0x3E - 0x20]) << 8) |
+                             uint32_t(block32[0x3F - 0x20]);
+    if (computed != stored) {
+        // Corrupted/torn read: don't hand back numbers that look plausible
+        // but aren't verified - leave `valid` false (all-zero arrays) so
+        // BalanceBoard() skips kg conversion and the caller can decide to
+        // keep whatever calibration it already had instead.
+        return c;
+    }
+
     auto be16 = [&](int off) -> uint16_t {
         return (uint16_t(block32[off]) << 8) | block32[off + 1];
     };
@@ -179,7 +225,7 @@ BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32]) 
     c.kg17[2] = be16(0x30 - 0x20); c.kg17[3] = be16(0x32 - 0x20);
     c.kg34[0] = be16(0x34 - 0x20); c.kg34[1] = be16(0x36 - 0x20);
     c.kg34[2] = be16(0x38 - 0x20); c.kg34[3] = be16(0x3A - 0x20);
-    c.valid = true; // CRC32 verification intentionally omitted, see header
+    c.valid = true;
     return c;
 }
 

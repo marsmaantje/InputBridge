@@ -64,6 +64,12 @@ namespace Registers {
     constexpr uint32_t ExtensionInitNew1 = 0xA400F0; // write 0x55 (new-style unencrypted init, step 1)
     constexpr uint32_t ExtensionInitNew2 = 0xA400FB; // write 0x00 (new-style unencrypted init, step 2)
     constexpr uint32_t ExtensionCalib    = 0xA40020; // Balance Board calibration block start
+    // Reference Temperature (+1 unknown byte, always 0x01) - not part of the
+    // 0xA40020 32-byte calibration block itself, but folded into that
+    // block's trailing CRC32 (see WiiBrew's "Calibration Data" section: the
+    // checksum covers 0x24-0x3B, then 0x20-0x21, then these two bytes at
+    // 0x60-0x61).
+    constexpr uint32_t ExtensionCalibRefTemp = 0xA40060;
     constexpr uint32_t ExtensionData     = 0xA40000; // live data, 11 bytes for Balance Board / 6-8 for others
     constexpr uint32_t ExtensionId       = 0xA400FA; // 6-byte extension ID (Wiimote) / 0xA400FE 2-byte (Balance Board)
     constexpr uint32_t ExtensionIdShort  = 0xA400FE; // 2-byte short form, also the "data format" byte pair

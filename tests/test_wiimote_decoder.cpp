@@ -141,13 +141,40 @@ TEST(WiimoteDecoder, BalanceBoardCalibrationParsesUSBoardSample) {
     memcpy(block + (0x24 - 0x20), kg0, 8);
     memcpy(block + (0x2C - 0x20), kg17, 8);
     memcpy(block + (0x34 - 0x20), kg34, 8);
+    // (4)A4003C: A9 06 B4 F0  <- WiiBrew's documented checksum for this exact sample
+    block[0x3C - 0x20] = 0xA9; block[0x3D - 0x20] = 0x06;
+    block[0x3E - 0x20] = 0xB4; block[0x3F - 0x20] = 0xF0;
+    // (4)A40060: 19 01  <- Reference Temperature + unknown byte, folded into the CRC
+    const uint8_t ref_temp[2] = {0x19, 0x01};
 
-    auto cal = Decode::ParseBalanceBoardCalibration(block);
+    auto cal = Decode::ParseBalanceBoardCalibration(block, ref_temp);
     ASSERT_TRUE(cal.valid);
     EXPECT_EQ(cal.kg0[0],  0x07BC); // TR 0kg
     EXPECT_EQ(cal.kg17[0], 0x0E6E); // TR 17kg
     EXPECT_EQ(cal.kg34[0], 0x152E); // TR 34kg
     EXPECT_EQ(cal.kg0[3],  0x4652); // BL 0kg (last pair in the 0kg row)
+}
+
+// A corrupted read (calibration bytes fine, but the wrong reference-
+// temperature byte fed in - simulating a torn/partial read) must not
+// silently hand back the otherwise-plausible-looking calibration values.
+TEST(WiimoteDecoder, BalanceBoardCalibrationRejectsBadChecksum) {
+    uint8_t block[32] = {};
+    block[0] = 0x01; block[1] = 0x69; block[2] = 0x00; block[3] = 0x00;
+    const uint8_t kg0[8]  = {0x07, 0xBC, 0x11, 0x8B, 0x06, 0xBA, 0x46, 0x52};
+    const uint8_t kg17[8] = {0x0E, 0x6E, 0x18, 0x79, 0x0D, 0x5D, 0x4D, 0x4C};
+    const uint8_t kg34[8] = {0x15, 0x2E, 0x1F, 0x71, 0x14, 0x07, 0x54, 0x51};
+    memcpy(block + (0x24 - 0x20), kg0, 8);
+    memcpy(block + (0x2C - 0x20), kg17, 8);
+    memcpy(block + (0x34 - 0x20), kg34, 8);
+    block[0x3C - 0x20] = 0xA9; block[0x3D - 0x20] = 0x06;
+    block[0x3E - 0x20] = 0xB4; block[0x3F - 0x20] = 0xF0;
+    // Wrong reference-temperature bytes (should be 19 01) -> checksum won't match.
+    const uint8_t bad_ref_temp[2] = {0x00, 0x00};
+
+    auto cal = Decode::ParseBalanceBoardCalibration(block, bad_ref_temp);
+    EXPECT_FALSE(cal.valid);
+    EXPECT_EQ(cal.kg0[0], 0); // corrupted read must not leak the parsed-but-unverified values
 }
 
 // Register value from WiiBrew's "Wii Initialisation Sequence" trace: the
