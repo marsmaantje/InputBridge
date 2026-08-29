@@ -29,7 +29,7 @@ your own decoded state separate from anything SDL owns.
 | --- | :-: | :-: |
 | Buttons | ✅ | ✅ |
 | Accelerometer | ✅ | ✅ (nominal 0g/1g; see `AccelState` comment for calibrated version) |
-| IR camera (4-point) | ✅ | ✅ basic mode (X/Y only). Extended/Full mode (object size, bounding box) not wired up - `IRMode::Extended/Full` constants exist, decoder does not yet. |
+| IR camera (4-point) | ✅ | ✅ basic mode (X/Y only) and extended mode (adds 4-bit dot size) via `WiimoteDevice::SetIRExtendedMode()`. Full mode (bounding box + intensity, needs the interleaved 0x3e/0x3f report pair) still not wired up - `IRMode::Full` constant exists, decoder does not yet. |
 | Nunchuk | ✅ | ✅ |
 | Classic Controller (+ Pro) | ✅ | ✅ |
 | Guitar Hero Guitar/Drums | ✅ | ⚠️ Frets/strum/whammy/joystick decoded via the Classic-Controller-shaped byte layout, which is how existing OSS drivers do it - **not verified against real hardware**. Drum pad velocities not implemented. |
@@ -37,7 +37,7 @@ your own decoded state separate from anything SDL owns.
 | LEDs | ✅ | ✅ |
 | Rumble | ✅ | ✅ |
 | Battery | ✅ | ✅ |
-| Speaker | ✅ | ❌ not implemented (report 0x14/0x18/0x19 + register config documented in `WiimoteProtocol.h`) |
+| Speaker | ✅ | ⚠️ 8-bit signed PCM only, via `EnableSpeaker()`/`QueuePCM8()` (`WiimoteDevice.cpp`) - **not verified against real hardware**. 4-bit Yamaha ADPCM (better quality at usable sample rates) not implemented; register layout for it is documented in `WiimoteProtocol.h` if someone wants to add an encoder. |
 | Raw register read/write | ✅ | ✅ (`ReadRegister`/`WriteRegister`, public) |
 | Multiple Wiimotes | ✅ | ✅ (`WiimoteManager::Scan()` returns a vector) |
 | Wii Motion Plus | ❌ (predates it) | ❌ not implemented; `ExtensionType::MotionPlus` is detected but not decoded |

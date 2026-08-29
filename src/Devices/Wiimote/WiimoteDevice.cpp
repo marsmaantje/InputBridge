@@ -5,6 +5,7 @@
 #include <SDL3/SDL.h>
 #include <cstring>
 #include <algorithm>
+#include <cmath>
 
 namespace InputBridge::Wiimote {
 
@@ -19,6 +20,11 @@ constexpr int kRegisterReadTimeoutMs = 250;
 // see that function's comment for why this must be an actual sleep rather
 // than relying on incidental Bluetooth/HID scheduling latency.
 constexpr Uint32 kIRInitStepDelayMs = 50;
+
+// std::numbers::pi_v<float> would be nicer but requires C++20 <numbers>;
+// avoid relying on M_PI, which isn't defined by <cmath> on MSVC without
+// _USE_MATH_DEFINES (this project builds on Windows - see CMakeLists.txt).
+constexpr float kPi = 3.14159265358979323846f;
 }
 
 WiimoteDevice::WiimoteDevice(SDL_hid_device *dev, std::string hid_path, bool is_balance_board_hint)
@@ -446,23 +452,71 @@ void WiimoteDevice::SetRumble(float intensity) {
     // phase 0 (motor on, for any nonzero intensity) instead of wherever the
     // previous target's cycle happened to be - otherwise a call that lands
     // late in a period could immediately read as "off" for up to
-    // kRumblePwmPeriodMs even though the new intensity is nonzero.
+    // kRumblePwmPeriodMs even though the new intensity is nonzero. Also
+    // drop any duty-cycle debt from the previous target - it doesn't mean
+    // anything relative to the new intensity.
     m_RumbleCycleStartMs = SDL_GetTicks();
+    m_RumbleDutyDebtMs = 0.0f;
     UpdateRumblePWM(); // apply immediately rather than waiting for the next Poll()
 }
 
 void WiimoteDevice::UpdateRumblePWM() {
+    const Uint64 now = SDL_GetTicks();
     bool desired_bit;
+
     if (m_RumbleIntensity <= 0.0f) {
         desired_bit = false;
+        m_RumbleDutyDebtMs = 0.0f;
     } else if (m_RumbleIntensity >= 1.0f) {
         desired_bit = true;
+        m_RumbleDutyDebtMs = 0.0f;
     } else {
-        const Uint64 now = SDL_GetTicks();
+        // How long since we last got a chance to check/toggle the bit at
+        // all. Under normal conditions (Poll() running faster than the
+        // carrier period) this is a few ms and everything below is a
+        // no-op - phase-in-period alone decides the bit, same as before.
+        // A frame hitch, the app losing focus/being throttled, or the
+        // Bluetooth stack stalling delivery of everything (not just
+        // rumble) all show up here the same way: as one bigger-than-usual
+        // gap. If that gap spans one or more WHOLE carrier periods, we
+        // know for certain the line sat wherever it last was (100% on or
+        // 100% off) for those periods rather than tracking `intensity` -
+        // there was no Poll() call in between to correct it. Rather than
+        // silently accepting that as lost accuracy, credit/debit the
+        // resulting shortfall or excess into m_RumbleDutyDebtMs and pay it
+        // back by nudging the CURRENT period's on/off boundary.
+        const Uint64 gapMs = (m_RumbleLastPollMs == 0) ? 0 : (now - m_RumbleLastPollMs);
+        const Uint64 skippedPeriods = gapMs / kRumblePwmPeriodMs;
+        if (skippedPeriods > 0) {
+            const float targetOnPerSkippedMs    = m_RumbleIntensity * float(kRumblePwmPeriodMs);
+            const float deliveredOnPerSkippedMs = m_RumbleBit ? float(kRumblePwmPeriodMs) : 0.0f;
+            m_RumbleDutyDebtMs += float(skippedPeriods) * (targetOnPerSkippedMs - deliveredOnPerSkippedMs);
+
+            // Bound the debt so a long stall (app suspended, a multi-
+            // second hitch) can't demand an absurdly long unbroken on/off
+            // burst once polling resumes - cap at a few periods' worth of
+            // correction and let any remainder just be lost, the same as
+            // it would have been without this mechanism at all.
+            const float kMaxDebtMs = float(kRumblePwmPeriodMs) * 4.0f;
+            m_RumbleDutyDebtMs = std::clamp(m_RumbleDutyDebtMs, -kMaxDebtMs, kMaxDebtMs);
+        }
+
         const Uint64 phase = (now - m_RumbleCycleStartMs) % kRumblePwmPeriodMs;
-        const Uint64 on_duration_ms = Uint64(m_RumbleIntensity * float(kRumblePwmPeriodMs));
-        desired_bit = phase < on_duration_ms;
+
+        // Nudge this period's on-duration by whatever debt is outstanding
+        // (positive = owe more on-time, negative = delivered too much),
+        // clamped to a single period's own bounds so correction always
+        // spreads across 1+ periods rather than landing as one instant
+        // jump to fully on/off. Whatever fraction of the debt this period
+        // actually got to absorb is no longer owed.
+        const float baseOnMs = m_RumbleIntensity * float(kRumblePwmPeriodMs);
+        const float correctedOnMs = std::clamp(baseOnMs + m_RumbleDutyDebtMs,
+                                                0.0f, float(kRumblePwmPeriodMs));
+        m_RumbleDutyDebtMs -= (correctedOnMs - baseOnMs);
+
+        desired_bit = phase < Uint64(correctedOnMs);
     }
+    m_RumbleLastPollMs = now;
 
     if (desired_bit == m_RumbleBit) return; // no edge to act on - skip the HID write
 
@@ -472,6 +526,159 @@ void WiimoteDevice::UpdateRumblePWM() {
     // with an otherwise-empty payload is the lightest way to do that on demand.
     uint8_t p[1] = {0x00};
     SendReport(m_Dev, OutReport::Rumble, m_RumbleBit, p, 1);
+}
+
+// -- Speaker ---------------------------------------------------------------
+
+bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume) {
+    if (!m_Dev) return false;
+    if (sample_rate_hz == 0) sample_rate_hz = 2000;
+
+    // WiiBrew "Wiimote#Speaker / Initialization Sequence", steps 1-7:
+    //   1. Enable speaker      (0x04 -> Report 0x14)
+    //   2. Mute speaker        (0x04 -> Report 0x19) - reconfiguring a live
+    //      speaker is what produces the garbled-squawk-on-connect several
+    //      other implementations report; muting first avoids it.
+    //   3. Write 0x01 -> 0xa20009
+    //   4. Write 0x08 -> 0xa20001 (yes, before step 5 overwrites the same
+    //      address as part of the 7-byte block - this is WiiBrew's literal
+    //      documented sequence, kept as-is for parity with known-working
+    //      implementations rather than "optimized" away)
+    //   5. Write the 7-byte format/rate/volume block -> 0xa20001-0xa20007
+    //   6. Write 0x01 -> 0xa20008
+    //   7. Unmute speaker      (0x00 -> Report 0x19)
+    bool ok = true;
+
+    uint8_t enable = 0x04;
+    ok &= SendReport(m_Dev, OutReport::SpeakerEnable, m_RumbleBit, &enable, 1);
+
+    uint8_t mute = 0x04;
+    ok &= SendReport(m_Dev, OutReport::SpeakerMute, m_RumbleBit, &mute, 1);
+
+    uint8_t v01 = 0x01;
+    ok &= WriteRegister(Registers::SpeakerInitFlag, &v01, 1);
+
+    uint8_t v08 = 0x08;
+    ok &= WriteRegister(Registers::SpeakerConfig, &v08, 1);
+
+    // rate register value = clock / desired Hz (WiiBrew's formula; integer
+    // division, so the achieved rate may differ slightly from what's asked
+    // for). 8-bit PCM only here - see the class comment on QueuePCM8() for
+    // why 4-bit ADPCM isn't wired up.
+    const uint32_t rate_value = kSpeakerPcmClockHz / sample_rate_hz;
+    const uint8_t config[7] = {
+        0x00,                                // unknown, always 0x00 per WiiBrew
+        SpeakerFormat::Pcm8,                 // 0x40 = signed 8-bit PCM
+        uint8_t(rate_value & 0xFF),           // sample rate, little-endian
+        uint8_t((rate_value >> 8) & 0xFF),
+        volume,                               // 0x00-0xFF in 8-bit mode
+        0x00, 0x00,                           // unknown, always 0x00 per WiiBrew
+    };
+    ok &= WriteRegister(Registers::SpeakerConfig, config, sizeof(config));
+
+    uint8_t v01b = 0x01;
+    ok &= WriteRegister(Registers::SpeakerCommitFlag, &v01b, 1);
+
+    uint8_t unmute = 0x00;
+    ok &= SendReport(m_Dev, OutReport::SpeakerMute, m_RumbleBit, &unmute, 1);
+
+    m_SpeakerEnabled = ok;
+    m_SpeakerSampleRateHz = sample_rate_hz;
+    // Pace TickSpeaker() so a kSpeakerMaxChunkBytes chunk drains roughly
+    // every (chunk_bytes / sample_rate_hz) seconds - i.e. we hand the
+    // Wiimote new data about as fast as it's consuming the last chunk,
+    // not faster (which would just pile up in whatever's buffer) or
+    // slower (which would starve it, producing audible dropouts/pops).
+    m_SpeakerChunkIntervalMs = std::max<Uint32>(
+        1, Uint32((1000ull * kSpeakerMaxChunkBytes) / sample_rate_hz));
+    m_SpeakerNextChunkAtMs = SDL_GetTicks();
+
+    if (!ok) {
+        LOG_WARN(kTag, "EnableSpeaker() had at least one failed HID write for %s "
+                 "(device unplugged mid-sequence?)", m_Path.c_str());
+    }
+    return ok;
+}
+
+void WiimoteDevice::DisableSpeaker() {
+    if (m_Dev) {
+        uint8_t off = 0x00;
+        SendReport(m_Dev, OutReport::SpeakerEnable, m_RumbleBit, &off, 1);
+    }
+    m_SpeakerEnabled = false;
+    m_SpeakerSampleRateHz = 0;
+    StopSpeaker();
+}
+
+void WiimoteDevice::QueuePCM8(const int8_t *samples, size_t count) {
+    if (!samples || !count) return;
+    m_SpeakerQueue.insert(m_SpeakerQueue.end(), samples, samples + count);
+}
+
+void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sample_rate_hz, uint8_t volume) {
+    if (sample_rate_hz == 0) sample_rate_hz = 2000;
+
+    // Only re-run the (synchronous, several-HID-writes) enable sequence if
+    // we're not already enabled at this exact rate - lets repeated beeps
+    // (e.g. a UI click sound) queue back-to-back without re-doing the
+    // register dance and its associated mute/unmute click every time.
+    if (!m_SpeakerEnabled || m_SpeakerSampleRateHz != sample_rate_hz) {
+        if (!EnableSpeaker(sample_rate_hz, volume)) return;
+    }
+
+    const size_t sample_count = size_t((uint64_t(sample_rate_hz) * duration_ms) / 1000);
+    std::vector<int8_t> samples(sample_count);
+
+    // Plain sine tone, plus a short linear fade-in/out (~5ms or 10% of the
+    // tone, whichever is shorter) to avoid the audible click a hard-edged
+    // buffer start/stop produces on this speaker.
+    const size_t fade_samples = std::min(sample_count / 10, size_t(sample_rate_hz) * 5 / 1000);
+    for (size_t i = 0; i < sample_count; ++i) {
+        const float t = float(i) / float(sample_rate_hz);
+        float amplitude = 1.0f;
+        if (fade_samples > 0) {
+            if (i < fade_samples) amplitude = float(i) / float(fade_samples);
+            else if (i >= sample_count - fade_samples) amplitude = float(sample_count - 1 - i) / float(fade_samples);
+        }
+        const float s = amplitude * std::sin(2.0f * kPi * freq_hz * t);
+        samples[i] = int8_t(std::clamp(s * 127.0f, -127.0f, 127.0f));
+    }
+
+    QueuePCM8(samples.data(), samples.size());
+}
+
+void WiimoteDevice::StopSpeaker() {
+    m_SpeakerQueue.clear();
+    m_SpeakerQueuePos = 0;
+}
+
+void WiimoteDevice::TickSpeaker() {
+    if (!m_SpeakerEnabled || !m_Dev) return;
+
+    if (m_SpeakerQueuePos >= m_SpeakerQueue.size()) {
+        // Fully drained - reset to an empty queue rather than letting
+        // m_SpeakerQueuePos grow unbounded across many small QueuePCM8()
+        // calls over a long session.
+        if (!m_SpeakerQueue.empty()) StopSpeaker();
+        return;
+    }
+
+    const Uint64 now = SDL_GetTicks();
+    if (now < m_SpeakerNextChunkAtMs) return;
+
+    const size_t remaining = m_SpeakerQueue.size() - m_SpeakerQueuePos;
+    const uint8_t n = uint8_t(std::min<size_t>(remaining, kSpeakerMaxChunkBytes));
+
+    // Report 0x18 payload is always the full LL byte + 20 data bytes, even
+    // for a short final chunk - SendReport()'s zero-initialized buf[32]
+    // already leaves any bytes past `n` as padding zeroes.
+    uint8_t p[1 + kSpeakerMaxChunkBytes] = {};
+    p[0] = uint8_t(n << 3); // LL: length, shifted left 3 bits (WiiBrew)
+    std::memcpy(p + 1, m_SpeakerQueue.data() + m_SpeakerQueuePos, n);
+    SendReport(m_Dev, OutReport::SpeakerData, m_RumbleBit, p, sizeof(p));
+
+    m_SpeakerQueuePos += n;
+    m_SpeakerNextChunkAtMs = now + m_SpeakerChunkIntervalMs;
 }
 
 // -- Register read/write (synchronous, bounded wait) ---------------------
@@ -566,6 +773,9 @@ void WiimoteDevice::Poll() {
     // whether any input reports arrived this frame - it has its own timing
     // (kRumblePwmPeriodMs) unrelated to the Wiimote's own report cadence.
     UpdateRumblePWM();
+    // Same "own timing, unrelated to report cadence" rationale as
+    // UpdateRumblePWM() above - see TickSpeaker()'s declaration comment.
+    TickSpeaker();
 
     uint8_t buf[kReportBufSize];
     for (;;) {

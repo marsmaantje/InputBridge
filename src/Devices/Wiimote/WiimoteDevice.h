@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <string>
 #include <optional>
+#include <vector>
 
 namespace InputBridge::Wiimote {
 
@@ -126,7 +127,7 @@ public:
     // it's a single on/off drive line (see the rumble bit OR'd into every
     // output report in WiimoteDevice.cpp) - so intermediate strengths are
     // approximated in software with PWM: Poll() rapidly switches the line
-    // on and off at a fixed carrier (kRumblePwmPeriodMs, ~50 Hz) with a
+    // on and off at a nominal carrier (kRumblePwmPeriodMs, ~50 Hz) with a
     // duty cycle equal to `intensity`. That's fast enough that the motor's
     // own spin-up/spin-down inertia blurs the on/off switching into a
     // perceived amplitude change (the same trick used to dim an LED with a
@@ -135,10 +136,62 @@ public:
     // entirely and just hold the line at the corresponding fixed state,
     // which is both the strongest possible rumble and the case that avoids
     // the extra HID write traffic PWM would otherwise add.
+    //
+    // UpdateRumblePWM() also carries forward a small duty-cycle debt
+    // (m_RumbleDutyDebtMs) across periods that Poll() didn't get called
+    // during at all - e.g. a frame hitch, or the Bluetooth stack briefly
+    // stalling delivery of everything, not just rumble - so a burst of
+    // missed periods reads as a slightly stronger/weaker few periods right
+    // after, rather than silently wrong for however long it was missed.
+    // That's the limit of what's actually correctable from here, though:
+    // it compensates for OUR OWN irregular sampling of the PWM decision,
+    // not for jitter in the underlying Bluetooth link itself (the delay
+    // between SendReport() returning and the motor actually responding) -
+    // there's no feedback path that reports when a write was really
+    // delivered, so that portion of the variance is invisible to us and
+    // can't be corrected in software.
     void SetRumble(float intensity);
 
     // Back-compat convenience for simple on/off callers.
     void SetRumble(bool on) { SetRumble(on ? 1.0f : 0.0f); }
+
+    // -- Speaker -----------------------------------------------------------
+    // Runs the full WiiBrew enable/mute/configure/unmute register sequence
+    // (see WiimoteProtocol.h's Registers::SpeakerInitFlag et al.) to switch
+    // the speaker into 8-bit signed PCM mode at `sample_rate_hz`. WiiBrew
+    // notes 8-bit mode needs a low sample rate to keep the Bluetooth link
+    // fed in time and calls out 2000Hz specifically as a good compromise -
+    // that's the default here. `volume` is 0x00-0xFF. Synchronous (several
+    // WriteRegister() round-trips); call once before QueuePCM8(), not every
+    // frame. Returns false if any step's HID write failed.
+    bool EnableSpeaker(uint32_t sample_rate_hz = 2000, uint8_t volume = 0xFF);
+
+    // Disables the speaker (Report 0x14, enable bit cleared) and discards
+    // anything still queued.
+    void DisableSpeaker();
+
+    // Appends signed 8-bit PCM samples to the playback queue; does not
+    // interrupt whatever's already queued/in-flight. EnableSpeaker() must
+    // have been called first (and with a matching sample rate - this call
+    // doesn't touch the device's rate configuration). Actual transmission
+    // happens kSpeakerMaxChunkBytes at a time from Poll(), paced to the
+    // rate passed to EnableSpeaker() - see TickSpeaker().
+    void QueuePCM8(const int8_t *samples, size_t count);
+
+    // True while there's still queued-but-unsent audio.
+    bool IsSpeakerPlaying() const { return m_SpeakerQueuePos < m_SpeakerQueue.size(); }
+
+    // Discards queued-but-unsent audio without disabling the speaker
+    // itself (use DisableSpeaker() for that).
+    void StopSpeaker();
+
+    // Convenience wrapper for testing/notification sounds: calls
+    // EnableSpeaker() (if not already enabled at a matching rate) and
+    // queues a generated sine-wave tone. Not meant for anything beyond
+    // simple beeps - for real audio, generate/decode your own PCM8 buffer
+    // and use QueuePCM8() directly.
+    void PlayBeep(float freq_hz = 440.0f, uint32_t duration_ms = 200,
+                   uint32_t sample_rate_hz = 2000, uint8_t volume = 0xFF);
 
     // -- Low-level register access (exposed for advanced/experimental use,
     //    same rationale as WiimoteLib exposing raw read/write) ------------
@@ -256,6 +309,13 @@ private:
     // the on/off line actually needs to change state, not every call.
     void UpdateRumblePWM();
 
+    // Drains m_SpeakerQueue into Report 0x18 writes, kSpeakerMaxChunkBytes
+    // at a time, no faster than m_SpeakerChunkIntervalMs apart (computed in
+    // EnableSpeaker() from the requested sample rate). Called once per
+    // Poll(), same cadence rationale as UpdateRumblePWM(). No-op when the
+    // speaker isn't enabled or the queue is empty.
+    void TickSpeaker();
+
     // Subtracts m_BalanceTareKg from a freshly-decoded BalanceBoardState's
     // four corners in place and recomputes kg_total/cog_x/cog_y from the
     // tared values. No-op (all offsets 0) until TareBalanceBoard() is
@@ -271,9 +331,30 @@ private:
     // Software-PWM rumble state (see SetRumble(float) / UpdateRumblePWM()).
     float m_RumbleIntensity = 0.0f;   // target strength, 0..1, set by SetRumble()
     Uint64 m_RumbleCycleStartMs = 0;  // start of the current PWM period, reset on every SetRumble() call
-    static constexpr Uint64 kRumblePwmPeriodMs = 20; // ~50 Hz carrier, see SetRumble(float)
+    static constexpr Uint64 kRumblePwmPeriodMs = 20; // ~50 Hz nominal carrier, see SetRumble(float)
+
+    // Duty-cycle debt carried across periods Poll() didn't run during at
+    // all (see UpdateRumblePWM()) - ms of "on" time owed (positive) or
+    // over-delivered (negative), paid back by nudging later periods'
+    // on/off boundary instead of the target intensity itself. Reset
+    // alongside m_RumbleCycleStartMs on every SetRumble() call so a new
+    // target doesn't inherit the previous one's leftover correction.
+    float  m_RumbleDutyDebtMs = 0.0f;
+    // Last time UpdateRumblePWM() actually ran, independent of
+    // m_RumbleCycleStartMs (which only moves on SetRumble()) - the gap
+    // between this and "now" on each call is what reveals a skipped
+    // period in the first place.
+    Uint64 m_RumbleLastPollMs = 0;
 
     std::optional<BalanceBoardCalibration> m_BalanceCal;
+
+    // Speaker playback queue (see EnableSpeaker()/QueuePCM8()/TickSpeaker()).
+    bool   m_SpeakerEnabled = false;
+    uint32_t m_SpeakerSampleRateHz = 0; // rate last passed to EnableSpeaker(), 0 = never enabled
+    std::vector<int8_t> m_SpeakerQueue;
+    size_t m_SpeakerQueuePos = 0;
+    Uint64 m_SpeakerNextChunkAtMs = 0;
+    Uint32 m_SpeakerChunkIntervalMs = 10; // recomputed by EnableSpeaker() from sample_rate_hz
 
     bool m_MotionPlusPresent = false;   // detected at 0xA600FA
     bool m_MotionPlusActive = false;    // activation write sent + acknowledged by data arriving

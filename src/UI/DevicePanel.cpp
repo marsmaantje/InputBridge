@@ -623,6 +623,20 @@ static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
     ImGui::SetNextItemWidth(160.0f);
     if (ImGui::SliderFloat("Rumble Strength", &rumble, 0.0f, 1.0f, "%.2f"))
         dev.SetRumble(rumble);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Speaker test: EnableSpeaker()/PlayBeep() below are untested against
+    // real hardware (see Devices/Wiimote/README.md's Speaker row) - this
+    // button exists to make that easy to check without writing any code.
+    // A single 440Hz/200ms tone is enough to confirm the enable/configure/
+    // unmute sequence actually produces sound; it's not meant as a general
+    // audio player.
+    ImGui::TextDisabled("8-bit PCM only - see README.md, untested against real hardware.");
+    if (ImGui::Button("Test Speaker (beep)"))
+        dev.PlayBeep();
 }
 
 // ---------------------------------------------------------------------------

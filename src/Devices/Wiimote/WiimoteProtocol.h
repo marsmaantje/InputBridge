@@ -9,6 +9,7 @@
 // no I/O - so it can be unit tested without a real device or SDL_hid handle.
 #pragma once
 #include <cstdint>
+#include <cstddef>
 #include <array>
 
 namespace InputBridge::Wiimote {
@@ -86,7 +87,38 @@ namespace Registers {
     constexpr uint32_t IRSensitivity2    = 0xB0001A; // 2-byte block
     constexpr uint32_t IRMode            = 0xB00033; // 1 byte
     constexpr uint32_t IRModeToggle      = 0xB00030; // write 0x08 (or 0x01 per "Wii" sequence variant)
+
+    // -- Speaker registers (WiiBrew "Wiimote#Speaker_Configuration") --------
+    // SpeakerInitFlag and SpeakerCommitFlag are single-byte "go" registers
+    // outside the 7-byte config block itself; SpeakerConfig is where that
+    // 7-byte block (format/rate/volume) gets written. See the full init
+    // sequence documented on WiimoteDevice::EnableSpeaker().
+    constexpr uint32_t SpeakerInitFlag   = 0xA20009; // write 0x01 here first (init step 3)
+    constexpr uint32_t SpeakerConfig     = 0xA20001; // 7-byte block, 0xA20001-0xA20007 (init steps 4-5)
+    constexpr uint32_t SpeakerCommitFlag = 0xA20008; // write 0x01 here last (init step 6)
 }
+
+// -- Speaker configuration -----------------------------------------------
+// WiiBrew: "7 bytes control the speaker settings... the following values
+// seem to produce some sound" - the exact meaning of every byte isn't
+// fully reverse-engineered, only the format/rate/volume fields below are
+// well-established. Byte layout of the 7-byte config block written to
+// Registers::SpeakerConfig: [0]=unknown(always 0x00) [1]=format
+// [2:3]=rate, little-endian [4]=volume [5:6]=unknown(always 0x00).
+namespace SpeakerFormat {
+    constexpr uint8_t Pcm8   = 0x40; // signed 8-bit PCM; volume range 0x00-0xFF
+    constexpr uint8_t Adpcm4 = 0x00; // 4-bit Yamaha ADPCM; volume range 0x00-0x40
+}
+
+// rate register value = clock / desired_sample_rate_hz (WiiBrew's formula,
+// integer division - exact requested rates won't always be hittable).
+constexpr uint32_t kSpeakerPcmClockHz   = 12000000;
+constexpr uint32_t kSpeakerAdpcmClockHz = 6000000;
+
+// Report 0x18 (Speaker Data) carries at most this many payload bytes per
+// write ("1-20 bytes may be sent at once", WiiBrew) - the report's LL
+// length byte is this count shifted left 3 bits.
+constexpr std::size_t kSpeakerMaxChunkBytes = 20;
 
 // -- Extension identification ------------------------------------------------
 // Read 6 bytes from Registers::ExtensionId after the "new way" init
