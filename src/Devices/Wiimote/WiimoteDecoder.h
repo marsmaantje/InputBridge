@@ -23,6 +23,17 @@ AccelState Accel(const uint8_t bb[2], const uint8_t aa[3]);
 // by the camera). ir[10].
 IRState IRBasic(const uint8_t ir[10]);
 
+// Extended-mode IR (12 bytes -> 4 dots, X:10bit/Y:10bit like Basic mode,
+// plus a 4-bit dot size per point). Per WiiBrew "IR Camera#Extended Mode":
+// 3 bytes per dot - X low 8 bits, Y low 8 bits, then a byte packing X/Y's
+// 2 high bits (bits 7-6 / 5-4) with a 4-bit size (bits 3-0). Only
+// meaningful while the Wiimote is actually in Extended IR mode (see
+// WiimoteDevice::SetIRExtendedMode) - feeding it Basic-mode bytes will
+// produce garbage size values, not a decode error, since there's nothing
+// in the 12 bytes themselves that identifies which mode produced them.
+// ir[12].
+IRState IRExtended(const uint8_t ir[12]);
+
 // Extension payload starting at logical extension-register offset 0x08,
 // i.e. the EE...EE bytes in reports 0x32/0x34/0x35/0x36/0x37/0x3d. `len`
 // must be >= the bytes required for the given decoder or it returns a

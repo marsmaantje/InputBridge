@@ -2,7 +2,6 @@
 #include "WiimoteVirtualBridge.h"
 #include "App/Log.h"
 #include <algorithm>
-#include <cstring>
 
 namespace InputBridge::Wiimote {
 
@@ -63,6 +62,10 @@ const char *WiimoteBridgeAxisName(int axis) {
         case Axis_IR3Y:           return "IR Dot 3 Y";
         case Axis_IR4X:           return "IR Dot 4 X";
         case Axis_IR4Y:           return "IR Dot 4 Y";
+        case Axis_IR1Size:        return "IR Dot 1 Size";
+        case Axis_IR2Size:        return "IR Dot 2 Size";
+        case Axis_IR3Size:        return "IR Dot 3 Size";
+        case Axis_IR4Size:        return "IR Dot 4 Size";
         case Axis_NunchukX:       return "Nunchuk Stick X";
         case Axis_NunchukY:       return "Nunchuk Stick Y";
         case Axis_ClassicLX:      return "Classic Left Stick X";
@@ -274,6 +277,19 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
             const auto &dot = snap.ir[i];
             setAxis(kIRAxisX[i], dot.visible ? (float(dot.x) / 1023.0f) * 2.f - 1.f : 0.f);
             setAxis(kIRAxisY[i], dot.visible ? (float(dot.y) / 767.0f)  * 2.f - 1.f : 0.f);
+        }
+
+        // Dot size (0-15), only meaningful while IR Extended mode is active
+        // (WiimoteDevice::SetIRExtendedMode) - IRDot::size stays 0 the rest
+        // of the time, same as any other at-rest reading. Uses the same
+        // "trigger at rest = -1" bipolar convention as the Balance Board's
+        // weight axes above (Norm01ToBipolar), since size is a magnitude
+        // with no natural sign, not a centered stick axis: 0 -> -1 (rest/
+        // not visible), 15 -> +1 (biggest blob the camera reports).
+        static constexpr int kIRAxisSize[4] = {Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size};
+        for (int i = 0; i < 4; ++i) {
+            const auto &dot = snap.ir[i];
+            setAxis(kIRAxisSize[i], dot.visible ? Norm01ToBipolar(float(dot.size), 0.f, 15.f) : -1.f);
         }
 
         // Nunchuk stick: 8-bit, documented center ~128, physical range

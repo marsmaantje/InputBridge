@@ -213,7 +213,7 @@ void DrawCoreButtons(const CoreButtons &b) {
     if (!any) { ImGui::SameLine(); ImGui::TextDisabled("(none)"); }
 }
 
-void DrawIRPanel(const IRState &ir, bool ir_enabled, bool ir_possibly_hijacked) {
+void DrawIRPanel(const IRState &ir, bool ir_enabled, bool ir_possibly_hijacked, bool ir_extended_mode) {
     ImGui::Separator();
     ImGui::Text("IR Camera:");
     ImGui::SameLine();
@@ -223,7 +223,10 @@ void DrawIRPanel(const IRState &ir, bool ir_enabled, bool ir_possibly_hijacked) 
         ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.0f, 1.0f), "no data - another app may be interfering");
         ImGui::TextDisabled("(commonly Steam Input; see Devices/Wiimote/README.md)");
     } else {
-        ImGui::TextDisabled("enabled");
+        ImGui::TextDisabled(ir_extended_mode ? "enabled (extended: size available)" : "enabled (basic)");
+    }
+    if (ir_extended_mode) {
+        ImGui::TextDisabled("Extension data (Nunchuk/Classic/Guitar) is frozen while this is active.");
     }
 
     ImDrawList *dl = ImGui::GetWindowDrawList();
@@ -238,24 +241,36 @@ void DrawIRPanel(const IRState &ir, bool ir_enabled, bool ir_possibly_hijacked) 
         // Camera reports X in 0-1023, Y in 0-767 (10-bit/~9.5-bit range).
         const float x = p.x + (float(dot.x) / 1023.0f) * w;
         const float y = p.y + (float(dot.y) / 767.0f) * h;
-        dl->AddCircleFilled(ImVec2(x, y), 4.0f, IM_COL32(255, 80, 80, 255));
+        // Radius reflects reported size in extended mode (4-6px range);
+        // basic mode has no size data, so every dot draws at a fixed 4px.
+        const float radius = ir_extended_mode ? (4.0f + (float(dot.size) / 15.0f) * 6.0f) : 4.0f;
+        dl->AddCircleFilled(ImVec2(x, y), radius, IM_COL32(255, 80, 80, 255));
         char label[2] = {char('1' + i), '\0'};
-        dl->AddText(ImVec2(x + 5.0f, y - 6.0f), IM_COL32(255, 255, 255, 200), label);
+        dl->AddText(ImVec2(x + radius + 1.0f, y - 6.0f), IM_COL32(255, 255, 255, 200), label);
     }
 
     // Numeric readout of the same 4 slots that get bridged into the mapper
-    // as Axis_IR1X/Y..Axis_IR4X/Y (see WiimoteVirtualBridge.cpp) - shown
-    // both as raw camera coordinates and as the normalized [-1,1] value the
-    // mapper actually sees, so what you bind matches what you're looking at.
+    // as Axis_IR1X/Y..Axis_IR4X/Y (and, in extended mode, Axis_IR1Size..
+    // Axis_IR4Size - see WiimoteVirtualBridge.cpp) - shown both as raw
+    // camera coordinates and as the normalized value the mapper actually
+    // sees, so what you bind matches what you're looking at.
     for (size_t i = 0; i < ir.size(); ++i) {
         const auto &dot = ir[i];
         if (dot.visible) {
             const float nx = (float(dot.x) / 1023.0f) * 2.f - 1.f;
             const float ny = (float(dot.y) / 767.0f)  * 2.f - 1.f;
-            ImGui::Text("Dot %zu: x=%4u y=%4u  (axis: %.2f, %.2f)",
-                        i + 1, dot.x, dot.y, nx, ny);
+            if (ir_extended_mode) {
+                const float nsize = (float(dot.size) / 15.0f) * 2.f - 1.f;
+                ImGui::Text("Dot %zu: x=%4u y=%4u size=%2u  (axis: %.2f, %.2f, %.2f)",
+                            i + 1, dot.x, dot.y, dot.size, nx, ny, nsize);
+            } else {
+                ImGui::Text("Dot %zu: x=%4u y=%4u  (axis: %.2f, %.2f)",
+                            i + 1, dot.x, dot.y, nx, ny);
+            }
         } else {
-            ImGui::TextDisabled("Dot %zu: not visible  (axis: 0.00, 0.00)", i + 1);
+            ImGui::TextDisabled(ir_extended_mode
+                ? "Dot %zu: not visible  (axis: 0.00, 0.00, -1.00)"
+                : "Dot %zu: not visible  (axis: 0.00, 0.00)", i + 1);
         }
     }
 }
@@ -436,7 +451,7 @@ void WiimoteVisualizer::Draw(const WiimoteSnapshot &snap, int index) {
     ImGui::Separator();
     ImGui::Text("Accel (g): X=%.2f Y=%.2f Z=%.2f", snap.accel.g_x, snap.accel.g_y, snap.accel.g_z);
 
-    DrawIRPanel(snap.ir, snap.ir_enabled, snap.ir_possibly_hijacked);
+    DrawIRPanel(snap.ir, snap.ir_enabled, snap.ir_possibly_hijacked, snap.ir_extended_mode);
 
     if (snap.motion_plus.connected) {
         DrawMotionPlus(snap.motion_plus);

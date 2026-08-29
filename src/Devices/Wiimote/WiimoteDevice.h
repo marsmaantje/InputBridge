@@ -41,6 +41,14 @@ struct WiimoteSnapshot {
     // (excluding the device from whatever else is grabbing it) is
     // different from anything wrong with our own init sequence.
     bool        ir_possibly_hijacked = false;
+    // Mirrors WiimoteDevice::IsIRExtendedModeActive() - true once the
+    // Extended IR toggle (SetIRExtendedMode) has actually taken effect on
+    // the hardware (not just been requested), i.e. IRDot::size is live.
+    // Report 0x33 carries no extension bytes at all (see
+    // SetIRExtendedMode()'s comment), so nunchuk/classic/guitar below are
+    // frozen at their last known values for as long as this is true - the
+    // UI should treat them as stale, not as "the accessory was unplugged".
+    bool        ir_extended_mode = false;
 
     ExtensionType extension = ExtensionType::None;
     NunchukState             nunchuk;
@@ -158,11 +166,34 @@ public:
     // raw factory-calibrated readings.
     void ClearBalanceBoardTare();
 
+    // -- IR Extended mode toggle ---------------------------------------------
+    // Switches between IR Basic mode (report 0x37: X/Y only, but leaves room
+    // for Nunchuk/Classic/Guitar extension data in the same report) and IR
+    // Extended mode (report 0x33: X/Y + a 4-bit dot size, but the hardware's
+    // report format for 0x33 has NO extension bytes at all - WiiBrew doesn't
+    // offer a report that combines size data with extension data, and Full
+    // mode's IR+brightness data is a separate interleaved 0x3e/0x3f pair,
+    // not covered here). While Extended mode is active, nunchuk/classic/
+    // guitar in the snapshot are simply frozen at whatever they last held -
+    // check ir_extended_mode before trusting them as live.
+    //
+    // Re-programs the running Wiimote synchronously: re-sends the IR mode
+    // register write (part of the same WiiBrew init sequence used at
+    // connect time - see EnableIRCameraOnce()) and the data reporting mode.
+    // Like EnableIRCameraOnce(), this sleeps briefly between writes
+    // (kIRInitStepDelayMs per step), so calling it is a deliberate,
+    // user-initiated action (e.g. a settings toggle) rather than something
+    // to call from a hot path. No-op if already in the requested mode, or
+    // if this device is a Balance Board (no IR/camera hardware).
+    bool SetIRExtendedMode(bool enabled);
+    bool IsIRExtendedModeActive() const { return m_Snapshot.ir_extended_mode; }
+
 private:
     void HandleReport(const uint8_t *buf, int len);
     void HandleStatusReport(const uint8_t *buf);
     void HandleExtensionChanged();
     void DecodeCoreAccelIR10Ext6(const uint8_t *buf); // report 0x37, Wiimote steady-state mode
+    void DecodeCoreAccelIR12(const uint8_t *buf);      // report 0x33, Extended IR mode (adds dot size)
     void DecodeCoreExt19(const uint8_t *buf);          // report 0x34, Balance Board steady-state mode
 
     uint8_t PreferredReportMode() const;
@@ -259,12 +290,19 @@ private:
     int    m_BalanceRecoveryAttempts = 0;      // capped so we don't spam re-init forever
 
     // IR-hijack watchdog state (see TickIRWatchdog()). Tracks the last
-    // time an IR-carrying report (0x37) was actually decoded, separately
-    // from last_report_ms (which updates for ANY report, including ones a
-    // competing process's reconfiguration switched us to).
+    // time an IR-carrying report (0x37 or 0x33) was actually decoded,
+    // separately from last_report_ms (which updates for ANY report,
+    // including ones a competing process's reconfiguration switched us to).
     Uint64 m_LastIRReportMs = 0;
     Uint64 m_LastIRReassertAtMs = 0;    // cooldown between corrective re-sends
     int    m_IRReassertAttempts = 0;    // capped, same rationale as balance board recovery
+
+    // IR Extended mode toggle (see SetIRExtendedMode()). This is the single
+    // source of truth PreferredReportMode() and EnableIRCameraOnce() read
+    // to decide between report 0x37/IRMode::Basic and report 0x33/
+    // IRMode::Extended; m_Snapshot.ir_extended_mode mirrors it only once
+    // the switch has actually been re-programmed on the hardware.
+    bool m_IRExtendedMode = false;
 
     // Balance Board software tare/zero. m_BalanceRawKg holds the most
     // recent PRE-tare corner readings (factory-calibrated, offset not yet

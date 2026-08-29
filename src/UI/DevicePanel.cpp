@@ -639,6 +639,21 @@ static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
         ImGui::SetNextItemWidth(120.0f);
         if (ImGui::SliderInt("Player LED", &player, 1, 4))
             dev.SetPlayerLED(player);
+
+        // IR Extended mode: trades away Nunchuk/Classic Controller/Guitar
+        // Hero data (report 0x33 carries no extension bytes - see
+        // WiimoteDevice::SetIRExtendedMode's comment) for a per-dot IR
+        // size reading. Re-programs the physical IR camera synchronously
+        // when toggled (a handful of ~50ms-spaced register writes), so
+        // there's a brief, deliberate pause on click rather than being
+        // wired to update every frame.
+        bool extended = snap.ir_extended_mode;
+        if (ImGui::Checkbox("IR Extended Mode (dot size)", &extended))
+            dev.SetIRExtendedMode(extended);
+        if (snap.ir_extended_mode) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(Nunchuk/Classic/Guitar data frozen while active)");
+        }
         return;
     }
 

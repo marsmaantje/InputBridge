@@ -34,10 +34,17 @@ struct AccelState {
 };
 
 // One tracked IR point. Basic mode gives 10-bit X (0-1023) / Y (0-767);
-// an empty slot is reported as fully off (visible=false).
+// an empty slot is reported as fully off (visible=false). Extended mode
+// (see WiimoteDevice::SetIRExtendedMode) additionally gives a 4-bit dot
+// size (0-15, larger = bigger/brighter IR blob as seen by the camera) but
+// truncates X/Y to 8 bits internally before re-expanding them, and drops
+// all extension (Nunchuk/Classic/Guitar) data for as long as it's active -
+// see the comment on SetIRExtendedMode() for why. `size` stays 0 (its
+// at-rest value) whenever extended mode isn't active.
 struct IRDot {
     bool visible = false;
     uint16_t x = 0, y = 0;
+    uint8_t size = 0; // 0-15, extended mode only
 };
 using IRState = std::array<IRDot, 4>;
 

@@ -86,7 +86,8 @@ bool WiimoteDevice::Init() {
 }
 
 uint8_t WiimoteDevice::PreferredReportMode() const {
-    return m_Snapshot.is_balance_board ? InReport::CoreExt19 : InReport::CoreAccelIR10Ext6;
+    if (m_Snapshot.is_balance_board) return InReport::CoreExt19;
+    return m_IRExtendedMode ? InReport::CoreAccelIR12 : InReport::CoreAccelIR10Ext6;
 }
 
 bool WiimoteDevice::EnableIRCamera() {
@@ -176,7 +177,7 @@ bool WiimoteDevice::EnableIRCameraOnce() {
     ok &= WriteRegister(Registers::IRSensitivity2, kIRSensitivityWiiLevel3.block2.data(),
                          uint8_t(kIRSensitivityWiiLevel3.block2.size()));
     SDL_Delay(kIRInitStepDelayMs);
-    uint8_t mode = IRMode::Basic; // matches report 0x37's 10 IR bytes
+    uint8_t mode = m_IRExtendedMode ? IRMode::Extended : IRMode::Basic;
     ok &= WriteRegister(Registers::IRMode, &mode, 1);
     SDL_Delay(kIRInitStepDelayMs);
     ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
@@ -596,6 +597,9 @@ void WiimoteDevice::HandleReport(const uint8_t *buf, int len) {
         case InReport::CoreAccelIR10Ext6:
             if (len >= 22) DecodeCoreAccelIR10Ext6(buf);
             break;
+        case InReport::CoreAccelIR12:
+            if (len >= 18) DecodeCoreAccelIR12(buf);
+            break;
         case InReport::CoreExt19:
             if (len >= 22) DecodeCoreExt19(buf);
             break;
@@ -698,6 +702,25 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
     }
 }
 
+void WiimoteDevice::DecodeCoreAccelIR12(const uint8_t *buf) {
+    // (a1) 33 BB BB AA AA AA II II II II II II II II II II II II
+    //       1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18
+    // No extension bytes in this report at all - see SetIRExtendedMode()'s
+    // comment for why. nunchuk/classic/guitar are deliberately left
+    // untouched here (not zeroed) so they hold their last known values;
+    // ir_extended_mode tells callers those values are frozen, not live.
+    const uint8_t *bb = buf + 1;
+    const uint8_t *aa = buf + 3;
+    const uint8_t *ir = buf + 6;
+
+    m_Snapshot.core  = Decode::Buttons(bb);
+    m_Snapshot.accel = Decode::Accel(bb, aa);
+    m_Snapshot.ir    = Decode::IRExtended(ir);
+    m_LastIRReportMs = SDL_GetTicks(); // fed to TickIRWatchdog() - see its comment
+    m_Snapshot.ir_possibly_hijacked = false; // this report proves our mode is still in effect right now
+}
+
+
 void WiimoteDevice::DecodeCoreExt19(const uint8_t *buf) {
     // (a1) 34 BB BB EE(x19)  - Balance Board steady-state mode. First 11 of
     // the 19 extension bytes are the weight sensors + temperature + battery
@@ -760,6 +783,58 @@ void WiimoteDevice::TareBalanceBoard() {
 void WiimoteDevice::ClearBalanceBoardTare() {
     for (int i = 0; i < 4; ++i) m_BalanceTareKg[i] = 0.f;
     m_Snapshot.balance_board_tared = false;
+}
+
+bool WiimoteDevice::SetIRExtendedMode(bool enabled) {
+    if (m_Snapshot.is_balance_board) return false; // no camera hardware
+    if (enabled == m_IRExtendedMode) return true;   // already there
+
+    m_IRExtendedMode = enabled;
+
+    // Re-run just the mode-select portion of EnableIRCameraOnce()'s WiiBrew
+    // sequence (toggle -> mode write -> toggle) rather than all 7 steps -
+    // the sensitivity blocks aren't mode-dependent, only the camera's data
+    // format is changing. Same >=50ms inter-write delay (kIRInitStepDelayMs)
+    // as the rest of that sequence and for the same reason: WiiBrew warns
+    // writing these registers back-to-back without a gap can land the
+    // camera in a random half-configured state.
+    bool ok = true;
+    uint8_t toggle08 = 0x08;
+    ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
+    SDL_Delay(kIRInitStepDelayMs);
+    uint8_t mode = enabled ? IRMode::Extended : IRMode::Basic;
+    ok &= WriteRegister(Registers::IRMode, &mode, 1);
+    SDL_Delay(kIRInitStepDelayMs);
+    ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
+    SDL_Delay(kIRInitStepDelayMs);
+
+    // Re-assert the data reporting mode so the report ID itself switches
+    // (0x37 <-> 0x33) - per WiiBrew this is required after any data format
+    // change, mirroring what HandleStatusReport()/TickIRWatchdog() already
+    // do for other report-mode transitions.
+    uint8_t p[2] = {0x04, PreferredReportMode()};
+    ok &= SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+
+    if (!ok) {
+        LOG_WARN(kTag, "SetIRExtendedMode(%s) had a write failure for %s - "
+                        "mode may not have taken effect",
+                 enabled ? "on" : "off", m_Path.c_str());
+    }
+
+    // Give TickIRWatchdog() a clean slate through the transition, same as
+    // a fresh EnableIRCamera() success does - we're switching which report
+    // ID carries IR data, and don't want a few transitional milliseconds
+    // of silence on the old one misread as a hijack.
+    m_LastIRReportMs = 0;
+    m_Snapshot.ir_possibly_hijacked = false;
+    m_IRReassertAttempts = 0;
+    m_Snapshot.ir_extended_mode = enabled;
+
+    LOG_INFO(kTag, "IR Extended mode %s for %s%s", enabled ? "enabled" : "disabled",
+             m_Path.c_str(),
+             enabled ? " - Nunchuk/Classic/Guitar data is frozen while this is active" : "");
+
+    return ok;
 }
 
 void WiimoteDevice::CheckBalanceBoardStuckSensors() {

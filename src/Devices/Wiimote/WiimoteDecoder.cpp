@@ -59,6 +59,22 @@ IRState IRBasic(const uint8_t ir[10]) {
     return out;
 }
 
+IRState IRExtended(const uint8_t ir[12]) {
+    IRState out{};
+    // Per dot: byte0 = X low 8 bits, byte1 = Y low 8 bits, byte2 = X high
+    // 2 bits (7:6) | Y high 2 bits (5:4) | size (3:0). An empty slot reads
+    // all-1s across all 3 bytes (X=0xFF, Y=0xFF, size=0xF) per WiiBrew.
+    for (int i = 0; i < 4; ++i) {
+        const uint8_t *p = ir + (i * 3);
+        IRDot &d = out[i];
+        d.x    = uint16_t(p[0]) | (uint16_t(p[2] & 0xC0) << 2);
+        d.y    = uint16_t(p[1]) | (uint16_t(p[2] & 0x30) << 4);
+        d.size = p[2] & 0x0F;
+        d.visible = !(p[0] == 0xFF && p[1] == 0xFF && (p[2] & 0x0F) == 0x0F);
+    }
+    return out;
+}
+
 NunchukState Nunchuk(const uint8_t *ext, size_t len) {
     NunchukState s;
     if (len < 6) return s; // disconnected/insufficient data

@@ -67,6 +67,34 @@ TEST(WiimoteDecoder, IRBasicEmptySlotIsInvisible) {
     EXPECT_FALSE(dots[0].visible);
 }
 
+TEST(WiimoteDecoder, IRExtendedFieldsAreIndependent) {
+    // Dot 0: X low=0x11, Y low=0x22, byte2 = Xhi(10) Yhi(01) size(1010)
+    // -> X=0x211, Y=0x122, size=0xA. Dot 1 left zeroed/untouched to check
+    // no cross-talk between dot slots.
+    uint8_t byte2 = 0b10'01'1010;
+    uint8_t ir[12] = {0x11, 0x22, byte2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    auto dots = Decode::IRExtended(ir);
+    EXPECT_EQ(dots[0].x, 0x211);
+    EXPECT_EQ(dots[0].y, 0x122);
+    EXPECT_EQ(dots[0].size, 0xA);
+    EXPECT_TRUE(dots[0].visible);
+}
+
+TEST(WiimoteDecoder, IRExtendedEmptySlotIsInvisible) {
+    uint8_t ir[12] = {0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    auto dots = Decode::IRExtended(ir);
+    EXPECT_FALSE(dots[0].visible);
+}
+
+TEST(WiimoteDecoder, IRExtendedMaxSize) {
+    // size = 0xF (max, not the "empty slot" sentinel unless X/Y are ALSO
+    // 0xFF) - a real large/bright dot near the edge of a 10-bit axis.
+    uint8_t ir[12] = {0xFF, 0x00, 0x0F, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    auto dots = Decode::IRExtended(ir);
+    EXPECT_TRUE(dots[0].visible);
+    EXPECT_EQ(dots[0].size, 0xF);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Extension identification
 // ═══════════════════════════════════════════════════════════════════════════
