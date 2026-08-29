@@ -42,6 +42,13 @@ NunchukState             Nunchuk(const uint8_t *ext, size_t len);
 ClassicControllerState    Classic(const uint8_t *ext, size_t len, bool is_pro);
 GuitarHeroState            Guitar(const uint8_t *ext, size_t len, bool is_drums);
 
+// Same 6-byte shape as GuitarHeroState's underlying Classic-Controller-
+// format decode, factored out so both Guitar() and the MotionPlus
+// passthrough path (GuitarFromClassic() below) can build a GuitarHeroState
+// from an already-decoded ClassicControllerState instead of duplicating
+// the fret/strum/whammy remap.
+GuitarHeroState GuitarFromClassic(const ClassicControllerState &cc, bool is_drums);
+
 // Balance Board: 8 weight bytes + temperature + battery, per WiiBrew
 // "Wii Balance Board#Data Format". `cal` must be filled in first via
 // ParseBalanceBoardCalibration() from the 32-byte block at 0xA40020.
@@ -64,5 +71,23 @@ BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32]);
 // Classic decode separately; this function only concerns itself with the
 // gyro rates + connection bits.
 MotionPlusState MotionPlus(const uint8_t *ext, size_t len);
+
+// Nunchuk/Classic Controller data as they arrive while a Wii Motion Plus
+// is active in that extension's passthrough mode, per WiiBrew's
+// "Nunchuck pass-through mode" / "Classic Controller pass-through mode"
+// tables (same page as MotionPlus() above). In passthrough, the MotionPlus
+// interleaves its own gyro reports with re-encoded extension reports, and
+// steals/moves a handful of bits in the extension report to make room for
+// 3 bookkeeping bits (an "extension connected" flag and the report-type
+// discriminator bit also used by MotionPlus() to tell the two report kinds
+// apart). Feeding passthrough-mode bytes to the plain Nunchuk()/Classic()
+// decoders instead of these will corrupt an axis LSB or two, and will
+// misread the always-zero discriminator/reserved bits in Classic's case as
+// permanently-held dpad_left/dpad_up presses - use these whenever
+// WimoteDevice has MotionPlus active AND the byte set is extension data
+// (i.e. NOT the ee[5] bit 1 == 1 case MotionPlus() itself handles).
+// `ext`/`len` are the same extension-offset pointer/length as above.
+NunchukState           NunchukViaMotionPlus(const uint8_t *ext, size_t len);
+ClassicControllerState ClassicViaMotionPlus(const uint8_t *ext, size_t len, bool is_pro);
 
 } // namespace InputBridge::Wiimote::Decode

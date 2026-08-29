@@ -302,3 +302,109 @@ TEST(WiimoteDecoder, MotionPlusDisconnectedWithInsufficientData) {
     auto mp = Decode::MotionPlus(nullptr, 0);
     EXPECT_FALSE(mp.connected);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Nunchuk / Classic Controller passthrough decode (Wii Motion Plus active)
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(WiimoteDecoder, NunchukViaMotionPlusSticksUnaffected) {
+    // SX/SY pass through untouched regardless of passthrough re-encoding.
+    uint8_t ext[6] = {0x7F, 0x81, 0x00, 0x00, 0x00, 0x00};
+    auto n = Decode::NunchukViaMotionPlus(ext, 6);
+    ASSERT_TRUE(n.connected);
+    EXPECT_EQ(n.stick_x, 0x7F);
+    EXPECT_EQ(n.stick_y, 0x81);
+}
+
+TEST(WiimoteDecoder, NunchukViaMotionPlusAccelReconstructsWithLsbZero) {
+    // AX high byte = 0xAA, AX's relocated bit1 set (ext[5] bit4) ->
+    // raw_x = (0xAA << 2) | (1 << 1) = 0x2A8 | 0x2 = 0x2AA, LSB forced 0.
+    // Likewise AY (ext[3]=0x55, ext[5] bit5 set) and AZ (ext[4]>>1 top 7
+    // bits = 0x7F i.e. ext[4]=0xFF, ext[5] bits7:6 set -> AZ<2:1>=3).
+    uint8_t ext[6] = {
+        0x00, 0x00,       // SX, SY (irrelevant here)
+        0xAA,              // AX<9:2>
+        0x55,              // AY<9:2>
+        0xFF,              // AZ<9:3> in bits7:1, bit0 = extension_connected
+        uint8_t(0xC0 | 0x20 | 0x10), // AZ<2:1>=11 (bits7:6), AY<1>=1 (bit5), AX<1>=1 (bit4)
+    };
+    auto n = Decode::NunchukViaMotionPlus(ext, 6);
+    EXPECT_EQ(n.accel_x, (uint16_t(0xAA) << 2) | 0x02);
+    EXPECT_EQ(n.accel_y, (uint16_t(0x55) << 2) | 0x02);
+    EXPECT_EQ(n.accel_z, (uint16_t(0xFF >> 1) << 3) | 0x06);
+    EXPECT_EQ(n.accel_x & 0x01, 0); // LSB always lost in passthrough
+    EXPECT_EQ(n.accel_y & 0x01, 0);
+    EXPECT_EQ(n.accel_z & 0x01, 0);
+}
+
+TEST(WiimoteDecoder, NunchukViaMotionPlusButtonsAtRelocatedBits) {
+    // C = ext[5] bit3, Z = ext[5] bit2 (moved from the non-passthrough
+    // format's bit1/bit0), both active-low.
+    uint8_t ext[6] = {0, 0, 0, 0, 0, uint8_t(0xFF & ~0x08)}; // C pressed, Z released
+    auto n = Decode::NunchukViaMotionPlus(ext, 6);
+    EXPECT_TRUE(n.button_c);
+    EXPECT_FALSE(n.button_z);
+}
+
+TEST(WiimoteDecoder, NunchukViaMotionPlusDisconnectedWithInsufficientData) {
+    auto n = Decode::NunchukViaMotionPlus(nullptr, 0);
+    EXPECT_FALSE(n.connected);
+}
+
+TEST(WiimoteDecoder, ClassicViaMotionPlusSticksLoseLsbAndDpadMoves) {
+    // LX = 0x3F (all 6 bits set) with BDU pressed -> byte0 = 0x3F & ~0x01
+    // active-low means BDU pressed = bit0 clear, so byte0 = 0x3E.
+    // Reconstructed left_x should read back 0x3E (LSB forced 0), not 0x3F.
+    uint8_t ext[6] = {
+        0x3E, // LX<5:1>=0x1F, bit0=0 -> BDU pressed
+        0x3E, // LY<5:1>=0x1F, bit0=0 -> BDL pressed
+        0x00, 0x00,
+        0xFF, // all of BDR/BDD/BLT/-/H/+/RT released (active-low, all 1)
+        0xFF, // all of ZL/B/Y/A/X/ZR released
+    };
+    auto c = Decode::ClassicViaMotionPlus(ext, 6, false);
+    ASSERT_TRUE(c.connected);
+    EXPECT_EQ(c.left_x, 0x3E);
+    EXPECT_EQ(c.left_y, 0x3E);
+    EXPECT_TRUE(c.dpad_up);   // BDU, from ext[0] bit0
+    EXPECT_TRUE(c.dpad_left); // BDL, from ext[1] bit0
+}
+
+TEST(WiimoteDecoder, ClassicViaMotionPlusReservedBitsDontLookLikeDpad) {
+    // ext[5] bits1:0 are the MotionPlus discriminator/reserved bits (always
+    // 0 in a real passthrough report) - the plain Classic() decoder would
+    // misread these as dpad_left/dpad_up permanently pressed (active-low);
+    // the *ViaMotionPlus decoder must not.
+    uint8_t ext[6] = {0x00, 0x00, 0x00, 0x00, 0xFF, 0x00}; // BDU/BDL released via bit0=1 below
+    ext[0] = 0x01; // BDU bit set = released
+    ext[1] = 0x01; // BDL bit set = released
+    auto c = Decode::ClassicViaMotionPlus(ext, 6, false);
+    EXPECT_FALSE(c.dpad_up);
+    EXPECT_FALSE(c.dpad_left);
+}
+
+TEST(WiimoteDecoder, ClassicViaMotionPlusFaceButtonsUnaffected) {
+    // A = byte5 bit4, same position as the non-passthrough format.
+    uint8_t ext[6] = {0x01, 0x01, 0x00, 0x00, 0xFF, uint8_t(0xFF & ~0x10)};
+    auto c = Decode::ClassicViaMotionPlus(ext, 6, false);
+    EXPECT_TRUE(c.a);
+    EXPECT_FALSE(c.b);
+}
+
+TEST(WiimoteDecoder, ClassicViaMotionPlusDisconnectedWithInsufficientData) {
+    auto c = Decode::ClassicViaMotionPlus(nullptr, 0, false);
+    EXPECT_FALSE(c.connected);
+}
+
+TEST(WiimoteDecoder, GuitarFromClassicMatchesGuitarMapping) {
+    // GuitarFromClassic() should reproduce exactly what Guitar() computes
+    // when fed the same (non-passthrough) Classic-shaped bytes, since
+    // Guitar() is now implemented in terms of it.
+    uint8_t ext[6] = {0x3F, 0x00, 0x00, uint8_t(0x1F), 0xFF, uint8_t(0xFF & ~0x40)}; // B (green fret) pressed
+    auto direct = Decode::Guitar(ext, 6, false);
+    auto viaHelper = Decode::GuitarFromClassic(Decode::Classic(ext, 6, false), false);
+    EXPECT_EQ(direct.fret_green, viaHelper.fret_green);
+    EXPECT_EQ(direct.stick_x, viaHelper.stick_x);
+    EXPECT_EQ(direct.whammy_bar, viaHelper.whammy_bar);
+    EXPECT_TRUE(viaHelper.fret_green);
+}

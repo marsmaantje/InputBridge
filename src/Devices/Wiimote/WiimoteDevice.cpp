@@ -942,11 +942,7 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
     // Once active, the MotionPlus takes over the extension byte slot: its
     // own gyro data is distinguished from a regular extension's data by
     // ee[5] bit 1 == 1 (the "extension identifier" bit WiiBrew documents
-    // for the DE data format). Passthrough Nunchuk/Classic data, if any,
-    // rides alongside inside the same 6 bytes (some button/axis LSBs are
-    // stolen to make room) - re-decoding those precisely is a known gap;
-    // for now we surface the MotionPlus gyro data itself, which is the
-    // feature being added here.
+    // for the DE data format).
     if (m_MotionPlusActive && (ee[5] & 0x02)) {
         m_Snapshot.motion_plus = Decode::MotionPlus(ee, 6);
         m_Snapshot.motion_plus.is_nunchuk_passthrough =
@@ -957,18 +953,35 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
         return;
     }
 
+    // Otherwise this is the passthrough device's own report. While the
+    // MotionPlus is active in a passthrough mode, it has re-encoded these
+    // bytes per WiiBrew's passthrough tables (stolen/relocated LSBs +
+    // bookkeeping bits) - decode with the *ViaMotionPlus variant, not the
+    // plain one, or an axis LSB gets corrupted and the always-zero
+    // discriminator/reserved bits get misread as held-down dpad presses.
+    // See WiimoteDecoder.h for the byte-level detail.
     switch (m_Snapshot.extension) {
         case ExtensionType::Nunchuk:
-            m_Snapshot.nunchuk = Decode::Nunchuk(ee, 6);
+            m_Snapshot.nunchuk = m_MotionPlusActive
+                ? Decode::NunchukViaMotionPlus(ee, 6)
+                : Decode::Nunchuk(ee, 6);
             break;
         case ExtensionType::ClassicController:
-        case ExtensionType::ClassicControllerPro:
-            m_Snapshot.classic = Decode::Classic(ee, 6, m_Snapshot.extension == ExtensionType::ClassicControllerPro);
+        case ExtensionType::ClassicControllerPro: {
+            const bool is_pro = m_Snapshot.extension == ExtensionType::ClassicControllerPro;
+            m_Snapshot.classic = m_MotionPlusActive
+                ? Decode::ClassicViaMotionPlus(ee, 6, is_pro)
+                : Decode::Classic(ee, 6, is_pro);
             break;
+        }
         case ExtensionType::GuitarHeroGuitar:
-        case ExtensionType::GuitarHeroDrums:
-            m_Snapshot.guitar = Decode::Guitar(ee, 6, m_Snapshot.extension == ExtensionType::GuitarHeroDrums);
+        case ExtensionType::GuitarHeroDrums: {
+            const bool is_drums = m_Snapshot.extension == ExtensionType::GuitarHeroDrums;
+            m_Snapshot.guitar = m_MotionPlusActive
+                ? Decode::GuitarFromClassic(Decode::ClassicViaMotionPlus(ee, 6, /*is_pro=*/false), is_drums)
+                : Decode::Guitar(ee, 6, is_drums);
             break;
+        }
         default: break;
     }
 }

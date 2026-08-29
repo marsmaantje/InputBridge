@@ -125,25 +125,10 @@ ClassicControllerState Classic(const uint8_t *ext, size_t len, bool is_pro) {
     return s;
 }
 
-GuitarHeroState Guitar(const uint8_t *ext, size_t len, bool is_drums) {
-    // Guitar Hero (Wii) guitars/drums stream their fret/strum/whammy data
-    // packed into the same 6-byte layout as a stock Classic Controller
-    // (format 0x01), just with different physical labels on the same
-    // button/axis bits - this is how the extension is decoded in practice
-    // by the existing open-source drivers (wiiuse's classic_ctrl.c reuses
-    // its Classic Controller parser for the guitar for exactly this reason).
-    // NOTE: WiiBrew separately states the guitar advertises data-format
-    // byte 0x03 (8-bit precision, 8-byte layout) - if your specific guitar
-    // reports 8 bytes of extension data instead of 6, this mapping will be
-    // wrong and needs to be reworked against a byte capture from real
-    // hardware. Treat this decoder as a verified-shape-but-unverified-on-
-    // hardware starting point.
+GuitarHeroState GuitarFromClassic(const ClassicControllerState &cc, bool is_drums) {
     GuitarHeroState s;
-    if (len < 6) return s;
-    s.connected = true;
+    s.connected = cc.connected;
     s.is_drums = is_drums;
-
-    const auto cc = Classic(ext, len, /*is_pro=*/false);
     s.fret_green  = cc.b;
     s.fret_red    = cc.a;
     s.fret_yellow = cc.y;
@@ -159,6 +144,23 @@ GuitarHeroState Guitar(const uint8_t *ext, size_t len, bool is_drums) {
     // Drum pad velocities are not covered by the Classic-Controller-shaped
     // decode above; GHWT Drums uses extra bytes/mode not modeled here yet.
     return s;
+}
+
+GuitarHeroState Guitar(const uint8_t *ext, size_t len, bool is_drums) {
+    // Guitar Hero (Wii) guitars/drums stream their fret/strum/whammy data
+    // packed into the same 6-byte layout as a stock Classic Controller
+    // (format 0x01), just with different physical labels on the same
+    // button/axis bits - this is how the extension is decoded in practice
+    // by the existing open-source drivers (wiiuse's classic_ctrl.c reuses
+    // its Classic Controller parser for the guitar for exactly this reason).
+    // NOTE: WiiBrew separately states the guitar advertises data-format
+    // byte 0x03 (8-bit precision, 8-byte layout) - if your specific guitar
+    // reports 8 bytes of extension data instead of 6, this mapping will be
+    // wrong and needs to be reworked against a byte capture from real
+    // hardware. Treat this decoder as a verified-shape-but-unverified-on-
+    // hardware starting point.
+    if (len < 6) return GuitarHeroState{};
+    return GuitarFromClassic(Classic(ext, len, /*is_pro=*/false), is_drums);
 }
 
 BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32]) {
@@ -291,6 +293,87 @@ MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
     s.deg_s_yaw   = toDegS(s.raw_yaw,   s.slow_yaw);
     s.deg_s_pitch = toDegS(s.raw_pitch, s.slow_pitch);
     s.deg_s_roll  = toDegS(s.raw_roll,  s.slow_roll);
+
+    return s;
+}
+
+NunchukState NunchukViaMotionPlus(const uint8_t *ext, size_t len) {
+    // Per WiiBrew "Nunchuck pass-through mode" data-format table: SX/SY are
+    // untouched; each accelerometer axis loses its LSB (bit 0, always read
+    // as 0 here) to make room for the bookkeeping bits, with the remaining
+    // 9 bits split across ext[2]/ext[3]/ext[4] (as in the normal format)
+    // plus one extra relocated bit per axis packed into ext[5]:
+    //   ext[5] bit 4 = AX bit 1     ext[5] bit 5 = AY bit 1
+    //   ext[5] bits 7:6 = AZ bits 2:1 (AZ's top 7 bits, 9:3, stay in ext[4]
+    //   bits 7:1; ext[4] bit 0 becomes "extension connected" instead of
+    //   contributing to AZ)
+    //   ext[5] bit 3 = Button C     ext[5] bit 2 = Button Z  (both active-low,
+    //   same convention as the non-passthrough format's bits 1/0)
+    //   ext[5] bits 1:0 = report-type discriminator + reserved (0 here;
+    //   WimoteDevice only calls this decoder when it's already established
+    //   this is extension data, not a MotionPlus gyro report)
+    NunchukState s;
+    if (len < 6) return s; // disconnected/insufficient data
+    s.connected = true;
+    s.stick_x = ext[0];
+    s.stick_y = ext[1];
+    s.accel_x = (uint16_t(ext[2]) << 2) | uint16_t(((ext[5] >> 4) & 0x01) << 1);
+    s.accel_y = (uint16_t(ext[3]) << 2) | uint16_t(((ext[5] >> 5) & 0x01) << 1);
+    s.accel_z = (uint16_t(ext[4] >> 1) << 3) | uint16_t(((ext[5] >> 6) & 0x03) << 1);
+    s.button_c = !(ext[5] & 0x08);
+    s.button_z = !(ext[5] & 0x04);
+    return s;
+}
+
+ClassicControllerState ClassicViaMotionPlus(const uint8_t *ext, size_t len, bool is_pro) {
+    // Per WiiBrew "Classic Controller ... pass-through mode" data-format
+    // table. RX/RY/LT/RT and the BDR/BDD/BLT/-/H/+/RT and ZL/B/Y/A/X/ZR
+    // button bits sit at the exact same bit positions as the non-passthrough
+    // format (see Classic() above), so those lines are unchanged from it.
+    // What differs:
+    //   - Left stick X/Y each lose their LSB (bit 0, always read as 0 here)
+    //     to make room for the two relocated D-pad bits below.
+    //   - BDU (dpad_up) moves into ext[0] bit 0 (was ext[5] bit 0).
+    //   - BDL (dpad_left) moves into ext[1] bit 0 (was ext[5] bit 1).
+    //   - ext[4] bit 0 becomes "extension connected" (unused/reserved in
+    //     the non-passthrough format).
+    //   - ext[5] bits 1:0 become the report-type discriminator + reserved
+    //     (always 0 here) rather than dpad_left/dpad_up - reading them as
+    //     buttons, as the plain Classic() decoder would, misreports both
+    //     as permanently pressed.
+    ClassicControllerState s;
+    if (len < 6) return s;
+    s.connected = true;
+    s.is_pro = is_pro;
+
+    const uint8_t b0 = ext[0], b1 = ext[1], b2 = ext[2], b3 = ext[3], b4 = ext[4], b5 = ext[5];
+
+    s.left_x  = b0 & 0x3E; // LX<5:1>, bit 0 forced to 0 (stolen for BDU)
+    s.left_y  = b1 & 0x3E; // LY<5:1>, bit 0 forced to 0 (stolen for BDL)
+    s.right_x = uint16_t(((b0 >> 6) & 0x03) << 3 | ((b1 >> 6) & 0x03) << 1 | ((b2 >> 7) & 0x01));
+    s.right_y = b2 & 0x1F;
+    s.left_trigger  = uint16_t(((b2 >> 5) & 0x03) << 3 | ((b3 >> 5) & 0x07));
+    s.right_trigger = b3 & 0x1F;
+
+    s.dpad_right = !(b4 & 0x80);
+    s.dpad_down  = !(b4 & 0x40);
+    s.l          = !(b4 & 0x20);
+    s.minus      = !(b4 & 0x10);
+    s.home       = !(b4 & 0x08);
+    s.plus       = !(b4 & 0x04);
+    s.r          = !(b4 & 0x02);
+    // b4 bit 0 here is "extension connected", not a button.
+
+    s.zl    = !(b5 & 0x80);
+    s.b     = !(b5 & 0x40);
+    s.y     = !(b5 & 0x20);
+    s.a     = !(b5 & 0x10);
+    s.x     = !(b5 & 0x08);
+    s.zr    = !(b5 & 0x04);
+    // b5 bits 1:0 are the discriminator/reserved bits, not dpad_left/up.
+
+    s.dpad_up   = !(b0 & 0x01);
+    s.dpad_left = !(b1 & 0x01);
 
     return s;
 }
