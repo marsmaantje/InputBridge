@@ -1,5 +1,23 @@
 #include "AboutWindow.h"
 #include "imgui.h"
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cstring>
+
+namespace {
+    // Case-insensitive strcmp. ImStricmp() lives in imgui_internal.h, which we
+    // don't otherwise need, so we provide our own instead of including it.
+    int CaseInsensitiveCompare(const char* a, const char* b) {
+        while (*a && *b) {
+            const int ca = std::tolower(static_cast<unsigned char>(*a));
+            const int cb = std::tolower(static_cast<unsigned char>(*b));
+            if (ca != cb) return ca - cb;
+            ++a; ++b;
+        }
+        return static_cast<unsigned char>(*a) - static_cast<unsigned char>(*b);
+    }
+}
 
 void AboutWindow::DrawContent() {
     // -- Title ----------------------------------------------------------------
@@ -99,7 +117,7 @@ void AboutWindow::DrawContent() {
         ImGui::Spacing();
 
         constexpr const char* testers_beta[] = {
-            "0x8081", "Decoy", "esnya", "GranpaVape", "Hayden", "ShadowX", "SnubbleJr"
+            "0x8081", "Decoy", "esnya", "GranpaVape", "Hayden", "LieutenantSparkles", "ShadowX", "SnubbleJr"
         };
         ImGui::Indent(8.0f);
         for (const char* t : testers_beta) {
@@ -122,25 +140,53 @@ void AboutWindow::DrawContent() {
     ImGui::Spacing();
 
     struct Lib { const char* name; const char* description; const char* license; };
-    constexpr Lib libs[] = {
-        { "SDL3",                 "Cross-platform hardware abstraction (input, audio, video)", "zlib License"         },
-        { "Dear ImGui",           "Immediate-mode graphical user interface library",           "MIT License"          },
-        { "liblo",                "Lightweight OSC (Open Sound Control) implementation",       "LGPL 2.1"             },
-        { "nlohmann/json",        "Single-header JSON parser and serialiser for C++",          "MIT License"          },
-        { "uWebSockets",          "High-performance WebSocket server library",                 "Apache 2.0"           },
-        { "uSockets",             "Low-level async networking (used by uWebSockets)",          "Apache 2.0"           },
-        { "Google Fonts",         "Used for the Resonite and VRChat color themes",             "Apache 2.0 / OFL 1.1" },
-        { "Font Awesome 6",       "Icon font used throughout the user interface",              "SIL OFL 1.1"          },
-        { "Kenney Input Prompts", "Icon fonts for game controller and device glyphs",          "CC0 1.0"              },
-    };
+    static constexpr std::array<Lib, 10> libs_source = {{
+        { "SDL3",                 "Cross-platform hardware abstraction (input, audio, video)",  "zlib License"         },
+        { "Dear ImGui",           "Immediate-mode graphical user interface library",            "MIT License"          },
+        { "liblo",                "Lightweight OSC (Open Sound Control) implementation",        "LGPL 2.1"             },
+        { "nlohmann/json",        "Single-header JSON parser and serialiser for C++",           "MIT License"          },
+        { "uWebSockets",          "High-performance WebSocket server library",                  "Apache 2.0"           },
+        { "uSockets",             "Low-level async networking (used by uWebSockets)",           "Apache 2.0"           },
+        { "Google Fonts",         "Used for the Resonite and VRChat color themes",              "Apache 2.0 / OFL 1.1" },
+        { "Font Awesome 6",       "Icon font used throughout the user interface",               "SIL OFL 1.1"          },
+        { "Kenney Input Prompts", "Icon fonts for game controller and device glyphs",           "CC0 1.0"              },
+        { "WiimoteLib",           "Wii Remote .Net library by Brian Peek. (Ported to C++)",     "MIT License"          },
+    }};
+
+    // Mutable, sortable copy of the library list (persists across frames).
+    static std::array<Lib, libs_source.size()> libs = libs_source;
 
     if (ImGui::BeginTable("##libs", 3,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-            ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("Library",     ImGuiTableColumnFlags_WidthStretch, 1.8f);
+            ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Sortable |
+            ImGuiTableFlags_SortTristate)) {
+        ImGui::TableSetupColumn("Library",     ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 1.8f);
         ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch, 4.0f);
         ImGui::TableSetupColumn("License",     ImGuiTableColumnFlags_WidthStretch, 1.6f);
         ImGui::TableHeadersRow();
+
+        // Re-sort (alphabetically/numerically, case-insensitive) whenever the
+        // user clicks a header and the sort specs become dirty.
+        if (ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs()) {
+            if (sort_specs->SpecsDirty || sort_specs->SpecsCount == 0) {
+                if (sort_specs->SpecsCount > 0) {
+                    const ImGuiTableColumnSortSpecs& spec = sort_specs->Specs[0];
+                    const int col = spec.ColumnIndex;
+                    const bool ascending = (spec.SortDirection == ImGuiSortDirection_Ascending);
+
+                    std::sort(libs.begin(), libs.end(), [col, ascending](const Lib& a, const Lib& b) {
+                        const char* sa = (col == 0) ? a.name : (col == 1) ? a.description : a.license;
+                        const char* sb = (col == 0) ? b.name : (col == 1) ? b.description : b.license;
+                        int cmp = CaseInsensitiveCompare(sa, sb);
+                        return ascending ? (cmp < 0) : (cmp > 0);
+                    });
+                } else {
+                    // No sort (third click state) -> restore original order.
+                    libs = libs_source;
+                }
+                sort_specs->SpecsDirty = false;
+            }
+        }
 
         for (const auto& lib : libs) {
             ImGui::TableNextRow();
