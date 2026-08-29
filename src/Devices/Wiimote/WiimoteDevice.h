@@ -161,10 +161,20 @@ public:
     // the speaker into 8-bit signed PCM mode at `sample_rate_hz`. WiiBrew
     // notes 8-bit mode needs a low sample rate to keep the Bluetooth link
     // fed in time and calls out 2000Hz specifically as a good compromise -
-    // that's the default here. `volume` is 0x00-0xFF. Synchronous (several
-    // WriteRegister() round-trips); call once before QueuePCM8(), not every
-    // frame. Returns false if any step's HID write failed.
-    bool EnableSpeaker(uint32_t sample_rate_hz = 2000, uint8_t volume = 0xFF);
+    // that's the default here. `volume` is 0x00-0xFF, but 0xFF (max gain
+    // on the hardware volume register) overdrives this speaker audibly -
+    // confirmed distorted/too loud on real hardware - so the default here
+    // is a conservative ~25%. Push it up if you want it louder and can
+    // live with more distortion; there's no way to get more volume
+    // without more distortion out of this speaker/format combination.
+    // NOTE: volume=0x00 is NOT confirmed to produce true silence on real
+    // hardware (WiiBrew: "the full purpose of these bytes is not known") -
+    // TickSpeaker() enforces silence at volume 0 by never transmitting
+    // queued audio at all, rather than relying on this register.
+    // Synchronous (several WriteRegister() round-trips); call once before
+    // QueuePCM8(), not every frame. Returns false if any step's HID write
+    // failed.
+    bool EnableSpeaker(uint32_t sample_rate_hz = 2000, uint8_t volume = 0x40);
 
     // Disables the speaker (Report 0x14, enable bit cleared) and discards
     // anything still queued.
@@ -191,7 +201,7 @@ public:
     // simple beeps - for real audio, generate/decode your own PCM8 buffer
     // and use QueuePCM8() directly.
     void PlayBeep(float freq_hz = 440.0f, uint32_t duration_ms = 200,
-                   uint32_t sample_rate_hz = 2000, uint8_t volume = 0xFF);
+                   uint32_t sample_rate_hz = 2000, uint8_t volume = 0x40);
 
     // -- Low-level register access (exposed for advanced/experimental use,
     //    same rationale as WiimoteLib exposing raw read/write) ------------
@@ -351,6 +361,7 @@ private:
     // Speaker playback queue (see EnableSpeaker()/QueuePCM8()/TickSpeaker()).
     bool   m_SpeakerEnabled = false;
     uint32_t m_SpeakerSampleRateHz = 0; // rate last passed to EnableSpeaker(), 0 = never enabled
+    uint8_t  m_SpeakerVolume = 0;       // volume last passed to EnableSpeaker() (see PlayBeep())
     std::vector<int8_t> m_SpeakerQueue;
     size_t m_SpeakerQueuePos = 0;
     Uint64 m_SpeakerNextChunkAtMs = 0;

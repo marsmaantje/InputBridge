@@ -584,6 +584,7 @@ bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume) {
 
     m_SpeakerEnabled = ok;
     m_SpeakerSampleRateHz = sample_rate_hz;
+    m_SpeakerVolume = volume;
     // Pace TickSpeaker() so a kSpeakerMaxChunkBytes chunk drains roughly
     // every (chunk_bytes / sample_rate_hz) seconds - i.e. we hand the
     // Wiimote new data about as fast as it's consuming the last chunk,
@@ -607,6 +608,7 @@ void WiimoteDevice::DisableSpeaker() {
     }
     m_SpeakerEnabled = false;
     m_SpeakerSampleRateHz = 0;
+    m_SpeakerVolume = 0;
     StopSpeaker();
 }
 
@@ -618,11 +620,24 @@ void WiimoteDevice::QueuePCM8(const int8_t *samples, size_t count) {
 void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sample_rate_hz, uint8_t volume) {
     if (sample_rate_hz == 0) sample_rate_hz = 2000;
 
+    // Volume 0 means "play nothing" - see TickSpeaker()'s comment on why
+    // silence is enforced by never sending data rather than by trusting
+    // the hardware volume register. No point running the enable sequence
+    // or generating samples that TickSpeaker() would just discard anyway.
+    if (volume == 0) {
+        StopSpeaker();
+        return;
+    }
+
     // Only re-run the (synchronous, several-HID-writes) enable sequence if
-    // we're not already enabled at this exact rate - lets repeated beeps
-    // (e.g. a UI click sound) queue back-to-back without re-doing the
-    // register dance and its associated mute/unmute click every time.
-    if (!m_SpeakerEnabled || m_SpeakerSampleRateHz != sample_rate_hz) {
+    // something it actually controls has changed - rate or volume - so
+    // repeated same-settings beeps (e.g. a UI click sound) can queue
+    // back-to-back without re-doing the register dance and its associated
+    // mute/unmute click every time. Checking rate alone here was a bug:
+    // a repeat call with a new `volume` but the same (default) rate would
+    // silently skip EnableSpeaker() and keep whatever volume was set on
+    // the very first call, making `volume` appear to do nothing.
+    if (!m_SpeakerEnabled || m_SpeakerSampleRateHz != sample_rate_hz || m_SpeakerVolume != volume) {
         if (!EnableSpeaker(sample_rate_hz, volume)) return;
     }
 
@@ -631,7 +646,10 @@ void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sampl
 
     // Plain sine tone, plus a short linear fade-in/out (~5ms or 10% of the
     // tone, whichever is shorter) to avoid the audible click a hard-edged
-    // buffer start/stop produces on this speaker.
+    // buffer start/stop produces on this speaker. Peak amplitude is held
+    // below full-scale (100 of a possible 127) to leave a little digital
+    // headroom on top of the volume register's own gain - see
+    // EnableSpeaker()'s comment on why 0xFF there already distorts.
     const size_t fade_samples = std::min(sample_count / 10, size_t(sample_rate_hz) * 5 / 1000);
     for (size_t i = 0; i < sample_count; ++i) {
         const float t = float(i) / float(sample_rate_hz);
@@ -641,7 +659,7 @@ void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sampl
             else if (i >= sample_count - fade_samples) amplitude = float(sample_count - 1 - i) / float(fade_samples);
         }
         const float s = amplitude * std::sin(2.0f * kPi * freq_hz * t);
-        samples[i] = int8_t(std::clamp(s * 127.0f, -127.0f, 127.0f));
+        samples[i] = int8_t(std::clamp(s * 100.0f, -100.0f, 100.0f));
     }
 
     QueuePCM8(samples.data(), samples.size());
@@ -655,6 +673,19 @@ void WiimoteDevice::StopSpeaker() {
 void WiimoteDevice::TickSpeaker() {
     if (!m_SpeakerEnabled || !m_Dev) return;
 
+    // Treat volume 0 as "play nothing" rather than trusting the hardware
+    // gain register (VV) to produce true silence at its documented
+    // minimum - WiiBrew itself notes "the full purpose of these bytes is
+    // not known", and real hardware has been confirmed to still output
+    // audible sound at VV=0x00. Dropping the queue without transmitting
+    // anything is a guarantee the register-level behavior isn't; anything
+    // still queued when volume drops to 0 (e.g. via the UI slider mid-
+    // playback) is discarded rather than silently sent anyway.
+    if (m_SpeakerVolume == 0) {
+        if (!m_SpeakerQueue.empty()) StopSpeaker();
+        return;
+    }
+
     if (m_SpeakerQueuePos >= m_SpeakerQueue.size()) {
         // Fully drained - reset to an empty queue rather than letting
         // m_SpeakerQueuePos grow unbounded across many small QueuePCM8()
@@ -664,21 +695,51 @@ void WiimoteDevice::TickSpeaker() {
     }
 
     const Uint64 now = SDL_GetTicks();
-    if (now < m_SpeakerNextChunkAtMs) return;
 
-    const size_t remaining = m_SpeakerQueue.size() - m_SpeakerQueuePos;
-    const uint8_t n = uint8_t(std::min<size_t>(remaining, kSpeakerMaxChunkBytes));
+    // Send every chunk whose scheduled time has already passed, not just
+    // one. Poll() runs at whatever the host's frame/tick rate is (commonly
+    // ~16.67ms at 60fps), which can be SLOWER than the ~10ms/20-byte
+    // cadence 2000Hz 8-bit PCM actually needs - sending only one chunk per
+    // Poll() call in that case silently under-delivers (e.g. 60 chunks/sec
+    // instead of the ~100/sec required), starving the speaker's buffer
+    // between writes. That starvation is what crackle/stutter sounds like
+    // on this hardware, not a bad waveform - the fix is catching up here,
+    // not changing what gets generated. Bounded (kMaxChunksPerTick) so a
+    // real stall (window unfocused, debugger pause, device hiccup) can't
+    // dump an unbounded backlog into one burst of HID writes.
+    constexpr int kMaxChunksPerTick = 8;
+    int sent = 0;
+    while (m_SpeakerQueuePos < m_SpeakerQueue.size() &&
+           now >= m_SpeakerNextChunkAtMs &&
+           sent < kMaxChunksPerTick) {
+        const size_t remaining = m_SpeakerQueue.size() - m_SpeakerQueuePos;
+        const uint8_t n = uint8_t(std::min<size_t>(remaining, kSpeakerMaxChunkBytes));
 
-    // Report 0x18 payload is always the full LL byte + 20 data bytes, even
-    // for a short final chunk - SendReport()'s zero-initialized buf[32]
-    // already leaves any bytes past `n` as padding zeroes.
-    uint8_t p[1 + kSpeakerMaxChunkBytes] = {};
-    p[0] = uint8_t(n << 3); // LL: length, shifted left 3 bits (WiiBrew)
-    std::memcpy(p + 1, m_SpeakerQueue.data() + m_SpeakerQueuePos, n);
-    SendReport(m_Dev, OutReport::SpeakerData, m_RumbleBit, p, sizeof(p));
+        // Report 0x18 payload is always the full LL byte + 20 data bytes,
+        // even for a short final chunk - SendReport()'s zero-initialized
+        // buf[32] already leaves any bytes past `n` as padding zeroes.
+        uint8_t p[1 + kSpeakerMaxChunkBytes] = {};
+        p[0] = uint8_t(n << 3); // LL: length, shifted left 3 bits (WiiBrew)
+        std::memcpy(p + 1, m_SpeakerQueue.data() + m_SpeakerQueuePos, n);
+        SendReport(m_Dev, OutReport::SpeakerData, m_RumbleBit, p, sizeof(p));
 
-    m_SpeakerQueuePos += n;
-    m_SpeakerNextChunkAtMs = now + m_SpeakerChunkIntervalMs;
+        m_SpeakerQueuePos += n;
+        // Schedule from where the PREVIOUS chunk was due, not from `now` -
+        // advancing from `now` each time would silently let real delivery
+        // rate drift below the target rate under any sustained Poll()
+        // jitter, reintroducing the same starvation this loop exists to
+        // fix.
+        m_SpeakerNextChunkAtMs += m_SpeakerChunkIntervalMs;
+        ++sent;
+    }
+
+    // If we're still behind after kMaxChunksPerTick catch-up sends (a
+    // stall long enough that even the bounded burst above couldn't clear
+    // it), resync the schedule to now rather than leaving it arbitrarily
+    // far in the past - otherwise every future Tick would think it's
+    // perpetually catching up and burst-send indefinitely.
+    if (now >= m_SpeakerNextChunkAtMs)
+        m_SpeakerNextChunkAtMs = now + m_SpeakerChunkIntervalMs;
 }
 
 // -- Register read/write (synchronous, bounded wait) ---------------------

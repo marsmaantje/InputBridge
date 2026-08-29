@@ -628,15 +628,32 @@ static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Speaker test: EnableSpeaker()/PlayBeep() below are untested against
-    // real hardware (see Devices/Wiimote/README.md's Speaker row) - this
+    // Speaker test: EnableSpeaker()/PlayBeep() below are confirmed working
+    // on real hardware (see Devices/Wiimote/README.md's Speaker row) - this
     // button exists to make that easy to check without writing any code.
-    // A single 440Hz/200ms tone is enough to confirm the enable/configure/
-    // unmute sequence actually produces sound; it's not meant as a general
-    // audio player.
-    ImGui::TextDisabled("8-bit PCM only - see README.md, untested against real hardware.");
+    // A single tone is enough to confirm the enable/configure/unmute
+    // sequence actually produces sound; it's not meant as a general audio
+    // player.
+    ImGui::TextDisabled("8-bit PCM only - see README.md.");
+
+    // Volume is the hardware gain register (0x00-0xFF), not a software
+    // multiplier - EnableSpeaker()'s default (0x40, ~25%) is already a
+    // conservative starting point because 0xFF audibly distorts this
+    // speaker. Slider starts at that same value so dragging it up is an
+    // explicit, visible trade of loudness for distortion, not a surprise.
+    static uint8_t s_volume[8] = {0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40}; // per-index scratch, good enough for a handful of Wiimotes
+    uint8_t &volume = s_volume[index % 8];
+    int volume_int = int(volume);
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::SliderInt("Speaker Volume", &volume_int, 0x00, 0xFF))
+        volume = uint8_t(volume_int);
+    if (volume >= 0xC0) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.0f, 1.0f), "(loud - likely to distort)");
+    }
+
     if (ImGui::Button("Test Speaker (beep)"))
-        dev.PlayBeep();
+        dev.PlayBeep(440.0f, 200, 2000, volume);
 }
 
 // ---------------------------------------------------------------------------

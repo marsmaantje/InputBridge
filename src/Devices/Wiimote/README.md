@@ -37,7 +37,7 @@ your own decoded state separate from anything SDL owns.
 | LEDs | ✅ | ✅ |
 | Rumble | ✅ | ✅ |
 | Battery | ✅ | ✅ |
-| Speaker | ✅ | ⚠️ 8-bit signed PCM only, via `EnableSpeaker()`/`QueuePCM8()` (`WiimoteDevice.cpp`) - **not verified against real hardware**. 4-bit Yamaha ADPCM (better quality at usable sample rates) not implemented; register layout for it is documented in `WiimoteProtocol.h` if someone wants to add an encoder. |
+| Speaker | ✅ | ⚠️ 8-bit signed PCM only, via `EnableSpeaker()`/`QueuePCM8()` (`WiimoteDevice.cpp`) - confirmed working on real hardware. Default volume tuned down (~25%, `0x40`) after max volume (`0xFF`) was confirmed to distort; `TickSpeaker()` catches up on multiple chunks per `Poll()` call after an earlier version under-delivered data whenever `Poll()`'s cadence was slower than the audio rate, which produced audible crackling. Volume 0 is enforced in software (no data transmitted) rather than trusted to the hardware gain register, which was confirmed on real hardware to still output sound at `VV=0x00`. 4-bit Yamaha ADPCM (better quality at usable sample rates) not implemented; register layout for it is documented in `WiimoteProtocol.h` if someone wants to add an encoder. |
 | Raw register read/write | ✅ | ✅ (`ReadRegister`/`WriteRegister`, public) |
 | Multiple Wiimotes | ✅ | ✅ (`WiimoteManager::Scan()` returns a vector) |
 | Wii Motion Plus | ❌ (predates it) | ❌ not implemented; `ExtensionType::MotionPlus` is detected but not decoded |
