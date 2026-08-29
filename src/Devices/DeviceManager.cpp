@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 
 static constexpr const char* kTag = "DeviceManager";
 
@@ -31,7 +32,28 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
     SDL_GUID guid = SDL_GetJoystickGUID(joystick);
     char guidStr[33];
     SDL_GUIDToString(guid, guidStr, sizeof(guidStr));
-    return std::string(guidStr);
+    std::string guidString(guidStr);
+
+    // Every WiimoteVirtualBridge joystick of a given kind (Wii Remote vs
+    // Balance Board) is attached with the exact same SDL_VirtualJoystickDesc
+    // (same name, same type, no vendor/product/serial set - see
+    // WiimoteVirtualBridge::Attach()), so SDL synthesizes the identical
+    // SDL_GUID for every one of them. With two+ Wiimotes connected at once,
+    // every caller above that keys off this string (MappingProfileStore,
+    // OutputMapper's HapticTarget, InputBindingListener, ...) would
+    // therefore treat them as the same device, silently colliding onto
+    // whichever one's instance_id happened to be found first. Disambiguate
+    // by folding in the bridge's hid_path, which WiimoteVirtualBridge
+    // already uses as the unique key per physical Wiimote within a session
+    // (see its Find()/Sync()). This only affects Wiimote bridge joysticks -
+    // every other device keeps its plain SDL-synthesized GUID unchanged, so
+    // existing saved profiles for non-Wiimote devices are unaffected.
+    bool is_balance_board = false;
+    if (const std::string* hid_path = InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance()
+            .FindHidPathForJoystick(dev.instance_id, &is_balance_board)) {
+        guidString += "-" + std::to_string(std::hash<std::string>{}(*hid_path));
+    }
+    return guidString;
 }
 
 void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
