@@ -776,11 +776,14 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
         if (!SendReport(m_Dev, OutReport::ReadMemory, m_RumbleBit, p, sizeof(p)))
             return false;
 
-        // Poll for the 0x21 reply, discarding/queuing any regular data
-        // reports we happen to read while waiting (Poll() isn't re-entrant
-        // with this call, so we do minimal inline handling here: buttons
-        // are still safe to decode from any report's first two bytes, but
-        // extension/IR handling is skipped for reports consumed here).
+        // Poll for the 0x21 reply. Regular data reports that arrive while
+        // we wait are run through the normal HandleReport() decoder (safe
+        // to call here - it never calls back into ReadRegister()) so
+        // accel/IR/extension/motion_plus stay live for the whole duration
+        // of the read instead of freezing at their pre-read values; only
+        // buttons used to be kept fresh here, which stalled everything
+        // else for up to kRegisterReadTimeoutMs per chunk (worse for
+        // multi-chunk reads like the 32-byte calibration blocks).
         const Uint64 deadline = SDL_GetTicks() + kRegisterReadTimeoutMs;
         bool got = false;
         while (SDL_GetTicks() < deadline) {
@@ -811,10 +814,10 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
                 got = true;
                 break;
             }
-            // Any other report while waiting: at minimum keep buttons fresh.
-            if (buf[0] >= InReport::Core && buf[0] <= InReport::InterleavedB) {
-                m_Snapshot.core = Decode::Buttons(buf + 1);
-            }
+            // Any other report while waiting: decode it exactly like Poll()
+            // would, so nothing goes stale just because a register read is
+            // in flight.
+            HandleReport(buf, n);
         }
         if (!got) return false;
 
