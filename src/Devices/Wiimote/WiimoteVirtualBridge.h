@@ -122,6 +122,17 @@ public:
     // DeviceManager::CloseAllDevices().
     void RemoveAll();
 
+    // Looks up the HID path of the WiimoteDevice backing a given bridge
+    // joystick id, so callers that only have an SDL_JoystickID (e.g.
+    // OutputMapper's HapticTarget::instance_id) can find their way back to
+    // the real WiimoteDevice via DeviceManager::GetWiimotes() - the bridge
+    // joystick itself is virtual and has no rumble motor of its own (see
+    // the file header comment). Returns nullptr if joystick_id isn't a
+    // currently-tracked bridge joystick. out_is_balance_board, if non-null,
+    // is set to whether the matched entry is a Balance Board (which has no
+    // rumble motor at all, unlike a Wii Remote/Wii Remote Plus).
+    const std::string *FindHidPathForJoystick(SDL_JoystickID joystick_id, bool *out_is_balance_board = nullptr) const;
+
 private:
     WiimoteVirtualBridge() = default;
 

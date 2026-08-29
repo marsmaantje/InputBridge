@@ -108,6 +108,18 @@ private:
     std::mutex m_ArrayMutex;
     std::vector<DualSenseArrayCommand> m_ArrayCommandQueue;
 
+    // Wii Remote rumble has no hardware timed-duration primitive (unlike
+    // SDL_Haptic effects, which carry their own length) - WiimoteDevice::
+    // SetRumble() just sets a persistent on/off/PWM level (see its header
+    // comment). A duration_ms > 0 passed to TriggerRumble() for a Wiimote
+    // target is therefore emulated here: the joystick id maps to the tick
+    // (SDL_GetTicks()) at which SetRumble(0) should be called, checked once
+    // per Update(). Entries are removed once expired or once rumble is
+    // stopped by other means (StopAllHapticEffects(), a new rumble command,
+    // or duration_ms == 0 / infinite).
+    std::map<SDL_JoystickID, Uint64> m_WiimoteRumbleExpiryMs;
+    void TickWiimoteRumbleExpiry();
+
     std::atomic<uint64_t> m_lastHapticActivityTime{0};
 
     void QueueCommand(HapticCommand&& cmd);

@@ -44,6 +44,16 @@ class DeviceManager {
     void ScanWiimotes();
     const std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>>& GetWiimotes() const;
 
+    // Resolves a WiimoteVirtualBridge bridge joystick's SDL_JoystickID (as
+    // seen on a normal DeviceState/HapticTarget) back to the real
+    // WiimoteDevice that backs it, so callers that only deal in
+    // SDL_JoystickID (e.g. OutputMapper routing a rumble command) can reach
+    // WiimoteDevice::SetRumble() - the bridge joystick itself is virtual
+    // and has no SDL_Haptic backing. Returns nullptr if instance_id isn't a
+    // currently-tracked Wiimote bridge joystick, or if it belongs to a
+    // Balance Board (which has no rumble motor).
+    InputBridge::Wiimote::WiimoteDevice* GetWiimoteForBridgeJoystick(SDL_JoystickID instance_id) const;
+
     // -- Device hide (HidHide / evdev grab / IOKit seize) ---------------------
     // Toggle the hide state for a single device.  Updates dev.hide_from_other_apps
     // and calls through to the platform backend.

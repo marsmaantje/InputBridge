@@ -344,4 +344,14 @@ void WiimoteVirtualBridge::RemoveAll() {
     m_Entries.clear();
 }
 
+const std::string *WiimoteVirtualBridge::FindHidPathForJoystick(SDL_JoystickID joystick_id, bool *out_is_balance_board) const {
+    for (const auto &e : m_Entries) {
+        if (e.joystick_id == joystick_id) {
+            if (out_is_balance_board) *out_is_balance_board = e.is_balance_board;
+            return &e.hid_path;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace InputBridge::Wiimote

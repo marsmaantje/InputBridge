@@ -3,6 +3,8 @@
 #include "imgui.h"
 #include "InputMapper.h"
 #include "Haptics/HapticDevice.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
+#include "Devices/Wiimote/WiimoteDevice.h"
 #include <algorithm>
 #include <memory>
 #include <map>
@@ -38,6 +40,21 @@ namespace {
         const auto& devices = deviceManager.GetDevices();
         auto it = std::find_if(devices.begin(), devices.end(), [id](const DeviceState& dev) { return dev.instance_id == id; });
         return (it != devices.end()) ? it->joystick : nullptr;
+    }
+
+    // True when `id` is the virtual bridge joystick for a Wii Remote / Wii
+    // Remote Plus (see Devices/Wiimote/WiimoteVirtualBridge.h). Balance
+    // Boards get their own bridge device name and are deliberately excluded
+    // here - they have no rumble motor. This device is neither
+    // SDL_IsJoystickHaptic() nor SDL_IsGamepad() (it's a virtual
+    // SDL_JOYSTICK_TYPE_UNKNOWN joystick, see WiimoteVirtualBridge::Attach's
+    // comment), so it needs its own recognition path alongside the SDL
+    // haptic/gamepad checks used for every other device.
+    bool IsWiimoteRumbleBridge(SDL_JoystickID id, const DeviceManager& deviceManager) {
+        if (id == 0) return false;
+        const auto& devices = deviceManager.GetDevices();
+        auto it = std::find_if(devices.begin(), devices.end(), [id](const DeviceState& dev) { return dev.instance_id == id; });
+        return it != devices.end() && it->name == InputBridge::Wiimote::kWiimoteBridgeDeviceName;
     }
 }
 
@@ -142,7 +159,8 @@ void OutputMapper::DrawContentOnly() {
                 }
 
                 for (const auto& dev : m_DeviceManager.GetDevices()) {
-                    if (SDL_IsJoystickHaptic(dev.joystick) || SDL_IsGamepad(dev.instance_id)) {
+                    if (SDL_IsJoystickHaptic(dev.joystick) || SDL_IsGamepad(dev.instance_id) ||
+                        dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName) {
                         bool isSelected = (target.instance_id == dev.instance_id);
                         bool isUsed = false;
                         for (const auto& other_target : *m_active_targets) {
@@ -174,7 +192,21 @@ void OutputMapper::DrawContentOnly() {
 
             // Effects
             ImGui::TableSetColumnIndex(2);
-            if (target.haptic_device || (target.instance_id != 0 && SDL_IsGamepad(target.instance_id))) {
+            const bool isWiimoteRumble = IsWiimoteRumbleBridge(target.instance_id, m_DeviceManager);
+            if (isWiimoteRumble) {
+                // Wii Remote rumble is a single on/off motor driven directly
+                // through WiimoteDevice::SetRumble() (see TriggerRumble()) -
+                // it has no SDL_Haptic backing, so none of the SDL feature
+                // queries below apply and only Rumble is ever offered.
+                if (!target.enable_rumble) {
+                    target.enable_rumble = true;
+                    inputMapper.SaveCurrentProfile();
+                }
+                bool dummy = true;
+                ImGui::BeginDisabled();
+                ImGui::Checkbox("Rumble", &dummy);
+                ImGui::EndDisabled();
+            } else if (target.haptic_device || (target.instance_id != 0 && SDL_IsGamepad(target.instance_id))) {
                 bool has_rumble = false;
                 bool has_constant = false;
                 bool has_periodic = false;
@@ -306,6 +338,28 @@ void OutputMapper::Update() {
                 break;
         }
     }
+
+    TickWiimoteRumbleExpiry();
+}
+
+// Emulates a timed rumble duration for Wiimote targets - see
+// m_WiimoteRumbleExpiryMs's declaration in OutputMapper.h for why this is
+// needed at all (WiimoteDevice::SetRumble() has no hardware duration of its
+// own). Called once per Update() (main thread, same as every other
+// Trigger*() call), so it's safe to call SetRumble() directly here.
+void OutputMapper::TickWiimoteRumbleExpiry() {
+    if (m_WiimoteRumbleExpiryMs.empty()) return;
+    const Uint64 now = SDL_GetTicks();
+    for (auto it = m_WiimoteRumbleExpiryMs.begin(); it != m_WiimoteRumbleExpiryMs.end(); ) {
+        if (now >= it->second) {
+            if (auto* wiimote = m_DeviceManager.GetWiimoteForBridgeJoystick(it->first)) {
+                wiimote->SetRumble(0.0f);
+            }
+            it = m_WiimoteRumbleExpiryMs.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void OutputMapper::StopAllHapticEffects()
@@ -322,6 +376,12 @@ void OutputMapper::StopAllHapticEffects()
                 if (pad) {
                     SDL_RumbleGamepad(pad, 0, 0, 0);
                 }
+            }
+            // Wii Remote rumble motor - not SDL_Haptic/SDL_Gamepad backed,
+            // see TriggerRumble()'s Wiimote branch.
+            else if (auto* wiimote = m_DeviceManager.GetWiimoteForBridgeJoystick(target.instance_id)) {
+                wiimote->SetRumble(0.0f);
+                m_WiimoteRumbleExpiryMs.erase(target.instance_id);
             }
         }
     }
@@ -357,8 +417,16 @@ void OutputMapper::HandleDeviceConnectionChange() {
         if (it != guidMap.end()) {
             if (target.instance_id != it->second) {
                 target.instance_id = it->second;
-                UpdateHapticDevice(target);
-            } else if (target.haptic_device == nullptr) {
+                if (!IsWiimoteRumbleBridge(target.instance_id, m_DeviceManager)) {
+                    UpdateHapticDevice(target);
+                }
+            } else if (target.haptic_device == nullptr && !IsWiimoteRumbleBridge(target.instance_id, m_DeviceManager)) {
+                // Wiimote targets never populate haptic_device (see
+                // UpdateHapticDevice()'s comment) - without this guard this
+                // branch would call UpdateHapticDevice() every single frame
+                // for them, since haptic_device == nullptr never stops being
+                // true. Harmless (CloseHapticDevice() is a no-op with
+                // nothing to close) but pure waste.
                 UpdateHapticDevice(target);
             }
         } else {
@@ -575,6 +643,25 @@ void OutputMapper::TriggerRumble(int virtual_id, int slot, float low_freq, float
     GetTargets(virtual_id, targets);
     for (auto* target : targets) {
         if (!target || !target->enable_rumble) continue;
+
+        // Wii Remote rumble: single on/off motor with software PWM for
+        // intermediate strengths (see WiimoteDevice::SetRumble()'s header
+        // comment) - not an SDL_Haptic device at all, so it needs its own
+        // path ahead of the DeviceManager::GetHapticDevice()/SDL_Haptic
+        // checks below, which would find nothing for it.
+        if (auto* wiimote = m_DeviceManager.GetWiimoteForBridgeJoystick(target->instance_id)) {
+            const float strength = std::clamp(std::max(low_freq, high_freq), 0.0f, 1.0f);
+            wiimote->SetRumble(strength);
+            if (duration_ms > 0) {
+                m_WiimoteRumbleExpiryMs[target->instance_id] = SDL_GetTicks() + (Uint64)duration_ms;
+            } else {
+                // 0/negative duration means "play until stopped" - clear any
+                // previously scheduled expiry so an earlier timed rumble
+                // doesn't cut this one off early.
+                m_WiimoteRumbleExpiryMs.erase(target->instance_id);
+            }
+            continue;
+        }
 
         HapticDevice* hapticDevice = m_DeviceManager.GetHapticDevice(target->instance_id);
         if (hapticDevice) {

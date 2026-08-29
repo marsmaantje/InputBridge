@@ -275,6 +275,18 @@ DeviceManager::GetWiimotes() const {
     return m_Wiimotes;
 }
 
+InputBridge::Wiimote::WiimoteDevice* DeviceManager::GetWiimoteForBridgeJoystick(SDL_JoystickID instance_id) const {
+    bool is_balance_board = false;
+    const std::string *hid_path = InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance()
+        .FindHidPathForJoystick(instance_id, &is_balance_board);
+    if (!hid_path || is_balance_board) return nullptr; // no bridge entry, or a Balance Board (no rumble motor)
+
+    for (const auto &dev : m_Wiimotes) {
+        if (dev->Snapshot().hid_path == *hid_path) return dev.get();
+    }
+    return nullptr;
+}
+
 void DeviceManager::Update(bool isMinimized) {
     // Refresh battery info every 5 seconds when active,
     // or every 30 seconds when minimized.
