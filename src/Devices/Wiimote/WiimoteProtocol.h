@@ -63,6 +63,15 @@ namespace Registers {
     constexpr uint32_t ExtensionBase     = 0xA40000; // - 0xA400FF
     constexpr uint32_t ExtensionInitNew1 = 0xA400F0; // write 0x55 (new-style unencrypted init, step 1)
     constexpr uint32_t ExtensionInitNew2 = 0xA400FB; // write 0x00 (new-style unencrypted init, step 2)
+    // "Old way" init (WiiBrew "Wiimote/Extension Controllers#Initializing"):
+    // write 0x00 to this same 0xA400F0 register (instead of the 0x55/0x00
+    // pair above) and skip 0xA400FB entirely. This leaves the extension's
+    // factory-default encryption ON, so every subsequent ID/data byte read
+    // from the extension must be run through DecryptExtensionByte() below.
+    // Some wireless/third-party Nunchuks either ignore the "new way" write
+    // or never disable encryption in the first place and only work through
+    // this path - see WiiBrew's Nunchuk page, "Wireless Nunchuks" section.
+    constexpr uint32_t ExtensionInitOld  = 0xA400F0;
     constexpr uint32_t ExtensionCalib    = 0xA40020; // Balance Board calibration block start
     // Reference Temperature (+1 unknown byte, always 0x01) - not part of the
     // 0xA40020 32-byte calibration block itself, but folded into that
@@ -130,6 +139,22 @@ constexpr std::size_t kSpeakerMaxChunkBytes = 20;
 // Read 6 bytes from Registers::ExtensionId after the "new way" init
 // (write 0x55 -> 0xA400F0, then 0x00 -> 0xA400FB). These bytes come back
 // UNENCRYPTED with that init method, so no decrypt step is required.
+//
+// If instead Registers::ExtensionInitOld was used (write 0x00 only), the
+// extension's default encryption stays enabled and every byte read from
+// its register space - the 6-byte ID *and* the live data bytes carried in
+// normal input reports (0x32/0x34/0x35/0x36/0x37/0x3d) - comes back run
+// through this transform (WiiBrew "Wiimote/Extension Controllers#The New
+// Way", decrypt direction):
+//   decrypted = ((encrypted ^ 0x17) + 0x17) & 0xFF
+inline uint8_t DecryptExtensionByte(uint8_t encrypted) {
+    return static_cast<uint8_t>((encrypted ^ 0x17) + 0x17);
+}
+
+inline void DecryptExtensionBytes(uint8_t *data, std::size_t len) {
+    for (std::size_t i = 0; i < len; ++i) data[i] = DecryptExtensionByte(data[i]);
+}
+
 enum class ExtensionType {
     None,
     Nunchuk,

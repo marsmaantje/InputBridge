@@ -279,20 +279,50 @@ bool WiimoteDevice::VerifyIRCameraEnabled() {
 
 bool WiimoteDevice::InitExtension() {
     // "New way" init (WiiBrew): write 0x55 -> 0xA400F0, then 0x00 -> 0xA400FB.
-    // Works on all known extensions and leaves the ID + data bytes
-    // unencrypted, so no decrypt transform is needed anywhere in this file.
+    // Works on all known official extensions and leaves the ID + data bytes
+    // unencrypted, so try it first - it needs no per-byte decrypt step.
     uint8_t v55 = 0x55, v00 = 0x00;
     bool ok = true;
     ok &= WriteRegister(Registers::ExtensionInitNew1, &v55, 1);
     ok &= WriteRegister(Registers::ExtensionInitNew2, &v00, 1);
     if (!ok) return false;
 
+    m_ExtensionEncrypted = false;
+
     ExtensionId6 id{};
     if (!ReadRegister(Registers::ExtensionId, 6, id.bytes.data())) {
         m_Snapshot.extension = ExtensionType::None;
     } else {
-        m_Snapshot.extension = ClassifyExtension(id);
+        ExtensionType classified = ClassifyExtension(id);
+        if (classified == ExtensionType::Unknown) {
+            // The "new way" write didn't produce a recognizable ID. Some
+            // wireless/third-party Nunchuks either ignore that write or
+            // ship with encryption on and no way to disable it - fall back
+            // to the "old way" init (write 0x00 -> 0xA400F0 only, leaving
+            // encryption ON) and decrypt the ID bytes before classifying.
+            // See WiiBrew's Nunchuk page, "Wireless Nunchuks" section, and
+            // WiimoteProtocol.h's DecryptExtensionByte().
+            uint8_t v00b = 0x00;
+            if (WriteRegister(Registers::ExtensionInitOld, &v00b, 1) &&
+                ReadRegister(Registers::ExtensionId, 6, id.bytes.data())) {
+                DecryptExtensionBytes(id.bytes.data(), id.bytes.size());
+                const ExtensionType retry = ClassifyExtension(id);
+                if (retry != ExtensionType::Unknown) {
+                    classified = retry;
+                    m_ExtensionEncrypted = true;
+                    LOG_INFO(kTag, "Extension on %s only identified via the encrypted "
+                                   "(\"old way\") init - treating its data as encrypted",
+                                   m_Path.c_str());
+                }
+                // If the retry is still Unknown, leave `classified` as
+                // whatever the "new way" read produced (Unknown/None) -
+                // neither init variant produced something recognizable, so
+                // there's nothing better to fall back to.
+            }
+        }
+        m_Snapshot.extension = classified;
     }
+    m_Snapshot.extension_encrypted = m_ExtensionEncrypted;
 
     // A physical Balance Board's load sensors are wired through the regular
     // extension port and self-identify with type 0x0402, so this branch is
@@ -982,18 +1012,35 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
     // plain one, or an axis LSB gets corrupted and the always-zero
     // discriminator/reserved bits get misread as held-down dpad presses.
     // See WiimoteDecoder.h for the byte-level detail.
+    //
+    // If InitExtension() only got a recognizable ID via the "old way"
+    // fallback (m_ExtensionEncrypted), these 6 bytes are the extension's
+    // live data and are just as encrypted as the ID was - decrypt in place
+    // before handing them to any decoder. Only done on the plain (non-
+    // MotionPlus) path: whether a MotionPlus re-encodes an *encrypted*
+    // passthrough device's bytes the same way it does an unencrypted one
+    // isn't documented on WiiBrew and hasn't been checked against real
+    // hardware, so left alone here rather than guessed at.
+    uint8_t decrypted[6];
+    const uint8_t *ext = ee;
+    if (m_ExtensionEncrypted && !m_MotionPlusActive) {
+        std::memcpy(decrypted, ee, 6);
+        DecryptExtensionBytes(decrypted, 6);
+        ext = decrypted;
+    }
+
     switch (m_Snapshot.extension) {
         case ExtensionType::Nunchuk:
             m_Snapshot.nunchuk = m_MotionPlusActive
                 ? Decode::NunchukViaMotionPlus(ee, 6)
-                : Decode::Nunchuk(ee, 6);
+                : Decode::Nunchuk(ext, 6);
             break;
         case ExtensionType::ClassicController:
         case ExtensionType::ClassicControllerPro: {
             const bool is_pro = m_Snapshot.extension == ExtensionType::ClassicControllerPro;
             m_Snapshot.classic = m_MotionPlusActive
                 ? Decode::ClassicViaMotionPlus(ee, 6, is_pro)
-                : Decode::Classic(ee, 6, is_pro);
+                : Decode::Classic(ext, 6, is_pro);
             break;
         }
         case ExtensionType::GuitarHeroGuitar:
@@ -1001,7 +1048,7 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
             const bool is_drums = m_Snapshot.extension == ExtensionType::GuitarHeroDrums;
             m_Snapshot.guitar = m_MotionPlusActive
                 ? Decode::GuitarFromClassic(Decode::ClassicViaMotionPlus(ee, 6, /*is_pro=*/false), is_drums)
-                : Decode::Guitar(ee, 6, is_drums);
+                : Decode::Guitar(ext, 6, is_drums);
             break;
         }
         default: break;

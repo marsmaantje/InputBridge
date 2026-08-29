@@ -52,6 +52,12 @@ struct WiimoteSnapshot {
     bool        ir_extended_mode = false;
 
     ExtensionType extension = ExtensionType::None;
+    // True if InitExtension() had to fall back to the "old way" (encrypted)
+    // init to get a recognizable ID from the currently-connected extension -
+    // see WiimoteProtocol.h's DecryptExtensionByte() comment. Purely
+    // informational (decoding already accounts for it); UI can surface this
+    // for troubleshooting a third-party/wireless Nunchuk.
+    bool          extension_encrypted = false;
     NunchukState             nunchuk;
     ClassicControllerState   classic;
     GuitarHeroState          guitar;
@@ -276,7 +282,12 @@ private:
     bool EnableIRCameraOnce();
     bool VerifyIRCameraEnabled();
 
-    bool InitExtension();       // "new way" unencrypted init + ID read
+    // Tries the "new way" (unencrypted) init first; if the resulting ID
+    // doesn't decode to a recognizable extension, falls back to the "old
+    // way" (encrypted) init and retries, setting m_ExtensionEncrypted /
+    // WiimoteSnapshot::extension_encrypted so DecodeCoreAccelIR10Ext6() and
+    // friends know to decrypt live data bytes too. See WiimoteProtocol.h.
+    bool InitExtension();
     bool LoadBalanceBoardCalibration();
 
     // Wii Motion Plus lives at its own register base (0xA60000) separate
@@ -375,6 +386,11 @@ private:
     // settle before it will answer ID reads reliably.
     Uint64 m_ExtensionSettleAtMs = 0;
     bool m_ExtensionPendingInit = false;
+
+    // Mirrors WiimoteSnapshot::extension_encrypted - set by InitExtension()
+    // when the "old way" fallback was needed, consulted by
+    // DecodeCoreAccelIR10Ext6() to decrypt live extension data bytes.
+    bool m_ExtensionEncrypted = false;
 
     // Balance Board stuck-sensor watchdog state.
     Uint64 m_BalanceStuckSinceMs = 0;          // 0 == not currently stuck

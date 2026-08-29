@@ -124,6 +124,43 @@ TEST(WiimoteDecoder, ClassifiesGuitarVsDrums) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Extension encryption ("old way" init)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 0x17 is a fixed point of the transform: (0x17 ^ 0x17) + 0x17 == 0x17.
+TEST(WiimoteDecoder, DecryptFixedPoint) {
+    EXPECT_EQ(DecryptExtensionByte(0x17), 0x17);
+}
+
+TEST(WiimoteDecoder, DecryptIsEncryptInverse) {
+    // Encrypting per WiiBrew is the same shape run the other direction:
+    // encrypted = (plain - 0x17) ^ 0x17. Round-trip every byte value and
+    // confirm decrypt undoes it.
+    for (int plain = 0; plain <= 0xFF; ++plain) {
+        const uint8_t encrypted = static_cast<uint8_t>((plain - 0x17) ^ 0x17);
+        EXPECT_EQ(DecryptExtensionByte(encrypted), static_cast<uint8_t>(plain));
+    }
+}
+
+TEST(WiimoteDecoder, DecryptExtensionBytesTransformsWholeBuffer) {
+    uint8_t buf[6] = {0x2F, 0x2F, 0x2F, 0x2F, 0x2F, 0x2F};
+    DecryptExtensionBytes(buf, 6);
+    for (uint8_t b : buf) EXPECT_EQ(b, DecryptExtensionByte(0x2F));
+}
+
+TEST(WiimoteDecoder, EncryptedNunchukIdClassifiesAfterDecrypt) {
+    // A genuine Nunchuk ID (0x00 0x00 0xA4 0x20 0x00 0x00), each byte
+    // encrypted per WiiBrew's transform - this is what a wireless/
+    // third-party Nunchuk that never disables encryption would return from
+    // Registers::ExtensionId even after the "new way" init, and what
+    // InitExtension()'s "old way" fallback is meant to recover from.
+    ExtensionId6 id{{0xFE, 0xFE, 0x9A, 0x1E, 0xFE, 0xFE}};
+    EXPECT_EQ(ClassifyExtension(id), ExtensionType::Unknown); // raw bytes: not recognizable
+    DecryptExtensionBytes(id.bytes.data(), id.bytes.size());
+    EXPECT_EQ(ClassifyExtension(id), ExtensionType::Nunchuk); // decrypted: recognizable
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Balance Board - "US Board" sample calibration from WiiBrew, spot-checked
 // with a synthetic mid-scale reading per sensor.
 // ═══════════════════════════════════════════════════════════════════════════

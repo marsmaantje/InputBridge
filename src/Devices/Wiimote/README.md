@@ -20,7 +20,7 @@ your own decoded state separate from anything SDL owns.
 | `WiimoteProtocol.h` | Report IDs, register addresses, extension IDs, IR sensitivity blocks. Numeric constants only, verified against wiibrew.org (2026-08-15). |
 | `WiimoteState.h` | Decoded-value structs (`CoreButtons`, `AccelState`, `IRState`, `NunchukState`, `ClassicControllerState`, `GuitarHeroState`, `BalanceBoardState`). |
 | `WiimoteDecoder.h/.cpp` | **Pure** byte→struct decode functions, no I/O. Unit tested in `tests/test_wiimote_decoder.cpp`. |
-| `WiimoteDevice.h/.cpp` | Owns one `SDL_hid_device*`. Handshake, polling, register read/write, LEDs/rumble. |
+| `WiimoteDevice.h/.cpp` | Owns one `SDL_hid_device*`. Handshake, polling, register read/write, LEDs/rumble. `InitExtension()` tries the documented "new way" init (write `0x55`→`0xA400F0`, `0x00`→`0xA400FB`, data unencrypted) first, then falls back to the "old way" (write `0x00`→`0xA400F0` only, data encrypted, decrypted per `WiimoteProtocol.h::DecryptExtensionByte()`) for wireless/third-party Nunchuks that need it - see WiiBrew's Nunchuk page, "Wireless Nunchuks" section. `WiimoteSnapshot::extension_encrypted` reports which path is active. |
 | `WiimoteManager.h/.cpp` | Enumerates & opens all connected Wiimotes/Balance Boards. |
 
 ## Feature parity vs. WiimoteLib
@@ -94,11 +94,6 @@ test binary without pulling in real HID I/O.)
 
 ## Known gaps / before you ship this
 
-- **Extension encryption.** This uses the documented "new way" init (write
-  `0x55`→`0xA400F0`, `0x00`→`0xA400FB`), which leaves data unencrypted on all
-  known official and most third-party extensions. Some wireless/third-party
-  Nunchuks need the encrypted path instead (see WiiBrew's Nunchuk page,
-  "Wireless Nunchuks" section) - not implemented here.
 - **`ReadRegister()`'s inline report-draining** (in the "wait for 0x21"
   loop) only refreshes buttons for reports it swallows during a register
   read; accel/IR/extension updates are briefly stalled during any read
