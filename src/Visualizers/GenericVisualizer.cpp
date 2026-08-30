@@ -65,7 +65,7 @@ void DrawInlineIcon(const DeviceIcon& icon)
     ImGui::GetWindowDrawList()->AddText(
         icon.font, renderSize, ImVec2(iconX, iconY),
         ImGui::GetColorU32(ImGuiCol_Text),
-        icon.glyph);
+        icon.glyph());
 }
 
 // Draws the progress bar + center tick for one axis row in whichever is the
@@ -236,7 +236,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                     ImGui::GetWindowDrawList()->AddText(
                         lbl.icon.font, renderSize, ImVec2(iconX, iconY),
                         ImGui::GetColorU32(tint),
-                        lbl.icon.glyph);
+                        lbl.icon.glyph());
                 } else {
                     // No icon - fall back to the short button name.
                     ImGui::TextColored(tint, "%s", lbl.name.c_str());
@@ -272,6 +272,13 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
 
             if (m_showLabels) {
                 InputLabel lbl = InputLabelProvider::GetHatLabel(dev, i, hat);
+
+                // GetHatLabel() already resolves to a single icon that
+                // matches the held direction - for the Wii font that's one
+                // of the distinct per-direction held/outline glyph pairs
+                // (KENNEY_WII_DPAD_{UP,DOWN,LEFT,RIGHT}_CP, each visually
+                // distinct from the others, with KENNEY_WII_DPAD_NONE_CP
+                // for the centered/idle state), so just draw it directly.
                 DrawInlineIcon(lbl.icon);
                 ImGui::SameLine(0.0f, 4.0f);
                 ImGui::Text("%s: %s (%d)", lbl.name.c_str(), dir, hat);

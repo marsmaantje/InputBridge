@@ -393,12 +393,15 @@ DeviceIcon MakeIcon(ImFont* font, ImWchar cp)
     icon.font      = font;
     icon.codepoint = cp;
     // KENNEY_ICON_STR is a macro that may not accept runtime cp values here,
-    // so build the UTF-8 bytes locally into a thread-local buffer and
-    // point glyph at it.
-    static thread_local char _kenney_buf[4];
+    // so build the UTF-8 bytes locally and copy them into this DeviceIcon's
+    // own glyphBuf (NOT a shared/static buffer - a previous version used a
+    // single thread_local buffer here, which meant every DeviceIcon handed
+    // out since the last MakeIcon() call silently aliased the same bytes;
+    // as soon as more than one is alive at once - e.g. GetHatDirectionIcons()
+    // building four of these in a row - all of them would render whichever
+    // codepoint was requested *last*).
     auto _arr = KenneyIconUTF8(cp);
-    std::memcpy(_kenney_buf, _arr.data(), 4);
-    icon.glyph = _kenney_buf;
+    std::memcpy(icon.glyphBuf, _arr.data(), 4);
     return icon;
 }
 
@@ -711,13 +714,48 @@ InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint
         else if (fam == FontFamily::SteamControllerV2)
             result.icon = MakeIcon(InputFont(dev, FontFamily::SteamDeck), 0xE021); // steamdeck_dpad
         else if (fam == FontFamily::Wii)
-            result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), KENNEY_WII_DPAD_CP); // wii_dpad (neutral)
+            result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), KENNEY_WII_DPAD_NONE_CP); // wii_dpad_none (idle)
         else
             result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE013); // generic_joystick
         return result;
     }
 
+    // The Wii font ships two glyphs per direction - a filled/solid one and
+    // an outline one - and the outline set is what should be used here
+    // (ButtonInfoFor()'s table below returns the filled KENNEY_WII_DPAD_*_CP
+    // codepoints, which are shared with GetButtonLabel()'s regular D-Pad
+    // button icons, so that table is intentionally left alone). Hats use
+    // the outline variant for all four directions instead.
+    if (fam == FontFamily::Wii)
+    {
+        ImWchar cp;
+        switch (dpad)
+        {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:    cp = KENNEY_WII_DPAD_UP_OUTLINE_CP;    break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  cp = KENNEY_WII_DPAD_DOWN_OUTLINE_CP;  break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  cp = KENNEY_WII_DPAD_LEFT_OUTLINE_CP;  break;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: cp = KENNEY_WII_DPAD_RIGHT_OUTLINE_CP; break;
+        default:                            cp = KENNEY_WII_DPAD_NONE_CP;          break;
+        }
+        result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), cp);
+        return result;
+    }
+
     ButtonInfo info = ButtonInfoFor(dpad, fam);
     result.icon = MakeIcon(InputFont(dev, info.fam), info.cp);
+    return result;
+}
+
+DpadDirectionIcons InputLabelProvider::GetHatDirectionIcons(const DeviceState& dev, uint8_t hatValue)
+{
+    DpadDirectionIcons result; // all four default-constructed DeviceIcon{} -> !IsValid()
+
+    if (GetFontFamily(dev) != FontFamily::Wii) return result;
+
+    ImFont* font = InputFont(dev, FontFamily::Wii);
+    result.up    = MakeIcon(font, (hatValue & SDL_HAT_UP)    ? KENNEY_WII_DPAD_UP_CP    : KENNEY_WII_DPAD_UP_OUTLINE_CP);
+    result.down  = MakeIcon(font, (hatValue & SDL_HAT_DOWN)  ? KENNEY_WII_DPAD_DOWN_CP  : KENNEY_WII_DPAD_DOWN_OUTLINE_CP);
+    result.left  = MakeIcon(font, (hatValue & SDL_HAT_LEFT)  ? KENNEY_WII_DPAD_LEFT_CP  : KENNEY_WII_DPAD_LEFT_OUTLINE_CP);
+    result.right = MakeIcon(font, (hatValue & SDL_HAT_RIGHT) ? KENNEY_WII_DPAD_RIGHT_CP : KENNEY_WII_DPAD_RIGHT_OUTLINE_CP);
     return result;
 }

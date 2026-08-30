@@ -425,7 +425,7 @@ void DrawDeviceItem(DeviceState&        dev,
         draw_list->AddText(icon.font, render_sz,
                            ImVec2(glyph_x, glyph_y),
                            ImGui::GetColorU32(ImGuiCol_Text),
-                           icon.glyph);
+                           icon.glyph());
     }
 
     // -- Battery indicator -------------------------------------------------

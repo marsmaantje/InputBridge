@@ -17,7 +17,7 @@
 //   // Render optional Kenney icon
 //   if (label.icon.IsValid()) {
 //       ImGui::PushFont(label.icon.font);
-//       ImGui::Text("%s", label.icon.glyph);
+//       ImGui::Text("%s", label.icon.glyph());
 //       ImGui::PopFont();
 //       ImGui::SameLine();
 //   }
@@ -39,6 +39,22 @@ struct InputLabel
 };
 
 // ---------------------------------------------------------------------------
+// DpadDirectionIcons
+// ---------------------------------------------------------------------------
+// Four per-direction icons for a single hat, each already resolved to
+// whichever glyph matches that direction's current held/idle state. Only the
+// Wii font ships distinct "held" (filled) and "idle" (outline) glyphs for
+// each D-Pad direction - every other family only has one glyph per direction
+// and relies on the caller's own pressed/unpressed tint instead (see
+// GenericVisualizer's Button rendering) - so for any non-Wii device all four
+// icons come back !IsValid() and callers should just fall back to
+// GetHatLabel()'s single icon.
+struct DpadDirectionIcons
+{
+    DeviceIcon up, down, left, right;
+};
+
+// ---------------------------------------------------------------------------
 // InputLabelProvider
 // ---------------------------------------------------------------------------
 class InputLabelProvider
@@ -56,4 +72,11 @@ public:
     /// glyph (reusing the same per-family set as GetButtonLabel) instead of a
     /// static generic joystick icon.
     static InputLabel GetHatLabel   (const DeviceState& dev, int hat, uint8_t hatValue);
+
+    /// Four-way breakdown of `hatValue` for devices whose font has separate
+    /// held/idle D-Pad glyphs per direction (currently just Wii) - lets a
+    /// caller draw a little up/down/left/right cluster that lights up the
+    /// held direction(s) instead of GetHatLabel()'s single combined icon.
+    /// See DpadDirectionIcons's comment for the all-other-families fallback.
+    static DpadDirectionIcons GetHatDirectionIcons(const DeviceState& dev, uint8_t hatValue);
 };
