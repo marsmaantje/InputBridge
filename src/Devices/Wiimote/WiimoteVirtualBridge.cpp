@@ -37,6 +37,30 @@ constexpr float kMotionPlusMaxDegPerSec = 500.0f;
 // the mapping's full-scale range so a moderate shake reaches the rails.
 constexpr float kAccelMaxG = 3.0f;
 
+// Balance Board keeps its raw 0x00-0xFF battery byte around
+// (snap.balance_board.battery_raw); Norm01ToBipolar(raw, 0, kBatteryRawMax)
+// maps that straight to the axis's -1..+1 range, full scale (0xFF -> +1)
+// rather than clamping at the "Four bars" threshold (0x82), so the axis
+// keeps resolving differences a 4-bar icon can't show.
+constexpr float kBatteryRawMax = 255.0f;
+
+// A handheld Wiimote, unlike the Balance Board, only keeps the *classified*
+// BatteryBars around (snap.battery - see WiimoteDevice.cpp's UpdateStatus()),
+// not the raw byte it came from, so its axis is derived from the same
+// bracket thresholds ClassifyWiimoteBattery() (WiimoteState.h) already
+// uses for the UI's 4-bar icon, keeping axis and icon consistent with each
+// other. Returns each bracket's approximate midpoint as a [0,1] fraction.
+float BatteryBarsToRaw01(BatteryBars bars) {
+    switch (bars) {
+        case BatteryBars::Four:  return 1.00f; // >= 0x82
+        case BatteryBars::Three: return 0.80f; // 0x7D-0x81
+        case BatteryBars::Two:   return 0.60f; // 0x78-0x7C
+        case BatteryBars::One:   return 0.40f; // 0x6A-0x77
+        case BatteryBars::Empty:
+        default:                 return 0.10f; // < 0x6A, still show a sliver rather than a hard 0
+    }
+}
+
 float Norm01ToBipolar(float v, float lo, float hi) {
     if (hi <= lo) return -1.f;
     const float t = std::clamp((v - lo) / (hi - lo), 0.f, 1.f); // 0..1
@@ -75,6 +99,7 @@ const char *WiimoteBridgeAxisName(int axis) {
         case Axis_MotionPlusYaw:  return "Motion Plus Yaw";
         case Axis_MotionPlusPitch: return "Motion Plus Pitch";
         case Axis_MotionPlusRoll: return "Motion Plus Roll";
+        case Axis_Battery:        return "Battery Level";
         default: return nullptr;
     }
 }
@@ -122,6 +147,7 @@ const char *BalanceBoardBridgeAxisName(int axis) {
         case BAxis_Total:       return "Total Weight";
         case BAxis_CoGX:        return "Center of Gravity X";
         case BAxis_CoGY:        return "Center of Gravity Y";
+        case BAxis_Battery:     return "Battery Level";
         default: return nullptr;
     }
 }
@@ -255,6 +281,12 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
             setAxis(BAxis_Total,       Norm01ToBipolar(bb.kg_total,        0.f, kBalanceMaxTotalKg));
             setAxis(BAxis_CoGX, std::clamp(bb.cog_x, -1.f, 1.f));
             setAxis(BAxis_CoGY, std::clamp(bb.cog_y, -1.f, 1.f));
+            // Balance Board keeps its own raw battery byte (unlike a
+            // handheld Wiimote, which only surfaces the classified
+            // BatteryBars - see WiimoteDevice.cpp), so use it directly for
+            // slightly finer resolution than re-deriving from the 4-bar
+            // classification would give.
+            setAxis(BAxis_Battery, Norm01ToBipolar(float(bb.battery_raw), 0.f, kBatteryRawMax));
             setBtn(BBtn_A, bb.button_a);
             continue;
         }
@@ -308,6 +340,10 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setAxis(Axis_MotionPlusYaw,   NormSymmetric(snap.motion_plus.deg_s_yaw,   kMotionPlusMaxDegPerSec));
         setAxis(Axis_MotionPlusPitch, NormSymmetric(snap.motion_plus.deg_s_pitch, kMotionPlusMaxDegPerSec));
         setAxis(Axis_MotionPlusRoll,  NormSymmetric(snap.motion_plus.deg_s_roll,  kMotionPlusMaxDegPerSec));
+
+        // Battery: -1 = empty, +1 = full, same "rest = -1" magnitude
+        // convention as the IR dot-size axes above (see their comment).
+        setAxis(Axis_Battery, BatteryBarsToRaw01(snap.battery) * 2.f - 1.f);
 
         setBtn(Btn_A, snap.core.a);         setBtn(Btn_B, snap.core.b);
         setBtn(Btn_One, snap.core.one);     setBtn(Btn_Two, snap.core.two);

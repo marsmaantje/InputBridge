@@ -37,19 +37,20 @@ namespace InputBridge::Wiimote {
 // index already in use ever shifted. Axis_IRX/Axis_IRY (indices 3/4) are
 // therefore kept in place as Axis_IR1X/Axis_IR1Y - just a rename, same
 // slot, same values a saved profile already expects there - and each
-// subsequent addition (the 3 extra dots, then the 4 dot-size axes) has
-// been appended after the existing layout (indices 14-19, then 20-23)
-// rather than inserted inline. Any future additions should do the same:
-// append, don't insert.
-constexpr int kWiimoteNumAxes = 24;
+// subsequent addition (the 3 extra dots, then the 4 dot-size axes, then
+// battery) has been appended after the existing layout (indices 14-19,
+// then 20-23, then 24) rather than inserted inline. Any future additions
+// should do the same: append, don't insert.
+constexpr int kWiimoteNumAxes = 25;
 enum WiimoteAxis {
     Axis_AccelX = 0, Axis_AccelY, Axis_AccelZ,
-    Axis_IR1X, Axis_IR1Y,
     Axis_NunchukX, Axis_NunchukY,
     Axis_ClassicLX, Axis_ClassicLY, Axis_ClassicRX, Axis_ClassicRY,
     Axis_MotionPlusYaw, Axis_MotionPlusPitch, Axis_MotionPlusRoll,
-    Axis_IR2X, Axis_IR2Y, Axis_IR3X, Axis_IR3Y, Axis_IR4X, Axis_IR4Y,
+    Axis_IR1X, Axis_IR1Y, Axis_IR2X, Axis_IR2Y,
+    Axis_IR3X, Axis_IR3Y, Axis_IR4X, Axis_IR4Y,
     Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size,
+    Axis_Battery,
 };
 
 // The main D-Pad is exposed as a hat (not 4 separate buttons) so it maps
@@ -72,10 +73,14 @@ enum WiimoteButton {
     Btn_ClassicUp, Btn_ClassicDown, Btn_ClassicLeft, Btn_ClassicRight,
 };
 
-constexpr int kBalanceNumAxes = 7;
+// Same "append, don't insert" rule as WiimoteAxis above applies here -
+// BAxis_Battery is appended after the original 7-axis layout (index 7)
+// rather than inserted inline.
+constexpr int kBalanceNumAxes = 8;
 enum BalanceAxis {
     BAxis_TopLeft = 0, BAxis_TopRight, BAxis_BottomLeft, BAxis_BottomRight,
     BAxis_Total, BAxis_CoGX, BAxis_CoGY,
+    BAxis_Battery,
 };
 constexpr int kBalanceNumButtons = 1;
 enum BalanceButton { BBtn_A = 0 };
