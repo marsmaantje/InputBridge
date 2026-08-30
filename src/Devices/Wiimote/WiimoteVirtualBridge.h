@@ -138,6 +138,17 @@ public:
     // rumble motor at all, unlike a Wii Remote/Wii Remote Plus).
     const std::string *FindHidPathForJoystick(SDL_JoystickID joystick_id, bool *out_is_balance_board = nullptr) const;
 
+    // Returns the SDL_JoystickID of every currently-attached bridge
+    // joystick, so callers that need to enumerate all mappable devices
+    // (e.g. MappingProfileStore::HandleDeviceConnectionChange(), which
+    // rebuilds its GUID -> SDL_JoystickID lookup from scratch on every
+    // profile activation / device connect-disconnect) can include Wiimotes
+    // alongside DeviceManager::GetDevices(). Without this, saved profile
+    // entries that reference a Wiimote GUID silently fail to remap to a
+    // live instance_id, since Wiimotes are never present in
+    // DeviceManager::m_Devices (see DeviceManager.h).
+    std::vector<SDL_JoystickID> GetAllJoystickIds() const;
+
 private:
     WiimoteVirtualBridge() = default;
 

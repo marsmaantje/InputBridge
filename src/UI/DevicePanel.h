@@ -30,4 +30,4 @@ void DrawDeviceItem(DeviceState&        dev,
 /// WiimoteDevice snapshot (see Devices/Wiimote/README.md). These are not
 /// SDL_Joystick-backed and so are not part of DeviceManager::GetDevices() -
 /// call this in its own loop over DeviceManager::GetWiimotes().
-void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index);
+void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, PreferencesManager& prefs, int index);

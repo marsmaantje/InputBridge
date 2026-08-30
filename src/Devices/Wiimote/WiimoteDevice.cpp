@@ -1221,6 +1221,19 @@ void WiimoteDevice::ClearBalanceBoardTare() {
     m_Snapshot.balance_board_tared = false;
 }
 
+void WiimoteDevice::SetBalanceBoardTareValues(float top_right, float bottom_right, float top_left, float bottom_left) {
+    m_BalanceTareKg[0] = top_right;
+    m_BalanceTareKg[1] = bottom_right;
+    m_BalanceTareKg[2] = top_left;
+    m_BalanceTareKg[3] = bottom_left;
+    m_Snapshot.balance_board_tared = (top_right != 0.f || bottom_right != 0.f ||
+                                       top_left != 0.f || bottom_left != 0.f);
+}
+
+void WiimoteDevice::GetBalanceBoardTareValues(float outKg[4]) const {
+    for (int i = 0; i < 4; ++i) outKg[i] = m_BalanceTareKg[i];
+}
+
 bool WiimoteDevice::SetIRExtendedMode(bool enabled) {
     if (m_Snapshot.is_balance_board) return false; // no camera hardware
     if (enabled == m_IRExtendedMode) return true;   // already there

@@ -271,6 +271,61 @@ void PreferencesManager::SetDeviceKeepalive(const std::string &guid, bool enable
     Save();
 }
 
+int PreferencesManager::GetWiimotePlayerLED(const std::string &hid_path, int defaultValue) const {
+    return GetInt(std::string(kWiimoteSectionPrefix) + hid_path, kWiiPlayerLEDKey, defaultValue);
+}
+
+void PreferencesManager::SetWiimotePlayerLED(const std::string &hid_path, int player_1to4) {
+    SetInt(std::string(kWiimoteSectionPrefix) + hid_path, kWiiPlayerLEDKey, player_1to4);
+    Save();
+}
+
+bool PreferencesManager::GetWiimoteIRExtendedMode(const std::string &hid_path, bool defaultValue) const {
+    return GetBool(std::string(kWiimoteSectionPrefix) + hid_path, kWiiIRExtendedKey, defaultValue);
+}
+
+void PreferencesManager::SetWiimoteIRExtendedMode(const std::string &hid_path, bool enabled) {
+    SetBool(std::string(kWiimoteSectionPrefix) + hid_path, kWiiIRExtendedKey, enabled);
+    Save();
+}
+
+bool PreferencesManager::GetWiimoteBalanceTareKg(const std::string &hid_path, float outKg[4]) const {
+    std::string section = std::string(kWiimoteSectionPrefix) + hid_path;
+    if (!m_Sections.count(section))
+        return false;
+
+    bool any = false;
+    for (int i = 0; i < 4; ++i) {
+        std::string key = std::string(kWiiTareKeyPrefix) + std::to_string(i);
+        const auto &sec = m_Sections.at(section);
+        auto it = sec.find(key);
+        if (it == sec.end())
+            return false; // partial/missing entry - treat as "nothing saved"
+        outKg[i] = (float)std::atof(it->second.c_str());
+        if (outKg[i] != 0.f)
+            any = true;
+    }
+    return any;
+}
+
+void PreferencesManager::SetWiimoteBalanceTareKg(const std::string &hid_path, const float kg[4]) {
+    std::string section = std::string(kWiimoteSectionPrefix) + hid_path;
+    for (int i = 0; i < 4; ++i) {
+        std::string key = std::string(kWiiTareKeyPrefix) + std::to_string(i);
+        m_Sections[section][key] = std::to_string(kg[i]);
+    }
+    Save();
+}
+
+void PreferencesManager::ClearWiimoteBalanceTareKg(const std::string &hid_path) {
+    std::string section = std::string(kWiimoteSectionPrefix) + hid_path;
+    if (!m_Sections.count(section))
+        return;
+    for (int i = 0; i < 4; ++i)
+        m_Sections[section].erase(std::string(kWiiTareKeyPrefix) + std::to_string(i));
+    Save();
+}
+
 bool PreferencesManager::IsPreferenceApplied(SDL_JoystickID instance_id) const { return m_AppliedPreferences.find(instance_id) != m_AppliedPreferences.end(); }
 
 void PreferencesManager::MarkPreferenceApplied(SDL_JoystickID instance_id) { m_AppliedPreferences.insert(instance_id); }

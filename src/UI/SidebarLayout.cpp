@@ -416,7 +416,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
                     ImGui::Text("Wiimotes: %d", static_cast<int>(wiimotes.size()));
                     int idx = 0;
                     for (auto& w : wiimotes)
-                        DrawWiimoteItem(*w, idx++);
+                        DrawWiimoteItem(*w, ctx.prefs, idx++);
                 }
             }
 

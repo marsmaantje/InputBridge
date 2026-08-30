@@ -141,6 +141,16 @@ public:
     // Point-in-time read of everything decoded so far.
     const WiimoteSnapshot &Snapshot() const { return m_Snapshot; }
 
+    // One-shot latch for "have saved preferences (player LED, IR Extended
+    // mode, Balance Board tare - see PreferencesManager) been restored onto
+    // this device yet". Analogous to PreferencesManager::IsPreferenceApplied/
+    // MarkPreferenceApplied, but tracked here instead: those are keyed by
+    // SDL_JoystickID, and WiimoteDevice (raw-HID, not SDL_Joystick-backed)
+    // has none. Public and unguarded like WiimoteSnapshot's own fields -
+    // callers (DevicePanel) are expected to check-then-set it themselves,
+    // the same one-shot pattern used for the SDL-backed device settings tab.
+    bool prefs_applied = false;
+
     // -- Feedback --------------------------------------------------------
     void SetPlayerLED(int player_1to4);   // lights exactly one LED, 1-4
     void SetLEDMask(uint8_t mask4bits);   // bits 4-7, arbitrary pattern
@@ -294,6 +304,21 @@ public:
     // Clears any offset set by TareBalanceBoard(), reverting to the board's
     // raw factory-calibrated readings.
     void ClearBalanceBoardTare();
+
+    // Directly sets the per-corner tare offset (order: top-right,
+    // bottom-right, top-left, bottom-left), bypassing the "capture the
+    // current live reading" behavior of TareBalanceBoard(). Exists so a
+    // previously-saved tare (see PreferencesManager::GetWiimoteBalanceTareKg)
+    // can be restored on reconnect without needing a fresh weight report to
+    // have arrived first. All-zero is equivalent to ClearBalanceBoardTare().
+    void SetBalanceBoardTareValues(float top_right, float bottom_right, float top_left, float bottom_left);
+
+    // Point-in-time read of the offset currently being subtracted from
+    // every corner reading, in the same TR/BR/TL/BL order as
+    // SetBalanceBoardTareValues(). For persisting the current tare (e.g.
+    // after TareBalanceBoard() was just called from the UI) rather than
+    // reconstructing it from BalanceBoardState.
+    void GetBalanceBoardTareValues(float outKg[4]) const;
 
     // -- IR Extended mode toggle ---------------------------------------------
     // Switches between IR Basic mode (report 0x37: X/Y only, but leaves room

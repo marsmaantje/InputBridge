@@ -30,6 +30,7 @@ static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
                                       int index);
 static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
                                     const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                    PreferencesManager& prefs,
                                     int index);
 
 // ---------------------------------------------------------------------------
@@ -538,7 +539,7 @@ void DrawDeviceItem(DeviceState&        dev,
 // DrawWiimoteItem
 // ---------------------------------------------------------------------------
 
-void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index) {
+void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, PreferencesManager& prefs, int index) {
     using namespace InputBridge::Wiimote;
     static WiimoteVisualizer wiimote_viz;
 
@@ -580,7 +581,7 @@ void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, int index) {
             }
 
             if (ImGui::BeginTabItem("Settings")) {
-                DrawWiimoteSettingsTab(dev, snap, index);
+                DrawWiimoteSettingsTab(dev, snap, prefs, index);
                 ImGui::EndTabItem();
             }
 
@@ -678,14 +679,43 @@ static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
 
 static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
                                     const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                    PreferencesManager& prefs,
                                     int index)
 {
-    if (!snap.is_balance_board) {
-        static int s_player[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
-        int &player = s_player[index % 8];
-        ImGui::SetNextItemWidth(120.0f);
-        if (ImGui::SliderInt("Player LED", &player, 1, 4))
+    // hid_path is the only stable identifier a raw-HID WiimoteDevice has -
+    // see PreferencesManager::GetWiimotePlayerLED's comment. Guard against
+    // restoring from an empty key (e.g. drawn a frame before the first
+    // status report has populated it) since that would collide across
+    // every not-yet-identified Wiimote.
+    const std::string& path = snap.hid_path;
+
+    static int s_player[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
+    int &player = s_player[index % 8];
+
+    // Restore saved settings once per appearance, the same one-shot
+    // pattern DrawDeviceSettingsTab uses for haptic keepalive - gated on
+    // WiimoteDevice::prefs_applied since these devices have no
+    // SDL_JoystickID for PreferencesManager's own applied-tracking.
+    if (!dev.prefs_applied && !path.empty()) {
+        dev.prefs_applied = true;
+        if (!snap.is_balance_board) {
+            player = prefs.GetWiimotePlayerLED(path);
             dev.SetPlayerLED(player);
+            if (prefs.GetWiimoteIRExtendedMode(path))
+                dev.SetIRExtendedMode(true);
+        } else {
+            float tareKg[4];
+            if (prefs.GetWiimoteBalanceTareKg(path, tareKg))
+                dev.SetBalanceBoardTareValues(tareKg[0], tareKg[1], tareKg[2], tareKg[3]);
+        }
+    }
+
+    if (!snap.is_balance_board) {
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::SliderInt("Player LED", &player, 1, 4)) {
+            dev.SetPlayerLED(player);
+            prefs.SetWiimotePlayerLED(path, player);
+        }
 
         // IR Extended mode: trades away Nunchuk/Classic Controller/Guitar
         // Hero data (report 0x33 carries no extension bytes - see
@@ -695,8 +725,10 @@ static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
         // there's a brief, deliberate pause on click rather than being
         // wired to update every frame.
         bool extended = snap.ir_extended_mode;
-        if (ImGui::Checkbox("IR Extended Mode (dot size)", &extended))
+        if (ImGui::Checkbox("IR Extended Mode (dot size)", &extended)) {
             dev.SetIRExtendedMode(extended);
+            prefs.SetWiimoteIRExtendedMode(path, extended);
+        }
         if (snap.ir_extended_mode) {
             ImGui::SameLine();
             ImGui::TextDisabled("(Nunchuk/Classic/Guitar data frozen while active)");
@@ -707,13 +739,20 @@ static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
     // Software zero point: subtracts whatever the board currently reads
     // from every future reading, without touching its own factory
     // calibration. Useful for a rug/mount/uneven floor adding a fixed
-    // offset, or just to zero out before stepping on.
-    if (ImGui::Button("Tare / Zero"))
+    // offset, or just to zero out before stepping on. Persisted so it
+    // survives a reconnect/relaunch rather than only lasting the session.
+    if (ImGui::Button("Tare / Zero")) {
         dev.TareBalanceBoard();
+        float tareKg[4];
+        dev.GetBalanceBoardTareValues(tareKg);
+        prefs.SetWiimoteBalanceTareKg(path, tareKg);
+    }
     if (snap.balance_board_tared) {
         ImGui::SameLine();
-        if (ImGui::Button("Clear Tare"))
+        if (ImGui::Button("Clear Tare")) {
             dev.ClearBalanceBoardTare();
+            prefs.ClearWiimoteBalanceTareKg(path);
+        }
         ImGui::SameLine();
         ImGui::TextDisabled("(tared)");
     }

@@ -2,6 +2,7 @@
 
 #include "App/Log.h"
 #include "Devices/DeviceManager.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 #include "Mappers/OutputMapper.h"
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
@@ -522,6 +523,19 @@ void MappingProfileStore::HandleDeviceConnectionChange() {
     std::map<std::string, SDL_JoystickID> guidMap;
     for (const auto& d : m_DeviceManager.GetDevices())
         guidMap[DeviceManager::GetDeviceGUIDString(d)] = d.instance_id;
+
+    // Wiimotes are never present in DeviceManager::GetDevices() (see the
+    // comment on DeviceManager::ScanWiimotes()/m_Wiimotes) - they're only
+    // reachable as SDL joysticks through WiimoteVirtualBridge's virtual
+    // joysticks. Fold those in too, or every saved Wiimote binding/haptic
+    // target/mapping GUID would fail to remap to a live instance_id here
+    // and silently appear unbound after every profile activation, device
+    // (re)connect, or app relaunch.
+    for (SDL_JoystickID id : InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().GetAllJoystickIds()) {
+        DeviceState fake;
+        fake.instance_id = id;
+        guidMap[DeviceManager::GetDeviceGUIDString(fake)] = id;
+    }
 
     auto remap = [&](const std::string& guid) -> SDL_JoystickID {
         auto it = guidMap.find(guid);

@@ -390,4 +390,12 @@ const std::string *WiimoteVirtualBridge::FindHidPathForJoystick(SDL_JoystickID j
     return nullptr;
 }
 
+std::vector<SDL_JoystickID> WiimoteVirtualBridge::GetAllJoystickIds() const {
+    std::vector<SDL_JoystickID> ids;
+    ids.reserve(m_Entries.size());
+    for (const auto &e : m_Entries)
+        if (e.joystick_id != 0) ids.push_back(e.joystick_id);
+    return ids;
+}
+
 } // namespace InputBridge::Wiimote
