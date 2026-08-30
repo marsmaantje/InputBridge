@@ -80,16 +80,28 @@ IRState IRBasic(const uint8_t ir[10]) {
 
 IRState IRExtended(const uint8_t ir[12]) {
     IRState out{};
-    // Per dot: byte0 = X low 8 bits, byte1 = Y low 8 bits, byte2 = X high
-    // 2 bits (7:6) | Y high 2 bits (5:4) | size (3:0). An empty slot reads
-    // all-1s across all 3 bytes (X=0xFF, Y=0xFF, size=0xF) per WiiBrew.
+    // Per dot: byte0 = X low 8 bits, byte1 = Y low 8 bits, byte2 bits 7:6 =
+    // Y high 2 bits, bits 5:4 = X high 2 bits, bits 3:0 = size. (Note the
+    // high-bit nibbles are Y-then-X in byte2, NOT X-then-Y - easy to get
+    // backwards since Basic Mode's pair-packing byte puts them in the
+    // opposite order per dot. Getting this swapped makes a dot's X and Y
+    // high bits cross-wired: a real X-axis boundary crossing shows up as a
+    // spurious jump in Y instead, i.e. dots appear to jump to the opposite
+    // side of the tracked area when moved smoothly in one direction.)
+    // An empty slot reads all-1s across *all 3 bytes* (byte2 == 0xFF in
+    // full, not just its low nibble) per WiiBrew - so byte2's visibility
+    // check must cover the X/Y high-bit nibble too, not only the size
+    // nibble. Checking only the size nibble (p[2] & 0x0F == 0x0F) lets a
+    // real, tracked dot with size==15 (a big/bright blob - common at close
+    // range) and X or Y raw low-bytes of 0xFF (X in {255,511,767,1023}
+    // etc.) get misclassified as invisible.
     for (int i = 0; i < 4; ++i) {
         const uint8_t *p = ir + (i * 3);
         IRDot &d = out[i];
-        d.x    = uint16_t(p[0]) | (uint16_t(p[2] & 0xC0) << 2);
-        d.y    = uint16_t(p[1]) | (uint16_t(p[2] & 0x30) << 4);
+        d.x    = uint16_t(p[0]) | (uint16_t(p[2] & 0x30) << 4);
+        d.y    = uint16_t(p[1]) | (uint16_t(p[2] & 0xC0) << 2);
         d.size = p[2] & 0x0F;
-        d.visible = !(p[0] == 0xFF && p[1] == 0xFF && (p[2] & 0x0F) == 0x0F);
+        d.visible = !(p[0] == 0xFF && p[1] == 0xFF && p[2] == 0xFF);
     }
     return out;
 }
