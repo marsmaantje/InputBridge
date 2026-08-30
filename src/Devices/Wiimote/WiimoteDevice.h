@@ -11,6 +11,7 @@
 // src/Devices/Wiimote/README.md (design doc) for how this plugs into
 // DeviceManager, ProtocolFieldUtils, and a new WiimoteVisualizer state.
 #pragma once
+#include "WiimoteADPCM.h"
 #include "WiimoteProtocol.h"
 #include "WiimoteState.h"
 #include <SDL3/SDL_hidapi.h>
@@ -20,6 +21,22 @@
 #include <vector>
 
 namespace InputBridge::Wiimote {
+
+// Which of the two speaker encodings (see WiimoteProtocol.h's
+// SpeakerFormat namespace for the underlying register values) EnableSpeaker()
+// should configure the hardware for. A type-safe wrapper around those raw
+// register values rather than reusing them directly as the API's parameter
+// type, so callers can't accidentally pass an unrelated byte.
+enum class SpeakerAudioFormat : uint8_t {
+    PCM8,   // signed 8-bit linear PCM - simple, but needs a low sample rate
+            // to keep the Bluetooth link fed (see EnableSpeaker()), which is
+            // what makes it sound thin/aliased even when everything else is
+            // working correctly.
+    ADPCM4, // 4-bit Yamaha ADPCM (WiimoteADPCM.h) - roughly double the
+            // usable sample rate for the same data rate, which is what
+            // actually fixes the thin/aliased sound above rather than any
+            // bug in the PCM8 path itself.
+};
 
 // Everything a caller (visualizer / protocol field mapper) needs for one
 // frame. Only the fields relevant to the currently-connected extension are
@@ -164,23 +181,36 @@ public:
     // -- Speaker -----------------------------------------------------------
     // Runs the full WiiBrew enable/mute/configure/unmute register sequence
     // (see WiimoteProtocol.h's Registers::SpeakerInitFlag et al.) to switch
-    // the speaker into 8-bit signed PCM mode at `sample_rate_hz`. WiiBrew
-    // notes 8-bit mode needs a low sample rate to keep the Bluetooth link
-    // fed in time and calls out 2000Hz specifically as a good compromise -
-    // that's the default here. `volume` is 0x00-0xFF, but 0xFF (max gain
-    // on the hardware volume register) overdrives this speaker audibly -
-    // confirmed distorted/too loud on real hardware - so the default here
-    // is a conservative ~25%. Push it up if you want it louder and can
-    // live with more distortion; there's no way to get more volume
-    // without more distortion out of this speaker/format combination.
+    // the speaker into `format` at `sample_rate_hz`. `format` defaults to
+    // PCM8 for back-compat with existing QueuePCM8() callers; pass ADPCM4
+    // (and use QueueADPCM4() below) for meaningfully better sound quality -
+    // see SpeakerAudioFormat's comment for why. WiiBrew calls out 2000Hz as
+    // a good compromise for 8-bit mode (to keep the Bluetooth link fed in
+    // time) and 3000Hz as its "standard value" for 4-bit mode; the default
+    // here (2000Hz) only matches the former; ADPCM4 callers will usually
+    // want to pass a higher rate explicitly (PlayBeep() does this for you).
+    // `volume` is 0x00-0xFF in PCM8 mode but only 0x00-0x40 in ADPCM4 mode
+    // (WiiBrew) - values above that are silently clamped down rather than
+    // writing an out-of-range register value whose hardware behavior isn't
+    // documented. Within either range, the hardware volume register's own
+    // max gain overdrives this speaker audibly - confirmed distorted/too
+    // loud on real hardware - so the default here is a conservative ~25%
+    // of PCM8's range. Push it up if you want it louder and can live with
+    // more distortion; there's no way to get more volume without more
+    // distortion out of this speaker/format combination.
     // NOTE: volume=0x00 is NOT confirmed to produce true silence on real
     // hardware (WiiBrew: "the full purpose of these bytes is not known") -
     // TickSpeaker() enforces silence at volume 0 by never transmitting
     // queued audio at all, rather than relying on this register.
     // Synchronous (several WriteRegister() round-trips); call once before
-    // QueuePCM8(), not every frame. Returns false if any step's HID write
-    // failed.
-    bool EnableSpeaker(uint32_t sample_rate_hz = 2000, uint8_t volume = 0x40);
+    // QueuePCM8()/QueueADPCM4(), not every frame. Returns false if any
+    // step's HID write failed. If `format` differs from whatever was
+    // active before this call, anything still queued from the old format
+    // is discarded first (see QueueADPCM4()'s comment on why mixing
+    // formats mid-queue can't work) - this includes DisableSpeaker() ->
+    // EnableSpeaker() with a different format, not just a live reconfigure.
+    bool EnableSpeaker(uint32_t sample_rate_hz = 2000, uint8_t volume = 0x40,
+                        SpeakerAudioFormat format = SpeakerAudioFormat::PCM8);
 
     // Disables the speaker (Report 0x14, enable bit cleared) and discards
     // anything still queued.
@@ -188,26 +218,56 @@ public:
 
     // Appends signed 8-bit PCM samples to the playback queue; does not
     // interrupt whatever's already queued/in-flight. EnableSpeaker() must
-    // have been called first (and with a matching sample rate - this call
-    // doesn't touch the device's rate configuration). Actual transmission
-    // happens kSpeakerMaxChunkBytes at a time from Poll(), paced to the
-    // rate passed to EnableSpeaker() - see TickSpeaker().
+    // have been called first with format PCM8 (and with a matching sample
+    // rate - this call doesn't touch the device's rate configuration).
+    // Actual transmission happens kSpeakerMaxChunkBytes at a time from
+    // Poll(), paced to the rate passed to EnableSpeaker() - see
+    // TickSpeaker().
     void QueuePCM8(const int8_t *samples, size_t count);
+
+    // Encodes `count` signed 16-bit PCM samples to 4-bit Yamaha ADPCM (see
+    // WiimoteADPCM.h) and appends the packed result to the playback queue.
+    // EnableSpeaker() must have been called first with format ADPCM4 (same
+    // "doesn't touch the rate configuration" contract as QueuePCM8()).
+    //
+    // The encoder's predictor/step state (and any odd leftover nibble)
+    // carries over between calls, so back-to-back QueueADPCM4() calls
+    // encode one continuous stream instead of restarting cold each time -
+    // restarting would desync from whatever state the Wiimote's onboard
+    // decoder is actually in, since (unlike 8-bit PCM, where every sample
+    // stands alone) each ADPCM nibble only makes sense relative to the
+    // decoder's running prediction. That state resets together with
+    // EnableSpeaker()'s reconfigure and StopSpeaker()'s discard (both of
+    // which leave the real hardware decoder's state unknown/stale anyway)
+    // so the host's encoder can't silently drift further out of sync with
+    // it - expect a small audible discontinuity right at that boundary,
+    // same as the "garbled squawk on reconnect" EnableSpeaker() already
+    // documents for a live reconfigure.
+    void QueueADPCM4(const int16_t *samples, size_t count);
 
     // True while there's still queued-but-unsent audio.
     bool IsSpeakerPlaying() const { return m_SpeakerQueuePos < m_SpeakerQueue.size(); }
 
     // Discards queued-but-unsent audio without disabling the speaker
-    // itself (use DisableSpeaker() for that).
+    // itself (use DisableSpeaker() for that). Also resets the ADPCM4
+    // encoder state (harmless no-op in PCM8 mode) - see QueueADPCM4()'s
+    // comment on why a discard has to imply a state reset there.
     void StopSpeaker();
 
     // Convenience wrapper for testing/notification sounds: calls
-    // EnableSpeaker() (if not already enabled at a matching rate) and
-    // queues a generated sine-wave tone. Not meant for anything beyond
-    // simple beeps - for real audio, generate/decode your own PCM8 buffer
-    // and use QueuePCM8() directly.
+    // EnableSpeaker() (if not already enabled at matching settings) and
+    // queues a generated sine-wave tone, encoded in `format` (ADPCM4 by
+    // default - it's the better-sounding choice for the same reason
+    // SpeakerAudioFormat documents, and this is exactly the "just want it
+    // to sound like a clean tone" use case). Not meant for anything beyond
+    // simple beeps - for real audio, generate/encode your own buffer and
+    // use QueuePCM8()/QueueADPCM4() directly. `sample_rate_hz` of 0 (the
+    // default) picks WiiBrew's suggested rate for whichever `format` was
+    // requested (2000Hz PCM8 / 3000Hz ADPCM4) rather than a single literal
+    // default that's only actually well-tuned for one of the two formats.
     void PlayBeep(float freq_hz = 440.0f, uint32_t duration_ms = 200,
-                   uint32_t sample_rate_hz = 2000, uint8_t volume = 0x40);
+                   uint32_t sample_rate_hz = 0, uint8_t volume = 0x40,
+                   SpeakerAudioFormat format = SpeakerAudioFormat::ADPCM4);
 
     // -- Low-level register access (exposed for advanced/experimental use,
     //    same rationale as WiimoteLib exposing raw read/write) ------------
@@ -369,14 +429,24 @@ private:
 
     std::optional<BalanceBoardCalibration> m_BalanceCal;
 
-    // Speaker playback queue (see EnableSpeaker()/QueuePCM8()/TickSpeaker()).
+    // Speaker playback queue (see EnableSpeaker()/QueuePCM8()/
+    // QueueADPCM4()/TickSpeaker()). Bytes here are already in whatever
+    // format m_SpeakerFormat says - TickSpeaker() just streams them out
+    // kSpeakerMaxChunkBytes at a time without caring what they mean.
     bool   m_SpeakerEnabled = false;
     uint32_t m_SpeakerSampleRateHz = 0; // rate last passed to EnableSpeaker(), 0 = never enabled
     uint8_t  m_SpeakerVolume = 0;       // volume last passed to EnableSpeaker() (see PlayBeep())
+    SpeakerAudioFormat m_SpeakerFormat = SpeakerAudioFormat::PCM8; // format last passed to EnableSpeaker()
     std::vector<int8_t> m_SpeakerQueue;
     size_t m_SpeakerQueuePos = 0;
     Uint64 m_SpeakerNextChunkAtMs = 0;
-    Uint32 m_SpeakerChunkIntervalMs = 10; // recomputed by EnableSpeaker() from sample_rate_hz
+    Uint32 m_SpeakerChunkIntervalMs = 10; // recomputed by EnableSpeaker() from sample_rate_hz/format
+
+    // Running Yamaha ADPCM encoder state for QueueADPCM4() - see that
+    // method's comment on why this has to persist across calls instead of
+    // resetting per-call, and EnableSpeaker()/StopSpeaker() for where it
+    // gets reset.
+    YamahaAdpcm4Encoder m_AdpcmEncoder;
 
     bool m_MotionPlusPresent = false;   // detected at 0xA600FA
     bool m_MotionPlusActive = false;    // activation write sent + acknowledged by data arriving

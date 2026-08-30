@@ -579,9 +579,21 @@ void WiimoteDevice::UpdateRumblePWM() {
 
 // -- Speaker ---------------------------------------------------------------
 
-bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume) {
+bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume, SpeakerAudioFormat format) {
     if (!m_Dev) return false;
     if (sample_rate_hz == 0) sample_rate_hz = 2000;
+
+    // ADPCM4's hardware volume register only goes to 0x40 (WiiBrew's
+    // Speaker Configuration section) - clamp rather than writing an
+    // out-of-range value whose hardware behavior isn't documented.
+    if (format == SpeakerAudioFormat::ADPCM4 && volume > 0x40) volume = 0x40;
+
+    // A live format switch leaves anything already queued in the old
+    // format meaningless (PCM8 bytes played back as ADPCM4 nibbles, or
+    // vice versa, is just noise) - see QueueADPCM4()'s comment for the
+    // fuller rationale, which applies here too since this discards the
+    // queue and resets the ADPCM encoder exactly like StopSpeaker() does.
+    if (m_SpeakerFormat != format) StopSpeaker();
 
     // WiiBrew "Wiimote#Speaker / Initialization Sequence", steps 1-7:
     //   1. Enable speaker      (0x04 -> Report 0x14)
@@ -612,15 +624,18 @@ bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume) {
 
     // rate register value = clock / desired Hz (WiiBrew's formula; integer
     // division, so the achieved rate may differ slightly from what's asked
-    // for). 8-bit PCM only here - see the class comment on QueuePCM8() for
-    // why 4-bit ADPCM isn't wired up.
-    const uint32_t rate_value = kSpeakerPcmClockHz / sample_rate_hz;
+    // for). Each format has its own clock (kSpeakerPcmClockHz /
+    // kSpeakerAdpcmClockHz, WiimoteProtocol.h) - using the wrong one here
+    // would silently configure a rate 2x off from what was asked for.
+    const bool is_adpcm = format == SpeakerAudioFormat::ADPCM4;
+    const uint32_t clock_hz = is_adpcm ? kSpeakerAdpcmClockHz : kSpeakerPcmClockHz;
+    const uint32_t rate_value = clock_hz / sample_rate_hz;
     const uint8_t config[7] = {
         0x00,                                // unknown, always 0x00 per WiiBrew
-        SpeakerFormat::Pcm8,                 // 0x40 = signed 8-bit PCM
+        is_adpcm ? SpeakerFormat::Adpcm4 : SpeakerFormat::Pcm8,
         uint8_t(rate_value & 0xFF),           // sample rate, little-endian
         uint8_t((rate_value >> 8) & 0xFF),
-        volume,                               // 0x00-0xFF in 8-bit mode
+        volume,                               // 0x00-0xFF (PCM8) / 0x00-0x40 (ADPCM4), already clamped above
         0x00, 0x00,                           // unknown, always 0x00 per WiiBrew
     };
     ok &= WriteRegister(Registers::SpeakerConfig, config, sizeof(config));
@@ -634,13 +649,27 @@ bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume) {
     m_SpeakerEnabled = ok;
     m_SpeakerSampleRateHz = sample_rate_hz;
     m_SpeakerVolume = volume;
+    m_SpeakerFormat = format;
+    // A (re)configure is exactly the kind of state discontinuity
+    // QueueADPCM4()'s comment describes - start its encoder clean so it
+    // doesn't carry predictor/step state across what's effectively a new
+    // stream as far as the hardware is concerned. Harmless no-op in PCM8
+    // mode (nothing reads m_AdpcmEncoder there).
+    m_AdpcmEncoder.Reset();
+
     // Pace TickSpeaker() so a kSpeakerMaxChunkBytes chunk drains roughly
-    // every (chunk_bytes / sample_rate_hz) seconds - i.e. we hand the
+    // every (chunk_samples / sample_rate_hz) seconds - i.e. we hand the
     // Wiimote new data about as fast as it's consuming the last chunk,
     // not faster (which would just pile up in whatever's buffer) or
     // slower (which would starve it, producing audible dropouts/pops).
+    // ADPCM4 packs 2 samples/byte where PCM8 packs 1, so the same
+    // kSpeakerMaxChunkBytes chunk covers twice as many samples (i.e.
+    // twice the playback time) in ADPCM4 - using the PCM8 math here would
+    // silently pace transmission at half the rate the hardware is
+    // actually consuming ADPCM4 data, starving it.
+    const uint32_t samples_per_chunk = uint32_t(kSpeakerMaxChunkBytes) * (is_adpcm ? 2 : 1);
     m_SpeakerChunkIntervalMs = std::max<Uint32>(
-        1, Uint32((1000ull * kSpeakerMaxChunkBytes) / sample_rate_hz));
+        1, Uint32((1000ull * samples_per_chunk) / sample_rate_hz));
     m_SpeakerNextChunkAtMs = SDL_GetTicks();
 
     if (!ok) {
@@ -666,8 +695,48 @@ void WiimoteDevice::QueuePCM8(const int8_t *samples, size_t count) {
     m_SpeakerQueue.insert(m_SpeakerQueue.end(), samples, samples + count);
 }
 
-void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sample_rate_hz, uint8_t volume) {
-    if (sample_rate_hz == 0) sample_rate_hz = 2000;
+void WiimoteDevice::QueueADPCM4(const int16_t *samples, size_t count) {
+    if (!samples || !count) return;
+    std::vector<uint8_t> packed;
+    m_AdpcmEncoder.Encode(samples, count, packed);
+    if (packed.empty()) return;
+    // Raw bytes, not sample values - a byte-for-byte copy regardless of
+    // int8_t's signedness is exactly what's wanted here (TickSpeaker()
+    // memcpy()s these straight into the HID report), so go through
+    // memcpy rather than an implicit/narrowing per-element conversion.
+    const size_t old_size = m_SpeakerQueue.size();
+    m_SpeakerQueue.resize(old_size + packed.size());
+    std::memcpy(m_SpeakerQueue.data() + old_size, packed.data(), packed.size());
+}
+
+namespace {
+// Shared amplitude envelope for PlayBeep()'s two format-specific sample
+// loops below: a plain sine tone with a short linear fade-in/out (~5ms or
+// 10% of the tone, whichever is shorter) to avoid the audible click a
+// hard-edged buffer start/stop produces on this speaker. Returns -1..1;
+// callers scale to their own format's headroom-adjusted full scale.
+float BeepEnvelope(size_t i, size_t sample_count, size_t fade_samples,
+                    float freq_hz, uint32_t sample_rate_hz) {
+    const float t = float(i) / float(sample_rate_hz);
+    float amplitude = 1.0f;
+    if (fade_samples > 0) {
+        if (i < fade_samples) amplitude = float(i) / float(fade_samples);
+        else if (i >= sample_count - fade_samples) amplitude = float(sample_count - 1 - i) / float(fade_samples);
+    }
+    return amplitude * std::sin(2.0f * kPi * freq_hz * t);
+}
+} // namespace
+
+void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sample_rate_hz,
+                              uint8_t volume, SpeakerAudioFormat format) {
+    // WiiBrew's suggested rate differs per format (2000Hz PCM8 to keep the
+    // Bluetooth link fed at that format's higher per-sample cost, 3000Hz -
+    // its "standard value" - for ADPCM4) - see SpeakerAudioFormat's
+    // comment for why picking the wrong one for the format is exactly
+    // what makes a "beep" sound like an aliased buzz instead of a tone.
+    if (sample_rate_hz == 0) {
+        sample_rate_hz = (format == SpeakerAudioFormat::ADPCM4) ? 3000 : 2000;
+    }
 
     // Volume 0 means "play nothing" - see TickSpeaker()'s comment on why
     // silence is enforced by never sending data rather than by trusting
@@ -677,46 +746,60 @@ void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sampl
         StopSpeaker();
         return;
     }
+    if (format == SpeakerAudioFormat::ADPCM4 && volume > 0x40) volume = 0x40; // see EnableSpeaker()
 
     // Only re-run the (synchronous, several-HID-writes) enable sequence if
-    // something it actually controls has changed - rate or volume - so
-    // repeated same-settings beeps (e.g. a UI click sound) can queue
-    // back-to-back without re-doing the register dance and its associated
-    // mute/unmute click every time. Checking rate alone here was a bug:
-    // a repeat call with a new `volume` but the same (default) rate would
-    // silently skip EnableSpeaker() and keep whatever volume was set on
-    // the very first call, making `volume` appear to do nothing.
-    if (!m_SpeakerEnabled || m_SpeakerSampleRateHz != sample_rate_hz || m_SpeakerVolume != volume) {
-        if (!EnableSpeaker(sample_rate_hz, volume)) return;
+    // something it actually controls has changed - rate, volume, or
+    // format - so repeated same-settings beeps (e.g. a UI click sound)
+    // can queue back-to-back without re-doing the register dance and its
+    // associated mute/unmute click every time. Checking rate/volume alone
+    // here was a past bug (see git history): a repeat call with a new
+    // `volume` but the same (default) rate silently skipped
+    // EnableSpeaker() and kept whatever volume was set on the very first
+    // call, making `volume` appear to do nothing - format needs the same
+    // treatment, or switching formats between beeps would silently keep
+    // encoding/queueing in the old one.
+    if (!m_SpeakerEnabled || m_SpeakerSampleRateHz != sample_rate_hz ||
+        m_SpeakerVolume != volume || m_SpeakerFormat != format) {
+        if (!EnableSpeaker(sample_rate_hz, volume, format)) return;
     }
 
     const size_t sample_count = size_t((uint64_t(sample_rate_hz) * duration_ms) / 1000);
-    std::vector<int8_t> samples(sample_count);
-
-    // Plain sine tone, plus a short linear fade-in/out (~5ms or 10% of the
-    // tone, whichever is shorter) to avoid the audible click a hard-edged
-    // buffer start/stop produces on this speaker. Peak amplitude is held
-    // below full-scale (100 of a possible 127) to leave a little digital
-    // headroom on top of the volume register's own gain - see
-    // EnableSpeaker()'s comment on why 0xFF there already distorts.
     const size_t fade_samples = std::min(sample_count / 10, size_t(sample_rate_hz) * 5 / 1000);
-    for (size_t i = 0; i < sample_count; ++i) {
-        const float t = float(i) / float(sample_rate_hz);
-        float amplitude = 1.0f;
-        if (fade_samples > 0) {
-            if (i < fade_samples) amplitude = float(i) / float(fade_samples);
-            else if (i >= sample_count - fade_samples) amplitude = float(sample_count - 1 - i) / float(fade_samples);
-        }
-        const float s = amplitude * std::sin(2.0f * kPi * freq_hz * t);
-        samples[i] = int8_t(std::clamp(s * 100.0f, -100.0f, 100.0f));
-    }
 
-    QueuePCM8(samples.data(), samples.size());
+    if (format == SpeakerAudioFormat::ADPCM4) {
+        // Peak amplitude held to ~80% of int16 full-scale - ADPCM's own
+        // quantization error means driving the source signal to true
+        // full-scale is more likely to clip on peaks than linear PCM
+        // would be, on top of the headroom EnableSpeaker()'s comment
+        // already describes wanting below the volume register's own gain.
+        std::vector<int16_t> samples(sample_count);
+        for (size_t i = 0; i < sample_count; ++i) {
+            const float s = BeepEnvelope(i, sample_count, fade_samples, freq_hz, sample_rate_hz);
+            samples[i] = int16_t(std::clamp(s * 26214.0f, -26214.0f, 26214.0f));
+        }
+        QueueADPCM4(samples.data(), samples.size());
+    } else {
+        // Peak amplitude held below full-scale (100 of a possible 127) -
+        // same headroom rationale as above.
+        std::vector<int8_t> samples(sample_count);
+        for (size_t i = 0; i < sample_count; ++i) {
+            const float s = BeepEnvelope(i, sample_count, fade_samples, freq_hz, sample_rate_hz);
+            samples[i] = int8_t(std::clamp(s * 100.0f, -100.0f, 100.0f));
+        }
+        QueuePCM8(samples.data(), samples.size());
+    }
 }
 
 void WiimoteDevice::StopSpeaker() {
     m_SpeakerQueue.clear();
     m_SpeakerQueuePos = 0;
+    // See QueueADPCM4()'s comment: once queued-but-unsent bytes are
+    // discarded, the host's encoder state no longer corresponds to
+    // anything the hardware decoder actually received, so it has to reset
+    // too rather than silently drifting further out of sync on the next
+    // QueueADPCM4() call. Harmless no-op in PCM8 mode.
+    m_AdpcmEncoder.Reset();
 }
 
 void WiimoteDevice::TickSpeaker() {

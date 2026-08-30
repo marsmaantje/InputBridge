@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.11.3)
+project(InputBridge VERSION 0.11.4)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -242,6 +242,7 @@ add_executable(InputBridge
     # Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero
     # (raw-HID, parallel to the SDL_Joystick-based devices above - see
     # src/Devices/Wiimote/README.md)
+    src/Devices/Wiimote/WiimoteADPCM.cpp
     src/Devices/Wiimote/WiimoteDecoder.cpp
     src/Devices/Wiimote/WiimoteDevice.cpp
     src/Devices/Wiimote/WiimoteManager.cpp

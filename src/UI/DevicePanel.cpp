@@ -628,32 +628,48 @@ static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Speaker test: EnableSpeaker()/PlayBeep() below are confirmed working
-    // on real hardware (see Devices/Wiimote/README.md's Speaker row) - this
-    // button exists to make that easy to check without writing any code.
-    // A single tone is enough to confirm the enable/configure/unmute
-    // sequence actually produces sound; it's not meant as a general audio
-    // player.
-    ImGui::TextDisabled("8-bit PCM only - see README.md.");
+    // Speaker test: 8-bit PCM (EnableSpeaker()/PlayBeep()) is confirmed
+    // working on real hardware; 4-bit ADPCM is not yet independently
+    // verified against real hardware (see Devices/Wiimote/README.md's
+    // Speaker row) - this button exists to make both easy to check
+    // without writing any code. A single tone is enough to confirm the
+    // enable/configure/unmute sequence actually produces sound; it's not
+    // meant as a general audio player.
+    ImGui::TextDisabled("4-bit ADPCM (recommended) or 8-bit PCM - see README.md.");
 
-    // Volume is the hardware gain register (0x00-0xFF), not a software
-    // multiplier - EnableSpeaker()'s default (0x40, ~25%) is already a
-    // conservative starting point because 0xFF audibly distorts this
-    // speaker. Slider starts at that same value so dragging it up is an
-    // explicit, visible trade of loudness for distortion, not a surprise.
+    using InputBridge::Wiimote::SpeakerAudioFormat;
+    static SpeakerAudioFormat s_format[8] = {
+        SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4,
+        SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4,
+    }; // per-index scratch, good enough for a handful of Wiimotes
+    SpeakerAudioFormat &format = s_format[index % 8];
+    int format_int = format == SpeakerAudioFormat::ADPCM4 ? 0 : 1;
+    ImGui::SetNextItemWidth(220.0f);
+    if (ImGui::Combo("Speaker Format", &format_int, "4-bit ADPCM\0" "8-bit PCM\0"))
+        format = format_int == 0 ? SpeakerAudioFormat::ADPCM4 : SpeakerAudioFormat::PCM8;
+
+    // Volume is the hardware gain register, not a software multiplier -
+    // EnableSpeaker()'s default (0x40) is already a conservative starting
+    // point in either format because the register's own max gain audibly
+    // distorts this speaker. The register's *range* differs by format
+    // though (0x00-0xFF for PCM8, 0x00-0x40 for ADPCM4 - WiiBrew), so the
+    // slider's max (and what counts as "loud") tracks whichever format is
+    // currently selected rather than assuming PCM8's wider range.
     static uint8_t s_volume[8] = {0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40}; // per-index scratch, good enough for a handful of Wiimotes
     uint8_t &volume = s_volume[index % 8];
+    const int volume_max = format == SpeakerAudioFormat::ADPCM4 ? 0x40 : 0xFF;
+    volume = std::min<uint8_t>(volume, uint8_t(volume_max)); // clamp after a format switch that shrank the range
     int volume_int = int(volume);
     ImGui::SetNextItemWidth(160.0f);
-    if (ImGui::SliderInt("Speaker Volume", &volume_int, 0x00, 0xFF))
+    if (ImGui::SliderInt("Speaker Volume", &volume_int, 0x00, volume_max))
         volume = uint8_t(volume_int);
-    if (volume >= 0xC0) {
+    if (volume >= (volume_max * 3) / 4) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.0f, 1.0f), "(loud - likely to distort)");
     }
 
     if (ImGui::Button("Test Speaker (beep)"))
-        dev.PlayBeep(440.0f, 200, 2000, volume);
+        dev.PlayBeep(440.0f, 200, 0, volume, format);
 }
 
 // ---------------------------------------------------------------------------

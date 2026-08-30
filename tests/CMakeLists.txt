@@ -168,3 +168,16 @@ add_executable(test_wiimote_decoder
 target_include_directories(test_wiimote_decoder PRIVATE ${IB_SRC})
 target_link_libraries(test_wiimote_decoder PRIVATE GTest::gtest_main)
 gtest_discover_tests(test_wiimote_decoder)
+
+# 13. test_wiimote_adpcm ────────────────────────────────────────────────────────
+# Tests the pure PCM16<->nibble encode/decode functions in
+# Devices/Wiimote/WiimoteADPCM.* (packing shape, incremental-vs-one-shot
+# equivalence, round-trip error bounds, Reset() semantics). No SDL_hid_* I/O
+# or WiimoteDevice - same rationale as test_wiimote_decoder above.
+add_executable(test_wiimote_adpcm
+    test_wiimote_adpcm.cpp
+    ${IB_SRC}/Devices/Wiimote/WiimoteADPCM.cpp
+)
+target_include_directories(test_wiimote_adpcm PRIVATE ${IB_SRC})
+target_link_libraries(test_wiimote_adpcm PRIVATE GTest::gtest_main)
+gtest_discover_tests(test_wiimote_adpcm)
