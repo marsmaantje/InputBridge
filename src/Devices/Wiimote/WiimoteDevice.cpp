@@ -21,6 +21,15 @@ constexpr int kRegisterReadTimeoutMs = 250;
 // than relying on incidental Bluetooth/HID scheduling latency.
 constexpr Uint32 kIRInitStepDelayMs = 50;
 
+// How long to wait after SDL_hid_open_path() succeeds before running the
+// handshake (Init(), including EnableIRCamera()) - see m_InitSettleAtMs's
+// header comment for why a just-opened handle isn't necessarily a
+// just-settled Bluetooth connection. 500ms is comfortably longer than the
+// sub-second HID-channel negotiation windows observed causing this, while
+// still being short enough that a freshly-connected Wiimote feels
+// responsive rather than stalled.
+constexpr Uint32 kConnectSettleMs = 500;
+
 // std::numbers::pi_v<float> would be nicer but requires C++20 <numbers>;
 // avoid relying on M_PI, which isn't defined by <cmath> on MSVC without
 // _USE_MATH_DEFINES (this project builds on Windows - see CMakeLists.txt).
@@ -31,7 +40,15 @@ WiimoteDevice::WiimoteDevice(SDL_hid_device *dev, std::string hid_path, bool is_
     : m_Dev(dev), m_Path(std::move(hid_path)) {
     m_Snapshot.hid_path = m_Path;
     m_Snapshot.is_balance_board = is_balance_board_hint;
-    if (m_Dev) SDL_hid_set_nonblocking(m_Dev, 1);
+    if (m_Dev) {
+        SDL_hid_set_nonblocking(m_Dev, 1);
+        // Don't run Init() synchronously from here (WiimoteManager::Scan()
+        // used to call it immediately after construction) - defer it to
+        // Poll() once the connection has had kConnectSettleMs to settle.
+        // See m_InitSettleAtMs's header comment for why.
+        m_InitPending = true;
+        m_InitSettleAtMs = SDL_GetTicks() + kConnectSettleMs;
+    }
 }
 
 WiimoteDevice::~WiimoteDevice() {
@@ -978,6 +995,17 @@ void WiimoteDevice::Poll() {
         const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));
         if (n <= 0) break; // no more pending reports (non-blocking handle)
         HandleReport(buf, n);
+    }
+
+    // Run the deferred handshake once the connection has had a moment to
+    // settle - see m_InitSettleAtMs's header comment. Checked before the
+    // extension-settle handling below since Init() (via EnableIRCamera())
+    // sends its own StatusRequest, and InitExtension() being triggered off
+    // that status report's reply is expected to still work the same way it
+    // always has once Init() actually runs.
+    if (m_InitPending && SDL_GetTicks() >= m_InitSettleAtMs) {
+        m_InitPending = false;
+        Init();
     }
 
     // If we're waiting for an extension to settle after a connect event,

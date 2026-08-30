@@ -482,6 +482,30 @@ private:
     Uint64 m_ExtensionSettleAtMs = 0;
     bool m_ExtensionPendingInit = false;
 
+    // Same rationale as m_ExtensionSettleAtMs above, but for the initial
+    // handshake (Init(), in particular EnableIRCamera()) itself. A
+    // successful SDL_hid_open_path() only means the HID *node* is openable
+    // - on Bluetooth it does not guarantee the underlying HID
+    // control/interrupt channels have finished being negotiated, and
+    // writes sent into that window can be silently swallowed even though
+    // SDL_hid_write() itself reports success. This is invisible when the
+    // Wiimote was already on (and therefore already connected/settled) for
+    // some time before InputBridge started - by the time Scan() gets
+    // around to opening it, the connection is old news. It reproduces
+    // reliably when InputBridge is already running and the Wiimote is
+    // turned on afterwards, because the HID-open-to-Init() gap is then
+    // just a few milliseconds, right as the connection is at its freshest
+    // and least reliable. Deferring Init() to run from Poll() once
+    // m_InitSettleAtMs has passed (set from the constructor, i.e. from the
+    // moment the handle was opened) fixes that without touching the
+    // still-necessary per-write kIRInitStepDelayMs spacing or the
+    // verify-and-retry loop already in EnableIRCamera() - those handle a
+    // different problem (WiiBrew's documented "which of 3 states you land
+    // in is pretty much random" flakiness) than a connection that hasn't
+    // finished establishing yet.
+    Uint64 m_InitSettleAtMs = 0;
+    bool m_InitPending = false;
+
     // Mirrors WiimoteSnapshot::extension_encrypted - set by InitExtension()
     // when the "old way" fallback was needed, consulted by
     // DecodeCoreAccelIR10Ext6() to decrypt live extension data bytes.

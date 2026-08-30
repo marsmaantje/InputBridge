@@ -147,13 +147,14 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
                                 std::strstr(product_utf8, "WBC") != nullptr;
         }
 
-        auto device = std::make_unique<WiimoteDevice>(hdev, path, is_balance_board);
-        if (!device->Init()) {
-            // Keep it anyway - Init() partially failing (e.g. one register
-            // write dropped) shouldn't hide the device; Poll() will keep
-            // trying to make sense of whatever reports do arrive.
-        }
-        out.push_back(std::move(device));
+        // Note: WiimoteDevice's constructor no longer runs Init() here -
+        // it defers the handshake to its own first Poll() call, once its
+        // internal settle timer has elapsed, so a Wiimote that connects
+        // while InputBridge is already running gets the same
+        // time-to-settle a Wiimote that was already on before InputBridge
+        // started gets "for free" (see WiimoteDevice.h's m_InitSettleAtMs
+        // comment for the bug this avoids).
+        out.push_back(std::make_unique<WiimoteDevice>(hdev, path, is_balance_board));
     }
     SDL_hid_free_enumeration(devs);
 
