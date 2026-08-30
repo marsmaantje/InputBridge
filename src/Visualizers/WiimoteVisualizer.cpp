@@ -420,6 +420,46 @@ void DrawBalanceBoard(const BalanceBoardState &bb, bool recovering, int recovery
     corner(0.8f, 0.2f, bb.kg_top_right);
     corner(0.2f, 0.8f, bb.kg_bottom_left);
     corner(0.8f, 0.8f, bb.kg_bottom_right);
+
+    // Center of gravity marker. bb.cog_x/cog_y are board-relative in
+    // [-1, 1] with (0,0) = center (see BalanceBoardState's comment in
+    // WiimoteState.h and its computation in WiimoteDevice.cpp's
+    // ApplyBalanceBoardTare()/WiimoteDecoder.cpp's Decode::BalanceBoard()).
+    // Mapped onto the same square the corner dots use so the marker
+    // visually sits between whichever corners are currently taking the
+    // most weight - see the mapping comments inline below for the per-axis
+    // sign convention, which differs between x and y. Drawn as a crosshair
+    // rather than a filled circle so it stays visually distinct from the
+    // corner-weight dots even when it lands close to one of them, and drawn
+    // after the corners so it's never occluded by an oversized corner dot.
+    // Below kRelativeMinTotalKg there's essentially nobody on the board and
+    // cog_x/cog_y are dominated by sensor noise (same threshold Relative
+    // dot-size mode already uses above) - fade the marker out instead of
+    // jittering it around the center.
+    {
+        const bool has_weight = bb.kg_total > kRelativeMinTotalKg;
+        // cog_x = (right - left) / total, so +1 is fully right, -1 fully
+        // left - matches the corner dots' fx directly (fx=0.2 left corners,
+        // fx=0.8 right corners), no flip needed.
+        // cog_y = (front - back) / total, so +1 is fully "front" (the top
+        // corners: kg_top_right + kg_top_left, drawn at fy=0.2), -1 fully
+        // "back" (the bottom corners, fy=0.8). Screen-space y grows
+        // downward, so front (+1) must map to the *small* fy - i.e. this
+        // axis has to be flipped relative to cog_x, not mapped the same way.
+        const float half = 7.0f;
+        // Keep the marker's own half-width inside the box rather than
+        // clamping just its center point, so a hard lean into a corner
+        // (cog_x/cog_y at or past +-1) rests its crosshair flush against
+        // the box edge instead of overshooting past it.
+        const float margin = half / size;
+        const float cx = std::clamp((bb.cog_x + 1.f) * 0.5f, margin, 1.f - margin);
+        const float cy = std::clamp((1.f - bb.cog_y) * 0.5f, margin, 1.f - margin);
+        const ImVec2 c = p + ImVec2(cx * size, cy * size);
+        const ImU32 col = has_weight ? IM_COL32(255, 80, 80, 255) : IM_COL32(255, 80, 80, 60);
+        dl->AddLine(ImVec2(c.x - half, c.y), ImVec2(c.x + half, c.y), col, 2.0f);
+        dl->AddLine(ImVec2(c.x, c.y - half), ImVec2(c.x, c.y + half), col, 2.0f);
+        dl->AddCircle(c, half * 0.6f, col, 12, 2.0f);
+    }
 }
 
 } // namespace
