@@ -1061,8 +1061,9 @@ void WiimoteDevice::HandleStatusReport(const uint8_t *buf) {
     m_Snapshot.battery = ClassifyWiimoteBattery(battery);
 
     const bool ext_connected = lf & 0x02;
-    const bool was_connected = (m_Snapshot.extension != ExtensionType::None);
-    if (ext_connected != was_connected) {
+    const bool changed = (ext_connected != m_ExtensionPortConnected);
+    m_ExtensionPortConnected = ext_connected;
+    if (changed) {
         HandleExtensionChanged();
     }
 

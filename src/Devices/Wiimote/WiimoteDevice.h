@@ -482,6 +482,18 @@ private:
     Uint64 m_ExtensionSettleAtMs = 0;
     bool m_ExtensionPendingInit = false;
 
+    // Tracks the physical extension-port connected bit (status report byte
+    // 3, 0x02) as of the last status report, independent of whether
+    // InitExtension() has actually run yet. HandleStatusReport() diffs the
+    // incoming bit against THIS, not against m_Snapshot.extension - see
+    // HandleExtensionChanged()'s comment for why using
+    // "m_Snapshot.extension != None" as the "was it already connected"
+    // check is a bug (it self-retriggers for as long as any status report
+    // - ours or a competing process's - arrives before the 150ms settle
+    // window closes, which can starve InitExtension()/DetectMotionPlus()
+    // of ever actually running).
+    bool m_ExtensionPortConnected = false;
+
     // Same rationale as m_ExtensionSettleAtMs above, but for the initial
     // handshake (Init(), in particular EnableIRCamera()) itself. A
     // successful SDL_hid_open_path() only means the HID *node* is openable
