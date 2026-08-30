@@ -212,23 +212,23 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
 
     case FontFamily::PlayStation:
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("Cross",         0xE049); // playstation_button_cross
-        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("Circle",        0xE03F); // playstation_button_circle
-        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("Square",        0xE04F); // playstation_button_square
-        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Triangle",      0xE051); // playstation_button_triangle
-        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Share/Create",  0xE01C); // playstation5_button_create (general)
+        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("Cross",         0xE04B); // playstation_button_cross
+        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("Circle",        0xE041); // playstation_button_circle
+        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("Square",        0xE051); // playstation_button_square
+        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Triangle",      0xE053); // playstation_button_triangle
+        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Share/Create",  0xE01E); // playstation5_button_create (general)
         //case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("PS",            0xE03D); // playstation5_button_create
-        case SDL_GAMEPAD_BUTTON_START:           return withFam("Options",       0xE022); // playstation5_button_options
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L3",            0xE04B); // playstation_button_l3
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R3",            0xE04D); // playstation_button_r3
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("L1",            0xE076); // playstation_trigger_l1
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("R1",            0xE07E); // playstation_trigger_r1
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE05E); // playstation_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE055); // playstation_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE059); // playstation_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE05C); // playstation_dpad_right
-        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return withFam("Touchpad",      0xE00F); // playstation_button_analog
-        case SDL_GAMEPAD_BUTTON_MISC1:           return withFam("Mute",          0xE020); // playstation5_button_mute
+        case SDL_GAMEPAD_BUTTON_START:           return withFam("Options",       0xE024); // playstation5_button_options
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L3",            0xE04D); // playstation_button_l3
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R3",            0xE04F); // playstation_button_r3
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("L1",            0xE078); // playstation_trigger_l1
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("R1",            0xE080); // playstation_trigger_r1
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE060); // playstation_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE057); // playstation_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE05B); // playstation_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE05E); // playstation_dpad_right
+        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return withFam("Touchpad",      0xE030); // playstation5_touchpad
+        case SDL_GAMEPAD_BUTTON_MISC1:           return withFam("Mute",          0xE022); // playstation5_button_mute
         default: break;
         }
         break;
@@ -335,10 +335,10 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         // bridge device was deliberately NOT typed as a gamepad, so there's
         // no SDL_GamepadButton semantic for its other inputs to key off of.
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      KENNEY_WII_DPAD_UP_CP);
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    KENNEY_WII_DPAD_DOWN_CP);
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    KENNEY_WII_DPAD_LEFT_CP);
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   KENNEY_WII_DPAD_RIGHT_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      KENNEY_WII_DPAD_UP_OUTLINE_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    KENNEY_WII_DPAD_DOWN_OUTLINE_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    KENNEY_WII_DPAD_LEFT_OUTLINE_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   KENNEY_WII_DPAD_RIGHT_OUTLINE_CP);
         default: break;
         }
         break;
@@ -721,26 +721,11 @@ InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint
     }
 
     // The Wii font ships two glyphs per direction - a filled/solid one and
-    // an outline one - and the outline set is what should be used here
-    // (ButtonInfoFor()'s table below returns the filled KENNEY_WII_DPAD_*_CP
-    // codepoints, which are shared with GetButtonLabel()'s regular D-Pad
-    // button icons, so that table is intentionally left alone). Hats use
-    // the outline variant for all four directions instead.
-    if (fam == FontFamily::Wii)
-    {
-        ImWchar cp;
-        switch (dpad)
-        {
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:    cp = KENNEY_WII_DPAD_UP_OUTLINE_CP;    break;
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  cp = KENNEY_WII_DPAD_DOWN_OUTLINE_CP;  break;
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  cp = KENNEY_WII_DPAD_LEFT_OUTLINE_CP;  break;
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: cp = KENNEY_WII_DPAD_RIGHT_OUTLINE_CP; break;
-        default:                            cp = KENNEY_WII_DPAD_NONE_CP;          break;
-        }
-        result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), cp);
-        return result;
-    }
-
+    // an outline one. ButtonInfoFor()'s Wii case now returns the outline
+    // codepoints for all four directions (shared with GetButtonLabel()'s
+    // regular D-Pad button icons), which is what both a Hat and a mapped
+    // D-Pad button should show, so no special-casing is needed here beyond
+    // the centered/idle state above.
     ButtonInfo info = ButtonInfoFor(dpad, fam);
     result.icon = MakeIcon(InputFont(dev, info.fam), info.cp);
     return result;

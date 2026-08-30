@@ -418,47 +418,47 @@ constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
 // ---------------------------------------------------------------------------
 // PlayStation per-input icons  (kenney_input_playstation_series.ttf)
 // ---------------------------------------------------------------------------
-#define KENNEY_PS_BUTTON_CROSS_CP             0xE049  // playstation_button_cross
+#define KENNEY_PS_BUTTON_CROSS_CP             0xE04B  // playstation_button_cross
 #define KENNEY_PS_BUTTON_CROSS                KENNEY_ICON_STR(KENNEY_PS_BUTTON_CROSS_CP)
-#define KENNEY_PS_BUTTON_CIRCLE_CP            0xE03F  // playstation_button_circle
+#define KENNEY_PS_BUTTON_CIRCLE_CP            0xE041  // playstation_button_circle
 #define KENNEY_PS_BUTTON_CIRCLE               KENNEY_ICON_STR(KENNEY_PS_BUTTON_CIRCLE_CP)
-#define KENNEY_PS_BUTTON_SQUARE_CP            0xE04F  // playstation_button_square
+#define KENNEY_PS_BUTTON_SQUARE_CP            0xE051  // playstation_button_square
 #define KENNEY_PS_BUTTON_SQUARE               KENNEY_ICON_STR(KENNEY_PS_BUTTON_SQUARE_CP)
-#define KENNEY_PS_BUTTON_TRIANGLE_CP          0xE051  // playstation_button_triangle
+#define KENNEY_PS_BUTTON_TRIANGLE_CP          0xE053  // playstation_button_triangle
 #define KENNEY_PS_BUTTON_TRIANGLE             KENNEY_ICON_STR(KENNEY_PS_BUTTON_TRIANGLE_CP)
-#define KENNEY_PS_BUTTON_L1_CP                0xE076  // playstation_trigger_l1
+#define KENNEY_PS_BUTTON_L1_CP                0xE078  // playstation_trigger_l1
 #define KENNEY_PS_BUTTON_L1                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_L1_CP)
-#define KENNEY_PS_BUTTON_R1_CP                0xE07E  // playstation_trigger_r1
+#define KENNEY_PS_BUTTON_R1_CP                0xE080  // playstation_trigger_r1
 #define KENNEY_PS_BUTTON_R1                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_R1_CP)
-#define KENNEY_PS_TRIGGER_L2_CP               0xE07A  // playstation_trigger_l2
+#define KENNEY_PS_TRIGGER_L2_CP               0xE07C  // playstation_trigger_l2
 #define KENNEY_PS_TRIGGER_L2                  KENNEY_ICON_STR(KENNEY_PS_TRIGGER_L2_CP)
-#define KENNEY_PS_TRIGGER_R2_CP               0xE082  // playstation_trigger_r2
+#define KENNEY_PS_TRIGGER_R2_CP               0xE084  // playstation_trigger_r2
 #define KENNEY_PS_TRIGGER_R2                  KENNEY_ICON_STR(KENNEY_PS_TRIGGER_R2_CP)
-#define KENNEY_PS_BUTTON_L3_CP                0xE04B  // playstation_button_l3
+#define KENNEY_PS_BUTTON_L3_CP                0xE04D  // playstation_button_l3
 #define KENNEY_PS_BUTTON_L3                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_L3_CP)
-#define KENNEY_PS_BUTTON_R3_CP                0xE04D  // playstation_button_r3
+#define KENNEY_PS_BUTTON_R3_CP                0xE04F  // playstation_button_r3
 #define KENNEY_PS_BUTTON_R3                   KENNEY_ICON_STR(KENNEY_PS_BUTTON_R3_CP)
-#define KENNEY_PS_BUTTON_OPTIONS_CP           0xE022  // playstation5_button_options
+#define KENNEY_PS_BUTTON_OPTIONS_CP           0xE024  // playstation5_button_options
 #define KENNEY_PS_BUTTON_OPTIONS              KENNEY_ICON_STR(KENNEY_PS_BUTTON_OPTIONS_CP)
-#define KENNEY_PS_BUTTON_CREATE_CP            0xE01C  // playstation5_button_create
+#define KENNEY_PS_BUTTON_CREATE_CP            0xE01E  // playstation5_button_create
 #define KENNEY_PS_BUTTON_CREATE               KENNEY_ICON_STR(KENNEY_PS_BUTTON_CREATE_CP)
-#define KENNEY_PS_BUTTON_ANALOG_CP            0xE03D  // playstation_button_analog (PS logo)
+#define KENNEY_PS_BUTTON_ANALOG_CP            0xE03F  // playstation_button_analog (touchpad/PS logo)
 #define KENNEY_PS_BUTTON_ANALOG               KENNEY_ICON_STR(KENNEY_PS_BUTTON_ANALOG_CP)
-#define KENNEY_PS_DPAD_UP_CP                  0xE05E  // playstation_dpad_up
+#define KENNEY_PS_DPAD_UP_CP                  0xE060  // playstation_dpad_up
 #define KENNEY_PS_DPAD_UP                     KENNEY_ICON_STR(KENNEY_PS_DPAD_UP_CP)
-#define KENNEY_PS_DPAD_DOWN_CP                0xE055  // playstation_dpad_down
+#define KENNEY_PS_DPAD_DOWN_CP                0xE057  // playstation_dpad_down
 #define KENNEY_PS_DPAD_DOWN                   KENNEY_ICON_STR(KENNEY_PS_DPAD_DOWN_CP)
-#define KENNEY_PS_DPAD_LEFT_CP                0xE059  // playstation_dpad_left
+#define KENNEY_PS_DPAD_LEFT_CP                0xE05B  // playstation_dpad_left
 #define KENNEY_PS_DPAD_LEFT                   KENNEY_ICON_STR(KENNEY_PS_DPAD_LEFT_CP)
-#define KENNEY_PS_DPAD_RIGHT_CP               0xE05C  // playstation_dpad_right
+#define KENNEY_PS_DPAD_RIGHT_CP               0xE05E  // playstation_dpad_right
 #define KENNEY_PS_DPAD_RIGHT                  KENNEY_ICON_STR(KENNEY_PS_DPAD_RIGHT_CP)
-#define KENNEY_PS_STICK_L_HORIZONTAL_CP       0xE064  // playstation_stick_l_horizontal
+#define KENNEY_PS_STICK_L_HORIZONTAL_CP       0xE066  // playstation_stick_l_horizontal
 #define KENNEY_PS_STICK_L_HORIZONTAL          KENNEY_ICON_STR(KENNEY_PS_STICK_L_HORIZONTAL_CP)
-#define KENNEY_PS_STICK_L_VERTICAL_CP         0xE069  // playstation_stick_l_vertical
+#define KENNEY_PS_STICK_L_VERTICAL_CP         0xE06B  // playstation_stick_l_vertical
 #define KENNEY_PS_STICK_L_VERTICAL            KENNEY_ICON_STR(KENNEY_PS_STICK_L_VERTICAL_CP)
-#define KENNEY_PS_STICK_R_HORIZONTAL_CP       0xE06C  // playstation_stick_r_horizontal
+#define KENNEY_PS_STICK_R_HORIZONTAL_CP       0xE06E  // playstation_stick_r_horizontal
 #define KENNEY_PS_STICK_R_HORIZONTAL          KENNEY_ICON_STR(KENNEY_PS_STICK_R_HORIZONTAL_CP)
-#define KENNEY_PS_STICK_R_VERTICAL_CP         0xE071  // playstation_stick_r_vertical
+#define KENNEY_PS_STICK_R_VERTICAL_CP         0xE073  // playstation_stick_r_vertical
 #define KENNEY_PS_STICK_R_VERTICAL            KENNEY_ICON_STR(KENNEY_PS_STICK_R_VERTICAL_CP)
 
 // ---------------------------------------------------------------------------
