@@ -294,15 +294,29 @@ bool WiimoteDevice::VerifyIRCameraEnabled() {
     return false; // timed out waiting for the status reply
 }
 
-bool WiimoteDevice::InitExtension() {
-    // "New way" init (WiiBrew): write 0x55 -> 0xA400F0, then 0x00 -> 0xA400FB.
+bool WiimoteDevice::ResetExtensionEncryption() {
+    // "New way" init (WiiBrew): write 0x55 -> 0xA400F0, 0x00 -> 0xA400FB,
+    // and write 0x00 -> 0xA400F0 to complete the encryption reset sequence.
     // Works on all known official extensions and leaves the ID + data bytes
     // unencrypted, so try it first - it needs no per-byte decrypt step.
+    //
+    // Split out from InitExtension() so ActivateMotionPlus() can redo just
+    // this reset before writing a passthrough-activation register, without
+    // calling back into the rest of InitExtension() (which ends by probing
+    // for Motion Plus again - see the comment on that call in
+    // ActivateMotionPlus() for why re-entering the whole function there
+    // caused unbounded Init<->Activate recursion on any Wiimote with a
+    // Nunchuk/Classic Controller behind an active Motion Plus).
     uint8_t v55 = 0x55, v00 = 0x00;
     bool ok = true;
     ok &= WriteRegister(Registers::ExtensionInitNew1, &v55, 1);
     ok &= WriteRegister(Registers::ExtensionInitNew2, &v00, 1);
-    if (!ok) return false;
+    ok &= WriteRegister(Registers::ExtensionEncryption, &v00, 1);
+    return ok;
+}
+
+bool WiimoteDevice::InitExtension() {
+    if (!ResetExtensionEncryption()) return false;
 
     m_ExtensionEncrypted = false;
 
@@ -315,7 +329,7 @@ bool WiimoteDevice::InitExtension() {
             // The "new way" write didn't produce a recognizable ID. Some
             // wireless/third-party Nunchuks either ignore that write or
             // ship with encryption on and no way to disable it - fall back
-            // to the "old way" init (write 0x00 -> 0xA400F0 only, leaving
+            // to the "old way" init (write 0x00 -> 0xA40040 only, leaving
             // encryption ON) and decrypt the ID bytes before classifying.
             // See WiiBrew's Nunchuk page, "Wireless Nunchuks" section, and
             // WiimoteProtocol.h's DecryptExtensionByte().
@@ -340,6 +354,13 @@ bool WiimoteDevice::InitExtension() {
         m_Snapshot.extension = classified;
     }
     m_Snapshot.extension_encrypted = m_ExtensionEncrypted;
+
+    // Explicitly set Data Format 0x01 at 0xA400FE for Classic Controllers
+    if (m_Snapshot.extension == ExtensionType::ClassicController ||
+        m_Snapshot.extension == ExtensionType::ClassicControllerPro) {
+        uint8_t fmt = 0x01;
+        WriteRegister(Registers::ExtensionDataFormat, &fmt, 1);
+    }
 
     // A physical Balance Board's load sensors are wired through the regular
     // extension port and self-identify with type 0x0402, so this branch is
@@ -410,7 +431,15 @@ bool WiimoteDevice::ActivateMotionPlus() {
     // Activation mode depends on whether something is already plugged into
     // the regular extension port: passthrough keeps that device's data
     // flowing (re-encoded by the MotionPlus) alongside the new gyro bytes;
-    // plain activation is used when the extension port is empty.
+    // plain activation is used when the extension port is empty. Per
+    // WiiBrew (see MotionPlusInit's comment in WiimoteProtocol.h),
+    // standalone activation is byte 0x55, not 0x04 - 0x04 is not a
+    // documented activation value at all, so writing it left the hardware
+    // never actually activated (the write still "succeeds" at the HID
+    // level, which is why this went unnoticed: m_MotionPlusActive got set
+    // true, but ee[5] bit 1 never came back set, so motion_plus data
+    // silently stayed zeroed whenever no passthrough extension was
+    // attached).
     uint8_t mode = 0x55;
     uint32_t reg = Registers::MotionPlusInit;
     if (m_Snapshot.extension == ExtensionType::Nunchuk) {
@@ -421,6 +450,22 @@ bool WiimoteDevice::ActivateMotionPlus() {
         mode = 0x07;
         reg = Registers::MotionPlusInitClassicPass;
     }
+
+    if (mode == 0x05 || mode == 0x07) {
+        // Only redo the encryption reset on the regular extension port, not
+        // a full InitExtension() - InitExtension() ends by calling
+        // DetectMotionPlus(), which (for a Motion Plus that's still present,
+        // as it will be here) calls back into this function, re-entering
+        // this same "if (mode == 0x05 || 0x07)" branch and calling
+        // InitExtension() again - and so on, forever. That made every
+        // Wiimote combining a Motion Plus with a Nunchuk or Classic
+        // Controller recurse without end (crash/hang, or - if a register
+        // read happened to time out at just the right moment - an
+        // unpredictable number of redundant re-inits), which is almost
+        // certainly why extension detection/activation has been flaky.
+        ResetExtensionEncryption();
+    }
+
     const bool ok = WriteRegister(reg, &mode, 1);
     m_MotionPlusActive = ok;
     if (ok) {
@@ -1063,7 +1108,11 @@ void WiimoteDevice::HandleStatusReport(const uint8_t *buf) {
     const bool ext_connected = lf & 0x02;
     const bool changed = (ext_connected != m_ExtensionPortConnected);
     m_ExtensionPortConnected = ext_connected;
-    if (changed) {
+    // Once a Motion Plus is present, this bit is documented-flaky and no
+    // longer drives re-detection - see m_MotionPlusExtConnected's comment.
+    // DecodeCoreAccelIR10Ext6() watches the Motion Plus's own
+    // extension_connected bit instead for that case.
+    if (changed && !m_MotionPlusPresent) {
         HandleExtensionChanged();
     }
 
@@ -1087,6 +1136,7 @@ void WiimoteDevice::HandleExtensionChanged() {
     m_BalanceCal.reset();
     m_MotionPlusPresent = false;
     m_MotionPlusActive = false;
+    m_MotionPlusExtConnected = -1; // baseline unknown again until the next MP report
 }
 
 void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
@@ -1114,6 +1164,18 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
         m_Snapshot.motion_plus.is_classic_passthrough =
             (m_Snapshot.extension == ExtensionType::ClassicController ||
              m_Snapshot.extension == ExtensionType::ClassicControllerPro);
+
+        // Authoritative "did the passthrough device change" signal while a
+        // Motion Plus is present - see m_MotionPlusExtConnected's comment
+        // in the header for why the status report's own extension bit is
+        // no longer used for this once we get here. First reading after
+        // (re)activation just records the baseline rather than firing a
+        // spurious re-detect.
+        const int8_t now = m_Snapshot.motion_plus.extension_connected ? 1 : 0;
+        if (m_MotionPlusExtConnected != -1 && now != m_MotionPlusExtConnected) {
+            HandleExtensionChanged();
+        }
+        m_MotionPlusExtConnected = now;
         return;
     }
 
@@ -1459,6 +1521,5 @@ void WiimoteDevice::TickIRWatchdog() {
     uint8_t p[2] = {0x04, PreferredReportMode()};
     SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
 }
-
 
 } // namespace InputBridge::Wiimote

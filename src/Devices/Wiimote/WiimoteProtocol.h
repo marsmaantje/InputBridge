@@ -63,15 +63,18 @@ namespace Registers {
     constexpr uint32_t ExtensionBase     = 0xA40000; // - 0xA400FF
     constexpr uint32_t ExtensionInitNew1 = 0xA400F0; // write 0x55 (new-style unencrypted init, step 1)
     constexpr uint32_t ExtensionInitNew2 = 0xA400FB; // write 0x00 (new-style unencrypted init, step 2)
-    // "Old way" init (WiiBrew "Wiimote/Extension Controllers#Initializing"):
-    // write 0x00 to this same 0xA400F0 register (instead of the 0x55/0x00
-    // pair above) and skip 0xA400FB entirely. This leaves the extension's
-    // factory-default encryption ON, so every subsequent ID/data byte read
-    // from the extension must be run through DecryptExtensionByte() below.
-    // Some wireless/third-party Nunchuks either ignore the "new way" write
-    // or never disable encryption in the first place and only work through
-    // this path - see WiiBrew's Nunchuk page, "Wireless Nunchuks" section.
-    constexpr uint32_t ExtensionInitOld  = 0xA400F0;
+    constexpr uint32_t ExtensionEncryption = 0xA400F0; // write 0x00 to complete encryption reset sequence
+    // "Old way" init (WiiBrew "Wiimote/Extension Controllers#The Old Way"):
+    // write the single byte 0x00 to register 0xA40040 (the same register the
+    // 16-byte encryption key would otherwise be written to - this is a
+    // 1-byte "null key" instead of the 0x55/0x00 pair above). This leaves
+    // the extension's factory-default encryption ON, so every subsequent
+    // ID/data byte read from the extension must be run through
+    // DecryptExtensionByte() below. Some wireless/third-party Nunchuks
+    // either ignore the "new way" write or never disable encryption in the
+    // first place and only work through this path - see WiiBrew's Nunchuk
+    // page, "Wireless Nunchuks" section.
+    constexpr uint32_t ExtensionInitOld  = 0xA40040;
     constexpr uint32_t ExtensionCalib    = 0xA40020; // Balance Board calibration block start
     // Reference Temperature (+1 unknown byte, always 0x01) - not part of the
     // 0xA40020 32-byte calibration block itself, but folded into that
@@ -82,6 +85,7 @@ namespace Registers {
     constexpr uint32_t ExtensionData     = 0xA40000; // live data, 11 bytes for Balance Board / 6-8 for others
     constexpr uint32_t ExtensionId       = 0xA400FA; // 6-byte extension ID (Wiimote) / 0xA400FE 2-byte (Balance Board)
     constexpr uint32_t ExtensionIdShort  = 0xA400FE; // 2-byte short form, also the "data format" byte pair
+    constexpr uint32_t ExtensionDataFormat = 0xA400FE; // 1-byte data format configuration register
     // Balance Board "wake" register (WiiBrew's captured Wii init trace,
     // "Wii Initialisation Sequence" section): writing 0xAA here several
     // times, interspersed with reads of the calibration block, is what the
@@ -94,7 +98,10 @@ namespace Registers {
     constexpr uint32_t BalanceBoardWake  = 0xA400F1;
     constexpr uint32_t MotionPlusBase    = 0xA60000; // - 0xA600FF
     constexpr uint32_t MotionPlusId      = 0xA600FA; // 6-byte ID, same shape as ExtensionId
-    constexpr uint32_t MotionPlusInit    = 0xA600F0; // write 0x55 (activate, "standalone" mode)
+    // All three activation modes are writes to the *same* register, 0xA600FE -
+    // they only differ in the byte written. (0xA600F0 is a different, unrelated
+    // register - writing there does not activate the Motion Plus.)
+    constexpr uint32_t MotionPlusInit    = 0xA600FE; // write 0x55 (activate, "standalone" mode)
     constexpr uint32_t MotionPlusInitNunchukPass  = 0xA600FE; // write 0x05 (activate w/ Nunchuk passthrough)
     constexpr uint32_t MotionPlusInitClassicPass  = 0xA600FE; // write 0x07 (activate w/ Classic passthrough)
     constexpr uint32_t IRCameraBase      = 0xB00000; // - 0xB00033
