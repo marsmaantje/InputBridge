@@ -40,17 +40,21 @@ namespace InputBridge::Wiimote {
 // subsequent addition (the 3 extra dots, then the 4 dot-size axes, then
 // battery) has been appended after the existing layout (indices 14-19,
 // then 20-23, then 24) rather than inserted inline. Any future additions
-// should do the same: append, don't insert.
-constexpr int kWiimoteNumAxes = 25;
+// should do the same: append, don't insert. The Nunchuk accelerometer axes
+// (indices 25-27) follow this same rule - appended after Axis_Battery
+// rather than inserted next to Axis_NunchukX/Y, even though they're
+// logically related to the Nunchuk stick axes above.
+constexpr int kWiimoteNumAxes = 28;
 enum WiimoteAxis {
     Axis_AccelX = 0, Axis_AccelY, Axis_AccelZ,
-    Axis_NunchukX, Axis_NunchukY,
-    Axis_ClassicLX, Axis_ClassicLY, Axis_ClassicRX, Axis_ClassicRY,
-    Axis_MotionPlusYaw, Axis_MotionPlusPitch, Axis_MotionPlusRoll,
     Axis_IR1X, Axis_IR1Y, Axis_IR2X, Axis_IR2Y,
     Axis_IR3X, Axis_IR3Y, Axis_IR4X, Axis_IR4Y,
     Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size,
     Axis_Battery,
+    Axis_NunchukX, Axis_NunchukY,
+    Axis_NunchukAccelX, Axis_NunchukAccelY, Axis_NunchukAccelZ,
+    Axis_MotionPlusYaw, Axis_MotionPlusPitch, Axis_MotionPlusRoll,
+    Axis_ClassicLX, Axis_ClassicLY, Axis_ClassicRX, Axis_ClassicRY,
 };
 
 // The main D-Pad is exposed as a hat (not 4 separate buttons) so it maps
