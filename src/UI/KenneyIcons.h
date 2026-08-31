@@ -366,7 +366,7 @@ constexpr std::array<char, 4> KenneyIconUTF8(ImWchar cp)
 #define KENNEY_GENERIC_STICK_PRESS_CP         0xE01F  // generic_stick_press
 #define KENNEY_GENERIC_STICK_PRESS            KENNEY_ICON_STR(KENNEY_GENERIC_STICK_PRESS_CP)
 
-#define KENNEY_GENERIC_STICK_VERTICAL_CP      0xE023  // generic_stick_vertical
+#define KENNEY_GENERIC_STICK_VERTICAL_CP      0xE022  // generic_stick_vertical
 #define KENNEY_GENERIC_STICK_VERTICAL         KENNEY_ICON_STR(KENNEY_GENERIC_STICK_VERTICAL_CP)
 
 // ---------------------------------------------------------------------------

@@ -100,12 +100,12 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
 
     case FontFamily::PlayStation:
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE064); // playstation_stick_l_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE069); // playstation_stick_l_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE06C); // playstation_stick_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE071); // playstation_stick_r_vertical
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("L2",                0xE07A); // playstation_trigger_l2
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("R2",                0xE082); // playstation_trigger_r2
+        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE066); // playstation_stick_l_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE06B); // playstation_stick_l_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE06E); // playstation_stick_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE073); // playstation_stick_r_vertical
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("L2",                0xE07C); // playstation_trigger_l2
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("R2",                0xE084); // playstation_trigger_r2
         default: break;
         }
         break;
@@ -168,9 +168,9 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
     // shared generic font, regardless of which device this was requested for.
     switch (ga) {
     case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE01D }; // generic_stick_horizontal
-    case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE023 }; // generic_stick_vertical
+    case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE022 }; // generic_stick_vertical
     case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Stick X",     0xE01D }; // generic_stick_horizontal
-    case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE023 }; // generic_stick_vertical
+    case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE022 }; // generic_stick_vertical
     case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return { "Left Trigger",      0 };
     case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return { "Right Trigger",     0 };
     default:                             return { "Axis",              0 };
@@ -609,7 +609,7 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
     // Non-gamepad path: no rich binding data available.
     result.name = "Axis " + std::to_string(axis);
     // generic_stick_horizontal for even indices (likely X), vertical for odd (likely Y)
-    const ImWchar cp = (axis % 2 == 0) ? 0xE01D : 0xE023; // generic_stick_horizontal / _vertical
+    const ImWchar cp = (axis % 2 == 0) ? 0xE01D : 0xE022; // generic_stick_horizontal / _vertical
     result.icon = MakeIcon(KenneyFonts::Get().generic, cp);
     return result;
 }
