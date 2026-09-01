@@ -47,8 +47,8 @@ CoreButtons Buttons(const uint8_t bb[2]) {
 AccelState Accel(const uint8_t bb[2], const uint8_t aa[3]) {
     AccelState s;
     s.raw_x = (uint16_t(aa[0]) << 2) | ((bb[0] >> 5) & 0x03);
-    s.raw_y = (uint16_t(aa[1]) << 2) | ((bb[1] >> 4) & 0x02);
-    s.raw_z = (uint16_t(aa[2]) << 2) | ((bb[1] >> 5) & 0x02);
+    s.raw_y = (uint16_t(aa[1]) << 2) | ((bb[1] >> 5) & 0x02);
+    s.raw_z = (uint16_t(aa[2]) << 2) | ((bb[1] >> 6) & 0x02);
 
     // Nominal (uncalibrated) conversion: 0g ~= 512, 1g ~= 512 + 128 = 640,
     // per WiiBrew's accelerometer overview. For precise work, read the

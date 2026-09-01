@@ -70,17 +70,6 @@ float NormSymmetric(float v, float maxAbs) {
     if (maxAbs <= 0.f) return 0.f;
     return std::clamp(v / maxAbs, -1.f, 1.f);
 }
-
-// NunchukState only keeps the raw 10-bit accelerometer counts (see
-// WiimoteState.h - "same scale as Wiimote accel"), unlike the main Wiimote
-// accelerometer which already has g_x/g_y/g_z precomputed by
-// WiimoteDecoder::Accel(). Apply the same nominal 0g/1g conversion here
-// (0g ~= 512, 1g ~= 512 + 128 counts) before feeding it through
-// NormSymmetric/kAccelMaxG below.
-float NunchukAccelRawToG(uint16_t raw) {
-    constexpr float kZeroG = 512.f, kOneGCounts = 128.f;
-    return (float(raw) - kZeroG) / kOneGCounts;
-}
 } // namespace
 
 // -- Name lookups (declared in the header, shared with InputLabelProvider) --
@@ -103,9 +92,6 @@ const char *WiimoteBridgeAxisName(int axis) {
         case Axis_IR4Size:        return "IR Dot 4 Size";
         case Axis_NunchukX:       return "Nunchuk Stick X";
         case Axis_NunchukY:       return "Nunchuk Stick Y";
-        case Axis_NunchukAccelX:  return "Nunchuk Accel X";
-        case Axis_NunchukAccelY:  return "Nunchuk Accel Y";
-        case Axis_NunchukAccelZ:  return "Nunchuk Accel Z";
         case Axis_ClassicLX:      return "Classic Left Stick X";
         case Axis_ClassicLY:      return "Classic Left Stick Y";
         case Axis_ClassicRX:      return "Classic Right Stick X";
@@ -343,13 +329,6 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         // the mapping usable without needing per-device calibration.
         setAxis(Axis_NunchukX, (float(snap.nunchuk.stick_x) - 128.f) / 100.f);
         setAxis(Axis_NunchukY, (float(snap.nunchuk.stick_y) - 128.f) / 100.f);
-
-        // Nunchuk accelerometer: same nominal 0g/1g raw-count scale as the
-        // Wiimote's own accelerometer (see NunchukAccelRawToG above), so
-        // reuse kAccelMaxG for the same +-3g full-scale mapping.
-        setAxis(Axis_NunchukAccelX, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_x), kAccelMaxG));
-        setAxis(Axis_NunchukAccelY, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_y), kAccelMaxG));
-        setAxis(Axis_NunchukAccelZ, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_z), kAccelMaxG));
 
         // Classic Controller sticks: 6-bit (0-63, center 32) left, 5-bit
         // (0-31, center 16) right - see ClassicControllerState/Decode::Classic.

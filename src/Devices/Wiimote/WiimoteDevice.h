@@ -500,29 +500,6 @@ private:
     // of ever actually running).
     bool m_ExtensionPortConnected = false;
 
-    // Once a Motion Plus is present, status report byte 3's extension-
-    // connected bit (m_ExtensionPortConnected above) stops being a
-    // trustworthy signal for "did the passthrough Nunchuk/Classic
-    // Controller behind it change" - WiiBrew notes this bit gets flaky
-    // once a Motion Plus occupies the port, and in practice it can flip
-    // on essentially any status report (ours or a competing process's)
-    // while nothing physically changed. HandleStatusReport() used to
-    // treat every flip as authoritative and tear down/re-detect the whole
-    // extension+MotionPlus state via HandleExtensionChanged() each time,
-    // which is what produced the "motion plus/nunchuk jump in and out of
-    // active" symptom - a single spurious status reply could wipe a
-    // perfectly fine, already-active MotionPlus.
-    //
-    // Once m_MotionPlusPresent is true, HandleStatusReport() stops acting
-    // on m_ExtensionPortConnected changes entirely and defers to THIS
-    // instead: the Motion Plus's own passthrough data carries its own
-    // extension_connected bit (ext[4] bit 0 - see Decode::MotionPlus),
-    // which reflects what's actually behind it right now rather than a
-    // possibly-stale/flaky port-level flag. -1 = not yet observed (don't
-    // trigger on the first reading, just record a baseline); 0/1 once a
-    // real reading has come in.
-    int8_t m_MotionPlusExtConnected = -1;
-
     // Same rationale as m_ExtensionSettleAtMs above, but for the initial
     // handshake (Init(), in particular EnableIRCamera()) itself. A
     // successful SDL_hid_open_path() only means the HID *node* is openable

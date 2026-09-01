@@ -23,6 +23,10 @@ your own decoded state separate from anything SDL owns.
 | `WiimoteDevice.h/.cpp` | Owns one `SDL_hid_device*`. Handshake, polling, register read/write, LEDs/rumble. `InitExtension()` tries the documented "new way" init (write `0x55`→`0xA400F0`, `0x00`→`0xA400FB`, data unencrypted) first, then falls back to the "old way" (write `0x00`→`0xA400F0` only, data encrypted, decrypted per `WiimoteProtocol.h::DecryptExtensionByte()`) for wireless/third-party Nunchuks that need it - see WiiBrew's Nunchuk page, "Wireless Nunchuks" section. `WiimoteSnapshot::extension_encrypted` reports which path is active. |
 | `WiimoteManager.h/.cpp` | Enumerates & opens all connected Wiimotes/Balance Boards. |
 
+Bluetooth *pairing* (as opposed to enumerating/opening already-paired
+devices) is a separate module, `src/Bluetooth/` - see the "Bluetooth
+pairing" section below.
+
 ## Feature parity vs. WiimoteLib
 
 | Feature | WiimoteLib | This module |
@@ -94,6 +98,22 @@ test binary without pulling in real HID I/O.)
 
 ## Known gaps / before you ship this
 
+- **In-app Bluetooth pairing (`src/Bluetooth/`) is unverified on all three
+  platforms.** It's written against each OS's documented Bluetooth API
+  (BlueZ D-Bus, WinRT `Windows.Devices.Enumeration`/`.Bluetooth`,
+  IOBluetooth) but hasn't been build- or hardware-tested as part of adding
+  it - see the header comment on each platform backend
+  (`LinuxWiimoteBluetoothPairing.h`, `WindowsWiimoteBluetoothPairing.h`,
+  `MacOSWiimoteBluetoothPairing.h`) for the specific caveats on that
+  platform before relying on it. Two specifics worth calling out: the
+  Windows AQS filter GUID was checked against Microsoft's own docs and is
+  correct; the Linux legacy-PIN fallback (`GetReversedAdapterAddressPin()`
+  in `LinuxWiimoteBluetoothPairing.cpp`) may be entirely redundant with
+  BlueZ's own built-in Wiimote-PIN handling, or may never even fire under
+  a `NoInputNoOutput` agent - see that function's comment for what's
+  actually confirmed vs. still open. `WiimoteManager::Scan()` itself is
+  unaffected either way - it only enumerates devices the OS already
+  considers paired, which is exactly what a successful pairing produces.
 - **`ReadRegister()`'s inline report-draining** (in the "wait for 0x21"
   loop) only refreshes buttons for reports it swallows during a register
   read; accel/IR/extension updates are briefly stalled during any read
@@ -103,6 +123,44 @@ test binary without pulling in real HID I/O.)
   need a fake `SDL_hid_device*` / injectable transport to be testable
   without hardware - e.g. a thin interface wrapping `SDL_hid_write`/
   `SDL_hid_read` that a test can substitute with canned byte sequences).
+
+## Bluetooth pairing
+
+`src/Bluetooth/WiimoteBluetoothPairing.h` + one platform backend per OS
+(`Linux/Windows/MacOSWiimoteBluetoothPairing.*`) let InputBridge discover
+and pair a Wiimote itself - press sync, click Scan, click Pair - instead of
+requiring the person to go pair it via the OS's own Bluetooth settings
+first. It's a separate concern from everything else in this directory:
+once a Wiimote is paired (by this module or the old manual way), it's
+indistinguishable to `WiimoteManager::Scan()`, which only ever enumerates
+already-paired HID devices and doesn't know or care how they got paired.
+
+The UI entry point is `src/UI/WiimotePairingWindow.*` ("Pair Wiimote..."
+button in the Devices sidebar section). See
+`WiimoteBluetoothPairing.h`'s header comment for the Just Works /
+sync-button/20-second-window background a caller needs, and each platform
+backend's own header for that platform's specific mechanism and caveats.
+
+Building it needs, per platform:
+- **Linux**: `libdbus-1-dev` (Debian/Ubuntu) / `dbus-devel` (Fedora) at
+  build time, and `bluetoothd` (BlueZ) reachable on the system bus at
+  runtime - both essentially universal on desktop Linux already, since
+  they're what every other Bluetooth-pairing UI (GNOME/KDE settings,
+  `bluetoothctl`) also depends on. `CMakeLists.txt` checks for the dev
+  package via pkg-config and cleanly falls back to the dummy backend
+  (dialog reports "not available") if it's missing, rather than failing
+  the whole build.
+- **Windows**: a Windows SDK new enough to ship the prebuilt `<winrt/...>`
+  headers for `Windows.Devices.Enumeration`/`.Bluetooth` (10.0.17134+ in
+  practice); links `windowsapp.lib`/`runtimeobject.lib`.
+- **macOS**: the `IOBluetooth` framework (part of the standard macOS SDK);
+  add `NSBluetoothAlwaysUsageDescription` to the app bundle's Info.plist
+  or the permission prompt IOBluetooth needs won't appear and discovery
+  will silently find nothing - see `MacOSWiimoteBluetoothPairing.h`.
+
+Set `-DENABLE_WIIMOTE_BLUETOOTH_PAIRING=OFF` to drop the whole feature
+(dummy backend everywhere, dialog reports "not available") - mirrors the
+existing `ENABLE_EXCLUSIVE_INPUT`/`ENABLE_WEBSOCKETS` option pattern.
 
 ## IR camera doesn't work while Steam is running
 
