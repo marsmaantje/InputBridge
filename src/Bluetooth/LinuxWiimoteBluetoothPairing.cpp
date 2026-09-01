@@ -3,9 +3,7 @@
 
 #ifdef __linux__
 
-#include <algorithm>
 #include <cstring>
-#include <sstream>
 
 static constexpr const char *kTag = "LinuxWiimoteBluetoothPairing";
 static constexpr const char *kAgentPath = "/org/inputbridge/agent";
@@ -773,7 +771,7 @@ void LinuxWiimoteBluetoothPairing::HandleAgentMethodCall(DBusMessage *msg) {
     if (std::strcmp(member, "Release") == 0 ||
         std::strcmp(member, "Cancel") == 0) {
         reply = dbus_message_new_method_return(msg);
-    } else if (std::strcmp(member, "RequestPinCode") == 0) {
+    /*} else if (std::strcmp(member, "RequestPinCode") == 0) {
         std::string adapter_path;
         {
             std::lock_guard<std::mutex> lock(m_Mutex);
@@ -783,6 +781,10 @@ void LinuxWiimoteBluetoothPairing::HandleAgentMethodCall(DBusMessage *msg) {
         reply = dbus_message_new_method_return(msg);
         const char *pin_cstr = pin.c_str();
         dbus_message_append_args(reply, DBUS_TYPE_STRING, &pin_cstr, DBUS_TYPE_INVALID);
+        // this can cause issues with dbus messages,
+        // since the inverted pin used by 1 + 2 pairing
+        // produces invalid utf-8 characters
+    */
     } else if (std::strcmp(member, "RequestConfirmation") == 0 ||
                std::strcmp(member, "RequestAuthorization") == 0 ||
                std::strcmp(member, "AuthorizeService") == 0) {
@@ -792,10 +794,7 @@ void LinuxWiimoteBluetoothPairing::HandleAgentMethodCall(DBusMessage *msg) {
         // it is.
         reply = dbus_message_new_method_return(msg);
     } else {
-        // DisplayPinCode / DisplayPasskey / RequestPasskey genuinely
-        // shouldn't be called against a NoInputNoOutput agent for a
-        // Wiimote - reply with an error instead of leaving BlueZ hanging
-        // if one somehow is.
+        // RequestPinCode / DisplayPinCode / DisplayPasskey / RequestPasskey
         reply = dbus_message_new_error(msg, "org.bluez.Error.Rejected", "not supported by this agent");
     }
 

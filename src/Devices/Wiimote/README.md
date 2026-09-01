@@ -98,22 +98,29 @@ test binary without pulling in real HID I/O.)
 
 ## Known gaps / before you ship this
 
-- **In-app Bluetooth pairing (`src/Bluetooth/`) is unverified on all three
-  platforms.** It's written against each OS's documented Bluetooth API
-  (BlueZ D-Bus, WinRT `Windows.Devices.Enumeration`/`.Bluetooth`,
-  IOBluetooth) but hasn't been build- or hardware-tested as part of adding
-  it - see the header comment on each platform backend
-  (`LinuxWiimoteBluetoothPairing.h`, `WindowsWiimoteBluetoothPairing.h`,
-  `MacOSWiimoteBluetoothPairing.h`) for the specific caveats on that
-  platform before relying on it. Two specifics worth calling out: the
-  Windows AQS filter GUID was checked against Microsoft's own docs and is
-  correct; the Linux legacy-PIN fallback (`GetReversedAdapterAddressPin()`
-  in `LinuxWiimoteBluetoothPairing.cpp`) may be entirely redundant with
-  BlueZ's own built-in Wiimote-PIN handling, or may never even fire under
-  a `NoInputNoOutput` agent - see that function's comment for what's
-  actually confirmed vs. still open. `WiimoteManager::Scan()` itself is
-  unaffected either way - it only enumerates devices the OS already
-  considers paired, which is exactly what a successful pairing produces.
+- **In-app Bluetooth pairing (`src/Bluetooth/`) is unverified on Windows
+  and macOS specifically** - it's written against each OS's documented
+  Bluetooth API (WinRT `Windows.Devices.Enumeration`/`.Bluetooth`,
+  IOBluetooth) but hasn't been build- or hardware-tested on those two
+  platforms as part of adding it. See the header comment on each backend
+  (`WindowsWiimoteBluetoothPairing.h`, `MacOSWiimoteBluetoothPairing.h`)
+  for platform-specific caveats before relying on it. The Windows AQS
+  filter GUID was checked against Microsoft's own docs and is correct.
+  The Linux backend (BlueZ D-Bus) has been exercised against real hardware
+  and had one real bug found and fixed this way: its `RequestPinCode`
+  agent handler used to attempt WiiBrew's documented "reversed host
+  address as legacy PIN" trick, which turns out to be impossible to
+  implement correctly over D-Bus - the Agent1 API requires that PIN as a
+  UTF-8 `STRING`, but arbitrary reversed address bytes are essentially
+  never valid UTF-8, and `libdbus` `abort()`s the whole process rather
+  than erroring out when handed invalid UTF-8. `RequestPinCode` now always
+  declines cleanly instead. Practically this only matters for legacy
+  (pre-SSP) Wiimote pairing that BlueZ's own built-in `wiimote` plugin
+  doesn't already handle internally - see that method's comment in
+  `LinuxWiimoteBluetoothPairing.cpp` for the full story.
+  `WiimoteManager::Scan()` itself is unaffected either way - it only
+  enumerates devices the OS already considers paired, which is exactly
+  what a successful pairing produces.
 - **`ReadRegister()`'s inline report-draining** (in the "wait for 0x21"
   loop) only refreshes buttons for reports it swallows during a register
   read; accel/IR/extension updates are briefly stalled during any read
