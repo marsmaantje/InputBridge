@@ -383,7 +383,9 @@ void MacOSWiimoteBluetoothPairing::PairDevice(const std::string &address, Wiimot
 
         // authenticationRequired:YES asks the Bluetooth daemon to pair
         // (not just connect) if the device isn't paired yet - this is what
-        // actually drives the Just Works handshake for a fresh Wiimote.
+        // actually drives the pairing handshake for a fresh Wiimote
+        // (Just Works or legacy PIN depending on the controller - see
+        // MacOSWiimoteBluetoothPairing.h's header comment).
         // Page timeout: 0x2000 (8192 * 0.625ms ~= 5.12s), the Bluetooth
         // Core Spec's own default HCI page timeout - used as a literal
         // here rather than a named IOBluetooth constant since this hasn't
@@ -402,6 +404,29 @@ void MacOSWiimoteBluetoothPairing::PairDevice(const std::string &address, Wiimot
             impl->OnConnectionComplete(device, err);
         }
     });
+}
+
+void MacOSWiimoteBluetoothPairing::ConnectDevice(const std::string &address, WiimotePairing::PairCallback on_done) {
+    // Not implemented: -[IOBluetoothDevice openConnection:] (used by
+    // PairDevice() above) always requests authentication/pairing as part
+    // of connecting - there's no separate "connect without bonding"
+    // operation exposed here the way BlueZ's D-Bus API distinguishes
+    // Device1.Connect from Device1.Pair, and macOS's Bluetooth HID stack
+    // almost certainly requires a bonded device for HID for the same
+    // security reasons BlueZ's ClassicBondedOnly=true default exists (see
+    // WiimoteBluetoothPairing.h's ConnectDevice() comment). Reporting this
+    // cleanly through the normal event queue rather than guessing at an
+    // unverified API.
+    if (!m_Impl) return;
+    (void)address;
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    Impl::QueuedEvent ev;
+    ev.kind = Impl::QueuedEvent::Kind::PairDone;
+    ev.pair_cb = std::move(on_done);
+    ev.pair_result = PairResult::NotAvailable;
+    ev.detail = "Session-only connect (for 1+2-synced Wiimotes) isn't implemented on macOS - "
+                 "use the SYNC button instead.";
+    m_Impl->event_queue.push_back(std::move(ev));
 }
 
 void MacOSWiimoteBluetoothPairing::Pump() {

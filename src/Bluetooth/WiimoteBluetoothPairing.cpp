@@ -55,6 +55,9 @@ public:
     void PairDevice(const std::string &, WiimotePairing::PairCallback on_done) override {
         if (on_done) on_done(PairResult::NotAvailable, "Not implemented on this platform/build.");
     }
+    void ConnectDevice(const std::string &, WiimotePairing::PairCallback on_done) override {
+        if (on_done) on_done(PairResult::NotAvailable, "Not implemented on this platform/build.");
+    }
 };
 
 // --- WiimotePairing -----------------------------------------------------
@@ -97,6 +100,11 @@ bool WiimotePairing::IsDiscovering() const {
 void WiimotePairing::PairDevice(const std::string &address, PairCallback on_done) {
     if (!m_Impl) return;
     m_Impl->PairDevice(address, std::move(on_done));
+}
+
+void WiimotePairing::ConnectDevice(const std::string &address, PairCallback on_done) {
+    if (!m_Impl) return;
+    m_Impl->ConnectDevice(address, std::move(on_done));
 }
 
 void WiimotePairing::Pump() {

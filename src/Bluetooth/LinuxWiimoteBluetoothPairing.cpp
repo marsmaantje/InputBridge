@@ -248,7 +248,9 @@ bool LinuxWiimoteBluetoothPairing::RegisterAgent() {
 
     // Capability "NoInputNoOutput": tells BlueZ our agent has no display
     // and no keyboard, matching a Wiimote exactly (see
-    // WiimoteBluetoothPairing.h's header comment on Just Works pairing).
+    // WiimoteBluetoothPairing.h's header comment). Note this doesn't mean
+    // pairing needs no PIN at all - see HandleAgentMethodCall below for
+    // why RequestPinCode still gets called and what we do about it.
     DBusMessage *call = dbus_message_new_method_call(
         "org.bluez", "/org/bluez", "org.bluez.AgentManager1", "RegisterAgent");
     const char *path = kAgentPath;
@@ -445,6 +447,7 @@ void LinuxWiimoteBluetoothPairing::PairDevice(const std::string &address, Wiimot
 
     m_PairingObjectPath = address; // `address` is the D-Bus object path (see header)
     m_OnPairDone = std::move(on_done);
+    m_ConnectOnly = false;
 
     DBusMessage *call = dbus_message_new_method_call(
         "org.bluez", address.c_str(), "org.bluez.Device1", "Pair");
@@ -469,6 +472,77 @@ void LinuxWiimoteBluetoothPairing::PairDevice(const std::string &address, Wiimot
     dbus_pending_call_set_notify(pending, &LinuxWiimoteBluetoothPairing::PairReplyThunk, this, nullptr);
 }
 
+void LinuxWiimoteBluetoothPairing::ConnectDevice(const std::string &address, WiimotePairing::PairCallback on_done) {
+    // Deliberately calls Device1.Connect() directly instead of Device1.Pair()
+    // - this is the "session-only, no permanent bond" path for a
+    // 1+2-discovered Wiimote. See WiimoteBluetoothPairing.h's
+    // ConnectDevice() comment for why PairDevice()/a permanent bond
+    // doesn't work for these, and HandlePairReply()'s handling of
+    // m_ConnectOnly below for the ClassicBondedOnly/CVE-2023-45866 caveat
+    // this can still run into even when the Bluetooth-level connect
+    // itself succeeds.
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
+    if (!m_Conn || m_AdapterPath.empty()) {
+        QueuedEvent ev;
+        ev.kind = QueuedEvent::Kind::PairDone;
+        ev.pair_cb = std::move(on_done);
+        ev.pair_result = PairResult::NotAvailable;
+        ev.detail = "Bluetooth is not available.";
+        m_EventQueue.push_back(std::move(ev));
+        return;
+    }
+    if (!m_PairingObjectPath.empty()) {
+        QueuedEvent ev;
+        ev.kind = QueuedEvent::Kind::PairDone;
+        ev.pair_cb = std::move(on_done);
+        ev.pair_result = PairResult::Error;
+        ev.detail = "Another pairing/connect attempt is already in progress.";
+        m_EventQueue.push_back(std::move(ev));
+        return;
+    }
+
+    auto known = m_KnownDevices.find(address);
+    if (known == m_KnownDevices.end()) {
+        QueuedEvent ev;
+        ev.kind = QueuedEvent::Kind::PairDone;
+        ev.pair_cb = std::move(on_done);
+        ev.pair_result = PairResult::NotFound;
+        ev.detail = "Device is no longer known - try scanning again.";
+        m_EventQueue.push_back(std::move(ev));
+        return;
+    }
+    // Unlike PairDevice(), already_paired isn't treated as an early-exit
+    // success case here - a permanently-bonded device should just use the
+    // normal Pair() path (which itself already reports AlreadyPaired), and
+    // this method is specifically for devices that aren't bonded at all.
+
+    m_PairingObjectPath = address;
+    m_OnPairDone = std::move(on_done);
+    m_ConnectOnly = true;
+
+    DBusMessage *call = dbus_message_new_method_call(
+        "org.bluez", address.c_str(), "org.bluez.Device1", "Connect");
+    DBusPendingCall *pending = nullptr;
+    if (!dbus_connection_send_with_reply(m_Conn, call, &pending, 30000) || !pending) {
+        dbus_message_unref(call);
+        WiimotePairing::PairCallback cb = std::move(m_OnPairDone);
+        m_OnPairDone = nullptr;
+        m_PairingObjectPath.clear();
+        m_ConnectOnly = false;
+        QueuedEvent ev;
+        ev.kind = QueuedEvent::Kind::PairDone;
+        ev.pair_cb = std::move(cb);
+        ev.pair_result = PairResult::Error;
+        ev.detail = "Failed to send Connect request.";
+        m_EventQueue.push_back(std::move(ev));
+        return;
+    }
+    dbus_message_unref(call);
+    m_PairPending = pending;
+    dbus_pending_call_set_notify(pending, &LinuxWiimoteBluetoothPairing::PairReplyThunk, this, nullptr);
+}
+
 void LinuxWiimoteBluetoothPairing::PairReplyThunk(DBusPendingCall *pending, void *user_data) {
     static_cast<LinuxWiimoteBluetoothPairing *>(user_data)->HandlePairReply(pending);
 }
@@ -476,9 +550,11 @@ void LinuxWiimoteBluetoothPairing::PairReplyThunk(DBusPendingCall *pending, void
 void LinuxWiimoteBluetoothPairing::HandlePairReply(DBusPendingCall *pending) {
     DBusMessage *reply = dbus_pending_call_steal_reply(pending);
     dbus_pending_call_unref(pending);
+    bool connect_only;
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
         if (m_PairPending == pending) m_PairPending = nullptr;
+        connect_only = m_ConnectOnly;
     }
     if (!reply) {
         FinishPairing(PairResult::Error, "No reply from bluetoothd.");
@@ -497,12 +573,28 @@ void LinuxWiimoteBluetoothPairing::HandlePairReply(DBusPendingCall *pending) {
 
         PairResult result = PairResult::Error;
         if (err_name) {
-            if (std::strstr(err_name, "AlreadyExists")) {
-                result = PairResult::AlreadyPaired;
+            if (std::strstr(err_name, "AlreadyExists") || std::strstr(err_name, "AlreadyConnected")) {
+                result = connect_only ? PairResult::Success : PairResult::AlreadyPaired;
             } else if (std::strstr(err_name, "AuthenticationCanceled") ||
                        std::strstr(err_name, "AuthenticationRejected") ||
                        std::strstr(err_name, "ConnectionAttemptFailed")) {
                 result = PairResult::Rejected;
+                if (connect_only) {
+                    // A 1+2-discovered Wiimote failing here is exactly the
+                    // known BlueZ ClassicBondedOnly=true (CVE-2023-45866
+                    // fix) interaction described in
+                    // WiimoteBluetoothPairing.h's ConnectDevice() comment -
+                    // surface that context directly rather than just the
+                    // raw D-Bus error name, since "AuthenticationRejected"
+                    // alone gives no hint that a system security setting
+                    // is the likely cause.
+                    detail += " (if this is a Wiimote synced via 1+2, BlueZ's HID "
+                        "profile refuses unbonded input devices by default "
+                        "since BlueZ 5.66/CVE-2023-45866 - see "
+                        "/etc/bluetooth/input.conf's ClassicBondedOnly "
+                        "setting; changing it is a real security tradeoff, "
+                        "not something this app changes for you)";
+                }
             } else if (std::strstr(err_name, "AuthenticationTimeout")) {
                 result = PairResult::Timeout;
             } else if (std::strstr(err_name, "DoesNotExist") || std::strstr(err_name, "NotFound")) {
@@ -521,7 +613,14 @@ void LinuxWiimoteBluetoothPairing::HandlePairReply(DBusPendingCall *pending) {
     }
 
     dbus_message_unref(reply);
-    ContinueToTrustAndConnect();
+    if (!connect_only) {
+        ContinueToTrustAndConnect();
+    }
+    // For connect_only, deliberately no Trust/re-Connect follow-up -
+    // ConnectDevice() already achieved exactly what it's meant to (a
+    // connection, nothing persisted) and calling ContinueToTrustAndConnect()
+    // would set Trusted=true, which - while not itself a permanent *bond* -
+    // isn't part of what "session-only" is supposed to mean here either.
     FinishPairing(PairResult::Success, "");
 }
 
@@ -579,6 +678,7 @@ void LinuxWiimoteBluetoothPairing::FinishPairing(PairResult result, const std::s
     m_EventQueue.push_back(std::move(ev));
     m_OnPairDone = nullptr;
     m_PairingObjectPath.clear();
+    m_ConnectOnly = false;
 }
 
 // --- device bookkeeping ----------------------------------------------------
@@ -678,90 +778,6 @@ void LinuxWiimoteBluetoothPairing::HandlePropertiesChanged(DBusMessage *msg) {
 
 // --- Agent1 (see class comment / RegisterAgent) --------------------------------
 
-namespace {
-// Reads org.bluez.Adapter1.Address ("AA:BB:CC:DD:EE:FF") and returns the 6
-// raw address bytes in reverse order as a std::string.
-//
-// Why: per WiiBrew's "How to Pair Bluetooth Wiimotes", a Wiimote put into
-// pairing mode via its sync button expects, for legacy (pre-SSP) pairing,
-// a PIN equal to the *host adapter's own Bluetooth address, reversed* -
-// not a fixed numeric PIN. Every established open-source Wiimote Linux
-// driver (wminput/cwiid, wiiuse) implements this same trick.
-//
-// Two things worth being upfront about, found while double-checking this
-// against BlueZ's actual behavior rather than only WiiBrew:
-//
-// 1. Modern BlueZ (since roughly 4.9x) ships its own built-in "wiimote"
-//    plugin that already answers this PIN request internally at the
-//    daemon level for recognized Wiimote controllers, without ever asking
-//    our Agent1 for it - see e.g. the Arch Linux forum thread on Wiimote
-//    pairing ("This plugin automatically selects the right PIN for the
-//    wiimote regardless of the agent you use"). So on most systems this
-//    function's return value is redundant with what BlueZ already does
-//    itself. It's kept anyway as a harmless fallback for any environment
-//    where that plugin is absent/disabled, since RequestPinCode simply
-//    won't be called at all if BlueZ's own plugin already answered it.
-// 2. Separately, at least one D-Bus Bluetooth binding's documentation
-//    claims RequestPinCode is only invoked when the registered agent's
-//    capability is something *other* than NoInputNoOutput - which is
-//    exactly the capability this class registers with (see RegisterAgent
-//    and the class comment on Just Works). If that claim holds for BlueZ
-//    generally and not just that binding's testing, RequestPinCode below
-//    may never fire for us regardless of point 1. Real-world reports of
-//    Wiimote pairing being flaky even on current BlueZ (bluez/bluez#765,
-//    bluez/bluez#1089) suggest this whole area remains genuinely finicky
-//    independent of anything in this file - if legacy-pairing Wiimotes
-//    still fail to pair through this dialog, registering a second,
-//    higher-capability agent (e.g. "DisplayYesNo") as a fallback path
-//    would be the next thing to try, rather than assuming this function
-//    is broken.
-//
-// Caveat on the implementation itself: the D-Bus Agent1 API represents
-// this PIN as a DBUS_TYPE_STRING, but a reversed 6-byte Bluetooth address
-// is arbitrary binary data, not guaranteed-valid UTF-8 (the D-Bus wire
-// format requires message strings to be valid UTF-8). In the extremely
-// unlikely case that reversing the address produces an invalid byte
-// sequence, dbus_message_append_args() below may fail. This mirrors the
-// same representation every other open-source implementation of this
-// trick uses, so it's not expected to be a real-world problem, but it
-// hasn't been exercised against real hardware as part of this change.
-std::string GetReversedAdapterAddressPin(DBusConnection *conn, const std::string &adapter_path) {
-    DBusMessage *call = dbus_message_new_method_call(
-        "org.bluez", adapter_path.c_str(), "org.freedesktop.DBus.Properties", "Get");
-    const char *iface = "org.bluez.Adapter1";
-    const char *prop = "Address";
-    dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, call, 2000, nullptr);
-    dbus_message_unref(call);
-
-    std::string address_str;
-    if (reply) {
-        DBusMessageIter it;
-        if (dbus_message_iter_init(reply, &it) && dbus_message_iter_get_arg_type(&it) == DBUS_TYPE_VARIANT) {
-            DBusMessageIter variant;
-            dbus_message_iter_recurse(&it, &variant);
-            if (dbus_message_iter_get_arg_type(&variant) == DBUS_TYPE_STRING) {
-                const char *s = nullptr;
-                dbus_message_iter_get_basic(&variant, &s);
-                if (s) address_str = s;
-            }
-        }
-        dbus_message_unref(reply);
-    }
-
-    std::vector<unsigned char> bytes;
-    std::stringstream ss(address_str);
-    std::string byte_str;
-    while (std::getline(ss, byte_str, ':')) {
-        if (byte_str.size() == 2) {
-            bytes.push_back(static_cast<unsigned char>(std::stoul(byte_str, nullptr, 16)));
-        }
-    }
-    std::reverse(bytes.begin(), bytes.end());
-    return std::string(bytes.begin(), bytes.end());
-}
-} // namespace
-
 void LinuxWiimoteBluetoothPairing::HandleAgentMethodCall(DBusMessage *msg) {
     const char *member = dbus_message_get_member(msg);
     if (!member || !m_Conn) return;
@@ -771,20 +787,6 @@ void LinuxWiimoteBluetoothPairing::HandleAgentMethodCall(DBusMessage *msg) {
     if (std::strcmp(member, "Release") == 0 ||
         std::strcmp(member, "Cancel") == 0) {
         reply = dbus_message_new_method_return(msg);
-    /*} else if (std::strcmp(member, "RequestPinCode") == 0) {
-        std::string adapter_path;
-        {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            adapter_path = m_AdapterPath;
-        }
-        std::string pin = GetReversedAdapterAddressPin(m_Conn, adapter_path);
-        reply = dbus_message_new_method_return(msg);
-        const char *pin_cstr = pin.c_str();
-        dbus_message_append_args(reply, DBUS_TYPE_STRING, &pin_cstr, DBUS_TYPE_INVALID);
-        // this can cause issues with dbus messages,
-        // since the inverted pin used by 1 + 2 pairing
-        // produces invalid utf-8 characters
-    */
     } else if (std::strcmp(member, "RequestConfirmation") == 0 ||
                std::strcmp(member, "RequestAuthorization") == 0 ||
                std::strcmp(member, "AuthorizeService") == 0) {
@@ -794,7 +796,36 @@ void LinuxWiimoteBluetoothPairing::HandleAgentMethodCall(DBusMessage *msg) {
         // it is.
         reply = dbus_message_new_method_return(msg);
     } else {
-        // RequestPinCode / DisplayPinCode / DisplayPasskey / RequestPasskey
+        // RequestPinCode / DisplayPinCode / DisplayPasskey / RequestPasskey:
+        // reply with an error instead of leaving BlueZ hanging.
+        //
+        // RequestPinCode used to attempt WiiBrew's documented trick for
+        // legacy (pre-SSP) Wiimote pairing - answer with the host
+        // adapter's own Bluetooth address, reversed. That's fundamentally
+        // impossible to implement correctly over this D-Bus method: the
+        // Agent1 API represents the PIN as a DBUS_TYPE_STRING, and D-Bus
+        // requires STRING arguments to be valid UTF-8 on the wire - but a
+        // reversed 6-byte Bluetooth address is arbitrary binary that is
+        // essentially never valid UTF-8 (any byte >= 0x80 not part of a
+        // proper multi-byte sequence is a hard rejection). Attempting it
+        // hit exactly that: dbus_message_append_args() asserts and
+        // SIGABRTs the whole process on an invalid-UTF-8 string, which is
+        // worse than just declining - so this method now always declines.
+        //
+        // This isn't a real-world loss for most people: modern BlueZ ships
+        // its own built-in "wiimote" plugin that already answers this PIN
+        // internally at the daemon level, below the Agent1 D-Bus API
+        // entirely, for recognized Wiimote controllers (see the Arch Linux
+        // forum thread on Wiimote pairing: "This plugin automatically
+        // selects the right PIN for the wiimote regardless of the agent
+        // you use"). This RequestPinCode being reached at all - as opposed
+        // to BlueZ's own plugin already having answered it before we ever
+        // see a request - means that plugin isn't handling this particular
+        // controller/BlueZ build, and legacy-pairing will fail here with a
+        // clear Rejected result rather than crash. Real-world reports of
+        // Wiimote pairing being flaky even independent of any particular
+        // app (bluez/bluez#765, bluez/bluez#1089) suggest this remains a
+        // genuinely finicky area of BlueZ itself.
         reply = dbus_message_new_error(msg, "org.bluez.Error.Rejected", "not supported by this agent");
     }
 

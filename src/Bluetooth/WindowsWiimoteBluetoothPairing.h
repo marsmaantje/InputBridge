@@ -39,6 +39,7 @@ public:
     bool IsDiscovering() const override;
 
     void PairDevice(const std::string &address, WiimotePairing::PairCallback on_done) override;
+    void ConnectDevice(const std::string &address, WiimotePairing::PairCallback on_done) override;
 
     void Pump() override;
 

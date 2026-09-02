@@ -20,14 +20,27 @@ namespace InputBridge::Bluetooth {
 // genuinely has no C API for this, hence the .mm file and the pimpl.
 //
 // Calling -openConnection: on a discovered device triggers macOS's own
-// Bluetooth daemon to perform standard baseband pairing (Just Works, same
-// as the other two backends - see WiimoteBluetoothPairing.h) and, because
-// a Wiimote advertises the HID service class, macOS's regular Bluetooth
-// HID stack takes over from there automatically - the same path a
-// physical Bluetooth mouse or keyboard pairs through. Once that finishes,
-// the Wiimote enumerates as a normal HID device and WiimoteManager's
-// existing SDL_hid-based scan (see WiimoteManager.h) finds it exactly like
-// any other Wiimote.
+// Bluetooth daemon to perform standard baseband pairing and, because a
+// Wiimote advertises the HID service class, macOS's regular Bluetooth HID
+// stack takes over from there automatically - the same path a physical
+// Bluetooth mouse or keyboard pairs through. Once that finishes, the
+// Wiimote enumerates as a normal HID device and WiimoteManager's existing
+// SDL_hid-based scan (see WiimoteManager.h) finds it exactly like any
+// other Wiimote.
+//
+// One correction worth being explicit about: an earlier version of this
+// comment claimed Wiimotes always negotiate Secure Simple Pairing "Just
+// Works". That's wrong for at least the original Wii Remote (RVL-CNT-01) -
+// WiiBrew states plainly that it doesn't support SSP at all and uses
+// legacy PIN-based pairing exclusively (see WiimoteBluetoothPairing.h's
+// header comment and LinuxWiimoteBluetoothPairing.cpp's
+// HandleAgentMethodCall for the full story, confirmed against real
+// hardware on Linux). Whether/how macOS's Bluetooth daemon supplies that
+// legacy PIN internally for -openConnection: hasn't been established as
+// part of this module - IOBluetooth doesn't expose an equivalent to
+// BlueZ's Agent1.RequestPinCode for us to hook into either way, so there's
+// nothing for this backend to do differently even if it did fail the same
+// way the Linux backend originally did; it's simply unconfirmed.
 //
 // Needs `NSBluetoothAlwaysUsageDescription` present in the app's
 // Info.plist (macOS shows a one-time permission prompt driven by that key
@@ -51,6 +64,7 @@ public:
     bool IsDiscovering() const override;
 
     void PairDevice(const std::string &address, WiimotePairing::PairCallback on_done) override;
+    void ConnectDevice(const std::string &address, WiimotePairing::PairCallback on_done) override;
 
     void Pump() override;
 

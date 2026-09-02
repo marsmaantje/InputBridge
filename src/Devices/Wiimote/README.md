@@ -143,10 +143,38 @@ indistinguishable to `WiimoteManager::Scan()`, which only ever enumerates
 already-paired HID devices and doesn't know or care how they got paired.
 
 The UI entry point is `src/UI/WiimotePairingWindow.*` ("Pair Wiimote..."
-button in the Devices sidebar section). See
-`WiimoteBluetoothPairing.h`'s header comment for the Just Works /
-sync-button/20-second-window background a caller needs, and each platform
-backend's own header for that platform's specific mechanism and caveats.
+button in the Devices sidebar section). See `WiimoteBluetoothPairing.h`'s
+header comment for the SYNC-vs-1+2 / legacy-PIN background a caller needs,
+and each platform backend's own header for that platform's specific
+mechanism and caveats.
+
+**Use the SYNC button, not 1+2, for a permanent pairing.** Confirmed
+against real hardware: an original Wii Remote (RVL-CNT-01) only saves a
+persistent pairing when synced via the red SYNC button. 1+2 puts it in a
+temporary/"guest" mode that the Wiimote itself won't bond for regardless
+of what this module does - that's the controller's own designed behavior
+(see WiiBrew), not a bug here. The dialog now offers two distinct buttons
+per device to match: **Pair** (permanent, for SYNC) and **Connect**
+(session-only, for 1+2 - calls `Device1.Connect()` directly instead of
+`Device1.Pair()`, implemented on Linux only so far). Even a successful
+**Connect** may still not work as an actual input device: since BlueZ
+5.66, `ClassicBondedOnly` in `/etc/bluetooth/input.conf` defaults to
+`true` (a deliberate fix for CVE-2023-45866, a Bluetooth HID-injection
+vulnerability), meaning BlueZ's HID profile refuses unbonded input devices
+by design. This module does not flip that setting for you - it's a
+real, system-wide security tradeoff the person needs to make
+knowingly, not something to silently change out from under them. See
+`LinuxWiimoteBluetoothPairing.cpp`'s `HandlePairReply()` for where this
+surfaces to the person if it happens.
+
+This also means original Wiimotes don't support Secure Simple Pairing at
+all (contrary to what an earlier version of this module assumed) and need
+legacy PIN pairing for the SYNC/**Pair** path - on Linux that mostly works
+only if the system's BlueZ was built with its optional `wiimote` plugin
+enabled, since the PIN it needs can't be supplied correctly through
+BlueZ's D-Bus Agent API (see `LinuxWiimoteBluetoothPairing.cpp`'s
+`HandleAgentMethodCall` for the full story, including a crash that shipped
+and was fixed here).
 
 Building it needs, per platform:
 - **Linux**: `libdbus-1-dev` (Debian/Ubuntu) / `dbus-devel` (Fedora) at

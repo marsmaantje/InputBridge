@@ -335,7 +335,8 @@ void WindowsWiimoteBluetoothPairing::PairDevice(const std::string &address, Wiim
                     // A Wiimote never has a display or keyboard, so every
                     // pairing kind Windows might offer here should be
                     // answered by simply accepting - see
-                    // WiimoteBluetoothPairing.h's Just Works note. For the
+                    // WiimoteBluetoothPairing.h's background section on
+                    // SYNC vs 1+2 and legacy PIN pairing. For the
                     // legacy PIN-code kinds (ProvidePin/DisplayPin),
                     // Windows' own Bluetooth stack already knows how to
                     // negotiate the HID-device pairing convention
@@ -388,6 +389,28 @@ void WindowsWiimoteBluetoothPairing::PairDevice(const std::string &address, Wiim
         impl->on_pair_done = nullptr;
         impl->pairing_id.clear();
     }).detach();
+}
+
+void WindowsWiimoteBluetoothPairing::ConnectDevice(const std::string &address, WiimotePairing::PairCallback on_done) {
+    // Not implemented: WinRT's device-pairing model doesn't expose a
+    // distinct "connect without a permanent bond" operation the way
+    // BlueZ's D-Bus API separates Device1.Connect from Device1.Pair - and
+    // Windows' Bluetooth HID stack, like BlueZ's ClassicBondedOnly=true
+    // default (see WiimoteBluetoothPairing.h's ConnectDevice() comment),
+    // almost certainly requires a bonded device for HID for the same
+    // security reasons regardless. Reporting this cleanly through the
+    // normal event queue (not synchronously - see
+    // WiimoteBluetoothPairingImpl.h's comment on why) rather than
+    // guessing at an unverified API.
+    (void)address;
+    std::lock_guard<std::mutex> lock(m_Impl->mutex);
+    Impl::QueuedEvent ev;
+    ev.kind = Impl::QueuedEvent::Kind::PairDone;
+    ev.pair_cb = std::move(on_done);
+    ev.pair_result = PairResult::NotAvailable;
+    ev.detail = "Session-only connect (for 1+2-synced Wiimotes) isn't implemented on Windows - "
+                 "use the SYNC button instead.";
+    m_Impl->event_queue.push_back(std::move(ev));
 }
 
 void WindowsWiimoteBluetoothPairing::Pump() {

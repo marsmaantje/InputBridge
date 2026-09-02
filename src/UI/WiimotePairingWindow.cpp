@@ -29,9 +29,13 @@ std::vector<DiscoveredDevice> s_Devices;
 bool s_Scanning = false;
 std::string s_StatusText;
 
-// Non-empty while a Pair click is outstanding for that device.
+// Non-empty while a Pair/Connect click is outstanding for that device -
+// separate trackers since PairDevice() and ConnectDevice() are visually
+// distinct buttons that could (in principle) target different devices,
+// even though the backend only actually runs one at a time.
 std::string s_PairingAddress;
-std::string s_PairingName;
+std::string s_ConnectingAddress;
+std::string s_BusyName;
 
 void UpsertDevice(const DiscoveredDevice &dev) {
     for (auto &d : s_Devices) {
@@ -75,14 +79,22 @@ void WiimotePairingWindow::Draw() {
         s_ShouldOpenPopup = false;
     }
 
-    ImGui::SetNextWindowSize(ImVec2(440, 380), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(440, 460), ImGuiCond_FirstUseEver);
     bool popup_open = true;
     if (ImGui::BeginPopupModal("Pair Wiimote", &popup_open, ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::TextWrapped(
-            "Hold the red SYNC button under the battery cover (or hold 1+2 "
-            "together on remotes without one) until it starts blinking, "
-            "then wait for it to appear below. It stays discoverable for "
-            "about 20 seconds.");
+        ImGui::TextDisabled("Hold SYNC under the battery cover, or press 1+2, to make a Wiimote discoverable.");
+        if (ImGui::CollapsingHeader("How pairing works")) {
+            ImGui::TextWrapped(
+                "Hold the red SYNC button under the battery cover until it "
+                "starts blinking, then wait for it to appear below. It stays "
+                "discoverable for about 20 seconds.");
+            ImGui::TextWrapped(
+                "SYNC gives a permanent pairing - use \"Pair\" for it. "
+                "1+2 only gives a temporary session that won't be remembered "
+                "next time - use \"Connect\" for it instead, and note it may "
+                "not work at all depending on your system's Bluetooth security "
+                "settings (see the status message below if it fails).");
+        }
         ImGui::Spacing();
 
         if (s_Scanning) {
@@ -115,6 +127,9 @@ void WiimotePairingWindow::Draw() {
 
             const std::string label = dev.name.empty() ? "(unnamed device)" : dev.name;
             const bool is_pairing_this = (s_PairingAddress == dev.address);
+            const bool is_connecting_this = (s_ConnectingAddress == dev.address);
+            const bool busy_elsewhere = (!s_PairingAddress.empty() && !is_pairing_this) ||
+                                         (!s_ConnectingAddress.empty() && !is_connecting_this);
 
             if (!dev.looks_like_wiimote) ImGui::BeginDisabled();
             ImGui::TextUnformatted(label.c_str());
@@ -124,24 +139,49 @@ void WiimotePairingWindow::Draw() {
                 ImGui::TextDisabled("Paired");
             } else if (is_pairing_this) {
                 ImGui::TextDisabled("Pairing...");
-            } else if (ImGui::SmallButton("Pair")) {
-                s_PairingAddress = dev.address;
-                s_PairingName = label;
-                s_StatusText.clear();
+            } else if (is_connecting_this) {
+                ImGui::TextDisabled("Connecting...");
+            } else {
                 const std::string address = dev.address; // captured by value below
-                GetPairing().PairDevice(address, [address](PairResult result, const std::string &detail) {
-                    if (s_PairingAddress == address) s_PairingAddress.clear();
-                    if (result == PairResult::Success || result == PairResult::AlreadyPaired) {
-                        s_StatusText = s_PairingName +
-                                       ": paired! It should show up in your device list in a moment.";
-                        for (auto &d : s_Devices) {
-                            if (d.address == address) d.already_paired = true;
+
+                if (busy_elsewhere) ImGui::BeginDisabled();
+                if (ImGui::SmallButton("Pair")) {
+                    s_PairingAddress = address;
+                    s_BusyName = label;
+                    s_StatusText.clear();
+                    GetPairing().PairDevice(address, [address](PairResult result, const std::string &detail) {
+                        if (s_PairingAddress == address) s_PairingAddress.clear();
+                        if (result == PairResult::Success || result == PairResult::AlreadyPaired) {
+                            s_StatusText = s_BusyName +
+                                           ": paired! It should show up in your device list in a moment.";
+                            for (auto &d : s_Devices) {
+                                if (d.address == address) d.already_paired = true;
+                            }
+                        } else {
+                            s_StatusText = s_BusyName + ": pairing failed (" + ToString(result) + ")" +
+                                           (detail.empty() ? "." : (" - " + detail));
                         }
-                    } else {
-                        s_StatusText = s_PairingName + ": pairing failed (" + ToString(result) + ")" +
-                                       (detail.empty() ? "." : (" - " + detail));
-                    }
-                });
+                    });
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Connect")) {
+                    s_ConnectingAddress = address;
+                    s_BusyName = label;
+                    s_StatusText.clear();
+                    GetPairing().ConnectDevice(address, [address](PairResult result, const std::string &detail) {
+                        if (s_ConnectingAddress == address) s_ConnectingAddress.clear();
+                        if (result == PairResult::Success || result == PairResult::AlreadyPaired) {
+                            s_StatusText = s_BusyName +
+                                           ": connected for this session. It should show up in your "
+                                           "device list in a moment, but won't be remembered next time - "
+                                           "hold 1+2 again if you need to reconnect it later.";
+                        } else {
+                            s_StatusText = s_BusyName + ": connect failed (" + ToString(result) + ")" +
+                                           (detail.empty() ? "." : (" - " + detail));
+                        }
+                    });
+                }
+                if (busy_elsewhere) ImGui::EndDisabled();
             }
             if (!dev.looks_like_wiimote) ImGui::EndDisabled();
 
