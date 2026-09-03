@@ -34,10 +34,18 @@ std::optional<std::string> ResolveBluetoothAddressForHidrawPath(const std::strin
 
 // Best-effort: asks the OS's own Bluetooth HID connection to this device
 // to disconnect, freeing up PSMs 0x11/0x13 so WiimoteL2CAPTransport can
-// connect its own direct sockets to them - otherwise the OS's existing
-// HID connection (the same one that created the hidraw node we resolved
-// `address` from in the first place) is already holding those channels
-// open, and our connect() will simply be refused.
+// connect its own direct sockets to them.
+//
+// NOT currently called from WiimoteManager's automatic Scan() path - an
+// earlier version did call this automatically whenever the passive
+// connect attempt failed, and that turned out to be actively harmful:
+// disconnecting a Wiimote's OS Bluetooth HID connection tears down the
+// real ACL link, and several Wiimotes will not accept a new connection
+// afterwards without the sync button being pressed again. This function
+// is kept for a possible future *user-initiated* "take over this
+// Wiimote's connection" action (with the disruption clearly disclosed up
+// front), not for anything automatic. See WiimoteManager.cpp's
+// TryOpenLinuxL2CAPTransport() for the current (passive-only) behavior.
 //
 // Implemented by shelling out to `bluetoothctl disconnect <address>`
 // (BlueZ's own CLI, present on essentially any Linux system that has

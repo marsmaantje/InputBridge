@@ -111,6 +111,40 @@ void LogLinuxOpenDiagnostics(const char *path) {
 // BlueZ to release its own HID connection to the device - callers should
 // fall back to the existing WiimoteHidTransport path in that case,
 // exactly like this feature didn't exist.
+// Best-effort, PASSIVE ONLY: builds a direct L2CAP transport for the
+// Wiimote at `hidraw_path` instead of the hidraw one, so this device
+// stops sharing the OS's generic HID node (and therefore stops being
+// reset by anything else that also opens it, most notoriously Steam
+// Input - see Devices/Wiimote/README.md's "IR camera doesn't work while
+// Steam is running" section, and WiimoteL2CAPTransport.h for the full
+// architecture rationale).
+//
+// Deliberately makes exactly ONE connect() attempt and never calls
+// DisconnectExistingHidConnection(). An earlier version of this function
+// also disconnected the OS's existing HID connection and retried when
+// the first attempt failed - that turned out to be actively harmful in
+// practice: it tore down a real, working Bluetooth link on essentially
+// every already-connected Wiimote (the normal case, not an edge case),
+// and the Wiimote did not reliably reconnect afterwards (several
+// Wiimotes require the sync button to be pressed again before they'll
+// accept a new connection at all once fully disconnected). It also
+// produced stray, permanently-broken "Wii Remote (Gamepad)" entries in
+// DeviceManager's joystick list, because the resulting disconnect/
+// reconnect churn could race SDL's joystick-added filter (a joystick
+// enumerated mid-reconnect, before BlueZ finishes renegotiating its HID
+// descriptor, can transiently miss the vidpid_match/name_match check and
+// slip through as an unmanaged, dead joystick).
+//
+// A user-initiated, explicit "take over this Wiimote's connection"
+// action (with a clear warning that it will briefly disconnect the
+// device and may require re-syncing it) is a reasonable thing to add to
+// the Wiimote settings tab later - but it must never be automatic.
+//
+// Returns nullptr if this isn't a Bluetooth device at all (e.g. a USB
+// Wiimote receiver) or if nothing was listening on those PSMs for some
+// other, non-disruptive reason - callers fall back to the existing
+// WiimoteHidTransport path in that case, exactly like this feature
+// didn't exist.
 std::unique_ptr<WiimoteL2CAPTransport> TryOpenLinuxL2CAPTransport(const std::string &hidraw_path) {
     const auto address_str = ResolveBluetoothAddressForHidrawPath(hidraw_path);
     if (!address_str) return nullptr; // not a Bluetooth device - nothing for L2CAP to do here
@@ -118,34 +152,23 @@ std::unique_ptr<WiimoteL2CAPTransport> TryOpenLinuxL2CAPTransport(const std::str
     const auto bdaddr = ParseBluetoothAddress(*address_str);
     if (!bdaddr) return nullptr; // shouldn't happen (already validated inside the resolve call)
 
-    // First attempt: in case nothing actually holds the OS HID connection
-    // open right now (e.g. a race, or a kernel/driver combination that
-    // doesn't bind hidp for this device at all).
+    // Single passive attempt only, in case nothing actually holds the OS
+    // HID connection open right now (e.g. a race, or a kernel/driver
+    // combination that doesn't bind hidp for this device at all). This
+    // is non-disruptive: if it fails, the OS's own HID connection (and
+    // therefore the existing hidraw fallback path) is completely
+    // untouched.
     if (auto transport = WiimoteL2CAPTransport::Connect(*bdaddr)) {
-        LOG_INFO("WiimoteManager", "Opened direct L2CAP transport for %s (%s) on the first "
-                                    "attempt - no competing OS HID connection was in the way",
+        LOG_INFO("WiimoteManager", "Opened direct L2CAP transport for %s (%s) - no competing OS "
+                                    "HID connection was in the way",
                  hidraw_path.c_str(), address_str->c_str());
         return transport;
     }
 
-    // Expected common case: the OS's own Bluetooth HID service is holding
-    // PSMs 0x11/0x13 open for this device already (that's what produced
-    // the hidraw node we started from) - ask it to let go, give BlueZ a
-    // moment to actually tear the channels down, then retry once.
-    DisconnectExistingHidConnection(*address_str);
-    SDL_Delay(300);
-
-    if (auto transport = WiimoteL2CAPTransport::Connect(*bdaddr)) {
-        LOG_INFO("WiimoteManager", "Opened direct L2CAP transport for %s (%s) after releasing "
-                                    "the OS's own HID connection to it",
-                 hidraw_path.c_str(), address_str->c_str());
-        return transport;
-    }
-
-    LOG_WARN("WiimoteManager", "Could not open a direct L2CAP transport for %s (%s) even after "
-                                "asking BlueZ to disconnect its own HID connection - falling "
-                                "back to the shared hidraw transport for this device",
-             hidraw_path.c_str(), address_str->c_str());
+    LOG_VERBOSE("WiimoteManager", "%s (%s) is already connected via the OS's own Bluetooth HID "
+                                   "service - using the shared hidraw transport for this device "
+                                   "(as always; this is expected and not an error)",
+                hidraw_path.c_str(), address_str->c_str());
     return nullptr;
 }
 #endif // __linux__
