@@ -64,15 +64,17 @@ namespace Registers {
     constexpr uint32_t ExtensionInitNew1 = 0xA400F0; // write 0x55 (new-style unencrypted init, step 1)
     constexpr uint32_t ExtensionInitNew2 = 0xA400FB; // write 0x00 (new-style unencrypted init, step 2)
     constexpr uint32_t ExtensionEncryption = 0xA400F0; // write 0x00 to complete encryption reset sequence
-    // "Old way" init (WiiBrew "Wiimote/Extension Controllers#Initializing"):
-    // write 0x00 to this same 0xA400F0 register (instead of the 0x55/0x00
-    // pair above) and skip 0xA400FB entirely. This leaves the extension's
-    // factory-default encryption ON, so every subsequent ID/data byte read
-    // from the extension must be run through DecryptExtensionByte() below.
-    // Some wireless/third-party Nunchuks either ignore the "new way" write
-    // or never disable encryption in the first place and only work through
-    // this path - see WiiBrew's Nunchuk page, "Wireless Nunchuks" section.
-    constexpr uint32_t ExtensionInitOld  = 0xA400F0;
+    // "Old way" init (WiiBrew "Wiimote/Extension Controllers#The Old Way"):
+    // write the single byte 0x00 to register 0xA40040 (the same register the
+    // 16-byte encryption key would otherwise be written to - this is a
+    // 1-byte "null key" instead of the 0x55/0x00 pair above). This leaves
+    // the extension's factory-default encryption ON, so every subsequent
+    // ID/data byte read from the extension must be run through
+    // DecryptExtensionByte() below. Some wireless/third-party Nunchuks
+    // either ignore the "new way" write or never disable encryption in the
+    // first place and only work through this path - see WiiBrew's Nunchuk
+    // page, "Wireless Nunchuks" section.
+    constexpr uint32_t ExtensionInitOld  = 0xA40040;
     constexpr uint32_t ExtensionCalib    = 0xA40020; // Balance Board calibration block start
     // Reference Temperature (+1 unknown byte, always 0x01) - not part of the
     // 0xA40020 32-byte calibration block itself, but folded into that

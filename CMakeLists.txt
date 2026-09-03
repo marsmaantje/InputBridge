@@ -4,18 +4,11 @@ project(InputBridge VERSION 0.11.4)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Wiimote Bluetooth pairing's macOS backend (MacOSWiimoteBluetoothPairing.mm)
-# talks to IOBluetooth, which is Objective-C only - needs OBJCXX enabled.
-if(APPLE)
-    enable_language(OBJCXX)
-endif()
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
 set(ENABLE_EXCLUSIVE_INPUT ON CACHE BOOL "Enable device-hide support (HidHide on Windows, evdev grab on Linux, IOKit seize on macOS)" FORCE)
 set(ENABLE_WEBSOCKETS ON CACHE BOOL "Enable WebSocket server support" FORCE)
 set(ENABLE_OSC ON CACHE BOOL "Enable WebSocket server support" FORCE)
-set(ENABLE_WIIMOTE_BLUETOOTH_PAIRING ON CACHE BOOL "Enable in-app Wiimote Bluetooth discovery/pairing (BlueZ D-Bus on Linux, WinRT on Windows, IOBluetooth on macOS)" FORCE)
 
 # Add SDL3
 # We assume lib/sdl contains the SDL3 source code.
@@ -252,8 +245,17 @@ add_executable(InputBridge
     src/Devices/Wiimote/WiimoteADPCM.cpp
     src/Devices/Wiimote/WiimoteDecoder.cpp
     src/Devices/Wiimote/WiimoteDevice.cpp
+    src/Devices/Wiimote/WiimoteHidTransport.cpp
     src/Devices/Wiimote/WiimoteManager.cpp
     src/Devices/Wiimote/WiimoteVirtualBridge.cpp
+    # Direct Bluetooth L2CAP transport (Linux only - #ifdef __linux__'d out
+    # to an empty translation unit elsewhere, same convention as
+    # src/ExclusiveMode/*.cpp below). Bypasses the OS HID subsystem so
+    # this Wiimote stops sharing its data-reporting mode with anything
+    # else that also opens the hidraw node (Steam Input, most notably -
+    # see src/Devices/Wiimote/README.md).
+    src/Devices/Wiimote/Linux/WiimoteL2CAPTransport.cpp
+    src/Devices/Wiimote/Linux/WiimoteBluetoothUtil.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
@@ -345,62 +347,6 @@ if(ENABLE_EXCLUSIVE_INPUT)
     )
 endif()
 
-if(ENABLE_WIIMOTE_BLUETOOTH_PAIRING)
-    # Tracks whether a real platform backend actually got added below (as
-    # opposed to the option merely being requested) - WiimoteBluetoothPairing.cpp's
-    # factory unconditionally references the platform class whenever the
-    # ENABLE_WIIMOTE_BLUETOOTH_PAIRING compile definition is set, so that
-    # definition must only be added when a backend is actually being built,
-    # or a missing optional dependency (libdbus-1-dev, see below) turns
-    # into a link error instead of a clean fallback to the dummy backend.
-    set(WIIMOTE_BT_BACKEND_AVAILABLE FALSE)
-
-    target_sources(InputBridge PRIVATE
-        src/Bluetooth/WiimoteBluetoothPairing.cpp
-        src/UI/WiimotePairingWindow.cpp
-    )
-    if(WIN32)
-        target_sources(InputBridge PRIVATE src/Bluetooth/WindowsWiimoteBluetoothPairing.cpp)
-        set(WIIMOTE_BT_BACKEND_AVAILABLE TRUE)
-    elseif(APPLE)
-        target_sources(InputBridge PRIVATE src/Bluetooth/MacOSWiimoteBluetoothPairing.mm)
-        # IOBluetoothDevice/IOBluetoothDeviceInquiry pointers live as plain
-        # members of a C++ struct (MacOSWiimoteBluetoothPairing::Impl) -
-        # ARC is what makes that memory-safe without hand-written
-        # retain/release, so this one file (not the rest of the target)
-        # needs it explicitly.
-        set_source_files_properties(src/Bluetooth/MacOSWiimoteBluetoothPairing.mm
-            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-        set(WIIMOTE_BT_BACKEND_AVAILABLE TRUE)
-    elseif(UNIX)
-        find_package(PkgConfig)
-        if(PkgConfig_FOUND)
-            pkg_check_modules(DBUS1 dbus-1)
-        endif()
-        if(DBUS1_FOUND)
-            target_sources(InputBridge PRIVATE src/Bluetooth/LinuxWiimoteBluetoothPairing.cpp)
-            target_include_directories(InputBridge PRIVATE ${DBUS1_INCLUDE_DIRS})
-            target_link_libraries(InputBridge PRIVATE ${DBUS1_LIBRARIES})
-            target_link_directories(InputBridge PRIVATE ${DBUS1_LIBRARY_DIRS})
-            set(WIIMOTE_BT_BACKEND_AVAILABLE TRUE)
-        else()
-            message(WARNING "libdbus-1 development files not found (pkg-config dbus-1) - "
-                            "Wiimote Bluetooth pairing will fall back to the disabled/dummy "
-                            "backend on this Linux build. Install libdbus-1-dev "
-                            "(Debian/Ubuntu) or dbus-devel (Fedora) to enable it.")
-        endif()
-    endif()
-
-    if(WIIMOTE_BT_BACKEND_AVAILABLE)
-        target_compile_definitions(InputBridge PRIVATE ENABLE_WIIMOTE_BLUETOOTH_PAIRING=1)
-        message(STATUS "Wiimote Bluetooth pairing: ENABLED")
-    else()
-        message(STATUS "Wiimote Bluetooth pairing: DISABLED (dummy backend - dialog will report unavailable)")
-    endif()
-else()
-    message(STATUS "Wiimote Bluetooth pairing: DISABLED (ENABLE_WIIMOTE_BLUETOOTH_PAIRING=OFF)")
-endif()
-
 # Add compile definitions to InputBridge
 target_compile_definitions(InputBridge PRIVATE
     INPUTBRIDGE_VERSION="${PROJECT_VERSION}"
@@ -465,33 +411,12 @@ if(WIN32)
     endif()
     # Windows native file dialogs and networking
     target_link_libraries(InputBridge PRIVATE ws2_32 comdlg32)
-    if(ENABLE_WIIMOTE_BLUETOOTH_PAIRING)
-        # WindowsApp.lib is the umbrella import lib for the WinRT base
-        # namespaces (Windows.Foundation, Windows.Devices.Enumeration,
-        # Windows.Devices.Bluetooth) used by WindowsWiimoteBluetoothPairing.cpp.
-        # Usable from a classic unpackaged Win32 desktop app, not just from
-        # MSIX/UWP - see that file's header comment for the caveat around
-        # this being unverified against a real Windows SDK/box.
-        target_link_libraries(InputBridge PRIVATE windowsapp runtimeobject)
-    endif()
 endif()
 
 if(APPLE AND ENABLE_EXCLUSIVE_INPUT)
     find_library(IOKIT_LIB IOKit)
     find_library(COREFOUNDATION_LIB CoreFoundation)
     target_link_libraries(InputBridge PRIVATE ${IOKIT_LIB} ${COREFOUNDATION_LIB})
-endif()
-
-if(APPLE AND ENABLE_WIIMOTE_BLUETOOTH_PAIRING)
-    find_library(IOBLUETOOTH_LIB IOBluetooth)
-    find_library(FOUNDATION_LIB Foundation)
-    if(IOBLUETOOTH_LIB AND FOUNDATION_LIB)
-        target_link_libraries(InputBridge PRIVATE ${IOBLUETOOTH_LIB} ${FOUNDATION_LIB})
-    else()
-        message(WARNING "IOBluetooth/Foundation frameworks not found - Wiimote Bluetooth "
-                        "pairing will fail to link. This should not happen on a standard "
-                        "macOS SDK.")
-    endif()
 endif()
 
 # Copy SDL3.dll to the output directory on Windows

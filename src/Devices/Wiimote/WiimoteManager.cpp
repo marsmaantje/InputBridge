@@ -1,5 +1,6 @@
 // src/Devices/Wiimote/WiimoteManager.cpp
 #include "WiimoteManager.h"
+#include "WiimoteHidTransport.h"
 #include "App/Log.h"
 #include <SDL3/SDL_hidapi.h>
 #include <SDL3/SDL_timer.h>
@@ -12,6 +13,8 @@
 #include <unistd.h>
 #include <cerrno>
 #include <sys/stat.h>
+#include "Linux/WiimoteL2CAPTransport.h"
+#include "Linux/WiimoteBluetoothUtil.h"
 #endif
 
 namespace InputBridge::Wiimote {
@@ -91,6 +94,62 @@ void LogLinuxOpenDiagnostics(const char *path) {
     }
 }
 #endif
+
+#if defined(__linux__)
+// Best-effort: builds a direct L2CAP transport for the Wiimote at
+// `hidraw_path` instead of the hidraw one, so this device stops sharing
+// the OS's generic HID node (and therefore stops being reset by
+// anything else that also opens it, most notoriously Steam Input - see
+// Devices/Wiimote/README.md's "IR camera doesn't work while Steam is
+// running" section, and WiimoteL2CAPTransport.h for the full
+// architecture rationale).
+//
+// Returns nullptr if this isn't a Bluetooth device at all (e.g. a USB
+// Wiimote receiver - ResolveBluetoothAddressForHidrawPath() already
+// handles telling those apart from a genuine Bluetooth hidraw node) or
+// if the direct connection couldn't be established even after asking
+// BlueZ to release its own HID connection to the device - callers should
+// fall back to the existing WiimoteHidTransport path in that case,
+// exactly like this feature didn't exist.
+std::unique_ptr<WiimoteL2CAPTransport> TryOpenLinuxL2CAPTransport(const std::string &hidraw_path) {
+    const auto address_str = ResolveBluetoothAddressForHidrawPath(hidraw_path);
+    if (!address_str) return nullptr; // not a Bluetooth device - nothing for L2CAP to do here
+
+    const auto bdaddr = ParseBluetoothAddress(*address_str);
+    if (!bdaddr) return nullptr; // shouldn't happen (already validated inside the resolve call)
+
+    // First attempt: in case nothing actually holds the OS HID connection
+    // open right now (e.g. a race, or a kernel/driver combination that
+    // doesn't bind hidp for this device at all).
+    if (auto transport = WiimoteL2CAPTransport::Connect(*bdaddr)) {
+        LOG_INFO("WiimoteManager", "Opened direct L2CAP transport for %s (%s) on the first "
+                                    "attempt - no competing OS HID connection was in the way",
+                 hidraw_path.c_str(), address_str->c_str());
+        return transport;
+    }
+
+    // Expected common case: the OS's own Bluetooth HID service is holding
+    // PSMs 0x11/0x13 open for this device already (that's what produced
+    // the hidraw node we started from) - ask it to let go, give BlueZ a
+    // moment to actually tear the channels down, then retry once.
+    DisconnectExistingHidConnection(*address_str);
+    SDL_Delay(300);
+
+    if (auto transport = WiimoteL2CAPTransport::Connect(*bdaddr)) {
+        LOG_INFO("WiimoteManager", "Opened direct L2CAP transport for %s (%s) after releasing "
+                                    "the OS's own HID connection to it",
+                 hidraw_path.c_str(), address_str->c_str());
+        return transport;
+    }
+
+    LOG_WARN("WiimoteManager", "Could not open a direct L2CAP transport for %s (%s) even after "
+                                "asking BlueZ to disconnect its own HID connection - falling "
+                                "back to the shared hidraw transport for this device",
+             hidraw_path.c_str(), address_str->c_str());
+    return nullptr;
+}
+#endif // __linux__
+
 } // namespace
 
 std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
@@ -154,7 +213,22 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
         // time-to-settle a Wiimote that was already on before InputBridge
         // started gets "for free" (see WiimoteDevice.h's m_InitSettleAtMs
         // comment for the bug this avoids).
-        out.push_back(std::make_unique<WiimoteDevice>(hdev, path, is_balance_board));
+        std::unique_ptr<IWiimoteTransport> transport;
+#if defined(__linux__)
+        // Prefer a direct L2CAP transport over the shared hidraw one when
+        // we can get one - see TryOpenLinuxL2CAPTransport()'s comment.
+        // `hdev` (already open) becomes redundant the moment this
+        // succeeds, since every subsequent read/write goes through the
+        // new transport instead - close it rather than leaking the
+        // hidraw handle for the lifetime of the Wiimote.
+        if (auto l2cap = TryOpenLinuxL2CAPTransport(path)) {
+            transport = std::move(l2cap);
+            SDL_hid_close(hdev);
+        }
+#endif
+        if (!transport) transport = std::make_unique<WiimoteHidTransport>(hdev);
+
+        out.push_back(std::make_unique<WiimoteDevice>(std::move(transport), path, is_balance_board));
     }
     SDL_hid_free_enumeration(devs);
 

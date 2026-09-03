@@ -36,12 +36,15 @@ constexpr Uint32 kConnectSettleMs = 500;
 constexpr float kPi = 3.14159265358979323846f;
 }
 
-WiimoteDevice::WiimoteDevice(SDL_hid_device *dev, std::string hid_path, bool is_balance_board_hint)
-    : m_Dev(dev), m_Path(std::move(hid_path)) {
+WiimoteDevice::WiimoteDevice(std::unique_ptr<IWiimoteTransport> transport, std::string hid_path, bool is_balance_board_hint)
+    : m_Transport(std::move(transport)), m_Path(std::move(hid_path)) {
     m_Snapshot.hid_path = m_Path;
     m_Snapshot.is_balance_board = is_balance_board_hint;
-    if (m_Dev) {
-        SDL_hid_set_nonblocking(m_Dev, 1);
+    if (m_Transport) {
+        // Non-blocking mode (where the transport needs to set it up
+        // explicitly at all) is handled inside the transport's own
+        // constructor now - see WiimoteHidTransport's ctor.
+        //
         // Don't run Init() synchronously from here (WiimoteManager::Scan()
         // used to call it immediately after construction) - defer it to
         // Poll() once the connection has had kConnectSettleMs to settle.
@@ -52,7 +55,7 @@ WiimoteDevice::WiimoteDevice(SDL_hid_device *dev, std::string hid_path, bool is_
 }
 
 WiimoteDevice::~WiimoteDevice() {
-    if (m_Dev) SDL_hid_close(m_Dev);
+    if (m_Transport) m_Transport->Close();
 }
 
 // -- Output report helpers -----------------------------------------------
@@ -60,28 +63,29 @@ WiimoteDevice::~WiimoteDevice() {
 namespace {
 // Every output report's first payload byte carries the rumble bit in bit 0.
 // `payload` should NOT include the leading report-ID byte - that's added
-// here, matching SDL_hid_write's convention of report-ID-as-first-byte.
-bool SendReport(SDL_hid_device *dev, uint8_t report_id, bool rumble,
+// here, matching IWiimoteTransport::Write's convention of
+// report-ID-as-first-byte (itself inherited from SDL_hid_write's).
+bool SendReport(IWiimoteTransport *transport, uint8_t report_id, bool rumble,
                  const uint8_t *payload, size_t payload_len) {
-    if (!dev) return false;
+    if (!transport) return false;
     uint8_t buf[32] = {};
     buf[0] = report_id;
     if (payload && payload_len) std::memcpy(buf + 1, payload, std::min(payload_len, sizeof(buf) - 1));
     if (rumble) buf[1] |= 0x01;
     const size_t total = 1 + std::max<size_t>(payload_len, 1);
-    return SDL_hid_write(dev, buf, total) >= 0;
+    return transport->Write(buf, total) >= 0;
 }
 } // namespace
 
 bool WiimoteDevice::Init() {
-    if (!m_Dev) return false;
+    if (!m_Transport) return false;
     bool ok = true;
 
     // Ask for a status report so we learn battery + whether an extension is
     // already plugged in before we pick a data-reporting mode.
     {
         uint8_t p[1] = {0x00};
-        ok &= SendReport(m_Dev, OutReport::StatusRequest, m_RumbleBit, p, 1);
+        ok &= SendReport(m_Transport.get(), OutReport::StatusRequest, m_RumbleBit, p, 1);
     }
 
     // Balance Boards have no IR/speaker hardware - skip straight to data
@@ -99,7 +103,7 @@ bool WiimoteDevice::Init() {
     // when nothing changes - simpler polling loop.
     {
         uint8_t p[2] = {0x04, PreferredReportMode()};
-        ok &= SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+        ok &= SendReport(m_Transport.get(), OutReport::DataReportMode, m_RumbleBit, p, 2);
     }
 
     // Default to player LED 1 lit so the physical remote shows it's alive.
@@ -180,9 +184,9 @@ bool WiimoteDevice::EnableIRCamera() {
 bool WiimoteDevice::EnableIRCameraOnce() {
     bool ok = true;
     uint8_t enable[1] = {0x04};
-    ok &= SendReport(m_Dev, OutReport::IRCameraEnable1, m_RumbleBit, enable, 1);
+    ok &= SendReport(m_Transport.get(), OutReport::IRCameraEnable1, m_RumbleBit, enable, 1);
     SDL_Delay(kIRInitStepDelayMs);
-    ok &= SendReport(m_Dev, OutReport::IRCameraEnable2, m_RumbleBit, enable, 1);
+    ok &= SendReport(m_Transport.get(), OutReport::IRCameraEnable2, m_RumbleBit, enable, 1);
     SDL_Delay(kIRInitStepDelayMs);
 
     // toggle -> sensitivity block 1 -> block 2 -> mode -> toggle again,
@@ -240,7 +244,7 @@ bool WiimoteDevice::VerifyIRCameraEnabled() {
     // discard.
     {
         uint8_t drain[kReportBufSize];
-        while (SDL_hid_read(m_Dev, drain, sizeof(drain)) > 0) {
+        while (m_Transport->Read(drain, sizeof(drain)) > 0) {
             // Discard, except keep buttons fresh from whatever's flushed,
             // same courtesy as the main wait loop below.
             if (drain[0] >= InReport::Core && drain[0] <= InReport::InterleavedB) {
@@ -250,14 +254,14 @@ bool WiimoteDevice::VerifyIRCameraEnabled() {
     }
 
     uint8_t p[1] = {0x00};
-    if (!SendReport(m_Dev, OutReport::StatusRequest, m_RumbleBit, p, 1)) return false;
+    if (!SendReport(m_Transport.get(), OutReport::StatusRequest, m_RumbleBit, p, 1)) return false;
 
     const Uint64 deadline = SDL_GetTicks() + kRegisterReadTimeoutMs;
     while (SDL_GetTicks() < deadline) {
         uint8_t buf[kReportBufSize] = {};
-        const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));
+        const int n = m_Transport->Read(buf, sizeof(buf));
         if (n <= 0) {
-            // m_Dev is opened non-blocking, so a "nothing pending" read
+            // The transport is non-blocking, so a "nothing pending" read
             // returns immediately (0), not after waiting for data - without
             // a sleep here this becomes an unthrottled busy-spin calling
             // SDL_hid_read() as fast as the CPU allows for up to
@@ -329,7 +333,7 @@ bool WiimoteDevice::InitExtension() {
             // The "new way" write didn't produce a recognizable ID. Some
             // wireless/third-party Nunchuks either ignore that write or
             // ship with encryption on and no way to disable it - fall back
-            // to the "old way" init (write 0x00 -> 0xA400F0 only, leaving
+            // to the "old way" init (write 0x00 -> 0xA40040 only, leaving
             // encryption ON) and decrypt the ID bytes before classifying.
             // See WiiBrew's Nunchuk page, "Wireless Nunchuks" section, and
             // WiimoteProtocol.h's DecryptExtensionByte().
@@ -386,13 +390,13 @@ bool WiimoteDevice::InitExtension() {
         // (0x34) start arriving instead of the wrong ones (0x37).
         if (!was_already_known) {
             uint8_t irOff[1] = {0x00};
-            SendReport(m_Dev, OutReport::IRCameraEnable1, m_RumbleBit, irOff, 1);
-            SendReport(m_Dev, OutReport::IRCameraEnable2, m_RumbleBit, irOff, 1);
+            SendReport(m_Transport.get(), OutReport::IRCameraEnable1, m_RumbleBit, irOff, 1);
+            SendReport(m_Transport.get(), OutReport::IRCameraEnable2, m_RumbleBit, irOff, 1);
             m_Snapshot.ir_enabled = false;
             m_Snapshot.ir = {};
 
             uint8_t p[2] = {0x04, PreferredReportMode()};
-            SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+            SendReport(m_Transport.get(), OutReport::DataReportMode, m_RumbleBit, p, 2);
         }
     }
 
@@ -431,8 +435,16 @@ bool WiimoteDevice::ActivateMotionPlus() {
     // Activation mode depends on whether something is already plugged into
     // the regular extension port: passthrough keeps that device's data
     // flowing (re-encoded by the MotionPlus) alongside the new gyro bytes;
-    // plain activation is used when the extension port is empty.
-    uint8_t mode = 0x04;
+    // plain activation is used when the extension port is empty. Per
+    // WiiBrew (see MotionPlusInit's comment in WiimoteProtocol.h),
+    // standalone activation is byte 0x55, not 0x04 - 0x04 is not a
+    // documented activation value at all, so writing it left the hardware
+    // never actually activated (the write still "succeeds" at the HID
+    // level, which is why this went unnoticed: m_MotionPlusActive got set
+    // true, but ee[5] bit 1 never came back set, so motion_plus data
+    // silently stayed zeroed whenever no passthrough extension was
+    // attached).
+    uint8_t mode = 0x55;
     uint32_t reg = Registers::MotionPlusInit;
     if (m_Snapshot.extension == ExtensionType::Nunchuk) {
         mode = 0x05;
@@ -544,7 +556,7 @@ void WiimoteDevice::SetPlayerLED(int player_1to4) {
 
 void WiimoteDevice::SetLEDMask(uint8_t mask4bits) {
     uint8_t p[1] = {mask4bits};
-    SendReport(m_Dev, OutReport::LEDs, m_RumbleBit, p, 1);
+    SendReport(m_Transport.get(), OutReport::LEDs, m_RumbleBit, p, 1);
     m_Snapshot.led_mask = mask4bits;
 }
 
@@ -628,13 +640,13 @@ void WiimoteDevice::UpdateRumblePWM() {
     // Any report re-asserts the rumble bit; a dedicated Rumble (0x10) report
     // with an otherwise-empty payload is the lightest way to do that on demand.
     uint8_t p[1] = {0x00};
-    SendReport(m_Dev, OutReport::Rumble, m_RumbleBit, p, 1);
+    SendReport(m_Transport.get(), OutReport::Rumble, m_RumbleBit, p, 1);
 }
 
 // -- Speaker ---------------------------------------------------------------
 
 bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume, SpeakerAudioFormat format) {
-    if (!m_Dev) return false;
+    if (!m_Transport) return false;
     if (sample_rate_hz == 0) sample_rate_hz = 2000;
 
     // ADPCM4's hardware volume register only goes to 0x40 (WiiBrew's
@@ -665,10 +677,10 @@ bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume, Speak
     bool ok = true;
 
     uint8_t enable = 0x04;
-    ok &= SendReport(m_Dev, OutReport::SpeakerEnable, m_RumbleBit, &enable, 1);
+    ok &= SendReport(m_Transport.get(), OutReport::SpeakerEnable, m_RumbleBit, &enable, 1);
 
     uint8_t mute = 0x04;
-    ok &= SendReport(m_Dev, OutReport::SpeakerMute, m_RumbleBit, &mute, 1);
+    ok &= SendReport(m_Transport.get(), OutReport::SpeakerMute, m_RumbleBit, &mute, 1);
 
     uint8_t v01 = 0x01;
     ok &= WriteRegister(Registers::SpeakerInitFlag, &v01, 1);
@@ -698,7 +710,7 @@ bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume, Speak
     ok &= WriteRegister(Registers::SpeakerCommitFlag, &v01b, 1);
 
     uint8_t unmute = 0x00;
-    ok &= SendReport(m_Dev, OutReport::SpeakerMute, m_RumbleBit, &unmute, 1);
+    ok &= SendReport(m_Transport.get(), OutReport::SpeakerMute, m_RumbleBit, &unmute, 1);
 
     m_SpeakerEnabled = ok;
     m_SpeakerSampleRateHz = sample_rate_hz;
@@ -734,9 +746,9 @@ bool WiimoteDevice::EnableSpeaker(uint32_t sample_rate_hz, uint8_t volume, Speak
 }
 
 void WiimoteDevice::DisableSpeaker() {
-    if (m_Dev) {
+    if (m_Transport) {
         uint8_t off = 0x00;
-        SendReport(m_Dev, OutReport::SpeakerEnable, m_RumbleBit, &off, 1);
+        SendReport(m_Transport.get(), OutReport::SpeakerEnable, m_RumbleBit, &off, 1);
     }
     m_SpeakerEnabled = false;
     m_SpeakerSampleRateHz = 0;
@@ -857,7 +869,7 @@ void WiimoteDevice::StopSpeaker() {
 }
 
 void WiimoteDevice::TickSpeaker() {
-    if (!m_SpeakerEnabled || !m_Dev) return;
+    if (!m_SpeakerEnabled || !m_Transport) return;
 
     // Treat volume 0 as "play nothing" rather than trusting the hardware
     // gain register (VV) to produce true silence at its documented
@@ -907,7 +919,7 @@ void WiimoteDevice::TickSpeaker() {
         uint8_t p[1 + kSpeakerMaxChunkBytes] = {};
         p[0] = uint8_t(n << 3); // LL: length, shifted left 3 bits (WiiBrew)
         std::memcpy(p + 1, m_SpeakerQueue.data() + m_SpeakerQueuePos, n);
-        SendReport(m_Dev, OutReport::SpeakerData, m_RumbleBit, p, sizeof(p));
+        SendReport(m_Transport.get(), OutReport::SpeakerData, m_RumbleBit, p, sizeof(p));
 
         m_SpeakerQueuePos += n;
         // Schedule from where the PREVIOUS chunk was due, not from `now` -
@@ -931,7 +943,7 @@ void WiimoteDevice::TickSpeaker() {
 // -- Register read/write (synchronous, bounded wait) ---------------------
 
 bool WiimoteDevice::WriteRegister(uint32_t address, const uint8_t *data, uint8_t size) {
-    if (!m_Dev || size > 16) return false;
+    if (!m_Transport || size > 16) return false;
     uint8_t p[21] = {};
     p[0] = kRegisterFlag; // select control-register space, not EEPROM
     p[1] = uint8_t((address >> 16) & 0xFF);
@@ -939,11 +951,11 @@ bool WiimoteDevice::WriteRegister(uint32_t address, const uint8_t *data, uint8_t
     p[3] = uint8_t(address & 0xFF);
     p[4] = size;
     if (data && size) std::memcpy(p + 5, data, size);
-    return SendReport(m_Dev, OutReport::WriteMemory, m_RumbleBit, p, sizeof(p));
+    return SendReport(m_Transport.get(), OutReport::WriteMemory, m_RumbleBit, p, sizeof(p));
 }
 
 bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) {
-    if (!m_Dev || !out) return false;
+    if (!m_Transport || !out) return false;
 
     uint16_t remaining = size;
     uint32_t addr = address;
@@ -959,7 +971,7 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
         p[3] = uint8_t(addr & 0xFF);
         p[4] = uint8_t((chunk >> 8) & 0xFF);
         p[5] = uint8_t(chunk & 0xFF);
-        if (!SendReport(m_Dev, OutReport::ReadMemory, m_RumbleBit, p, sizeof(p)))
+        if (!SendReport(m_Transport.get(), OutReport::ReadMemory, m_RumbleBit, p, sizeof(p)))
             return false;
 
         // Poll for the 0x21 reply. Regular data reports that arrive while
@@ -974,10 +986,10 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
         bool got = false;
         while (SDL_GetTicks() < deadline) {
             uint8_t buf[kReportBufSize] = {};
-            const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));
+            const int n = m_Transport->Read(buf, sizeof(buf));
             if (n <= 0) {
                 // Same unthrottled-busy-spin hazard as VerifyIRCameraEnabled()'s
-                // wait loop - see its comment. m_Dev is non-blocking, so
+                // wait loop - see its comment. The transport is non-blocking, so
                 // without this sleep a failed read returns instantly and
                 // this loop would call SDL_hid_read() as fast as the CPU
                 // allows for up to kRegisterReadTimeoutMs, which on Linux/
@@ -1017,7 +1029,7 @@ bool WiimoteDevice::ReadRegister(uint32_t address, uint16_t size, uint8_t *out) 
 // -- Input report handling -----------------------------------------------
 
 void WiimoteDevice::Poll() {
-    if (!m_Dev) return;
+    if (!m_Transport) return;
 
     // Keep the rumble PWM's on/off line current every tick, independent of
     // whether any input reports arrived this frame - it has its own timing
@@ -1029,7 +1041,7 @@ void WiimoteDevice::Poll() {
 
     uint8_t buf[kReportBufSize];
     for (;;) {
-        const int n = SDL_hid_read(m_Dev, buf, sizeof(buf));
+        const int n = m_Transport->Read(buf, sizeof(buf));
         if (n <= 0) break; // no more pending reports (non-blocking handle)
         HandleReport(buf, n);
     }
@@ -1100,14 +1112,18 @@ void WiimoteDevice::HandleStatusReport(const uint8_t *buf) {
     const bool ext_connected = lf & 0x02;
     const bool changed = (ext_connected != m_ExtensionPortConnected);
     m_ExtensionPortConnected = ext_connected;
-    if (changed) {
+    // Once a Motion Plus is present, this bit is documented-flaky and no
+    // longer drives re-detection - see m_MotionPlusExtConnected's comment.
+    // DecodeCoreAccelIR10Ext6() watches the Motion Plus's own
+    // extension_connected bit instead for that case.
+    if (changed && !m_MotionPlusPresent) {
         HandleExtensionChanged();
     }
 
     // Per WiiBrew: after ANY status report (requested or unsolicited), the
     // reporting mode must be re-sent or no further data reports will arrive.
     uint8_t p[2] = {0x04, PreferredReportMode()};
-    SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+    SendReport(m_Transport.get(), OutReport::DataReportMode, m_RumbleBit, p, 2);
 }
 
 void WiimoteDevice::HandleExtensionChanged() {
@@ -1124,6 +1140,7 @@ void WiimoteDevice::HandleExtensionChanged() {
     m_BalanceCal.reset();
     m_MotionPlusPresent = false;
     m_MotionPlusActive = false;
+    m_MotionPlusExtConnected = -1; // baseline unknown again until the next MP report
 }
 
 void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
@@ -1151,6 +1168,18 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
         m_Snapshot.motion_plus.is_classic_passthrough =
             (m_Snapshot.extension == ExtensionType::ClassicController ||
              m_Snapshot.extension == ExtensionType::ClassicControllerPro);
+
+        // Authoritative "did the passthrough device change" signal while a
+        // Motion Plus is present - see m_MotionPlusExtConnected's comment
+        // in the header for why the status report's own extension bit is
+        // no longer used for this once we get here. First reading after
+        // (re)activation just records the baseline rather than firing a
+        // spurious re-detect.
+        const int8_t now = m_Snapshot.motion_plus.extension_connected ? 1 : 0;
+        if (m_MotionPlusExtConnected != -1 && now != m_MotionPlusExtConnected) {
+            HandleExtensionChanged();
+        }
+        m_MotionPlusExtConnected = now;
         return;
     }
 
@@ -1328,7 +1357,7 @@ bool WiimoteDevice::SetIRExtendedMode(bool enabled) {
     // change, mirroring what HandleStatusReport()/TickIRWatchdog() already
     // do for other report-mode transitions.
     uint8_t p[2] = {0x04, PreferredReportMode()};
-    ok &= SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+    ok &= SendReport(m_Transport.get(), OutReport::DataReportMode, m_RumbleBit, p, 2);
 
     if (!ok) {
         LOG_WARN(kTag, "SetIRExtendedMode(%s) had a write failure for %s - "
@@ -1494,7 +1523,7 @@ void WiimoteDevice::TickIRWatchdog() {
     m_LastIRReassertAtMs = now;
 
     uint8_t p[2] = {0x04, PreferredReportMode()};
-    SendReport(m_Dev, OutReport::DataReportMode, m_RumbleBit, p, 2);
+    SendReport(m_Transport.get(), OutReport::DataReportMode, m_RumbleBit, p, 2);
 }
 
 } // namespace InputBridge::Wiimote

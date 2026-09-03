@@ -14,7 +14,6 @@
 #include "UI/DevicePanel.h"
 #include "UI/IconsFontAwesome6.h"
 #include "UI/SettingsPanel.h"
-#include "UI/WiimotePairingWindow.h"
 
 #include <string>
 #include <vector>
@@ -277,12 +276,6 @@ void DrawSidebarLayout(SidebarContext& ctx)
                       ImGuiChildFlags_None,
                       ImGuiWindowFlags_None);
 
-    // Drawn unconditionally (not nested in the "Devices" case below) so the
-    // modal keeps pumping/rendering even if the sidebar section is switched
-    // away from Devices while it's open - see WiimotePairingWindow::Draw()'s
-    // comment on why it must run every frame while open.
-    WiimotePairingWindow::Draw();
-
     switch (g_ActiveSection) {
 
         case 0: { // -- Devices ---------------------------------------------
@@ -316,10 +309,6 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
             auto& devices = ctx.deviceManager.GetDevices();
             ImGui::Text("Connected Devices: %d", static_cast<int>(devices.size()));
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Pair Wiimote...")) {
-                WiimotePairingWindow::Open();
-            }
 
             // Update gamepads' LED colour based on cached battery info once per second
             // (every ~60 frames at 60 fps).
