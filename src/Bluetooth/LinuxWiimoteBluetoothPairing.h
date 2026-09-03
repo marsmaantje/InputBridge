@@ -27,7 +27,7 @@ namespace InputBridge::Bluetooth {
 //   org.bluez.Agent1          - implemented *by us* at object path
 //                               /org/inputbridge/agent, registered with
 //                               capability "NoInputNoOutput" to match a
-//                               Wiimote's Just Works pairing (see
+//                               Wiimote's legacy PIN pairing (see
 //                               WiimoteBluetoothPairing.h's header comment)
 //
 // Threading model: opens its own private D-Bus connection and does all
@@ -55,6 +55,7 @@ public:
     bool IsDiscovering() const override;
 
     void PairDevice(const std::string &address, WiimotePairing::PairCallback on_done) override;
+    void ConnectDevice(const std::string &address, WiimotePairing::PairCallback on_done) override;
 
     void Pump() override;
 
@@ -65,8 +66,9 @@ private:
     DBusHandlerResult HandleMessage(DBusMessage *msg);
 
     // Agent1 method calls arrive here (see comment on class re: capability).
-    // All of these auto-accept, since a real Wiimote never needs anything
-    // but Just Works - see WiimoteBluetoothPairing.h.
+    // Confirmation/authorization methods auto-accept; RequestPinCode always
+    // declines (can't be answered safely over D-Bus - see this class's .cpp
+    // and WiimoteBluetoothPairing.h for why).
     void HandleAgentMethodCall(DBusMessage *msg);
 
     void HandleInterfacesAdded(DBusMessage *msg);
@@ -105,10 +107,16 @@ private:
     // on_device again when something actually changed.
     std::map<std::string, DiscoveredDevice> m_KnownDevices;
 
-    // Outstanding pairing attempt, if any (only one at a time).
+    // Outstanding pairing/connect attempt, if any (only one at a time -
+    // PairDevice() and ConnectDevice() share this same slot).
     std::string m_PairingObjectPath;
     WiimotePairing::PairCallback m_OnPairDone;
     DBusPendingCall *m_PairPending = nullptr;
+    // True if the outstanding attempt is a ConnectDevice() (Device1.Connect,
+    // no bond) rather than a PairDevice() (Device1.Pair, permanent bond) -
+    // read by HandlePairReply() to pick the right success/error handling
+    // for each. See ConnectDevice()'s comment.
+    bool m_ConnectOnly = false;
 
     // Cross-thread event queue drained by Pump() on the caller's thread.
     // Each event carries its own copy of the callback to invoke rather

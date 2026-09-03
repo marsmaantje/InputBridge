@@ -104,6 +104,72 @@ test binary without pulling in real HID I/O.)
   without hardware - e.g. a thin interface wrapping `SDL_hid_write`/
   `SDL_hid_read` that a test can substitute with canned byte sequences).
 
+## Bluetooth pairing
+
+`src/Bluetooth/WiimoteBluetoothPairing.h` + one platform backend per OS
+(`Linux/Windows/MacOSWiimoteBluetoothPairing.*`) let InputBridge discover
+and pair a Wiimote itself - press sync, click Scan, click Pair - instead of
+requiring the person to go pair it via the OS's own Bluetooth settings
+first. It's a separate concern from everything else in this directory:
+once a Wiimote is paired (by this module or the old manual way), it's
+indistinguishable to `WiimoteManager::Scan()`, which only ever enumerates
+already-paired HID devices and doesn't know or care how they got paired.
+
+The UI entry point is `src/UI/WiimotePairingWindow.*` ("Pair Wiimote..."
+button in the Devices sidebar section). See `WiimoteBluetoothPairing.h`'s
+header comment for the SYNC-vs-1+2 / legacy-PIN background a caller needs,
+and each platform backend's own header for that platform's specific
+mechanism and caveats.
+
+**Use the SYNC button, not 1+2, for a permanent pairing.** Confirmed
+against real hardware: an original Wii Remote (RVL-CNT-01) only saves a
+persistent pairing when synced via the red SYNC button. 1+2 puts it in a
+temporary/"guest" mode that the Wiimote itself won't bond for regardless
+of what this module does - that's the controller's own designed behavior
+(see WiiBrew), not a bug here. The dialog now offers two distinct buttons
+per device to match: **Pair** (permanent, for SYNC) and **Connect**
+(session-only, for 1+2 - calls `Device1.Connect()` directly instead of
+`Device1.Pair()`, implemented on Linux only so far). Even a successful
+**Connect** may still not work as an actual input device: since BlueZ
+5.66, `ClassicBondedOnly` in `/etc/bluetooth/input.conf` defaults to
+`true` (a deliberate fix for CVE-2023-45866, a Bluetooth HID-injection
+vulnerability), meaning BlueZ's HID profile refuses unbonded input devices
+by design. This module does not flip that setting for you - it's a
+real, system-wide security tradeoff the person needs to make
+knowingly, not something to silently change out from under them. See
+`LinuxWiimoteBluetoothPairing.cpp`'s `HandlePairReply()` for where this
+surfaces to the person if it happens.
+
+This also means original Wiimotes don't support Secure Simple Pairing at
+all (contrary to what an earlier version of this module assumed) and need
+legacy PIN pairing for the SYNC/**Pair** path - on Linux that mostly works
+only if the system's BlueZ was built with its optional `wiimote` plugin
+enabled, since the PIN it needs can't be supplied correctly through
+BlueZ's D-Bus Agent API (see `LinuxWiimoteBluetoothPairing.cpp`'s
+`HandleAgentMethodCall` for the full story, including a crash that shipped
+and was fixed here).
+
+Building it needs, per platform:
+- **Linux**: `libdbus-1-dev` (Debian/Ubuntu) / `dbus-devel` (Fedora) at
+  build time, and `bluetoothd` (BlueZ) reachable on the system bus at
+  runtime - both essentially universal on desktop Linux already, since
+  they're what every other Bluetooth-pairing UI (GNOME/KDE settings,
+  `bluetoothctl`) also depends on. `CMakeLists.txt` checks for the dev
+  package via pkg-config and cleanly falls back to the dummy backend
+  (dialog reports "not available") if it's missing, rather than failing
+  the whole build.
+- **Windows**: a Windows SDK new enough to ship the prebuilt `<winrt/...>`
+  headers for `Windows.Devices.Enumeration`/`.Bluetooth` (10.0.17134+ in
+  practice); links `windowsapp.lib`/`runtimeobject.lib`.
+- **macOS**: the `IOBluetooth` framework (part of the standard macOS SDK);
+  add `NSBluetoothAlwaysUsageDescription` to the app bundle's Info.plist
+  or the permission prompt IOBluetooth needs won't appear and discovery
+  will silently find nothing - see `MacOSWiimoteBluetoothPairing.h`.
+
+Set `-DENABLE_WIIMOTE_BLUETOOTH_PAIRING=OFF` to drop the whole feature
+(dummy backend everywhere, dialog reports "not available") - mirrors the
+existing `ENABLE_EXCLUSIVE_INPUT`/`ENABLE_WEBSOCKETS` option pattern.
+
 ## IR camera doesn't work while Steam is running
 
 This is a known, well-documented conflict between Steam Input and Wiimotes,

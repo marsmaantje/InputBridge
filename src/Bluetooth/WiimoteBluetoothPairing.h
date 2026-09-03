@@ -9,28 +9,6 @@
 // yourself first" step, it doesn't change how Wiimotes are driven
 // afterwards.
 //
-// Background a caller needs to know to build a sane UI around this:
-//
-//   - Wiimotes only support Bluetooth Classic (BR/EDR), never BLE. A
-//     Wiimote must be put into discoverable/pairing mode first: hold the
-//     red SYNC button under the battery cover for ~1 second (original/Plus
-//     remotes with a sync button), or hold buttons 1+2 together (remotes
-//     without one). This makes it discoverable/connectable for ~20 seconds,
-//     which is why StartDiscovery() below runs on roughly that timescale -
-//     tell the user to press sync *before* they hit "Scan", not after.
-//   - Pairing itself needs no PIN entry and no user confirmation on a
-//     display, because Wiimotes use Secure Simple Pairing's "Just Works"
-//     association model (no display, no keyboard on the remote side). Each
-//     platform backend registers accordingly (BlueZ agent capability
-//     "NoInputNoOutput", WinRT ConfirmOnly custom pairing, etc.) so no
-//     backend should ever need to show the person a passkey/PIN prompt for
-//     a genuine Wiimote. If a backend ever surfaces one, something's
-//     talking to a different kind of device.
-//   - This is entirely separate from OS-level Bluetooth-off/no-adapter/
-//     permission-denied states, which IsAvailable() below folds into a
-//     single false rather than trying to distinguish them for the caller -
-//     PairResult::NotAvailable from PairDevice() carries a human-readable
-//     `detail` string with the specifics when that happens instead.
 #pragma once
 
 #include <functional>
@@ -132,7 +110,36 @@ public:
     // the device previously reported via `on_device` with this `address`.
     // Asynchronous - result arrives through `on_done`, delivered from
     // Pump(). Safe to call while a discovery scan is still running.
+    //
+    // This is specifically for a SYNC-button-discovered device - see the
+    // header comment above for why a 1+2-discovered device should go
+    // through ConnectDevice() below instead, not this.
     void PairDevice(const std::string &address, PairCallback on_done);
+
+    // Connects to a 1+2-discovered device for the current session only,
+    // WITHOUT requesting a permanent OS-level bond - see the header
+    // comment above for why PairDevice()/a permanent bond doesn't work for
+    // a 1+2-discovered Wiimote (the controller itself refuses to store
+    // one). The connection doesn't survive a reboot or this process
+    // restarting; the person will need to hold 1+2 again next time.
+    //
+    // Important limitation this can't work around: on Linux, BlueZ's own
+    // HID input profile has required the *device* to already be bonded by
+    // default since BlueZ 5.66 (`ClassicBondedOnly=true` in
+    // /etc/bluetooth/input.conf) - a deliberate security fix for
+    // CVE-2023-45866 (a nearby attacker could otherwise inject a fake
+    // Bluetooth keyboard/mouse). That means even a successful
+    // ConnectDevice() may still not be usable as actual input unless the
+    // person has explicitly opted into `ClassicBondedOnly=false` on their
+    // system - this module deliberately does not flip that setting itself
+    // (it's a system-wide security tradeoff, not something to change out
+    // from under someone silently) and PairResult::Success here only
+    // reflects that the Bluetooth-level connection succeeded, not that the
+    // HID profile will accept it. See LinuxWiimoteBluetoothPairing.cpp's
+    // ConnectDevice() for the full explanation to surface to the person if
+    // this doesn't end up working end-to-end. Not implemented on every
+    // platform - see each backend header.
+    void ConnectDevice(const std::string &address, PairCallback on_done);
 
     // Must be called regularly (e.g. once per frame from the UI thread)
     // for as long as a scan or pairing attempt is outstanding. Every

@@ -25,6 +25,17 @@ public:
 
     virtual void PairDevice(const std::string &address, WiimotePairing::PairCallback on_done) = 0;
 
+    // See WiimoteBluetoothPairing.h's ConnectDevice() comment. Pure
+    // virtual, not defaulted - every backend must still deliver its result
+    // via that backend's own queue/Pump() plumbing like every other
+    // callback, even backends that don't have a real implementation and
+    // just want to report PairResult::NotAvailable; a same-call-stack,
+    // synchronous invocation of on_done() here would violate Pump()'s
+    // "callbacks only ever arrive from Pump()" contract and risk
+    // reentrancy bugs in whatever UI code called ConnectDevice() (e.g.
+    // mutating a container the caller is still iterating over).
+    virtual void ConnectDevice(const std::string &address, WiimotePairing::PairCallback on_done) = 0;
+
     // Default no-op is fine for backends that deliver callbacks
     // synchronously from within their own OS-driven callback as long as
     // that callback already happens to land on the caller's thread; every
