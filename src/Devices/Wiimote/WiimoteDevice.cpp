@@ -436,15 +436,14 @@ bool WiimoteDevice::ActivateMotionPlus() {
     // the regular extension port: passthrough keeps that device's data
     // flowing (re-encoded by the MotionPlus) alongside the new gyro bytes;
     // plain activation is used when the extension port is empty. Per
-    // WiiBrew (see MotionPlusInit's comment in WiimoteProtocol.h),
-    // standalone activation is byte 0x55, not 0x04 - 0x04 is not a
-    // documented activation value at all, so writing it left the hardware
-    // never actually activated (the write still "succeeds" at the HID
-    // level, which is why this went unnoticed: m_MotionPlusActive got set
-    // true, but ee[5] bit 1 never came back set, so motion_plus data
-    // silently stayed zeroed whenever no passthrough extension was
-    // attached).
-    uint8_t mode = 0x55;
+    // WiiBrew ("Wii Motion Plus" page), standalone activation is byte 0x04
+    // written to 0xA600FE - 0x55 is unrelated (it's the "new way" extension
+    // init byte written to 0xA400F0, which actually *deactivates* the
+    // MotionPlus). Writing 0x55 here still "succeeds" at the HID level, so
+    // m_MotionPlusActive would get set true, but ee[5] bit 1 never comes
+    // back set, so motion_plus data silently stays zeroed whenever no
+    // passthrough extension is attached.
+    uint8_t mode = 0x04;
     uint32_t reg = Registers::MotionPlusInit;
     if (m_Snapshot.extension == ExtensionType::Nunchuk) {
         mode = 0x05;

@@ -101,7 +101,7 @@ namespace Registers {
     // All three activation modes are writes to the *same* register, 0xA600FE -
     // they only differ in the byte written. (0xA600F0 is a different, unrelated
     // register - writing there does not activate the Motion Plus.)
-    constexpr uint32_t MotionPlusInit    = 0xA600FE; // write 0x55 (activate, "standalone" mode)
+    constexpr uint32_t MotionPlusInit    = 0xA600FE; // write 0x04 (activate, "standalone" mode)
     constexpr uint32_t MotionPlusInitNunchukPass  = 0xA600FE; // write 0x05 (activate w/ Nunchuk passthrough)
     constexpr uint32_t MotionPlusInitClassicPass  = 0xA600FE; // write 0x07 (activate w/ Classic passthrough)
     constexpr uint32_t IRCameraBase      = 0xB00000; // - 0xB00033
@@ -205,18 +205,20 @@ inline ExtensionType ClassifyExtension(const ExtensionId6 &id) {
 }
 
 // Which passthrough mode a detected MotionPlus ID indicates, per WiiBrew's
-// "Wii Motion Plus#Identifying" table. Only meaningful when
-// ClassifyExtension() above returned ExtensionType::MotionPlus.
+// "Wii Motion Plus" page (0x0405 = activated standalone, 0x0505 = Nunchuk
+// passthrough, 0x0705 = Classic Controller passthrough; 0x0005 is the
+// inactive/not-yet-activated state). Only meaningful when ClassifyExtension()
+// above returned ExtensionType::MotionPlus.
 enum class MotionPlusPassthrough { None, Nunchuk, Classic, Unknown };
 
 inline MotionPlusPassthrough ClassifyMotionPlusPassthrough(const ExtensionId6 &id) {
     const auto &b = id.bytes;
     const uint16_t typ = (uint16_t(b[4]) << 8) | b[5];
     switch (typ) {
-        case 0x0005: return MotionPlusPassthrough::None;
-        case 0x0405: return MotionPlusPassthrough::Nunchuk;
-        case 0x0505: return MotionPlusPassthrough::Classic;
-        default:     return MotionPlusPassthrough::Unknown;
+        case 0x0405: return MotionPlusPassthrough::None;    // activated, standalone
+        case 0x0505: return MotionPlusPassthrough::Nunchuk;
+        case 0x0705: return MotionPlusPassthrough::Classic;
+        default:     return MotionPlusPassthrough::Unknown; // includes 0x0005 (inactive)
     }
 }
 

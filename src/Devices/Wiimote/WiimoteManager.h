@@ -38,8 +38,30 @@ public:
     // SDL_EVENT_JOYSTICK_ADDED for a device SDL itself doesn't recognize as
     // something else (or periodically, e.g. every few seconds, to catch
     // devices paired while the app is running).
+    //
+    // `try_linux_l2cap`: Linux only, ignored elsewhere. When true, Scan()
+    // makes one passive attempt per newly-found device to connect a direct
+    // Bluetooth L2CAP transport instead of the shared hidraw one (see
+    // Linux/WiimoteL2CAPTransport.h) before falling back to hidraw as
+    // usual. Defaults to false and should stay false unless the person
+    // has explicitly opted in.
+    //
+    // This is NOT a "safe to just try" toggle - even a REFUSED connect()
+    // attempt sends real L2CAP signaling traffic to the remote device over
+    // its existing Bluetooth ACL link, and at least some third-party
+    // Wiimote Bluetooth chips have been observed dropping IR data (the
+    // same class of symptom as Steam Input interference - see
+    // TickIRWatchdog's "may have changed this Wiimote's report mode"
+    // message) purely from receiving that unexpected request, with no
+    // successful connection or explicit disconnect ever taking place. An
+    // earlier version of this feature also auto-disconnected the OS's own
+    // HID connection on failure, which was worse (see git history) - that
+    // is gone entirely now, but even the passive attempt this flag guards
+    // is not risk-free and must be something the person turns on
+    // knowingly, per device, not a background default.
     static std::vector<std::unique_ptr<WiimoteDevice>> Scan(
-        const std::vector<std::string> &already_open_paths = {});
+        const std::vector<std::string> &already_open_paths = {},
+        bool try_linux_l2cap = false);
 
     // Convenience: true if `name`/`product_string` looks like a Wiimote
     // product SDL might otherwise also try to claim as a generic gamepad.

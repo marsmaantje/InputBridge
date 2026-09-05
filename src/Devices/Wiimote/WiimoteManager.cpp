@@ -176,7 +176,7 @@ std::unique_ptr<WiimoteL2CAPTransport> TryOpenLinuxL2CAPTransport(const std::str
 } // namespace
 
 std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
-    const std::vector<std::string> &already_open_paths) {
+    const std::vector<std::string> &already_open_paths, bool try_linux_l2cap) {
     std::vector<std::unique_ptr<WiimoteDevice>> out;
 
     SDL_hid_device_info *devs = SDL_hid_enumerate(kVendorNintendo, 0);
@@ -238,15 +238,20 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
         // comment for the bug this avoids).
         std::unique_ptr<IWiimoteTransport> transport;
 #if defined(__linux__)
-        // Prefer a direct L2CAP transport over the shared hidraw one when
-        // we can get one - see TryOpenLinuxL2CAPTransport()'s comment.
+        // Off by default - see try_linux_l2cap's doc comment in
+        // WiimoteManager.h for why even a passive/failed connect attempt
+        // isn't risk-free for some Wiimote Bluetooth chips. Only attempt
+        // this when the caller has explicitly opted in.
+        //
         // `hdev` (already open) becomes redundant the moment this
         // succeeds, since every subsequent read/write goes through the
         // new transport instead - close it rather than leaking the
         // hidraw handle for the lifetime of the Wiimote.
-        if (auto l2cap = TryOpenLinuxL2CAPTransport(path)) {
-            transport = std::move(l2cap);
-            SDL_hid_close(hdev);
+        if (try_linux_l2cap) {
+            if (auto l2cap = TryOpenLinuxL2CAPTransport(path)) {
+                transport = std::move(l2cap);
+                SDL_hid_close(hdev);
+            }
         }
 #endif
         if (!transport) transport = std::make_unique<WiimoteHidTransport>(hdev);
