@@ -54,12 +54,10 @@ RawBdaddr ToRawBdaddr(const std::array<uint8_t, 6> &human_order) {
 }
 
 // Opens one L2CAP channel to `bdaddr` on `psm`, blocking with a bounded
-// timeout for the connect() to complete (Wiimotes over Bluetooth
-// classic - connect latency is dominated by the radio link, not CPU, so a
-// few seconds is a reasonable bound rather than blocking forever on a
-// remote that's been turned off mid-attempt). Returns -1 on any failure,
-// having already closed the fd itself - callers never need to clean up a
-// partial failure.
+// timeout (connect latency over Bluetooth classic is radio-bound, so a few
+// seconds is reasonable rather than blocking forever on a dead remote).
+// Returns -1 on any failure, having already closed the fd - no cleanup
+// needed by the caller.
 int OpenL2CAPChannel(const std::array<uint8_t, 6> &bdaddr, uint16_t psm) {
     const int fd = ::socket(AF_BLUETOOTH, SOCK_SEQPACKET, kBtProtoL2CAP);
     if (fd < 0) {
@@ -67,10 +65,9 @@ int OpenL2CAPChannel(const std::array<uint8_t, 6> &bdaddr, uint16_t psm) {
         return -1;
     }
 
-    // Bind to the local adapter's "any" address with PSM 0 so the kernel
-    // picks whichever local HCI route can reach `bdaddr` and auto-assigns
-    // a local PSM - the same thing BlueZ's own bind-before-connect
-    // convention does for L2CAP client sockets.
+    // Bind "any" local address with PSM 0 so the kernel picks the local
+    // HCI route and auto-assigns a local PSM - same convention BlueZ
+    // itself uses for L2CAP client sockets.
     SockaddrL2 local{};
     local.l2_family = AF_BLUETOOTH;
     local.l2_psm = 0;
@@ -81,10 +78,8 @@ int OpenL2CAPChannel(const std::array<uint8_t, 6> &bdaddr, uint16_t psm) {
         return -1;
     }
 
-    // Non-blocking connect + poll-with-timeout, rather than a plain
-    // blocking connect(), so a Wiimote that's gone silent mid-attempt
-    // can't hang WiimoteManager::Scan() (called from the main thread)
-    // indefinitely.
+    // Non-blocking connect + poll-with-timeout so a silent Wiimote can't
+    // hang WiimoteManager::Scan() (called from the main thread).
     const int flags = ::fcntl(fd, F_GETFL, 0);
     ::fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
