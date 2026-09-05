@@ -2,6 +2,8 @@
 #include "WiimoteVirtualBridge.h"
 #include "App/Log.h"
 #include <algorithm>
+#include <cstring>
+#include <optional>
 
 namespace InputBridge::Wiimote {
 
@@ -228,6 +230,28 @@ void WiimoteVirtualBridge::Detach(Entry &entry) {
     SDL_DetachVirtualJoystick(entry.joystick_id);
 }
 
+namespace {
+// Reads the *actual* name SDL attached the virtual joystick under, rather
+// than trusting Entry::is_balance_board (which is only ever set by Attach()
+// itself, so comparing a cached copy of it against the value that produced
+// it can never disagree). This is the same identity InputLabelProvider
+// keys off of to know which axis/button name table to use for an
+// already-created SDL device - if that ever drifted from Entry's cached
+// bool, InputLabelProvider's labels would be wrong for reasons this class
+// couldn't see. Querying SDL directly keeps this check honest against the
+// live device instead of another copy of our own state.
+//
+// Returns std::nullopt if the joystick's name can't be read at all (null
+// joystick pointer, or SDL_GetJoystickName() itself returning null) - the
+// caller falls back to Entry::is_balance_board in that case rather than
+// treating an inconclusive read as "not a balance board".
+std::optional<bool> AttachedAsBalanceBoard(SDL_Joystick *joystick) {
+    const char *name = joystick ? SDL_GetJoystickName(joystick) : nullptr;
+    if (!name) return std::nullopt;
+    return std::strcmp(name, kBalanceBoardBridgeDeviceName) == 0;
+}
+} // namespace
+
 void WiimoteVirtualBridge::Sync(const std::vector<std::unique_ptr<WiimoteDevice>> &wiimotes) {
     for (auto &dev : wiimotes) {
         const std::string &path = dev->Snapshot().hid_path;
@@ -246,12 +270,22 @@ void WiimoteVirtualBridge::Sync(const std::vector<std::unique_ptr<WiimoteDevice>
         // regular Wii Remote. Once the snapshot's flag flips, re-attach so
         // the virtual device gets the right axis/button layout and name
         // too instead of staying wrong for the rest of the connection.
-        if (existing->is_balance_board != dev->Snapshot().is_balance_board) {
+        //
+        // Compare against the *actual* SDL joystick name (the same
+        // identity InputLabelProvider keys off of) rather than the cached
+        // Entry::is_balance_board bool alone - that bool is only ever set
+        // by Attach() from this same snapshot flag, so checking it here
+        // would just compare a value against a copy of itself and could
+        // never catch drift between the live SDL device and what we think
+        // we attached. Fall back to the cached bool only if the name can't
+        // be read at all.
+        const bool attached_as_balance = AttachedAsBalanceBoard(existing->joystick).value_or(existing->is_balance_board);
+        if (attached_as_balance != dev->Snapshot().is_balance_board) {
             LOG_INFO(kTag, "Wiimote '%s' balance-board classification changed "
                       "(%s -> %s) after the virtual joystick was already "
                       "created - re-attaching with the correct device type",
                       path.c_str(),
-                      existing->is_balance_board ? "balance board" : "wiimote",
+                      attached_as_balance ? "balance board" : "wiimote",
                       dev->Snapshot().is_balance_board ? "balance board" : "wiimote");
             Detach(*existing);
             m_Entries.erase(std::remove_if(m_Entries.begin(), m_Entries.end(),
