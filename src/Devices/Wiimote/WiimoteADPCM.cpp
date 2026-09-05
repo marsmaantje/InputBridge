@@ -6,11 +6,9 @@ namespace InputBridge::Wiimote {
 
 namespace {
 
-// ffmpeg libavcodec/adpcm.c's yamaha_indexscale[]/yamaha_difflookup[] - see
-// WiimoteADPCM.h's class comment for why this specific table applies here.
-// Index is the full 4-bit code (sign bit 0x8 | 3-bit magnitude 0x0-0x7);
-// both halves of each table are identical because the sign bit doesn't
-// affect the step-size update, only the direction of the predictor delta.
+// ffmpeg's yamaha_indexscale[]/yamaha_difflookup[] (see WiimoteADPCM.h).
+// Indexed by the full 4-bit code (sign 0x8 | 3-bit magnitude); both halves
+// match since the sign bit only affects delta direction, not step size.
 constexpr int kIndexScale[16] = {
     230, 230, 230, 230, 307, 409, 512, 614,
     230, 230, 230, 230, 307, 409, 512, 614,
@@ -47,16 +45,12 @@ void YamahaAdpcm4Encoder::EncodeSample(int16_t sample, std::vector<uint8_t> &out
     int32_t delta = int32_t(sample) - m_Predictor;
     uint8_t nibble = delta < 0 ? 0x8 : 0x0;
     if (nibble) delta = -delta;
-    // 3-bit magnitude: how many step-sizes (quartered) the delta spans,
-    // capped at 7 - this IS the lossy part of the codec (a delta bigger
-    // than 7 quarter-steps just clips to the loudest code available at
-    // the current step size, same as any ADPCM's fundamental slope-
-    // overload limitation).
+    // 3-bit magnitude: quarter-steps the delta spans, capped at 7 (this
+    // cap is the codec's lossy part - standard ADPCM slope overload).
     nibble = uint8_t(nibble | std::min(7, (delta * 4) / m_Step));
 
-    // Update predictor/step from the CODE actually emitted (not the raw
-    // delta) - this is what keeps the encoder in lockstep with a decoder
-    // that only ever sees the 4-bit codes, never the original sample.
+    // Update from the emitted CODE, not the raw delta, to stay in lockstep
+    // with a decoder that only ever sees 4-bit codes.
     m_Predictor = int16_t(ClipInt16(m_Predictor + (m_Step * kDiffLookup[nibble]) / 8));
     m_Step = ClipStep((m_Step * kIndexScale[nibble]) >> 8);
 

@@ -1,9 +1,8 @@
 // src/Devices/Wiimote/Linux/WiimoteBluetoothUtil.h
 //
 // Small Linux-only helpers WiimoteManager needs to get from "here's a
-// hidraw path SDL_hid_enumerate() found" to "here's a raw L2CAP
-// connection to that same physical Wiimote" - see WiimoteL2CAPTransport.h
-// for why that's worth doing at all.
+// hidraw path SDL_hid_enumerate() found" to "here's a raw L2CAP connection
+// to that same physical Wiimote" - see WiimoteL2CAPTransport.h for why.
 #pragma once
 #ifdef __linux__
 
@@ -14,48 +13,32 @@
 
 namespace InputBridge::Wiimote {
 
-// Parses "AA:BB:CC:DD:EE:FF" (case-insensitive) into 6 raw bytes in the
-// same human-reading order (out[0] == 0xAA above) - NOT the
-// least-significant-byte-first order the kernel's L2CAP sockaddr wants;
-// WiimoteL2CAPTransport::Connect() does that conversion itself. Returns
-// std::nullopt if `text` isn't a well-formed address.
+// Parses "AA:BB:CC:DD:EE:FF" (case-insensitive) into 6 bytes in
+// human-reading order (out[0] == 0xAA) - NOT the little-endian order the
+// kernel's L2CAP sockaddr wants; WiimoteL2CAPTransport::Connect() converts
+// that itself. Returns nullopt if malformed.
 std::optional<std::array<uint8_t, 6>> ParseBluetoothAddress(const std::string &text);
 
-// Given a hidraw device path (e.g. "/dev/hidraw3", the same string
-// SDL_hid_device_info::path gives us), resolves the remote Bluetooth
-// address of whatever's connected to it via that node's sysfs `uevent`
-// file's `HID_UNIQ` field - which the kernel's Bluetooth HID transport
-// (hidp) populates with exactly this for any Bluetooth HID device, no
-// D-Bus/BlueZ userspace round-trip required. Returns std::nullopt if the
-// path isn't a Bluetooth HID device (e.g. it's a USB Wiimote receiver, or
-// the sysfs layout doesn't match what's expected on this kernel version)
-// or the file can't be read.
+// Given a hidraw path (e.g. "/dev/hidraw3"), resolves the remote Bluetooth
+// address via that node's sysfs `uevent` HID_UNIQ field - populated by the
+// kernel's hidp transport for any Bluetooth HID device, no D-Bus/BlueZ
+// round-trip needed. Returns nullopt if not a Bluetooth HID device (e.g. a
+// USB receiver) or unreadable.
 std::optional<std::string> ResolveBluetoothAddressForHidrawPath(const std::string &hidraw_path);
 
-// Best-effort: asks the OS's own Bluetooth HID connection to this device
-// to disconnect, freeing up PSMs 0x11/0x13 so WiimoteL2CAPTransport can
-// connect its own direct sockets to them.
+// Best-effort: asks the OS's Bluetooth HID connection to disconnect,
+// freeing PSMs 0x11/0x13 for WiimoteL2CAPTransport's own sockets.
 //
-// NOT currently called from WiimoteManager's automatic Scan() path - an
-// earlier version did call this automatically whenever the passive
-// connect attempt failed, and that turned out to be actively harmful:
-// disconnecting a Wiimote's OS Bluetooth HID connection tears down the
-// real ACL link, and several Wiimotes will not accept a new connection
-// afterwards without the sync button being pressed again. This function
-// is kept for a possible future *user-initiated* "take over this
-// Wiimote's connection" action (with the disruption clearly disclosed up
-// front), not for anything automatic. See WiimoteManager.cpp's
-// TryOpenLinuxL2CAPTransport() for the current (passive-only) behavior.
+// NOT currently called from WiimoteManager's automatic Scan() path - doing
+// so tears down the real ACL link, and several Wiimotes won't reconnect
+// without the sync button being pressed again. Kept for a possible future
+// user-initiated "take over this connection" action, not anything
+// automatic - see WiimoteManager.cpp's TryOpenLinuxL2CAPTransport().
 //
-// Implemented by shelling out to `bluetoothctl disconnect <address>`
-// (BlueZ's own CLI, present on essentially any Linux system that has
-// BlueZ installed at all) rather than linking against BlueZ's D-Bus API
-// directly - avoids adding a libdbus build dependency for a single
-// fire-and-forget call. This is a known simplification: it assumes
-// `bluetoothctl` is on PATH and silently no-ops (logging a warning) if it
-// isn't, rather than failing the whole connect attempt - the L2CAP
-// connect below will just fail with a clear log line in that case, same
-// as it would for any other reason the channels are unavailable.
+// Shells out to `bluetoothctl disconnect <address>` rather than linking
+// BlueZ's D-Bus API, to avoid a libdbus dependency for one fire-and-forget
+// call. If bluetoothctl isn't on PATH, logs a warning and no-ops - the
+// L2CAP connect below just fails with its own clear log line.
 void DisconnectExistingHidConnection(const std::string &address);
 
 } // namespace InputBridge::Wiimote

@@ -22,21 +22,15 @@ namespace InputBridge::Wiimote {
 bool WiimoteManager::IsWiimoteProductString(const char *product) {
     if (!product) return false;
     // "Nintendo RVL-CNT-01" (Wiimote), "Nintendo RVL-CNT-01-TR" (Wiimote
-    // Plus), "Nintendo RVL-WBC-01" (Balance Board) - see WiiBrew's SDP table.
+    // Plus), "Nintendo RVL-WBC-01" (Balance Board) - WiiBrew's SDP table.
     return std::strstr(product, "RVL-CNT-01") != nullptr ||
            std::strstr(product, "RVL-WBC-01") != nullptr;
 }
 
 namespace {
-// hidapi's own issue tracker documents open() racing enumerate() on Linux
-// hidraw (permission bits/uaccess tagging can land microseconds after the
-// device node shows up in a udev-driven enumerate, so the very next open()
-// can transiently see stale permissions) - the workaround recommended
-// there, absent a hard "wait for udev" signal, is a short bounded retry
-// rather than a single attempt. A handful of tries a few ms apart costs
-// nothing on the common case (first try succeeds) and turns what would
-// otherwise be an up-to-kWiimoteScanIntervalMs-long outage into a
-// sub-50ms one.
+// hidapi's issue tracker documents open() racing enumerate() on Linux
+// hidraw (permission tagging can land just after the node appears), so a
+// short bounded retry clears the transient case cheaply.
 SDL_hid_device *OpenWithRetry(const char *path) {
     constexpr int kMaxAttempts = 5;
     constexpr Uint32 kDelayMs = 10;
@@ -49,27 +43,17 @@ SDL_hid_device *OpenWithRetry(const char *path) {
 }
 
 #if defined(__linux__)
-// SDL_hid_open_path() doesn't surface the underlying errno, so when it
-// fails we can't tell "wrong permissions" (EACCES - fixable with a udev
-// rule) apart from "something else already has it open in a way that
-// matters" (EBUSY - unusual for hidraw, which the kernel documents as a
-// non-exclusive raw-report tap that normally tolerates multiple readers)
-// apart from "the node is gone" (ENOENT - a stale enumerate() result) from
-// on-device diagnostics alone. Probe the raw path directly with a plain
-// open()/close() so the log tells the actual story instead of us guessing
-// at it - this is diagnostic-only, the fd is closed immediately and never
-// used for real I/O (WiimoteDevice always goes through the SDL_hid_device
-// OpenWithRetry() already obtained, or failed to).
+// SDL_hid_open_path() doesn't surface errno, so diagnose with a plain
+// open()/close() (diagnostic only - fd closed immediately, never used for
+// real I/O) to tell EACCES (permissions/udev rule), EBUSY (something else
+// has it open exclusively - unusual for hidraw), and ENOENT (stale
+// enumerate() result) apart in the logs.
 void LogLinuxOpenDiagnostics(const char *path) {
     struct stat st{};
     const bool stat_ok = ::stat(path, &st) == 0;
     const int fd = ::open(path, O_RDWR);
     const int open_errno = errno;
     if (fd >= 0) {
-        // Genuinely openable via a plain open() even though hidapi's own
-        // open (which does extra ioctl/HIDIOCGRDESC work on top of the
-        // same open()) failed - points at something hidapi-specific
-        // rather than a plain permissions/exclusivity problem.
         LOG_WARN("WiimoteManager", "  diagnostic: plain open() of '%s' SUCCEEDED "
                  "(mode=0%o) even though SDL_hid_open_path() failed - likely an "
                  "hidapi-internal ioctl failure, not a permissions/exclusivity issue",
@@ -96,68 +80,30 @@ void LogLinuxOpenDiagnostics(const char *path) {
 #endif
 
 #if defined(__linux__)
-// Best-effort: builds a direct L2CAP transport for the Wiimote at
-// `hidraw_path` instead of the hidraw one, so this device stops sharing
-// the OS's generic HID node (and therefore stops being reset by
-// anything else that also opens it, most notoriously Steam Input - see
-// Devices/Wiimote/README.md's "IR camera doesn't work while Steam is
-// running" section, and WiimoteL2CAPTransport.h for the full
-// architecture rationale).
+// Best-effort, PASSIVE ONLY: opens a direct L2CAP transport for the
+// Wiimote at `hidraw_path` so it stops sharing the OS's generic HID node
+// (and stops being reset by anything else that opens it, notably Steam
+// Input - see README.md and WiimoteL2CAPTransport.h).
 //
-// Returns nullptr if this isn't a Bluetooth device at all (e.g. a USB
-// Wiimote receiver - ResolveBluetoothAddressForHidrawPath() already
-// handles telling those apart from a genuine Bluetooth hidraw node) or
-// if the direct connection couldn't be established even after asking
-// BlueZ to release its own HID connection to the device - callers should
-// fall back to the existing WiimoteHidTransport path in that case,
-// exactly like this feature didn't exist.
-// Best-effort, PASSIVE ONLY: builds a direct L2CAP transport for the
-// Wiimote at `hidraw_path` instead of the hidraw one, so this device
-// stops sharing the OS's generic HID node (and therefore stops being
-// reset by anything else that also opens it, most notoriously Steam
-// Input - see Devices/Wiimote/README.md's "IR camera doesn't work while
-// Steam is running" section, and WiimoteL2CAPTransport.h for the full
-// architecture rationale).
+// Makes exactly ONE connect() attempt and never disconnects the OS's
+// existing HID connection. An earlier version did that on failure, which
+// tore down working Bluetooth links on already-connected Wiimotes (the
+// common case) without a reliable reconnect - some Wiimotes need the sync
+// button pressed again afterward - and could race SDL's joystick-added
+// filter into leaving dead "Wii Remote (Gamepad)" entries. A user-
+// initiated "take over this connection" action would be reasonable to add
+// later, but this must stay non-automatic.
 //
-// Deliberately makes exactly ONE connect() attempt and never calls
-// DisconnectExistingHidConnection(). An earlier version of this function
-// also disconnected the OS's existing HID connection and retried when
-// the first attempt failed - that turned out to be actively harmful in
-// practice: it tore down a real, working Bluetooth link on essentially
-// every already-connected Wiimote (the normal case, not an edge case),
-// and the Wiimote did not reliably reconnect afterwards (several
-// Wiimotes require the sync button to be pressed again before they'll
-// accept a new connection at all once fully disconnected). It also
-// produced stray, permanently-broken "Wii Remote (Gamepad)" entries in
-// DeviceManager's joystick list, because the resulting disconnect/
-// reconnect churn could race SDL's joystick-added filter (a joystick
-// enumerated mid-reconnect, before BlueZ finishes renegotiating its HID
-// descriptor, can transiently miss the vidpid_match/name_match check and
-// slip through as an unmanaged, dead joystick).
-//
-// A user-initiated, explicit "take over this Wiimote's connection"
-// action (with a clear warning that it will briefly disconnect the
-// device and may require re-syncing it) is a reasonable thing to add to
-// the Wiimote settings tab later - but it must never be automatic.
-//
-// Returns nullptr if this isn't a Bluetooth device at all (e.g. a USB
-// Wiimote receiver) or if nothing was listening on those PSMs for some
-// other, non-disruptive reason - callers fall back to the existing
-// WiimoteHidTransport path in that case, exactly like this feature
-// didn't exist.
+// Returns nullptr if this isn't Bluetooth (e.g. a USB receiver) or if the
+// OS already holds the HID connection - callers fall back to
+// WiimoteHidTransport as usual.
 std::unique_ptr<WiimoteL2CAPTransport> TryOpenLinuxL2CAPTransport(const std::string &hidraw_path) {
     const auto address_str = ResolveBluetoothAddressForHidrawPath(hidraw_path);
-    if (!address_str) return nullptr; // not a Bluetooth device - nothing for L2CAP to do here
+    if (!address_str) return nullptr; // not a Bluetooth device
 
     const auto bdaddr = ParseBluetoothAddress(*address_str);
-    if (!bdaddr) return nullptr; // shouldn't happen (already validated inside the resolve call)
+    if (!bdaddr) return nullptr; // shouldn't happen; already validated above
 
-    // Single passive attempt only, in case nothing actually holds the OS
-    // HID connection open right now (e.g. a race, or a kernel/driver
-    // combination that doesn't bind hidp for this device at all). This
-    // is non-disruptive: if it fails, the OS's own HID connection (and
-    // therefore the existing hidraw fallback path) is completely
-    // untouched.
     if (auto transport = WiimoteL2CAPTransport::Connect(*bdaddr)) {
         LOG_INFO("WiimoteManager", "Opened direct L2CAP transport for %s (%s) - no competing OS "
                                     "HID connection was in the way",
@@ -188,23 +134,16 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
         const bool already_tracked = !path.empty() &&
             std::find(already_open_paths.begin(), already_open_paths.end(), path) != already_open_paths.end();
         if (already_tracked)
-            continue; // see the Init()-races-Init() hazard documented in the header
+            continue; // see the concurrent-handle hazard documented in the header
 
         SDL_hid_device *hdev = OpenWithRetry(d->path);
         if (!hdev) {
-            // Most commonly at this point (after OpenWithRetry's own short
-            // retries already ruled out the transient permission-race case
-            // documented above): SDL's OWN joystick subsystem still holds
-            // this HID node open at the platform layer, even though
-            // SDL_HINT_JOYSTICK_HIDAPI_WII is disabled and DeviceManager
-            // never calls SDL_OpenJoystick() on it - on some SDL/platform
-            // combinations (observed with SDL3's Linux hidraw joystick
-            // backend), SDL opens the underlying node just to enumerate
-            // capabilities (VID/PID/name) for the SDL_EVENT_JOYSTICK_ADDED
-            // callback. DeviceManager now scans again immediately after it
-            // closes any such handle (see HandleDeviceAdded), so this is
-            // expected to clear within one more scan rather than needing
-            // the full kWiimoteScanIntervalMs periodic retry.
+            // Most commonly: SDL's own joystick subsystem still holds this
+            // node open at the platform layer just to enumerate
+            // capabilities for SDL_EVENT_JOYSTICK_ADDED, even with
+            // SDL_HINT_JOYSTICK_HIDAPI_WII disabled. DeviceManager rescans
+            // immediately after closing any such handle, so this should
+            // clear within one more scan.
             LOG_WARN("WiimoteManager", "Found Wiimote-like HID device at '%s' but could not "
                      "open it after retrying (likely still held by another process/backend - "
                      "will retry again on the next scan)", path.c_str());
@@ -229,24 +168,16 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
                                 std::strstr(product_utf8, "WBC") != nullptr;
         }
 
-        // Note: WiimoteDevice's constructor no longer runs Init() here -
-        // it defers the handshake to its own first Poll() call, once its
-        // internal settle timer has elapsed, so a Wiimote that connects
-        // while InputBridge is already running gets the same
-        // time-to-settle a Wiimote that was already on before InputBridge
-        // started gets "for free" (see WiimoteDevice.h's m_InitSettleAtMs
-        // comment for the bug this avoids).
+        // WiimoteDevice's constructor defers Init() to its first Poll()
+        // call (once its settle timer elapses), so a Wiimote connecting
+        // mid-session gets the same settle time as one already on at
+        // startup - see WiimoteDevice.h's m_InitSettleAtMs comment.
         std::unique_ptr<IWiimoteTransport> transport;
 #if defined(__linux__)
         // Off by default - see try_linux_l2cap's doc comment in
-        // WiimoteManager.h for why even a passive/failed connect attempt
-        // isn't risk-free for some Wiimote Bluetooth chips. Only attempt
-        // this when the caller has explicitly opted in.
-        //
-        // `hdev` (already open) becomes redundant the moment this
-        // succeeds, since every subsequent read/write goes through the
-        // new transport instead - close it rather than leaking the
-        // hidraw handle for the lifetime of the Wiimote.
+        // WiimoteManager.h. `hdev` becomes redundant the moment this
+        // succeeds, since all I/O moves to the new transport - close it
+        // rather than leaking the hidraw handle.
         if (try_linux_l2cap) {
             if (auto l2cap = TryOpenLinuxL2CAPTransport(path)) {
                 transport = std::move(l2cap);
