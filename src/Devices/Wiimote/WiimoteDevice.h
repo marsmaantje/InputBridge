@@ -403,6 +403,21 @@ private:
     bool m_MotionPlusPresent = false;   // detected at 0xA600FA
     bool m_MotionPlusActive = false;    // activation write sent + acknowledged by data arriving
 
+    // A Motion Plus that ISN'T behind a Nunchuk/Classic Controller (i.e.
+    // the common case: a bare external Motion Plus, or a Wii Remote Plus's
+    // built-in one) never toggles the status report's regular extension-
+    // connected bit (byte 3, 0x02) - per WiiBrew, that bit only reflects
+    // the 0xA40000 port, which a not-yet-activated Motion Plus doesn't
+    // occupy. HandleExtensionChanged() (and therefore InitExtension()/
+    // DetectMotionPlus()) is gated entirely on that bit changing, so
+    // without this timer a bare Motion Plus would simply never be probed
+    // for. Set to a real deadline once Init() completes; Poll() then
+    // calls DetectMotionPlus() directly (not the heavier InitExtension())
+    // once that deadline passes and re-arms it for ~8s later - WiiBrew's
+    // own recommended re-poll interval for an inactive Motion Plus -
+    // until one is actually found (m_MotionPlusPresent stops the retries).
+    Uint64 m_MotionPlusNextProbeAtMs = 0;
+
     // Re-request extension identification a short time after the status
     // report flags a connect/disconnect - the extension needs a moment to
     // settle before it answers ID reads reliably.

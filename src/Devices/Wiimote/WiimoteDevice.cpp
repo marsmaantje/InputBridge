@@ -104,6 +104,15 @@ bool WiimoteDevice::Init() {
     // Default to player LED 1 lit so the physical remote shows it's alive.
     SetPlayerLED(1);
 
+    // Arm the bare-Motion-Plus probe (see m_MotionPlusNextProbeAtMs's
+    // header comment for why this can't just ride on the extension-
+    // changed path). Balance Boards have no Motion Plus port to probe.
+    // Give it the same settle window as a regular extension gets before
+    // Poll() acts on it, rather than probing with zero delay.
+    if (!m_Snapshot.is_balance_board) {
+        m_MotionPlusNextProbeAtMs = SDL_GetTicks() + 150;
+    }
+
     return ok;
 }
 
@@ -970,6 +979,19 @@ void WiimoteDevice::Poll() {
         InitExtension();
     }
 
+    // Independently keep probing for a bare Motion Plus - see
+    // m_MotionPlusNextProbeAtMs's header comment for why this can't just
+    // ride on the extension-changed path above. Guarded on m_InitPending
+    // being false (not just the deadline) so this can't fire on the very
+    // first few Poll() ticks, before Init() has even run once and set a
+    // real deadline. Stops re-arming (and re-reading the register) once
+    // a Motion Plus is actually found.
+    if (!m_InitPending && !m_MotionPlusPresent && !m_Snapshot.is_balance_board &&
+        SDL_GetTicks() >= m_MotionPlusNextProbeAtMs) {
+        m_MotionPlusNextProbeAtMs = SDL_GetTicks() + 8000; // WiiBrew's own suggested re-poll interval
+        DetectMotionPlus();
+    }
+
     // Detect and correct for a second process (typically Steam Input - see
     // TickIRWatchdog()'s comment) silently changing our data reporting
     // mode after the fact.
@@ -1047,6 +1069,11 @@ void WiimoteDevice::HandleExtensionChanged() {
     m_MotionPlusPresent = false;
     m_MotionPlusActive = false;
     m_MotionPlusExtConnected = -1; // baseline unknown again until the next MP report
+    // Let Poll()'s bare-Motion-Plus probe (see m_MotionPlusNextProbeAtMs's
+    // header comment) run again on its next tick instead of possibly
+    // waiting out whatever was left of the previous ~8s window - relevant
+    // e.g. right after a Nunchuk is unplugged from behind a Motion Plus.
+    m_MotionPlusNextProbeAtMs = 0;
 }
 
 void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
