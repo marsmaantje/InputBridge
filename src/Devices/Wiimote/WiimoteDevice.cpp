@@ -416,20 +416,26 @@ bool WiimoteDevice::ActivateMotionPlus() {
         reg = Registers::MotionPlusInitClassicPass;
     }
 
-    if (mode == 0x05 || mode == 0x07) {
-        // Only redo the encryption reset on the regular extension port, not
-        // a full InitExtension() - InitExtension() ends by calling
-        // DetectMotionPlus(), which would call back into this function and
-        // re-enter this same branch, recursing without end for any Wiimote
-        // combining a Motion Plus with a Nunchuk/Classic Controller.
-        ResetExtensionEncryption();
-    }
+    // Always reset the regular extension port, even without a attached extension.
+    // The init sequence wakes the port's state machine required for internal
+    // Motion Plus passthrough logic to communicate. Skipping this for standalone
+    // mode (0x04) prevents gyro reports because InitExtension() is never called
+    // for a bare Motion Plus.
+    ResetExtensionEncryption();
 
     const bool ok = WriteRegister(reg, &mode, 1);
     m_MotionPlusActive = ok;
     if (ok) {
         m_Snapshot.motion_plus.is_nunchuk_passthrough = (mode == 0x05);
         m_Snapshot.motion_plus.is_classic_passthrough = (mode == 0x07);
+
+        // WiiBrew notes standalone mode auto-reports status (triggering a Data
+        // Reporting Mode resend) only without a pass-through extension attached.
+        // Real hardware and clones unreliably omit this auto-report,
+        // which halts data reporting and freezes gyro input.
+        // Explicitly resend the mode here to ensure report flow.
+        uint8_t p[2] = {0x04, PreferredReportMode()};
+        SendReport(m_Transport.get(), OutReport::DataReportMode, m_RumbleBit, p, 2);
     }
     return ok;
 }
