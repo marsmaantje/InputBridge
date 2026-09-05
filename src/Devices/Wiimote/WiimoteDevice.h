@@ -424,6 +424,16 @@ private:
     Uint64 m_ExtensionSettleAtMs = 0;
     bool m_ExtensionPendingInit = false;
 
+    // A single post-settle identification attempt isn't always enough -
+    // slower/third-party Nunchuks can still be powering up at the 150ms
+    // mark and answer the ID read with garbage, classifying as Unknown.
+    // Without a retry that sticks until the cable is pulled and reinserted
+    // (the only thing that re-arms m_ExtensionSettleAtMs). Poll() retries
+    // roughly once a second, using this deadline, for as long as the port
+    // is connected but still unclassified; a successful classification
+    // moves m_Snapshot.extension off Unknown/None and the retries stop.
+    Uint64 m_ExtensionRetryAtMs = 0;
+
     // Tracks the physical extension-port connected bit (status report byte
     // 3, 0x02) as of the last status report, independent of whether
     // InitExtension() has run yet. HandleStatusReport() diffs the incoming

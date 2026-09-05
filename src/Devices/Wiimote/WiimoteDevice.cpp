@@ -20,6 +20,16 @@ constexpr int kRegisterReadTimeoutMs = 250;
 // actual sleep, not incidental Bluetooth/HID scheduling latency.
 constexpr Uint32 kIRInitStepDelayMs = 50;
 
+// Settle time after ResetExtensionEncryption()'s writes before trusting a
+// subsequent ID/data read. Needed in particular when that call is also
+// what deactivates an active Motion Plus (WiiBrew: writing the standard
+// extension-init bytes to 0xA400F0/FB "register-swaps" 0xA4xxxx back from
+// the Motion Plus to whatever's on the regular/pass-through port) - reading
+// too soon after that write can race the hardware's swap and return stale
+// Motion Plus-shaped bytes instead of the real extension's ID, misreading
+// a perfectly good Nunchuk/Classic Controller as Unknown.
+constexpr Uint32 kExtensionSwapSettleMs = 50;
+
 // How long to wait after SDL_hid_open_path() succeeds before running the
 // handshake (Init(), including EnableIRCamera()) - see m_InitSettleAtMs's
 // header comment for why a just-opened handle isn't necessarily a
@@ -292,6 +302,7 @@ bool WiimoteDevice::ResetExtensionEncryption() {
 
 bool WiimoteDevice::InitExtension() {
     if (!ResetExtensionEncryption()) return false;
+    SDL_Delay(kExtensionSwapSettleMs);
 
     m_ExtensionEncrypted = false;
 
@@ -416,12 +427,17 @@ bool WiimoteDevice::ActivateMotionPlus() {
         reg = Registers::MotionPlusInitClassicPass;
     }
 
-    // Always reset the regular extension port, even without a attached extension.
-    // The init sequence wakes the port's state machine required for internal
-    // Motion Plus passthrough logic to communicate. Skipping this for standalone
-    // mode (0x04) prevents gyro reports because InitExtension() is never called
-    // for a bare Motion Plus.
-    ResetExtensionEncryption();
+    // Only reset the regular extension port (0xA400F0/FB) when we're about
+    // to pass a Nunchuk/Classic Controller through - those registers belong
+    // to the *regular* extension, not the Motion Plus. Sending that reset
+    // in standalone mode (0x04), when nothing is plugged into that port,
+    // stomps on the Motion Plus's own bus arbitration right before the
+    // 0xA600FE activation write - detection still works fine (that's a
+    // separate read at 0xA600FA), but the activation write silently fails,
+    // so no gyro reports ever arrive despite m_MotionPlusPresent being true.
+    if (mode != 0x04) {
+        ResetExtensionEncryption();
+    }
 
     const bool ok = WriteRegister(reg, &mode, 1);
     m_MotionPlusActive = ok;
@@ -998,6 +1014,33 @@ void WiimoteDevice::Poll() {
         DetectMotionPlus();
     }
 
+    // Keep retrying extension identification while something is physically
+    // plugged in but the last attempt(s) came back unclassified - see
+    // m_ExtensionRetryAtMs's header comment for why a single settle-timed
+    // attempt isn't always enough (e.g. a slow-powering Nunchuk).
+    //
+    // Gated on !m_MotionPlusPresent: once a Motion Plus is active it owns
+    // the regular extension address space (0xA4xxxx gets "register-swapped"
+    // to the Motion Plus itself - WiiBrew's Wii Motion Plus page), so a
+    // read there legitimately classifies as Unknown/None and is NOT a
+    // failed identification needing a retry. Retrying anyway would call
+    // InitExtension(), whose ResetExtensionEncryption() sends the standard
+    // extension-init bytes to 0xA400F0/FB - exactly the sequence WiiBrew
+    // documents as deactivating an active Motion Plus via that same
+    // register swap. Without this guard, an active standalone Motion Plus
+    // gets silently deactivated ~1s after every (re)activation, and one
+    // behind a Nunchuk/Classic Controller flip-flops between passthrough
+    // device and Motion Plus as each retry knocks it back down and
+    // DetectMotionPlus()'s own re-probe (at the end of InitExtension())
+    // races to bring it back up.
+    if (!m_InitPending && !m_ExtensionPendingInit && !m_MotionPlusPresent &&
+        m_ExtensionPortConnected && !m_Snapshot.is_balance_board &&
+        (m_Snapshot.extension == ExtensionType::Unknown || m_Snapshot.extension == ExtensionType::None) &&
+        SDL_GetTicks() >= m_ExtensionRetryAtMs) {
+        m_ExtensionRetryAtMs = SDL_GetTicks() + 1000;
+        InitExtension();
+    }
+
     // Detect and correct for a second process (typically Steam Input - see
     // TickIRWatchdog()'s comment) silently changing our data reporting
     // mode after the fact.
@@ -1065,6 +1108,9 @@ void WiimoteDevice::HandleExtensionChanged() {
     // its ID - reading too early is a common source of misdetection.
     m_ExtensionPendingInit = true;
     m_ExtensionSettleAtMs = SDL_GetTicks() + 150;
+    // First retry (if the settle-timed attempt above still comes back
+    // Unknown/None) follows a bit after that attempt, not immediately.
+    m_ExtensionRetryAtMs = m_ExtensionSettleAtMs + 1000;
     m_Snapshot.extension = ExtensionType::None;
     m_Snapshot.nunchuk = {};
     m_Snapshot.classic = {};
