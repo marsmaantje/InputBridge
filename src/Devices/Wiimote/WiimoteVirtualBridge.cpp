@@ -231,7 +231,34 @@ void WiimoteVirtualBridge::Detach(Entry &entry) {
 void WiimoteVirtualBridge::Sync(const std::vector<std::unique_ptr<WiimoteDevice>> &wiimotes) {
     for (auto &dev : wiimotes) {
         const std::string &path = dev->Snapshot().hid_path;
-        if (!Find(path)) Attach(*dev);
+        Entry *existing = Find(path);
+        if (!existing) {
+            Attach(*dev);
+            continue;
+        }
+
+        // The initial is_balance_board hint comes from the Bluetooth HID
+        // product string, which many stacks (notably on Windows) leave
+        // blank/generic for a Balance Board - see WiimoteDevice::Init()'s
+        // "self-heals" comment. That means Attach() can run before the
+        // authoritative extension ID (0x0402) has been read, latching in
+        // an SDL_JOYSTICK_TYPE_UNKNOWN virtual joystick shaped like a
+        // regular Wii Remote. Once the snapshot's flag flips, re-attach so
+        // the virtual device gets the right axis/button layout and name
+        // too instead of staying wrong for the rest of the connection.
+        if (existing->is_balance_board != dev->Snapshot().is_balance_board) {
+            LOG_INFO(kTag, "Wiimote '%s' balance-board classification changed "
+                      "(%s -> %s) after the virtual joystick was already "
+                      "created - re-attaching with the correct device type",
+                      path.c_str(),
+                      existing->is_balance_board ? "balance board" : "wiimote",
+                      dev->Snapshot().is_balance_board ? "balance board" : "wiimote");
+            Detach(*existing);
+            m_Entries.erase(std::remove_if(m_Entries.begin(), m_Entries.end(),
+                [&](const Entry &e) { return e.hid_path == path; }),
+                m_Entries.end());
+            Attach(*dev);
+        }
     }
 
     auto still_present = [&](const std::string &path) {
