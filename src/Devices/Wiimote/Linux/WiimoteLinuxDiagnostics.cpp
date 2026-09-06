@@ -66,6 +66,13 @@ bool RulesFileHasCombinedUaccessGroupLine(const std::string &path) {
     if (!file) return false;
     std::string line;
     while (std::getline(file, line)) {
+        // Skip comments (and blank/whitespace-only lines) before scanning -
+        // without this, the doc-comment above explaining this exact bug
+        // (which mentions both "TAG+=\"uaccess\"" and "GROUP=" in prose)
+        // trips its own check.
+        const size_t first = line.find_first_not_of(" \t");
+        if (first == std::string::npos || line[first] == '#') continue;
+
         if (line.find("TAG+=\"uaccess\"") != std::string::npos &&
             line.find("GROUP=") != std::string::npos) {
             return true;

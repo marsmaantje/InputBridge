@@ -36,6 +36,13 @@ namespace {
 struct UdevJobUiState {
     std::future<InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome> pending;
     bool has_result = false;
+    // True once the current last_result has been shown in the modal at
+    // least once - starts true (nothing to show yet), flips false the
+    // frame Poll() picks up a fresh result, and back to true as soon as
+    // DrawUdevResultModal() has opened the popup for it. This is what
+    // lets the modal detect "there's a new result to pop up for" without
+    // reopening every frame the popup happens to already be open.
+    bool modal_shown = true;
     InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome last_result;
 
     bool IsRunning() const {
@@ -47,6 +54,7 @@ struct UdevJobUiState {
         if (pending.valid() && pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             last_result = pending.get();
             has_result = true;
+            modal_shown = false;
         }
     }
 };
@@ -77,6 +85,59 @@ void DrawUdevJobResult(const UdevJobUiState& job) {
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", why);
         if (!job.last_result.stderr_tail.empty() && job.last_result.result == Result::Failed)
             ImGui::TextWrapped("%s", job.last_result.stderr_tail.c_str());
+    }
+}
+
+// Same ESC-to-close convenience used by the other BeginPopupModal blocks
+// in this codebase (e.g. ProtocolEditorWindow.cpp) - kept as its own copy
+// here since it's a small file-local static, not worth sharing a header for.
+void CloseUdevResultModalOnEscape() {
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
+}
+
+// Shows the outcome of the last Install/Remove run in a modal instead of
+// as text sitting under the buttons - same reasoning as the diagnostics
+// modal below: the stdout/stderr tail can run several lines, and a modal
+// gives it an explicit dismissal instead of permanently taking up space
+// in the settings panel after the first run.
+//
+// One shared popup serves both jobs since only one can run at a time
+// (the buttons are mutually disabled via any_running below); each job's
+// own modal_shown flag independently tracks whether *it* has a fresh,
+// not-yet-shown result, so a completed Install doesn't get overwritten
+// or skipped if Remove finishes moments later.
+void DrawUdevResultModal() {
+    static const UdevJobUiState* s_ResultToShow = nullptr;
+
+    if (!s_UdevInstallJob.modal_shown) {
+        s_ResultToShow = &s_UdevInstallJob;
+        s_UdevInstallJob.modal_shown = true;
+        ImGui::OpenPopup("Permission Rule##udev_modal");
+    } else if (!s_UdevRemoveJob.modal_shown) {
+        s_ResultToShow = &s_UdevRemoveJob;
+        s_UdevRemoveJob.modal_shown = true;
+        ImGui::OpenPopup("Permission Rule##udev_modal");
+    }
+
+    bool open = true;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(480, 280), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(360, 180), ImVec2(FLT_MAX, FLT_MAX));
+    if (ImGui::BeginPopupModal("Permission Rule##udev_modal", &open)) {
+        CloseUdevResultModalOnEscape();
+
+        const float footerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
+        ImGui::BeginChild("##udev_result", ImVec2(0, -footerH), false);
+        if (s_ResultToShow) DrawUdevJobResult(*s_ResultToShow);
+        ImGui::EndChild();
+
+        ImGui::Separator();
+        if (ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
     }
 }
 
@@ -522,8 +583,7 @@ void DrawSettingsContent(float&              user_ui_scale,
             ImGui::TextDisabled("Waiting for authentication...");
         }
 
-        DrawUdevJobResult(s_UdevInstallJob);
-        DrawUdevJobResult(s_UdevRemoveJob);
+        DrawUdevResultModal();
 
         // -- Diagnostics --------------------------------------------------
         // Separate from Install/Remove above: those two change system
