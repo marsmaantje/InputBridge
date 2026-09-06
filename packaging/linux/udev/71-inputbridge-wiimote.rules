@@ -1,5 +1,25 @@
 # InputBridge - udev rules for Nintendo Wii Remote / Wii Balance Board
 #
+# NOTE ON THE "71" PREFIX - do not rename this to something >= 73 (this
+# file used to ship as 99-inputbridge-wiimote.rules; don't go back to
+# that). systemd's own ACL-granting rule lives in
+# /usr/lib/udev/rules.d/73-seat-late.rules:
+#   TAG=="uaccess", ENV{MAJOR}!="", RUN{builtin}+="uaccess"
+# udev merges every *.rules file across /etc/udev/rules.d and
+# /usr/lib/udev/rules.d into one filename-sorted list and walks it in a
+# single top-to-bottom pass per device event, running RUN{builtin}
+# actions immediately as each line is reached - not after every file has
+# been processed. So that line only sees whatever TAG state rules *below
+# priority 73* have already set. If TAG+="uaccess" is first assigned by
+# a rule numbered >= 73 (e.g. 99), the tag still ends up recorded in the
+# udev database (so `udevadm info` looks correct) but 73-seat-late.rules
+# already ran its uaccess-granting builtin without seeing it - the ACL
+# is never actually applied, and the device stays root:root/0600 with
+# no error anywhere. Confirmed the hard way: see project history for
+# the case this bit an actual Balance Board connected via a Bluetooth
+# dongle, indistinguishable from a permissions problem until you diff
+# `udevadm info`'s CURRENT_TAGS against `getfacl` on the node itself.
+#
 # Without this file, a Wiimote or Balance Board connected via a Bluetooth
 # *dongle* (as opposed to a laptop's built-in adapter on some distros) is
 # commonly exposed as a plain hid-generic device backed by the kernel's

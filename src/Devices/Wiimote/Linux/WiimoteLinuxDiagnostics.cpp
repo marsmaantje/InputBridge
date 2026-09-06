@@ -6,6 +6,7 @@
 
 #include <SDL3/SDL_hidapi.h>
 
+#include <array>
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
@@ -13,9 +14,11 @@
 #include <fcntl.h>
 #include <fstream>
 #include <grp.h>
+#include <string>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <vector>
 
 namespace InputBridge::Wiimote {
 
@@ -25,6 +28,55 @@ using Status = WiimoteLinuxDiagnostics::Status;
 using CheckResult = WiimoteLinuxDiagnostics::CheckResult;
 
 constexpr const char *kUdevRulesPath = "/etc/udev/rules.d/71-inputbridge-wiimote.rules";
+
+// Filenames this rule has shipped under in past InputBridge versions,
+// other than kUdevRulesPath above. install-udev-rules.sh cleans these up
+// on install/uninstall (see migrate_away_from_legacy_filenames() there),
+// but a user could still be sitting on one from before upgrading, or
+// could have hand-copied the file into place under the old name from an
+// old download - so this diagnostic checks for them directly rather
+// than assuming the installer already ran.
+//
+// 99-inputbridge-wiimote.rules is the one that matters: earlier
+// versions shipped under that name, and 99 sorts *after* systemd's own
+// /usr/lib/udev/rules.d/73-seat-late.rules - the rule that actually
+// applies the uaccess ACL grant based on whatever TAG state is already
+// set by the time udev's single filename-sorted pass reaches priority
+// 73. A TAG+="uaccess" first assigned at priority 99 is too late for
+// that grant to see it: the tag still lands in the udev database (so
+// `udevadm info` reports it correctly under CURRENT_TAGS) but the
+// device is left root:root/0600 with no ACL and no error anywhere -
+// confirmed the hard way against a real Balance Board connected over a
+// Bluetooth dongle. See kUaccessGrantRulePriorityThreshold below.
+constexpr std::array<const char *, 1> kLegacyUdevRulesPaths = {
+    "/etc/udev/rules.d/99-inputbridge-wiimote.rules",
+};
+
+// systemd's uaccess-granting rule lives at this priority in
+// /usr/lib/udev/rules.d/73-seat-late.rules. Any rule file that assigns
+// TAG+="uaccess" for the first time at this priority or higher is too
+// late in udev's single sorted pass for that grant to apply - see the
+// comment on kLegacyUdevRulesPaths above for the full mechanism. This
+// is a systemd implementation detail, not something InputBridge
+// controls, so it's plausible (if unlikely) it moves in a future
+// systemd release; if diagnostics start reporting false positives/
+// negatives here after a systemd update, check
+// /usr/lib/udev/rules.d/*seat-late* for the current priority.
+constexpr int kUaccessGrantRulePriorityThreshold = 73;
+
+// Parses the leading run of ASCII digits from a rules file's basename
+// (e.g. "71" from "71-inputbridge-wiimote.rules"), the way udev itself
+// treats the numeric prefix convention. Returns -1 if the filename
+// doesn't start with a digit at all, since such a file sorts after
+// every purely-numeric-prefixed one anyway (ASCII digits < most other
+// characters udev rule files use), which for our purposes here means
+// "can't tell, don't claim it's safe."
+int ParseRulePriorityPrefix(const std::string &basename) {
+    size_t i = 0;
+    while (i < basename.size() && std::isdigit(static_cast<unsigned char>(basename[i]))) ++i;
+    if (i == 0) return -1;
+    return std::atoi(basename.substr(0, i).c_str());
+}
 
 bool FileExists(const std::string &path) {
     struct stat st{};
@@ -81,8 +133,73 @@ bool RulesFileHasCombinedUaccessGroupLine(const std::string &path) {
     return false;
 }
 
+// Finds every legacy-named copy of our rule that's actually present on
+// disk right now (there's normally at most one, but nothing stops a
+// user from having several stale copies from different old versions).
+std::vector<std::string> FindPresentLegacyRuleFiles() {
+    std::vector<std::string> present;
+    for (const char *path : kLegacyUdevRulesPaths) {
+        if (FileExists(path)) present.emplace_back(path);
+    }
+    return present;
+}
+
+// basename() without pulling in <libgen.h>'s mutating C version - just
+// the piece after the last '/', which is all ParseRulePriorityPrefix()
+// needs.
+std::string PathBasename(const std::string &path) {
+    const size_t slash = path.find_last_of('/');
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+std::string JoinPaths(const std::vector<std::string> &paths) {
+    std::string joined;
+    for (size_t i = 0; i < paths.size(); ++i) {
+        if (i > 0) joined += ", ";
+        joined += paths[i];
+    }
+    return joined;
+}
+
 CheckResult CheckUdevRule() {
-    if (FileExists(kUdevRulesPath)) {
+    const std::vector<std::string> legacy_present = FindPresentLegacyRuleFiles();
+    const bool current_present = FileExists(kUdevRulesPath);
+
+    // Stale copies under an old filename are worth flagging even when
+    // the current one is also installed and working: at best they're
+    // dead weight that makes `ls /etc/udev/rules.d` and future
+    // debugging more confusing than it needs to be; at worst (if
+    // they're the only copy - see the branch below) they're silently
+    // not granting the access they appear to.
+    std::string legacy_note;
+    if (!legacy_present.empty()) {
+        legacy_note = " Also found " + std::to_string(legacy_present.size()) +
+            " leftover rule file(s) from an older InputBridge version at a "
+            "priority (>= " + std::to_string(kUaccessGrantRulePriorityThreshold) +
+            ") too late for systemd's uaccess ACL grant to reliably apply: " +
+            JoinPaths(legacy_present) +
+            ". Reinstall from Settings > Linux Permissions to remove "
+            "these automatically, or delete them manually.";
+    }
+
+    if (current_present) {
+        const int priority = ParseRulePriorityPrefix(PathBasename(kUdevRulesPath));
+        if (priority < 0 || priority >= kUaccessGrantRulePriorityThreshold) {
+            // Shouldn't happen given the constant above, but if
+            // kUdevRulesPath and kUaccessGrantRulePriorityThreshold
+            // ever drift out of sync (or someone edits one without the
+            // other), this is exactly the bug that cost real debugging
+            // time before - surface it loudly rather than silently
+            // reporting Ok for a rule whose ACL grant may not apply.
+            return {Status::Warning, "Permission rule",
+                    std::string("Installed at ") + kUdevRulesPath +
+                    ", but its filename priority doesn't sort before systemd's "
+                    "own uaccess-granting rule (priority " +
+                    std::to_string(kUaccessGrantRulePriorityThreshold) +
+                    "). The tag will show up in `udevadm info` but the actual "
+                    "ACL grant may silently never apply. This shouldn't happen "
+                    "with a stock InputBridge install - please report it." + legacy_note};
+        }
         if (RulesFileHasCombinedUaccessGroupLine(kUdevRulesPath)) {
             return {Status::Warning, "Permission rule",
                     std::string("Installed at ") + kUdevRulesPath +
@@ -94,11 +211,30 @@ CheckResult CheckUdevRule() {
                     "access below reports EACCES. Reinstall the current "
                     "permission rule from Settings > Linux Permissions to "
                     "get the fixed version, which splits these onto "
-                    "separate lines."};
+                    "separate lines." + legacy_note};
         }
         return {Status::Ok, "Permission rule",
-                std::string("Installed at ") + kUdevRulesPath + "."};
+                std::string("Installed at ") + kUdevRulesPath + "." + legacy_note};
     }
+
+    if (!legacy_present.empty()) {
+        // The only copy on disk is one that can't actually grant
+        // access - this looks installed (a file is there, `udevadm
+        // info` will show the tag) but silently doesn't work. Worth a
+        // distinctly stronger message than the generic "not installed"
+        // case below, since a user hitting this has already tried to
+        // fix it and reasonably believes it's done.
+        return {Status::Warning, "Permission rule",
+                std::string("No rule found at the current expected location (") +
+                kUdevRulesPath + "), but found " + std::to_string(legacy_present.size()) +
+                " file(s) installed under an old, too-late priority that cannot "
+                "grant the uaccess ACL (systemd's own grant at priority " +
+                std::to_string(kUaccessGrantRulePriorityThreshold) +
+                " already runs before it takes effect): " + JoinPaths(legacy_present) +
+                ". Reinstall from Settings > Linux Permissions to replace it with "
+                "the current, correctly-numbered rule."};
+    }
+
     return {Status::Warning, "Permission rule",
             "Not installed. Only needed if you connect a Wiimote/Balance "
             "Board through a USB Bluetooth dongle - a laptop's built-in "

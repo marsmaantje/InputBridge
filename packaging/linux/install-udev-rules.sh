@@ -21,6 +21,23 @@ RULES_FILENAME="71-inputbridge-wiimote.rules"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DEST_RULES_PATH="/etc/udev/rules.d/${RULES_FILENAME}"
 
+# Filenames this script (or an older version of it) has installed the
+# rule as in the past, OTHER than the current RULES_FILENAME above.
+# Versions before this one shipped as 99-inputbridge-wiimote.rules -
+# that number sorts *after* systemd's own /usr/lib/udev/rules.d/
+# 73-seat-late.rules, which is what actually applies the uaccess ACL
+# grant udev's own rule-matching just tagged the device for. Since
+# udev processes all *.rules files as one filename-sorted list in a
+# single pass, running RUN{builtin} actions immediately as each rule
+# line is reached, a TAG+="uaccess" first set at priority 99 is too
+# late for 73's ACL-granting builtin to ever see it - the tag still
+# shows up in `udevadm info`, but the device stays root:root/0600 with
+# no ACL and no error anywhere. Anyone who installed via that older
+# version needs the stale 99-named file actively removed, not just
+# shadowed by installing this one alongside it - see
+# migrate_away_from_legacy_filenames() below.
+LEGACY_RULES_FILENAMES=("99-inputbridge-wiimote.rules")
+
 # Installed layout (CMake `install()`) puts the rules file next to this
 # script (share/inputbridge/udev/); the source tree keeps it one level
 # down (packaging/linux/udev/). Try both so the script works either way.
@@ -92,8 +109,19 @@ check_preexisting_wii_rules() {
 
     for f in "${rules_dir}"/*.rules; do
         [[ -e "${f}" ]] || continue
-        # Skip our own rule; we only care about *other* files.
-        [[ "$(basename -- "${f}")" == "${RULES_FILENAME}" ]] && continue
+        # Skip our own rule (current filename, and any name a previous
+        # version of this script used) - we only care about genuinely
+        # *other* files here, not our own file under an old name that
+        # migrate_away_from_legacy_filenames() already handles/reports
+        # separately.
+        local base="$(basename -- "${f}")"
+        [[ "${base}" == "${RULES_FILENAME}" ]] && continue
+        local is_legacy=0
+        local legacy_name
+        for legacy_name in "${LEGACY_RULES_FILENAMES[@]}"; do
+            [[ "${base}" == "${legacy_name}" ]] && is_legacy=1 && break
+        done
+        [[ "${is_legacy}" -eq 1 ]] && continue
         if grep -Eq "${match_pattern}" -- "${f}" 2>/dev/null; then
             found+=("${f}")
         fi
@@ -110,6 +138,36 @@ check_preexisting_wii_rules() {
     fi
 }
 
+# Removes any rules file this script previously installed under one of
+# LEGACY_RULES_FILENAMES, so an upgrade doesn't leave a dead, wrongly-
+# numbered copy of our own rule sitting in /etc/udev/rules.d alongside
+# the correctly-numbered current one - which would be confusing to
+# debug later (both "look installed", only one actually grants access)
+# and is pure clutter once the current DEST_RULES_PATH is in place.
+# Safe to call unconditionally; a no-op if none of the legacy names are
+# present. Returns via a variable rather than stdout because callers
+# need to know whether to mention it in their own messaging.
+REMOVED_LEGACY_FILES=()
+migrate_away_from_legacy_filenames() {
+    local rules_dir="/etc/udev/rules.d"
+    local legacy_name legacy_path
+    for legacy_name in "${LEGACY_RULES_FILENAMES[@]}"; do
+        legacy_path="${rules_dir}/${legacy_name}"
+        if [[ -e "${legacy_path}" ]]; then
+            rm -f -- "${legacy_path}"
+            REMOVED_LEGACY_FILES+=("${legacy_path}")
+        fi
+    done
+    if [[ "${#REMOVED_LEGACY_FILES[@]}" -gt 0 ]]; then
+        echo "note: removed stale rule file(s) from an older InputBridge version that used a" >&2
+        echo "      priority (>= 73) too late for systemd's uaccess ACL grant to apply:" >&2
+        local f
+        for f in "${REMOVED_LEGACY_FILES[@]}"; do
+            echo "        ${f}" >&2
+        done
+    fi
+}
+
 if [[ "${UNINSTALL}" -eq 1 ]]; then
     if [[ -e "${DEST_RULES_PATH}" ]]; then
         rm -f -- "${DEST_RULES_PATH}"
@@ -117,6 +175,7 @@ if [[ "${UNINSTALL}" -eq 1 ]]; then
     else
         echo "Nothing to remove (${DEST_RULES_PATH} not present)."
     fi
+    migrate_away_from_legacy_filenames
     reload_udev
     check_preexisting_wii_rules
     echo "Done. Unplug and replug the Wiimote/Balance Board (or its Bluetooth dongle) to apply."
@@ -128,6 +187,7 @@ if [[ ! -f "${SOURCE_RULES_PATH}" ]]; then
     exit 1
 fi
 
+migrate_away_from_legacy_filenames
 check_preexisting_wii_rules
 
 install -D -m 0644 -- "${SOURCE_RULES_PATH}" "${DEST_RULES_PATH}"
