@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.11.4)
+project(InputBridge VERSION 0.11.5)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,7 +8,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
 set(ENABLE_EXCLUSIVE_INPUT ON CACHE BOOL "Enable device-hide support (HidHide on Windows, evdev grab on Linux, IOKit seize on macOS)" FORCE)
 set(ENABLE_WEBSOCKETS ON CACHE BOOL "Enable WebSocket server support" FORCE)
-set(ENABLE_OSC ON CACHE BOOL "Enable WebSocket server support" FORCE)
+set(ENABLE_OSC ON CACHE BOOL "Enable OSC support" FORCE)
 
 # Add SDL3
 # We assume lib/sdl contains the SDL3 source code.

@@ -80,10 +80,22 @@ void DrawUdevJobResult(const UdevJobUiState& job) {
     }
 }
 
-// Results of the last "Check for common issues" run - empty until the
-// button's pressed at least once, then persists across frames so the
-// list stays visible (rather than only flashing up for one frame).
+// Results of the last "Check for common issues" run, and whether the modal
+// showing them still needs to be opened this frame (set on button click,
+// consumed the next time DrawDiagnosticsModal runs). The results persist
+// across frames/re-opens rather than being cleared when the modal is
+// closed, so re-opening without re-running still shows the last run.
 std::vector<InputBridge::Wiimote::WiimoteLinuxDiagnostics::CheckResult> s_DiagnosticsResults;
+bool s_ShouldOpenDiagnosticsModal = false;
+
+// Same ESC-to-close convenience used by the other BeginPopupModal blocks
+// in this codebase (e.g. ProtocolEditorWindow.cpp) - kept as its own copy
+// here since it's a small file-local static, not worth sharing a header for.
+void CloseDiagnosticsModalOnEscape() {
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
+}
 
 void DrawDiagnosticsResult(const InputBridge::Wiimote::WiimoteLinuxDiagnostics::CheckResult& r) {
     using Status = InputBridge::Wiimote::WiimoteLinuxDiagnostics::Status;
@@ -94,6 +106,68 @@ void DrawDiagnosticsResult(const InputBridge::Wiimote::WiimoteLinuxDiagnostics::
                         r.status == Status::Warning ? "!" : "i";
     ImGui::TextColored(color, "%s %s", icon, r.title.c_str());
     ImGui::TextWrapped("%s", r.detail.c_str());
+}
+
+// Shows the results of the last "Check for common issues" run in a modal
+// dialog rather than inline in the settings panel - the list can get long
+// enough (permissions, group membership, tooling, Bluetooth, Steam IR
+// conflict) that leaving it inline pushed the rest of the panel down every
+// time it was run, and a modal gives it an explicit "done reading this"
+// dismissal instead.
+void DrawDiagnosticsModal() {
+    if (s_ShouldOpenDiagnosticsModal) {
+        ImGui::OpenPopup("Common Issues Check##modal");
+        s_ShouldOpenDiagnosticsModal = false;
+    }
+
+    bool open = true;
+
+    // Auto-center on the main viewport each time the popup opens (not
+    // ImGuiCond_Always, so the user's own drag/resize afterwards sticks
+    // instead of snapping back to center every frame).
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // No ImGuiWindowFlags_AlwaysAutoResize/NoResize here (unlike the other
+    // modals in this codebase) - the result list's length varies with how
+    // many checks warn, so letting the user drag it larger is more useful
+    // than forcing an exact-content-fit size every time.
+    ImGui::SetNextWindowSize(ImVec2(480, 360), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(360, 200), ImVec2(FLT_MAX, FLT_MAX));
+    if (ImGui::BeginPopupModal("Common Issues Check##modal", &open)) {
+        CloseDiagnosticsModalOnEscape();
+
+        // Results scroll in their own region so Re-check/Close stay pinned
+        // at the bottom regardless of how the user resizes the window.
+        // Reserve room for the Separator (which adds its own ItemSpacing.y
+        // above and below) plus the button row below it, so Re-check/Close
+        // stay fully on-screen - and outside any scrolling region - however
+        // small the user resizes the window, rather than being clipped or
+        // needing a scroll to reach.
+        const float footerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
+        ImGui::BeginChild("##diag_results", ImVec2(0, -footerH), false);
+        if (s_DiagnosticsResults.empty()) {
+            ImGui::TextDisabled("No results yet.");
+        } else {
+            for (size_t i = 0; i < s_DiagnosticsResults.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                DrawDiagnosticsResult(s_DiagnosticsResults[i]);
+                ImGui::PopID();
+                if (i + 1 < s_DiagnosticsResults.size()) ImGui::Spacing();
+            }
+        }
+        ImGui::EndChild();
+
+        ImGui::Separator();
+
+        if (ImGui::Button("Re-check", ImVec2(120, 0))) {
+            s_DiagnosticsResults = InputBridge::Wiimote::WiimoteLinuxDiagnostics::RunAll();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
+    }
 }
 
 } // namespace
@@ -458,16 +532,9 @@ void DrawSettingsContent(float&              user_ui_scale,
         ImGui::Spacing();
         if (ImGui::Button("Check for common issues")) {
             s_DiagnosticsResults = InputBridge::Wiimote::WiimoteLinuxDiagnostics::RunAll();
+            s_ShouldOpenDiagnosticsModal = true;
         }
-        if (!s_DiagnosticsResults.empty()) {
-            ImGui::Spacing();
-            for (size_t i = 0; i < s_DiagnosticsResults.size(); ++i) {
-                ImGui::PushID(static_cast<int>(i));
-                DrawDiagnosticsResult(s_DiagnosticsResults[i]);
-                ImGui::PopID();
-                if (i + 1 < s_DiagnosticsResults.size()) ImGui::Spacing();
-            }
-        }
+        DrawDiagnosticsModal();
     }
 #endif // __linux__
 }
