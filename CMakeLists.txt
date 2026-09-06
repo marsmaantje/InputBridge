@@ -608,7 +608,7 @@ if(UNIX AND NOT APPLE)
     # root). Instead we ship the rules file + installer script under
     # share/inputbridge/udev so packagers/users can apply it explicitly:
     #   sudo <prefix>/share/inputbridge/udev/install-udev-rules.sh
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/99-inputbridge-wiimote.rules"
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-wiimote.rules"
         DESTINATION share/inputbridge/udev)
     install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
         DESTINATION share/inputbridge/udev)
@@ -621,7 +621,7 @@ if(UNIX AND NOT APPLE)
         COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/99-inputbridge-wiimote.rules"
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-wiimote.rules"
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
         "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev/"
         COMMENT "Copying udev installer assets to build output directory"

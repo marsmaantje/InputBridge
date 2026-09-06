@@ -15,7 +15,7 @@ denied" diagnostic (see `WiimoteManager.cpp`).
 
 ## What's here
 
-- `udev/99-inputbridge-wiimote.rules` - a udev rule matching Nintendo's
+- `udev/71-inputbridge-wiimote.rules` - a udev rule matching Nintendo's
   vendor ID (`057e`) and the Wiimote/Wiimote Plus/Balance Board product
   IDs (`0306`, `0330`), tagged both with `uaccess` (for modern
   systemd-logind-based distros) and `GROUP="plugdev", MODE="0660"` (for
@@ -56,7 +56,7 @@ sudo ./packaging/linux/install-udev-rules.sh --uninstall
 ## Packagers (deb/rpm/AUR/etc.)
 
 If you're building a distro package, prefer installing
-`udev/99-inputbridge-wiimote.rules` directly to `/etc/udev/rules.d/` (or
+`udev/71-inputbridge-wiimote.rules` directly to `/etc/udev/rules.d/` (or
 your packaging format's udev rules hook) as part of the package's normal
 post-install, rather than shipping and asking users to run the script -
 the script exists for source builds and generic tarball/AppImage-style

@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-RULES_FILENAME="99-inputbridge-wiimote.rules"
+RULES_FILENAME="71-inputbridge-wiimote.rules"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DEST_RULES_PATH="/etc/udev/rules.d/${RULES_FILENAME}"
 

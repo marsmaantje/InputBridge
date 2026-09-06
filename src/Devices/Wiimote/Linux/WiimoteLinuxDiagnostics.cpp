@@ -24,7 +24,7 @@ namespace {
 using Status = WiimoteLinuxDiagnostics::Status;
 using CheckResult = WiimoteLinuxDiagnostics::CheckResult;
 
-constexpr const char *kUdevRulesPath = "/etc/udev/rules.d/99-inputbridge-wiimote.rules";
+constexpr const char *kUdevRulesPath = "/etc/udev/rules.d/71-inputbridge-wiimote.rules";
 
 bool FileExists(const std::string &path) {
     struct stat st{};
