@@ -1,0 +1,88 @@
+# InputBridge - udev rules for Nintendo Wii Remote / Wii Balance Board
+#
+# NOTE ON THE "71" PREFIX - do not rename this to something >= 73 (this
+# file used to ship as 99-inputbridge-wiimote.rules; don't go back to
+# that). systemd's own ACL-granting rule lives in
+# /usr/lib/udev/rules.d/73-seat-late.rules:
+#   TAG=="uaccess", ENV{MAJOR}!="", RUN{builtin}+="uaccess"
+# udev merges every *.rules file across /etc/udev/rules.d and
+# /usr/lib/udev/rules.d into one filename-sorted list and walks it in a
+# single top-to-bottom pass per device event, running RUN{builtin}
+# actions immediately as each line is reached - not after every file has
+# been processed. So that line only sees whatever TAG state rules *below
+# priority 73* have already set. If TAG+="uaccess" is first assigned by
+# a rule numbered >= 73 (e.g. 99), the tag still ends up recorded in the
+# udev database (so `udevadm info` looks correct) but 73-seat-late.rules
+# already ran its uaccess-granting builtin without seeing it - the ACL
+# is never actually applied, and the device stays root:root/0600 with
+# no error anywhere. Confirmed the hard way: see project history for
+# the case this bit an actual Balance Board connected via a Bluetooth
+# dongle, indistinguishable from a permissions problem until you diff
+# `udevadm info`'s CURRENT_TAGS against `getfacl` on the node itself.
+#
+# Without this file, a Wiimote or Balance Board connected via a Bluetooth
+# *dongle* (as opposed to a laptop's built-in adapter on some distros) is
+# commonly exposed as a plain hid-generic device backed by the kernel's
+# uhid subsystem, and the resulting /dev/hidraw* node is created
+# root:root with mode 0600 - readable/writable only by root - because no
+# rule tags it for the desktop user's session otherwise. InputBridge talks
+# to these devices over hidraw (see WiimoteManager.cpp), so without a rule
+# like this one it fails to open the node with EACCES.
+#
+# This rule matches Nintendo's USB vendor ID (057e) and the two product
+# IDs Wiimotes and Wii Remote Plus / Balance Boards report (0306, 0330 -
+# the Balance Board shares 0330 with the Wiimote Plus - and, per
+# real-world testing, some Balance Boards also report 0306 - the two
+# product families aren't told apart by PID, so both must be covered
+# for both device types).
+#
+# Each match below is deliberately written as TWO separate rule lines,
+# not one line combining both assignments:
+#   1. TAG+="uaccess" alone - the systemd-logind/udev mechanism most
+#      modern distros (Fedora, Arch, recent Debian/Ubuntu, etc.) use to
+#      grant the currently logged-in seat's user access automatically,
+#      no group membership required.
+#   2. GROUP="plugdev", MODE="0660" alone - a fallback for older/minimal
+#      distros that still rely on plugdev-style group ownership instead
+#      of uaccess.
+# This split matters: on a system with no "plugdev" group,
+# systemd-udevd logs "Failed to resolve group 'plugdev', ignoring:
+# Unknown group" for line 2 and - critically - invalidates that ENTIRE
+# rule line, not just the unresolvable GROUP= assignment. If TAG+="uaccess"
+# had been combined onto the same line (as an earlier version of this
+# file did), the failed GROUP lookup silently took the uaccess grant
+# down with it too, leaving the device root:root/0600 with no error
+# anywhere in the app - only visible via `udevadm test`. Splitting them
+# means a missing "plugdev" group only costs line 2; line 1 still grants
+# access via uaccess independently. Confirmed with:
+#   sudo udevadm test /sys/class/hidraw/hidrawN
+
+# Wiimote (RVL-CNT-01) and Wiimote Plus / Balance Board (RVL-CNT-01-TR),
+# connected via USB Bluetooth dongle or built-in adapter.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0306", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0306", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0330", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0330", GROUP="plugdev", MODE="0660"
+
+# Some Bluetooth stacks surface the vendor/product IDs on the parent
+# Bluetooth HID device node rather than (or in addition to) the hidraw
+# grandchild's own ATTRS. Walking up to match there too covers dongles
+# whose hidraw node doesn't inherit idVendor/idProduct directly.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01-TR", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01-TR", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-WBC-01", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-WBC-01", GROUP="plugdev", MODE="0660"
+
+# Most robust match for the Bluetooth/uhid case: the hidraw node's
+# immediate parent is a virtual "hid"-bus device (see
+# /devices/virtual/misc/uhid/... in `udevadm info -a`), whose *kernel*
+# name is always "<bus>:<vendor>:<product>.<instance>" in uppercase hex
+# - bus 0005 is BUS_BLUETOOTH. This doesn't depend on a "name" attribute
+# being present or exactly matching, unlike the ATTRS{name} rules above,
+# so it's kept as a third, independent way to reach the same node.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0306.*", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0306.*", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0330.*", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0330.*", GROUP="plugdev", MODE="0660"

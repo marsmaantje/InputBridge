@@ -80,21 +80,13 @@ IRState IRBasic(const uint8_t ir[10]) {
 
 IRState IRExtended(const uint8_t ir[12]) {
     IRState out{};
-    // Per dot: byte0 = X low 8 bits, byte1 = Y low 8 bits, byte2 bits 7:6 =
-    // Y high 2 bits, bits 5:4 = X high 2 bits, bits 3:0 = size. (Note the
-    // high-bit nibbles are Y-then-X in byte2, NOT X-then-Y - easy to get
-    // backwards since Basic Mode's pair-packing byte puts them in the
-    // opposite order per dot. Getting this swapped makes a dot's X and Y
-    // high bits cross-wired: a real X-axis boundary crossing shows up as a
-    // spurious jump in Y instead, i.e. dots appear to jump to the opposite
-    // side of the tracked area when moved smoothly in one direction.)
-    // An empty slot reads all-1s across *all 3 bytes* (byte2 == 0xFF in
-    // full, not just its low nibble) per WiiBrew - so byte2's visibility
-    // check must cover the X/Y high-bit nibble too, not only the size
-    // nibble. Checking only the size nibble (p[2] & 0x0F == 0x0F) lets a
-    // real, tracked dot with size==15 (a big/bright blob - common at close
-    // range) and X or Y raw low-bytes of 0xFF (X in {255,511,767,1023}
-    // etc.) get misclassified as invisible.
+    // Per dot: byte0 = X low 8 bits, byte1 = Y low 8 bits, byte2 = Y-high
+    // (bits 7:6), X-high (bits 5:4), size (bits 3:0) - same Y-before-X
+    // nibble order as Basic Mode's pair-packing byte.
+    // An empty slot reads all-1s across all 3 bytes (byte2 == 0xFF in
+    // full), so the visibility check must cover the X/Y high-bit nibble
+    // too, not just the size nibble - checking only bits 3:0 would
+    // misclassify a real dot with size==15 as invisible.
     for (int i = 0; i < 4; ++i) {
         const uint8_t *p = ir + (i * 3);
         IRDot &d = out[i];
@@ -172,24 +164,18 @@ GuitarHeroState GuitarFromClassic(const ClassicControllerState &cc, bool is_drum
     s.stick_x     = uint8_t(cc.left_x * 4); // rescale 0-63 -> ~0-252
     s.whammy_bar  = uint8_t(cc.right_trigger * 8); // rescale 0-31 -> ~0-248
 
-    // Drum pad velocities are not covered by the Classic-Controller-shaped
-    // decode above; GHWT Drums uses extra bytes/mode not modeled here yet.
+    // Drum pad velocities aren't covered by this Classic-shaped decode;
+    // GHWT Drums needs extra bytes/mode not modeled here yet.
     return s;
 }
 
 GuitarHeroState Guitar(const uint8_t *ext, size_t len, bool is_drums) {
-    // Guitar Hero (Wii) guitars/drums stream their fret/strum/whammy data
-    // packed into the same 6-byte layout as a stock Classic Controller
-    // (format 0x01), just with different physical labels on the same
-    // button/axis bits - this is how the extension is decoded in practice
-    // by the existing open-source drivers (wiiuse's classic_ctrl.c reuses
-    // its Classic Controller parser for the guitar for exactly this reason).
-    // NOTE: WiiBrew separately states the guitar advertises data-format
-    // byte 0x03 (8-bit precision, 8-byte layout) - if your specific guitar
-    // reports 8 bytes of extension data instead of 6, this mapping will be
-    // wrong and needs to be reworked against a byte capture from real
-    // hardware. Treat this decoder as a verified-shape-but-unverified-on-
-    // hardware starting point.
+    // GH guitars/drums stream fret/strum/whammy in the same 6-byte layout
+    // as a stock Classic Controller (format 0x01), just with different
+    // physical labels - same approach wiiuse's classic_ctrl.c takes.
+    // WiiBrew notes the guitar actually advertises format 0x03 (8-bit,
+    // 8-byte layout); if real hardware sends 8 bytes this mapping is wrong
+    // and needs reworking against a real capture. Unverified on hardware.
     if (len < 6) return GuitarHeroState{};
     return GuitarFromClassic(Classic(ext, len, /*is_pro=*/false), is_drums);
 }
@@ -246,21 +232,11 @@ namespace {
 // two nearest calibration points that bracket the reading, or the top two
 // if the reading exceeds the highest calibration point (extrapolate).
 float InterpolateWeight(uint16_t raw, uint16_t c0, uint16_t c17, uint16_t c34) {
-    // Do the whole computation in the signed/float domain and don't clamp
-    // a sub-c0 reading to a hard 0. That clamp used to pin a corner at a
-    // flat, unmoving 0.0 kg the instant its raw value dipped even slightly
-    // below the stored 0kg calibration point - which happens constantly,
-    // both from ordinary sensor drift AND from real physics (the board
-    // flexes: when weight shifts toward one corner, the diagonally
-    // opposite corner's compression can genuinely drop below its "empty"
-    // baseline). WiiBalanceWalker doesn't clamp this either - it just
-    // shows the signed raw-vs-baseline delta - which is why its readings
-    // stay "alive" on all four corners while ours pinned three of them at
-    // exactly 0. Extrapolating below c0 the same way we already
-    // extrapolate above c34 fixes that; a final small negative kg reading
-    // is expected/harmless (it means "slightly unloaded relative to
-    // calibration", not a sensor fault) and callers can clamp for display
-    // if they want a strictly-non-negative number.
+    // Extrapolate below c0 the same way we extrapolate above c34, rather
+    // than clamping to 0 - board flex can genuinely push a corner's raw
+    // reading below its 0kg baseline (e.g. diagonal compression as weight
+    // shifts elsewhere), and a small negative kg is a valid "slightly
+    // unloaded" reading, not a fault. Callers can clamp for display.
     if (raw <= c17) {
         if (c17 == c0) return 0.f;
         return 17.f * (float(raw) - float(c0)) / float(c17 - c0);
@@ -303,23 +279,14 @@ BalanceBoardState BalanceBoard(const uint8_t ext[11], const BalanceBoardCalibrat
 }
 
 MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
-    // Byte layout, cross-checked against two independently-written reference
-    // implementations (FreeIMU's Wii Motion Plus support, and the Adafruit/
-    // Arduino I2C sample referenced from WiiBrew) since WiiBrew's own bit
-    // table for this section is easy to mis-transcribe by hand:
-    //   ext[0] = Yaw   low 8 bits      ext[3] bits 7:2 = Yaw   high 6 bits
-    //   ext[1] = Roll  low 8 bits      ext[4] bits 7:2 = Roll  high 6 bits
-    //   ext[2] = Pitch low 8 bits      ext[5] bits 7:2 = Pitch high 6 bits
-    //   ext[3] bit 1 = slow_yaw     (1 = yaw axis in slow/high-precision range)
-    //   ext[3] bit 0 = slow_pitch   (1 = pitch axis in slow/high-precision range)
-    //   ext[4] bit 1 = slow_roll    (1 = roll axis in slow/high-precision range)
-    //   ext[4] bit 0 = extension_connected (per WiiBrew: "usually 1" - a
-    //                  passthrough Nunchuk/Classic Controller is present)
-    //   ext[5] bit 1 = report-type discriminator: 1 = this IS MotionPlus
-    //                  data, 0 = regular extension data snuck through in
-    //                  the same byte slot. WiimoteDevice checks this bit
-    //                  BEFORE calling this decoder, so it's not re-checked
-    //                  here, but note it for anyone reading raw captures.
+    // Byte layout (cross-checked against FreeIMU and Adafruit reference
+    // implementations, since WiiBrew's own bit table is easy to mistranscribe):
+    //   ext[0/1/2] = Yaw/Roll/Pitch low 8 bits
+    //   ext[3/4/5] bits 7:2 = Yaw/Roll/Pitch high 6 bits
+    //   ext[3] bit 1/0 = slow_yaw/slow_pitch; ext[4] bit 1 = slow_roll
+    //   ext[4] bit 0 = extension_connected (passthrough device present)
+    //   ext[5] bit 1 = report-type discriminator (1 = MotionPlus data) -
+    //     WiimoteDevice checks this before calling here, not re-checked.
     MotionPlusState s;
     if (len < 6) return s; // disconnected/insufficient data
     s.connected = true;
@@ -334,13 +301,10 @@ MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
 
     s.extension_connected = ext[4] & 0x01;
 
-    // Nominal conversion: zero-rate offset ~8192 (14-bit centre - WiiBrew
-    // documents the real still-state reading as closer to 0x1F7F/8063, so
-    // recalibrate at startup for drift-free readings if precision matters).
-    // Scale: ~13.768 counts/deg/s in the "slow"/high-precision range; the
-    // "fast" range covers a wider deg/s span (2000 vs 440 deg/s full-scale)
-    // over the same 14-bit code space, so its counts/deg/s is smaller by
-    // that 2000/440 ratio.
+    // Nominal conversion: zero-rate offset 8192 (14-bit centre; real
+    // hardware idles closer to ~8063, so recalibrate at startup for
+    // precision). Scale: ~13.768 counts/deg/s in "slow" range; "fast"
+    // range covers 2000 vs 440 deg/s full-scale over the same code space.
     constexpr float kZero = 8192.f;
     constexpr float kSlowCountsPerDegS = 8192.f / 595.f; // ~13.768
     constexpr float kFastCountsPerDegS = kSlowCountsPerDegS * 440.f / 2000.f;
@@ -356,20 +320,13 @@ MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
 }
 
 NunchukState NunchukViaMotionPlus(const uint8_t *ext, size_t len) {
-    // Per WiiBrew "Nunchuck pass-through mode" data-format table: SX/SY are
-    // untouched; each accelerometer axis loses its LSB (bit 0, always read
-    // as 0 here) to make room for the bookkeeping bits, with the remaining
-    // 9 bits split across ext[2]/ext[3]/ext[4] (as in the normal format)
-    // plus one extra relocated bit per axis packed into ext[5]:
-    //   ext[5] bit 4 = AX bit 1     ext[5] bit 5 = AY bit 1
-    //   ext[5] bits 7:6 = AZ bits 2:1 (AZ's top 7 bits, 9:3, stay in ext[4]
-    //   bits 7:1; ext[4] bit 0 becomes "extension connected" instead of
-    //   contributing to AZ)
-    //   ext[5] bit 3 = Button C     ext[5] bit 2 = Button Z  (both active-low,
-    //   same convention as the non-passthrough format's bits 1/0)
-    //   ext[5] bits 1:0 = report-type discriminator + reserved (0 here;
-    //   WimoteDevice only calls this decoder when it's already established
-    //   this is extension data, not a MotionPlus gyro report)
+    // Per WiiBrew "Nunchuck pass-through mode": SX/SY untouched; each accel
+    // axis loses its LSB (always 0 here) to make room for bookkeeping bits
+    // relocated into ext[5]:
+    //   bit 5/4 = AY/AX bit 1     bits 7:6 = AZ bits 2:1
+    //   bit 3/2 = Button C/Z (active-low)   bits 1:0 = discriminator/reserved
+    // AZ's top 7 bits stay in ext[4] bits 7:1; ext[4] bit 0 becomes
+    // "extension connected".
     NunchukState s;
     if (len < 6) return s; // disconnected/insufficient data
     s.connected = true;
@@ -384,21 +341,13 @@ NunchukState NunchukViaMotionPlus(const uint8_t *ext, size_t len) {
 }
 
 ClassicControllerState ClassicViaMotionPlus(const uint8_t *ext, size_t len, bool is_pro) {
-    // Per WiiBrew "Classic Controller ... pass-through mode" data-format
-    // table. RX/RY/LT/RT and the BDR/BDD/BLT/-/H/+/RT and ZL/B/Y/A/X/ZR
-    // button bits sit at the exact same bit positions as the non-passthrough
-    // format (see Classic() above), so those lines are unchanged from it.
-    // What differs:
-    //   - Left stick X/Y each lose their LSB (bit 0, always read as 0 here)
-    //     to make room for the two relocated D-pad bits below.
-    //   - BDU (dpad_up) moves into ext[0] bit 0 (was ext[5] bit 0).
-    //   - BDL (dpad_left) moves into ext[1] bit 0 (was ext[5] bit 1).
-    //   - ext[4] bit 0 becomes "extension connected" (unused/reserved in
-    //     the non-passthrough format).
-    //   - ext[5] bits 1:0 become the report-type discriminator + reserved
-    //     (always 0 here) rather than dpad_left/dpad_up - reading them as
-    //     buttons, as the plain Classic() decoder would, misreports both
-    //     as permanently pressed.
+    // Per WiiBrew "Classic Controller pass-through mode": RX/RY/LT/RT and
+    // all buttons except the D-pad sit at the same bits as Classic() above.
+    // What differs: left stick X/Y each lose their LSB to make room for
+    // BDU (moved to ext[0] bit 0) and BDL (moved to ext[1] bit 0); ext[4]
+    // bit 0 becomes "extension connected"; ext[5] bits 1:0 become the
+    // discriminator/reserved bits instead of dpad_left/up (reading them as
+    // buttons, as plain Classic() would, misreports both as held).
     ClassicControllerState s;
     if (len < 6) return s;
     s.connected = true;

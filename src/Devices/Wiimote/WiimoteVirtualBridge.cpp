@@ -2,54 +2,46 @@
 #include "WiimoteVirtualBridge.h"
 #include "App/Log.h"
 #include <algorithm>
+#include <cstring>
+#include <optional>
 
 namespace InputBridge::Wiimote {
 
 namespace {
 constexpr const char *kTag = "WiimoteVirtualBridge";
 
-// IMPORTANT: kWiimoteBridgeDeviceName/kBalanceBoardBridgeDeviceName (see
-// header) must never contain "Wii Remote", "RVL-CNT", or "RVL-WBC" -
-// DeviceManager::HandleDeviceAdded's Wiimote-family filter (added to stop
-// SDL's own HIDAPI Wii driver racing WiimoteManager for the real hardware)
-// would silently reject this bridge's virtual joystick too, thinking it's
-// a second real Wiimote. They also must not contain "Nintendo" or
-// "Wiimote" - DevicePanel's legacy DeviceState-based WiimoteVisualizer tab
-// keys off those substrings and assumes SDL's own Wii HIDAPI button
-// layout, which doesn't match this bridge's custom layout and would show
-// wrong button highlighting if triggered here.
+// IMPORTANT: the bridge device names (see header) must never contain "Wii
+// Remote", "RVL-CNT", or "RVL-WBC" - DeviceManager's Wiimote-family filter
+// would mistake this virtual joystick for a second real Wiimote. Must also
+// avoid "Nintendo"/"Wiimote" - DevicePanel's legacy WiimoteVisualizer tab
+// keys off those substrings and assumes SDL's own Wii button layout, which
+// doesn't match this bridge's custom layout.
 
-// Balance Board weight axes rest at 0kg -> mapped to -1, matching the
-// "trigger at rest = -1" convention VirtualDeviceManager's gamepad/wheel
-// presets already use for throttle/brake/triggers (see the naming
-// convention embedded in the Preset tables in VirtualDeviceManager.cpp).
+// Balance Board weight axes rest at 0kg -> -1, matching the "rest = -1"
+// convention VirtualDeviceManager's gamepad/wheel presets use for
+// throttle/brake/triggers.
 constexpr float kBalanceMaxKgPerCorner = 80.0f;  // generous single-corner max
 constexpr float kBalanceMaxTotalKg     = 150.0f; // above typical adult body weight
 
-// Motion Plus deg/s -> [-1,1], clamped rather than scaled to the full
-// documented ~±2000 deg/s fast-mode range: most mapping use cases (aiming,
-// tilt gestures) care about a much smaller working range. 500 deg/s is
-// already a brisk wrist flick.
+// Motion Plus deg/s -> [-1,1], clamped well below the ~±2000 deg/s fast-mode
+// range since most mapping uses (aiming, tilt gestures) want a smaller
+// working range; 500 deg/s is already a brisk wrist flick.
 constexpr float kMotionPlusMaxDegPerSec = 500.0f;
 
-// A hand-held remote's accelerometer rarely sees much past ±3g in normal
-// use (WiiBrew notes the sensor itself saturates around ±3g); use that as
-// the mapping's full-scale range so a moderate shake reaches the rails.
+// A handheld remote's accelerometer rarely exceeds ±3g in normal use
+// (the sensor itself saturates near there) - use that as full scale.
 constexpr float kAccelMaxG = 3.0f;
 
-// Balance Board keeps its raw 0x00-0xFF battery byte around
-// (snap.balance_board.battery_raw); Norm01ToBipolar(raw, 0, kBatteryRawMax)
-// maps that straight to the axis's -1..+1 range, full scale (0xFF -> +1)
-// rather than clamping at the "Four bars" threshold (0x82), so the axis
-// keeps resolving differences a 4-bar icon can't show.
+// Balance Board keeps its raw 0x00-0xFF battery byte, mapped straight to
+// -1..+1 (0xFF -> +1) rather than clamped at the "4 bars" threshold, so the
+// axis resolves finer differences than the 4-bar icon shows.
 constexpr float kBatteryRawMax = 255.0f;
 
-// A handheld Wiimote, unlike the Balance Board, only keeps the *classified*
-// BatteryBars around (snap.battery - see WiimoteDevice.cpp's UpdateStatus()),
-// not the raw byte it came from, so its axis is derived from the same
-// bracket thresholds ClassifyWiimoteBattery() (WiimoteState.h) already
-// uses for the UI's 4-bar icon, keeping axis and icon consistent with each
-// other. Returns each bracket's approximate midpoint as a [0,1] fraction.
+// A handheld Wiimote only keeps the *classified* BatteryBars, not the raw
+// byte, so derive its axis from the same thresholds
+// ClassifyWiimoteBattery() (WiimoteState.h) uses for the UI's 4-bar icon,
+// keeping axis and icon consistent. Returns each bracket's midpoint as
+// [0,1].
 float BatteryBarsToRaw01(BatteryBars bars) {
     switch (bars) {
         case BatteryBars::Four:  return 1.00f; // >= 0x82
@@ -71,12 +63,9 @@ float NormSymmetric(float v, float maxAbs) {
     return std::clamp(v / maxAbs, -1.f, 1.f);
 }
 
-// NunchukState only keeps the raw 10-bit accelerometer counts (see
-// WiimoteState.h - "same scale as Wiimote accel"), unlike the main Wiimote
-// accelerometer which already has g_x/g_y/g_z precomputed by
-// WiimoteDecoder::Accel(). Apply the same nominal 0g/1g conversion here
-// (0g ~= 512, 1g ~= 512 + 128 counts) before feeding it through
-// NormSymmetric/kAccelMaxG below.
+// NunchukState only keeps raw 10-bit accel counts (same scale as the
+// Wiimote's own accel), so apply the same nominal 0g/1g conversion
+// WiimoteDecoder::Accel() uses before feeding NormSymmetric/kAccelMaxG.
 float NunchukAccelRawToG(uint16_t raw) {
     constexpr float kZeroG = 512.f, kOneGCounts = 128.f;
     return (float(raw) - kZeroG) / kOneGCounts;
@@ -190,30 +179,21 @@ void WiimoteVirtualBridge::Attach(const WiimoteDevice &dev) {
 
     SDL_VirtualJoystickDesc desc{};
     SDL_INIT_INTERFACE(&desc);
-    // NOT SDL_JOYSTICK_TYPE_GAMEPAD: DeviceFactory routes anything typed as
-    // a gamepad through SDL_OpenGamepad(), which gives DeviceState a
-    // non-null `gamepad` handle - and InputLabelProvider (the "Raw Inputs"
-    // tab's naming source, shown for every device including this one) uses
-    // that to walk SDL_GetGamepadBindings() and label axes/buttons with
-    // Xbox-style names ("Left Stick X", "South", ...) looked up by
-    // *numeric position* in SDL's synthetic default gamepad mapping. That
-    // table has no idea this virtual joystick's axis 0 actually holds
-    // accelerometer X, axis 11 holds Motion Plus yaw, etc - hence the
-    // reported name/channel mismatch. SDL_JOYSTICK_TYPE_UNKNOWN routes
-    // through CreateGenericDevice() instead (gamepad left null, exactly
-    // like VirtualDeviceManager's own non-gamepad presets), and
-    // InputLabelProvider's Wiimote-aware branch below (matched by this
-    // device's name) supplies the real per-index names directly instead of
-    // falling through to a numbered "Axis N" fallback.
+    // NOT SDL_JOYSTICK_TYPE_GAMEPAD: that would route through
+    // SDL_OpenGamepad(), and InputLabelProvider would then label axes
+    // using SDL's default gamepad mapping by numeric position (e.g. "Left
+    // Stick X") - which has no idea axis 0 here is actually accelerometer
+    // X. SDL_JOYSTICK_TYPE_UNKNOWN keeps `gamepad` null (like
+    // VirtualDeviceManager's other non-gamepad presets), so
+    // InputLabelProvider's Wiimote-aware branch (matched by device name)
+    // supplies the real per-index names instead.
     desc.type     = static_cast<Uint16>(SDL_JOYSTICK_TYPE_UNKNOWN);
     desc.naxes    = static_cast<Uint16>(balance ? kBalanceNumAxes : kWiimoteNumAxes);
     desc.nbuttons = static_cast<Uint16>(balance ? kBalanceNumButtons : kWiimoteNumButtons);
     desc.nhats    = static_cast<Uint16>(balance ? 0 : kWiimoteNumHats); // Balance Board has no D-Pad
 
-    // See the file-level comment for why these exact strings matter. Also
-    // referenced by name (not substring) from InputLabelProvider's
-    // Wiimote-aware branch - keep those two switch/if checks in sync if
-    // either string changes.
+    // Exact strings matter (see file-level comment); also referenced by
+    // InputLabelProvider's Wiimote-aware branch - keep in sync if changed.
     const std::string name = balance ? kBalanceBoardBridgeDeviceName
                                       : kWiimoteBridgeDeviceName;
     desc.name = name.c_str();
@@ -244,17 +224,76 @@ void WiimoteVirtualBridge::Attach(const WiimoteDevice &dev) {
 }
 
 void WiimoteVirtualBridge::Detach(Entry &entry) {
-    // Same ordering VirtualDeviceManager::RemoveDevice documents:
     // SDL_DetachVirtualJoystick fires SDL_EVENT_JOYSTICK_REMOVED, which
     // DeviceManager::HandleDeviceRemoved() handles by closing the SDL
-    // handle itself - do not also close it here.
+    // handle - don't also close it here (see VirtualDeviceManager::RemoveDevice).
     SDL_DetachVirtualJoystick(entry.joystick_id);
 }
+
+namespace {
+// Reads the *actual* name SDL attached the virtual joystick under, rather
+// than trusting Entry::is_balance_board (which is only ever set by Attach()
+// itself, so comparing a cached copy of it against the value that produced
+// it can never disagree). This is the same identity InputLabelProvider
+// keys off of to know which axis/button name table to use for an
+// already-created SDL device - if that ever drifted from Entry's cached
+// bool, InputLabelProvider's labels would be wrong for reasons this class
+// couldn't see. Querying SDL directly keeps this check honest against the
+// live device instead of another copy of our own state.
+//
+// Returns std::nullopt if the joystick's name can't be read at all (null
+// joystick pointer, or SDL_GetJoystickName() itself returning null) - the
+// caller falls back to Entry::is_balance_board in that case rather than
+// treating an inconclusive read as "not a balance board".
+std::optional<bool> AttachedAsBalanceBoard(SDL_Joystick *joystick) {
+    const char *name = joystick ? SDL_GetJoystickName(joystick) : nullptr;
+    if (!name) return std::nullopt;
+    return std::strcmp(name, kBalanceBoardBridgeDeviceName) == 0;
+}
+} // namespace
 
 void WiimoteVirtualBridge::Sync(const std::vector<std::unique_ptr<WiimoteDevice>> &wiimotes) {
     for (auto &dev : wiimotes) {
         const std::string &path = dev->Snapshot().hid_path;
-        if (!Find(path)) Attach(*dev);
+        Entry *existing = Find(path);
+        if (!existing) {
+            Attach(*dev);
+            continue;
+        }
+
+        // The initial is_balance_board hint comes from the Bluetooth HID
+        // product string, which many stacks (notably on Windows) leave
+        // blank/generic for a Balance Board - see WiimoteDevice::Init()'s
+        // "self-heals" comment. That means Attach() can run before the
+        // authoritative extension ID (0x0402) has been read, latching in
+        // an SDL_JOYSTICK_TYPE_UNKNOWN virtual joystick shaped like a
+        // regular Wii Remote. Once the snapshot's flag flips, re-attach so
+        // the virtual device gets the right axis/button layout and name
+        // too instead of staying wrong for the rest of the connection.
+        //
+        // Compare against the *actual* SDL joystick name (the same
+        // identity InputLabelProvider keys off of) rather than the cached
+        // Entry::is_balance_board bool alone - that bool is only ever set
+        // by Attach() from this same snapshot flag, so checking it here
+        // would just compare a value against a copy of itself and could
+        // never catch drift between the live SDL device and what we think
+        // we attached. Fall back to the cached bool only if the name can't
+        // be read at all.
+        const bool attached_as_balance = AttachedAsBalanceBoard(existing->joystick)
+                                         .value_or(existing->is_balance_board);
+        if (attached_as_balance != dev->Snapshot().is_balance_board) {
+            LOG_INFO(kTag, "Wiimote '%s' balance-board classification changed "
+                      "(%s -> %s) after the virtual joystick was already "
+                      "created - re-attaching with the correct device type",
+                      path.c_str(),
+                      attached_as_balance ? "balance board" : "wiimote",
+                      dev->Snapshot().is_balance_board ? "balance board" : "wiimote");
+            Detach(*existing);
+            m_Entries.erase(std::remove_if(m_Entries.begin(), m_Entries.end(),
+                [&](const Entry &e) { return e.hid_path == path; }),
+                m_Entries.end());
+            Attach(*dev);
+        }
     }
 
     auto still_present = [&](const std::string &path) {
@@ -296,10 +335,7 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
             setAxis(BAxis_CoGX, std::clamp(bb.cog_x, -1.f, 1.f));
             setAxis(BAxis_CoGY, std::clamp(bb.cog_y, -1.f, 1.f));
             // Balance Board keeps its own raw battery byte (unlike a
-            // handheld Wiimote, which only surfaces the classified
-            // BatteryBars - see WiimoteDevice.cpp), so use it directly for
-            // slightly finer resolution than re-deriving from the 4-bar
-            // classification would give.
+            // handheld Wiimote), so use it directly for finer resolution.
             setAxis(BAxis_Battery, Norm01ToBipolar(float(bb.battery_raw), 0.f, kBatteryRawMax));
             setBtn(BBtn_A, bb.button_a);
             continue;
@@ -309,14 +345,10 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setAxis(Axis_AccelY, NormSymmetric(snap.accel.g_y, kAccelMaxG));
         setAxis(Axis_AccelZ, NormSymmetric(snap.accel.g_z, kAccelMaxG));
 
-        // IR: all 4 tracked points are bridged, each as its own X/Y axis
-        // pair (Axis_IR1X/Y .. Axis_IR4X/Y), in the same slot order the
-        // Wiimote report delivers them (see IRState/WiimoteDecoder.cpp) -
-        // there's no persistent identity across frames beyond that slot
-        // index, so "dot 1" simply means "whatever is in ir[0] right now".
-        // Each rests at center (0) when its slot isn't visible, rather than
-        // snapping to a rail, so an empty/unmapped camera view doesn't read
-        // as "full deflection".
+        // IR: all 4 points bridged as X/Y axis pairs, in report slot order
+        // - "dot 1" just means "whatever is in ir[0] right now", no
+        // persistent identity across frames. Rests at center (0), not a
+        // rail, when its slot isn't visible.
         static constexpr int kIRAxisX[4] = {Axis_IR1X, Axis_IR2X, Axis_IR3X, Axis_IR4X};
         static constexpr int kIRAxisY[4] = {Axis_IR1Y, Axis_IR2Y, Axis_IR3Y, Axis_IR4Y};
         for (int i = 0; i < 4; ++i) {
@@ -325,28 +357,23 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
             setAxis(kIRAxisY[i], dot.visible ? (float(dot.y) / 767.0f)  * 2.f - 1.f : 0.f);
         }
 
-        // Dot size (0-15), only meaningful while IR Extended mode is active
-        // (WiimoteDevice::SetIRExtendedMode) - IRDot::size stays 0 the rest
-        // of the time, same as any other at-rest reading. Uses the same
-        // "trigger at rest = -1" bipolar convention as the Balance Board's
-        // weight axes above (Norm01ToBipolar), since size is a magnitude
-        // with no natural sign, not a centered stick axis: 0 -> -1 (rest/
-        // not visible), 15 -> +1 (biggest blob the camera reports).
+        // Dot size (0-15), only meaningful in IR Extended mode
+        // (WiimoteDevice::SetIRExtendedMode; stays 0 otherwise). Magnitude
+        // with no natural sign, so uses the "rest = -1" convention like
+        // the Balance Board weight axes: 0/not-visible -> -1, 15 -> +1.
         static constexpr int kIRAxisSize[4] = {Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size};
         for (int i = 0; i < 4; ++i) {
             const auto &dot = snap.ir[i];
             setAxis(kIRAxisSize[i], dot.visible ? Norm01ToBipolar(float(dot.size), 0.f, 15.f) : -1.f);
         }
 
-        // Nunchuk stick: 8-bit, documented center ~128, physical range
-        // roughly 35-228 (WiiBrew) - +-100 as the working half-range keeps
-        // the mapping usable without needing per-device calibration.
+        // Nunchuk stick: 8-bit, center ~128, physical range roughly
+        // 35-228 - ±100 half-range avoids needing per-device calibration.
         setAxis(Axis_NunchukX, (float(snap.nunchuk.stick_x) - 128.f) / 100.f);
         setAxis(Axis_NunchukY, (float(snap.nunchuk.stick_y) - 128.f) / 100.f);
 
-        // Nunchuk accelerometer: same nominal 0g/1g raw-count scale as the
-        // Wiimote's own accelerometer (see NunchukAccelRawToG above), so
-        // reuse kAccelMaxG for the same +-3g full-scale mapping.
+        // Nunchuk accel: same nominal 0g/1g scale as the Wiimote's own
+        // (NunchukAccelRawToG above), so reuse kAccelMaxG.
         setAxis(Axis_NunchukAccelX, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_x), kAccelMaxG));
         setAxis(Axis_NunchukAccelY, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_y), kAccelMaxG));
         setAxis(Axis_NunchukAccelZ, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_z), kAccelMaxG));
@@ -371,10 +398,8 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setBtn(Btn_Plus, snap.core.plus);   setBtn(Btn_Minus, snap.core.minus);
         setBtn(Btn_Home, snap.core.home);
 
-        // D-Pad as a hat (see WiimoteHat's comment) - bits are ORable
-        // directly into SDL's own hat bitmask (SDL_HAT_UP/DOWN/LEFT/RIGHT),
-        // so a diagonal reads as e.g. SDL_HAT_LEFTUP automatically without
-        // needing to special-case it here.
+        // D-Pad as a hat (see WiimoteHat) - bits OR directly into SDL's
+        // hat bitmask, so a diagonal reads as e.g. SDL_HAT_LEFTUP for free.
         Uint8 dpad_hat = SDL_HAT_CENTERED;
         if (snap.core.up)    dpad_hat |= SDL_HAT_UP;
         if (snap.core.down)  dpad_hat |= SDL_HAT_DOWN;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.11.4)
+project(InputBridge VERSION 0.11.5)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,7 +8,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
 set(ENABLE_EXCLUSIVE_INPUT ON CACHE BOOL "Enable device-hide support (HidHide on Windows, evdev grab on Linux, IOKit seize on macOS)" FORCE)
 set(ENABLE_WEBSOCKETS ON CACHE BOOL "Enable WebSocket server support" FORCE)
-set(ENABLE_OSC ON CACHE BOOL "Enable WebSocket server support" FORCE)
+set(ENABLE_OSC ON CACHE BOOL "Enable OSC support" FORCE)
 
 # Add SDL3
 # We assume lib/sdl contains the SDL3 source code.
@@ -245,8 +245,27 @@ add_executable(InputBridge
     src/Devices/Wiimote/WiimoteADPCM.cpp
     src/Devices/Wiimote/WiimoteDecoder.cpp
     src/Devices/Wiimote/WiimoteDevice.cpp
+    src/Devices/Wiimote/WiimoteHidTransport.cpp
     src/Devices/Wiimote/WiimoteManager.cpp
     src/Devices/Wiimote/WiimoteVirtualBridge.cpp
+    # Direct Bluetooth L2CAP transport (Linux only - #ifdef __linux__'d out
+    # to an empty translation unit elsewhere, same convention as
+    # src/ExclusiveMode/*.cpp below). Bypasses the OS HID subsystem so
+    # this Wiimote stops sharing its data-reporting mode with anything
+    # else that also opens the hidraw node (Steam Input, most notably -
+    # see src/Devices/Wiimote/README.md).
+    src/Devices/Wiimote/Linux/WiimoteL2CAPTransport.cpp
+    src/Devices/Wiimote/Linux/WiimoteBluetoothUtil.cpp
+    # In-app udev-rule installer trigger for the Wiimote/Balance Board
+    # hidraw permission issue (see packaging/linux/README.md). Same
+    # Linux-only-but-unconditionally-listed convention as the two files
+    # just above - empty translation unit on other platforms via the
+    # #ifdef __linux__ wrapping the whole file.
+    src/Devices/Wiimote/Linux/LinuxUdevInstaller.cpp
+    # Read-only "check for common issues" diagnostics backing the button
+    # in Settings > Linux Permissions - same #ifdef __linux__-wrapped
+    # empty-translation-unit convention as the files above.
+    src/Devices/Wiimote/Linux/WiimoteLinuxDiagnostics.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
@@ -581,6 +600,32 @@ if(UNIX AND NOT APPLE)
 
     file(WRITE ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='#333'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='10'>IB</text></svg>")
     install(FILES ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg DESTINATION share/icons/hicolor/scalable/apps)
+
+    # Wiimote/Balance Board hidraw permissions (see packaging/linux/README.md).
+    # These are host system config, not app payload, so `cmake --install`
+    # deliberately does NOT write to /etc/udev/rules.d itself (that would
+    # make a plain, non-root `cmake --install` fail, or silently need
+    # root). Instead we ship the rules file + installer script under
+    # share/inputbridge/udev so packagers/users can apply it explicitly:
+    #   sudo <prefix>/share/inputbridge/udev/install-udev-rules.sh
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-wiimote.rules"
+        DESTINATION share/inputbridge/udev)
+    install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
+        DESTINATION share/inputbridge/udev)
+
+    # Also copy both next to the built binary (dev/build-tree layout, same
+    # idea as the themes/fonts POST_BUILD copies above) so the in-app
+    # "Fix permissions" button (DevicePanel.cpp / LinuxUdevInstaller) finds
+    # them without needing a full `cmake --install` first.
+    add_custom_command(TARGET InputBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-wiimote.rules"
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
+        "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev/"
+        COMMENT "Copying udev installer assets to build output directory"
+    )
 endif()
 
 if(WIN32)

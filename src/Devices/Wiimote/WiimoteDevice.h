@@ -14,28 +14,24 @@
 #include "WiimoteADPCM.h"
 #include "WiimoteProtocol.h"
 #include "WiimoteState.h"
-#include <SDL3/SDL_hidapi.h>
+#include "WiimoteTransport.h"
+#include <SDL3/SDL_stdinc.h>
 #include <cstdint>
 #include <string>
 #include <optional>
+#include <memory>
 #include <vector>
 
 namespace InputBridge::Wiimote {
 
-// Which of the two speaker encodings (see WiimoteProtocol.h's
-// SpeakerFormat namespace for the underlying register values) EnableSpeaker()
-// should configure the hardware for. A type-safe wrapper around those raw
-// register values rather than reusing them directly as the API's parameter
-// type, so callers can't accidentally pass an unrelated byte.
+// Which speaker encoding (see WiimoteProtocol.h's SpeakerFormat namespace
+// for the raw register values) EnableSpeaker() configures the hardware
+// for. Type-safe wrapper so callers can't pass an unrelated byte.
 enum class SpeakerAudioFormat : uint8_t {
     PCM8,   // signed 8-bit linear PCM - simple, but needs a low sample rate
-            // to keep the Bluetooth link fed (see EnableSpeaker()), which is
-            // what makes it sound thin/aliased even when everything else is
-            // working correctly.
-    ADPCM4, // 4-bit Yamaha ADPCM (WiimoteADPCM.h) - roughly double the
-            // usable sample rate for the same data rate, which is what
-            // actually fixes the thin/aliased sound above rather than any
-            // bug in the PCM8 path itself.
+            // to keep the Bluetooth link fed, hence the thin/aliased sound.
+    ADPCM4, // 4-bit Yamaha ADPCM (WiimoteADPCM.h) - ~double the usable
+            // sample rate for the same data rate; fixes the above.
 };
 
 // Everything a caller (visualizer / protocol field mapper) needs for one
@@ -50,30 +46,23 @@ struct WiimoteSnapshot {
     AccelState  accel;
     IRState     ir;
     bool        ir_enabled = false;
-    // True if ir_enabled is true but no IR-carrying report has been
-    // decoded in longer than expected - see WiimoteDevice::TickIRWatchdog()
-    // for the mechanism and why this can happen (a second process, most
-    // notoriously Steam Input, silently reconfiguring the Wiimote's data
-    // reporting mode out from under us). UI can use this to warn the user
-    // separately from a hard "IR failed to enable" error, since the fix
-    // (excluding the device from whatever else is grabbing it) is
-    // different from anything wrong with our own init sequence.
+    // True if ir_enabled but no IR-carrying report has decoded in longer
+    // than expected - see TickIRWatchdog(). Usually means a second process
+    // (typically Steam Input) silently reconfigured the reporting mode
+    // out from under us; the fix differs from an init failure, hence the
+    // separate flag.
     bool        ir_possibly_hijacked = false;
-    // Mirrors WiimoteDevice::IsIRExtendedModeActive() - true once the
-    // Extended IR toggle (SetIRExtendedMode) has actually taken effect on
-    // the hardware (not just been requested), i.e. IRDot::size is live.
-    // Report 0x33 carries no extension bytes at all (see
-    // SetIRExtendedMode()'s comment), so nunchuk/classic/guitar below are
-    // frozen at their last known values for as long as this is true - the
-    // UI should treat them as stale, not as "the accessory was unplugged".
+    // Mirrors IsIRExtendedModeActive(): true once the Extended IR toggle
+    // has actually taken effect on hardware. Report 0x33 carries no
+    // extension bytes, so nunchuk/classic/guitar below stay frozen at
+    // their last values while this is true - treat as stale, not
+    // "unplugged".
     bool        ir_extended_mode = false;
 
     ExtensionType extension = ExtensionType::None;
     // True if InitExtension() had to fall back to the "old way" (encrypted)
-    // init to get a recognizable ID from the currently-connected extension -
-    // see WiimoteProtocol.h's DecryptExtensionByte() comment. Purely
-    // informational (decoding already accounts for it); UI can surface this
-    // for troubleshooting a third-party/wireless Nunchuk.
+    // init - see WiimoteProtocol.h's DecryptExtensionByte(). Informational
+    // only; decoding already accounts for it.
     bool          extension_encrypted = false;
     NunchukState             nunchuk;
     ClassicControllerState   classic;
@@ -84,32 +73,24 @@ struct WiimoteSnapshot {
     BatteryBars battery = BatteryBars::Four;
     uint8_t     led_mask = 0;
 
-    // Target strength last passed to SetRumble(), 0..1. The physical motor
-    // itself only has an on/off drive line - see SetRumble()'s comment -
-    // so this is the *requested* strength, not necessarily what the motor
-    // is doing at this exact instant.
+    // Requested strength last passed to SetRumble(), 0..1 - the motor
+    // itself is on/off only (see SetRumble()), so this isn't necessarily
+    // what the motor is doing this instant.
     float       rumble_intensity = 0.0f;
-    // Instantaneous physical state of the on/off drive line right now,
-    // i.e. what UpdateRumblePWM() last actually wrote to the hardware.
-    // For rumble_intensity == 0 or 1 this is constant; for anything in
-    // between it flips at the ~50 Hz PWM carrier rate, so a UI polling
-    // this every frame will see it toggling - that's expected, not a bug.
+    // Instantaneous physical state of the on/off drive line, i.e. what
+    // UpdateRumblePWM() last wrote. Constant at intensity 0/1; flips at
+    // the ~50Hz PWM rate for anything in between - expected, not a bug.
     bool        rumble_on = false;
 
-    // Set while WiimoteDevice is actively retrying the extension-init dance
-    // to clear a known Balance Board firmware quirk where one or more of
-    // the 4 weight sensors report a flat 0 (see WiiBrew Wii_Balance_Board
-    // "Wii Initialisation Sequence" section - this is a real hardware/
-    // firmware behavior, not a decoding bug). UI can surface this so the
-    // user isn't confused by weight readings jumping while it self-heals.
+    // Set while retrying the extension-init dance to clear a known Balance
+    // Board firmware quirk (one or more of the 4 sensors reporting a flat
+    // 0 - real hardware behavior per WiiBrew, not a decode bug).
     bool balance_board_recovering = false;
     int  balance_board_recovery_attempts = 0;
 
-    // True once TareBalanceBoard() has been called and its offset is being
-    // subtracted from every corner reading below. Purely a runtime/software
-    // zero point - it does not touch the board's own EEPROM calibration,
-    // so it's safe to call as often as you like and never persists across
-    // reconnects.
+    // True once TareBalanceBoard() has set an offset being subtracted from
+    // every corner reading. Software-only zero point: doesn't touch the
+    // board's EEPROM and never persists across reconnects on its own.
     bool balance_board_tared = false;
 
     TimestampMs last_report_ms = 0; // see TimestampMs comment in WiimoteState.h
@@ -117,25 +98,23 @@ struct WiimoteSnapshot {
 
 class WiimoteDevice {
 public:
-    // Takes ownership of `dev` (already opened via SDL_hid_open_path).
-    // `is_balance_board_hint` comes from the HID product string
-    // ("Nintendo RVL-WBC-01") observed during enumeration.
-    WiimoteDevice(SDL_hid_device *dev, std::string hid_path, bool is_balance_board_hint);
+    // Takes ownership of `transport` (already open/connected - either a
+    // WiimoteHidTransport or, on Linux, a WiimoteL2CAPTransport - see
+    // WiimoteTransport.h). `is_balance_board_hint` comes from the HID
+    // product string ("Nintendo RVL-WBC-01") seen during enumeration.
+    WiimoteDevice(std::unique_ptr<IWiimoteTransport> transport, std::string hid_path, bool is_balance_board_hint);
     ~WiimoteDevice();
 
     WiimoteDevice(const WiimoteDevice &) = delete;
     WiimoteDevice &operator=(const WiimoteDevice &) = delete;
 
-    // Performs the startup handshake: request status, set data-reporting
-    // mode, and (for Wiimotes, not Balance Boards) enable the IR camera.
-    // Safe to call once after construction. Returns false on write failure
-    // (device unplugged mid-init, permissions, etc).
+    // Startup handshake: request status, set data-reporting mode, and (for
+    // Wiimotes, not Balance Boards) enable the IR camera. Safe to call
+    // once after construction. Returns false on write failure.
     bool Init();
 
-    // Drains all pending input reports and updates internal state. Call
-    // once per frame from the main thread (matches SensorReader's
-    // "must be called from the main thread" contract). Cheap no-op if
-    // nothing is pending, since the underlying handle is non-blocking.
+    // Drains pending input reports and updates internal state. Call once
+    // per frame from the main thread. Cheap no-op if nothing is pending.
     void Poll();
 
     // Point-in-time read of everything decoded so far.
@@ -143,12 +122,10 @@ public:
 
     // One-shot latch for "have saved preferences (player LED, IR Extended
     // mode, Balance Board tare - see PreferencesManager) been restored onto
-    // this device yet". Analogous to PreferencesManager::IsPreferenceApplied/
-    // MarkPreferenceApplied, but tracked here instead: those are keyed by
-    // SDL_JoystickID, and WiimoteDevice (raw-HID, not SDL_Joystick-backed)
-    // has none. Public and unguarded like WiimoteSnapshot's own fields -
-    // callers (DevicePanel) are expected to check-then-set it themselves,
-    // the same one-shot pattern used for the SDL-backed device settings tab.
+    // this device yet". Tracked here rather than via
+    // PreferencesManager::IsPreferenceApplied since that's keyed by
+    // SDL_JoystickID and WiimoteDevice has none. Public and unguarded,
+    // same check-then-set pattern as the SDL-backed device settings tab.
     bool prefs_applied = false;
 
     // -- Feedback --------------------------------------------------------
@@ -156,69 +133,48 @@ public:
     void SetLEDMask(uint8_t mask4bits);   // bits 4-7, arbitrary pattern
 
     // Sets the rumble motor's requested strength, 0.0 (off) - 1.0 (full).
-    // A Wii Remote's rumble motor has no amplitude control in hardware -
-    // it's a single on/off drive line (see the rumble bit OR'd into every
-    // output report in WiimoteDevice.cpp) - so intermediate strengths are
-    // approximated in software with PWM: Poll() rapidly switches the line
-    // on and off at a nominal carrier (kRumblePwmPeriodMs, ~50 Hz) with a
-    // duty cycle equal to `intensity`. That's fast enough that the motor's
-    // own spin-up/spin-down inertia blurs the on/off switching into a
-    // perceived amplitude change (the same trick used to dim an LED with a
-    // GPIO pin that only has HIGH/LOW), rather than feeling like distinct
-    // buzzes. intensity is clamped to [0,1]; exactly 0 or 1 skip PWM
-    // entirely and just hold the line at the corresponding fixed state,
-    // which is both the strongest possible rumble and the case that avoids
-    // the extra HID write traffic PWM would otherwise add.
+    // The motor has no hardware amplitude control - just an on/off drive
+    // line OR'd into every output report - so intermediate strengths are
+    // approximated via software PWM: Poll() switches the line at a
+    // nominal ~50Hz carrier (kRumblePwmPeriodMs) with duty cycle equal to
+    // `intensity`. Fast enough that the motor's own spin-up/down inertia
+    // blurs it into a perceived amplitude change. 0 or 1 skip PWM
+    // entirely (fixed line state, less HID traffic).
     //
-    // UpdateRumblePWM() also carries forward a small duty-cycle debt
-    // (m_RumbleDutyDebtMs) across periods that Poll() didn't get called
-    // during at all - e.g. a frame hitch, or the Bluetooth stack briefly
-    // stalling delivery of everything, not just rumble - so a burst of
-    // missed periods reads as a slightly stronger/weaker few periods right
-    // after, rather than silently wrong for however long it was missed.
-    // That's the limit of what's actually correctable from here, though:
-    // it compensates for OUR OWN irregular sampling of the PWM decision,
-    // not for jitter in the underlying Bluetooth link itself (the delay
-    // between SendReport() returning and the motor actually responding) -
-    // there's no feedback path that reports when a write was really
-    // delivered, so that portion of the variance is invisible to us and
-    // can't be corrected in software.
+    // UpdateRumblePWM() carries forward a small duty-cycle debt
+    // (m_RumbleDutyDebtMs) across periods Poll() didn't run during (a
+    // frame hitch, a Bluetooth stall), so a burst of missed periods reads
+    // as slightly over/under-strength shortly after rather than silently
+    // wrong. This only compensates for our own irregular sampling, not
+    // for Bluetooth delivery jitter itself - there's no feedback path for
+    // when a write actually reaches the motor.
     void SetRumble(float intensity);
 
     // Back-compat convenience for simple on/off callers.
     void SetRumble(bool on) { SetRumble(on ? 1.0f : 0.0f); }
 
     // -- Speaker -----------------------------------------------------------
-    // Runs the full WiiBrew enable/mute/configure/unmute register sequence
-    // (see WiimoteProtocol.h's Registers::SpeakerInitFlag et al.) to switch
-    // the speaker into `format` at `sample_rate_hz`. `format` defaults to
-    // PCM8 for back-compat with existing QueuePCM8() callers; pass ADPCM4
-    // (and use QueueADPCM4() below) for meaningfully better sound quality -
-    // see SpeakerAudioFormat's comment for why. WiiBrew calls out 2000Hz as
-    // a good compromise for 8-bit mode (to keep the Bluetooth link fed in
-    // time) and 3000Hz as its "standard value" for 4-bit mode; the default
-    // here (2000Hz) only matches the former; ADPCM4 callers will usually
-    // want to pass a higher rate explicitly (PlayBeep() does this for you).
-    // `volume` is 0x00-0xFF in PCM8 mode but only 0x00-0x40 in ADPCM4 mode
-    // (WiiBrew) - values above that are silently clamped down rather than
-    // writing an out-of-range register value whose hardware behavior isn't
-    // documented. Within either range, the hardware volume register's own
-    // max gain overdrives this speaker audibly - confirmed distorted/too
-    // loud on real hardware - so the default here is a conservative ~25%
-    // of PCM8's range. Push it up if you want it louder and can live with
-    // more distortion; there's no way to get more volume without more
-    // distortion out of this speaker/format combination.
-    // NOTE: volume=0x00 is NOT confirmed to produce true silence on real
-    // hardware (WiiBrew: "the full purpose of these bytes is not known") -
-    // TickSpeaker() enforces silence at volume 0 by never transmitting
-    // queued audio at all, rather than relying on this register.
+    // Runs the WiiBrew enable/mute/configure/unmute register sequence to
+    // switch the speaker into `format` at `sample_rate_hz`. `format`
+    // defaults to PCM8 for back-compat; pass ADPCM4 (with QueueADPCM4())
+    // for better quality. WiiBrew suggests 2000Hz for 8-bit mode and
+    // 3000Hz as its "standard value" for 4-bit mode - the default here
+    // (2000Hz) only matches the former, so ADPCM4 callers will usually
+    // want to pass a higher rate explicitly (PlayBeep() does this).
+    // `volume` is 0x00-0xFF in PCM8 but only 0x00-0x40 in ADPCM4 (WiiBrew);
+    // out-of-range values are clamped rather than writing an undocumented
+    // register value. The hardware's own max gain audibly overdrives this
+    // speaker, so the default here is a conservative ~25% of PCM8's range
+    // - push higher for more volume at the cost of more distortion.
+    // NOTE: volume=0x00 is not confirmed to mean true silence on real
+    // hardware, so TickSpeaker() enforces silence at volume 0 by never
+    // transmitting queued audio, rather than relying on the register.
     // Synchronous (several WriteRegister() round-trips); call once before
-    // QueuePCM8()/QueueADPCM4(), not every frame. Returns false if any
-    // step's HID write failed. If `format` differs from whatever was
-    // active before this call, anything still queued from the old format
-    // is discarded first (see QueueADPCM4()'s comment on why mixing
-    // formats mid-queue can't work) - this includes DisableSpeaker() ->
-    // EnableSpeaker() with a different format, not just a live reconfigure.
+    // queuing audio, not every frame. Returns false if any step's HID
+    // write failed. Switching `format` from what was active before
+    // discards anything still queued (see QueueADPCM4()'s comment on why
+    // mixing formats mid-queue can't work) - including via
+    // DisableSpeaker() -> EnableSpeaker() with a different format.
     bool EnableSpeaker(uint32_t sample_rate_hz = 2000, uint8_t volume = 0x40,
                         SpeakerAudioFormat format = SpeakerAudioFormat::PCM8);
 
@@ -226,55 +182,47 @@ public:
     // anything still queued.
     void DisableSpeaker();
 
-    // Appends signed 8-bit PCM samples to the playback queue; does not
-    // interrupt whatever's already queued/in-flight. EnableSpeaker() must
-    // have been called first with format PCM8 (and with a matching sample
-    // rate - this call doesn't touch the device's rate configuration).
-    // Actual transmission happens kSpeakerMaxChunkBytes at a time from
-    // Poll(), paced to the rate passed to EnableSpeaker() - see
-    // TickSpeaker().
+    // Appends signed 8-bit PCM samples to the playback queue without
+    // interrupting what's already queued/in-flight. EnableSpeaker() must
+    // already be active in PCM8 format at a matching sample rate (this
+    // call doesn't touch rate configuration). Sent kSpeakerMaxChunkBytes
+    // at a time from Poll(), paced to that rate - see TickSpeaker().
     void QueuePCM8(const int8_t *samples, size_t count);
 
     // Encodes `count` signed 16-bit PCM samples to 4-bit Yamaha ADPCM (see
-    // WiimoteADPCM.h) and appends the packed result to the playback queue.
-    // EnableSpeaker() must have been called first with format ADPCM4 (same
-    // "doesn't touch the rate configuration" contract as QueuePCM8()).
+    // WiimoteADPCM.h) and appends the result to the playback queue.
+    // EnableSpeaker() must already be active in ADPCM4 format (same
+    // rate-configuration contract as QueuePCM8()).
     //
     // The encoder's predictor/step state (and any odd leftover nibble)
-    // carries over between calls, so back-to-back QueueADPCM4() calls
-    // encode one continuous stream instead of restarting cold each time -
-    // restarting would desync from whatever state the Wiimote's onboard
-    // decoder is actually in, since (unlike 8-bit PCM, where every sample
-    // stands alone) each ADPCM nibble only makes sense relative to the
-    // decoder's running prediction. That state resets together with
-    // EnableSpeaker()'s reconfigure and StopSpeaker()'s discard (both of
-    // which leave the real hardware decoder's state unknown/stale anyway)
-    // so the host's encoder can't silently drift further out of sync with
-    // it - expect a small audible discontinuity right at that boundary,
-    // same as the "garbled squawk on reconnect" EnableSpeaker() already
-    // documents for a live reconfigure.
+    // carries over between calls so back-to-back calls encode one
+    // continuous stream - each ADPCM nibble only makes sense relative to
+    // the decoder's running prediction, unlike standalone 8-bit PCM
+    // samples, so restarting cold would desync from the Wiimote's onboard
+    // decoder. This state resets on EnableSpeaker()'s reconfigure and
+    // StopSpeaker()'s discard (both already leave the hardware decoder's
+    // state stale anyway), so expect a small audible discontinuity right
+    // at that boundary - the same "garbled squawk on reconnect" a live
+    // EnableSpeaker() reconfigure already causes.
     void QueueADPCM4(const int16_t *samples, size_t count);
 
     // True while there's still queued-but-unsent audio.
     bool IsSpeakerPlaying() const { return m_SpeakerQueuePos < m_SpeakerQueue.size(); }
 
-    // Discards queued-but-unsent audio without disabling the speaker
-    // itself (use DisableSpeaker() for that). Also resets the ADPCM4
-    // encoder state (harmless no-op in PCM8 mode) - see QueueADPCM4()'s
-    // comment on why a discard has to imply a state reset there.
+    // Discards queued-but-unsent audio without disabling the speaker (use
+    // DisableSpeaker() for that). Also resets the ADPCM4 encoder state
+    // (harmless no-op in PCM8 mode) since a discard implies the same
+    // desync QueueADPCM4() guards against.
     void StopSpeaker();
 
     // Convenience wrapper for testing/notification sounds: calls
-    // EnableSpeaker() (if not already enabled at matching settings) and
-    // queues a generated sine-wave tone, encoded in `format` (ADPCM4 by
-    // default - it's the better-sounding choice for the same reason
-    // SpeakerAudioFormat documents, and this is exactly the "just want it
-    // to sound like a clean tone" use case). Not meant for anything beyond
-    // simple beeps - for real audio, generate/encode your own buffer and
-    // use QueuePCM8()/QueueADPCM4() directly. `sample_rate_hz` of 0 (the
-    // default) picks WiiBrew's suggested rate for whichever `format` was
-    // requested (2000Hz PCM8 / 3000Hz ADPCM4) rather than a single literal
-    // default that's only actually well-tuned for one of the two formats.
+    // EnableSpeaker() (if not already active at matching settings) and
+    // queues a generated sine tone in `format` (ADPCM4 by default, for the
+    // same quality reason as SpeakerAudioFormat). Not meant for real
+    // audio - use QueuePCM8()/QueueADPCM4() directly for that.
+    // `sample_rate_hz` of 0 (default) picks WiiBrew's suggested rate for
+    // whichever `format` was requested (2000Hz PCM8 / 3000Hz ADPCM4)
+    // rather than one literal default only well-tuned for one format.
     void PlayBeep(float freq_hz = 440.0f, uint32_t duration_ms = 200,
                    uint32_t sample_rate_hz = 0, uint8_t volume = 0x40,
                    SpeakerAudioFormat format = SpeakerAudioFormat::ADPCM4);
@@ -282,63 +230,53 @@ public:
     // -- Low-level register access (exposed for advanced/experimental use,
     //    same rationale as WiimoteLib exposing raw read/write) ------------
     // Synchronous: blocks (bounded, ~200ms timeout) waiting for the 0x21
-    // reply. Returns false on timeout/error. `out` must have room for `size`
-    // bytes (size <= 16 per WiiBrew's Read Memory and Registers Data limit
-    // per packet - this helper loops internally for larger reads).
+    // reply. Returns false on timeout/error. `out` needs room for `size`
+    // bytes (this helper loops internally past WiiBrew's 16-byte-per-
+    // packet read limit).
     bool ReadRegister(uint32_t address, uint16_t size, uint8_t *out);
     bool WriteRegister(uint32_t address, const uint8_t *data, uint8_t size /* <=16 */);
 
     // -- Balance Board tare/zero --------------------------------------------
-    // Captures whatever the four corners currently read (pre-tare, i.e. the
-    // board's own 0/17/34kg factory calibration applied and nothing else)
-    // and stores it as a per-corner offset that gets subtracted from every
-    // subsequent reading, so "current load" becomes the new zero point -
-    // useful for compensating for the board's own resting weight on a rug,
-    // an uneven floor, a mount, etc. Software-only: doesn't touch the
-    // board's EEPROM, is lost on disconnect, and can be called again at any
-    // time to re-zero (each call replaces the previous offset, it does not
-    // stack). No-op if this device isn't a Balance Board or no weight
-    // report has been decoded yet.
+    // Captures the four corners' current (pre-tare, factory-calibrated)
+    // readings and stores them as a per-corner offset subtracted from
+    // every subsequent reading, so "current load" becomes the new zero -
+    // useful for a rug, uneven floor, or mount under the board.
+    // Software-only: doesn't touch the board's EEPROM, is lost on
+    // disconnect, and can be re-called anytime (replaces, doesn't stack).
+    // No-op if this isn't a Balance Board or nothing's been decoded yet.
     void TareBalanceBoard();
 
-    // Clears any offset set by TareBalanceBoard(), reverting to the board's
-    // raw factory-calibrated readings.
+    // Clears any offset set by TareBalanceBoard(), reverting to the
+    // board's raw factory-calibrated readings.
     void ClearBalanceBoardTare();
 
-    // Directly sets the per-corner tare offset (order: top-right,
-    // bottom-right, top-left, bottom-left), bypassing the "capture the
-    // current live reading" behavior of TareBalanceBoard(). Exists so a
-    // previously-saved tare (see PreferencesManager::GetWiimoteBalanceTareKg)
-    // can be restored on reconnect without needing a fresh weight report to
-    // have arrived first. All-zero is equivalent to ClearBalanceBoardTare().
+    // Directly sets the per-corner tare offset (order: TR, BR, TL, BL),
+    // bypassing TareBalanceBoard()'s "capture the current reading"
+    // behavior - lets a previously-saved tare
+    // (PreferencesManager::GetWiimoteBalanceTareKg) be restored on
+    // reconnect before a fresh weight report arrives. All-zero is
+    // equivalent to ClearBalanceBoardTare().
     void SetBalanceBoardTareValues(float top_right, float bottom_right, float top_left, float bottom_left);
 
-    // Point-in-time read of the offset currently being subtracted from
-    // every corner reading, in the same TR/BR/TL/BL order as
-    // SetBalanceBoardTareValues(). For persisting the current tare (e.g.
-    // after TareBalanceBoard() was just called from the UI) rather than
-    // reconstructing it from BalanceBoardState.
+    // Point-in-time read of the offset currently subtracted from every
+    // corner reading, same TR/BR/TL/BL order as
+    // SetBalanceBoardTareValues() - for persisting the current tare.
     void GetBalanceBoardTareValues(float outKg[4]) const;
 
     // -- IR Extended mode toggle ---------------------------------------------
-    // Switches between IR Basic mode (report 0x37: X/Y only, but leaves room
-    // for Nunchuk/Classic/Guitar extension data in the same report) and IR
-    // Extended mode (report 0x33: X/Y + a 4-bit dot size, but the hardware's
-    // report format for 0x33 has NO extension bytes at all - WiiBrew doesn't
-    // offer a report that combines size data with extension data, and Full
-    // mode's IR+brightness data is a separate interleaved 0x3e/0x3f pair,
-    // not covered here). While Extended mode is active, nunchuk/classic/
-    // guitar in the snapshot are simply frozen at whatever they last held -
-    // check ir_extended_mode before trusting them as live.
+    // Switches between IR Basic mode (report 0x37: X/Y, with room left for
+    // extension data in the same report) and IR Extended mode (report
+    // 0x33: X/Y + a 4-bit dot size, but no extension bytes at all - WiiBrew
+    // has no report combining size with extension data; Full mode's
+    // separate 0x3e/0x3f pair isn't covered here). While Extended mode is
+    // active, nunchuk/classic/guitar in the snapshot stay frozen at their
+    // last values - check ir_extended_mode before trusting them.
     //
-    // Re-programs the running Wiimote synchronously: re-sends the IR mode
-    // register write (part of the same WiiBrew init sequence used at
-    // connect time - see EnableIRCameraOnce()) and the data reporting mode.
-    // Like EnableIRCameraOnce(), this sleeps briefly between writes
-    // (kIRInitStepDelayMs per step), so calling it is a deliberate,
-    // user-initiated action (e.g. a settings toggle) rather than something
-    // to call from a hot path. No-op if already in the requested mode, or
-    // if this device is a Balance Board (no IR/camera hardware).
+    // Re-programs the running Wiimote synchronously (same IR mode register
+    // write used at connect time, plus the data reporting mode) - sleeps
+    // briefly between writes like EnableIRCameraOnce(), so treat this as a
+    // deliberate user action (a settings toggle), not a hot-path call.
+    // No-op if already in the requested mode or on a Balance Board.
     bool SetIRExtendedMode(bool enabled);
     bool IsIRExtendedModeActive() const { return m_Snapshot.ir_extended_mode; }
 
@@ -355,86 +293,73 @@ private:
     // EnableIRCamera() runs EnableIRCameraOnce() + VerifyIRCameraEnabled()
     // in a bounded retry loop - WiiBrew documents the raw init sequence as
     // landing in a working state only "pretty much random[ly]" even with
-    // correct inter-write delays, and explicitly recommends repeating the
-    // whole sequence rather than trusting a single pass. EnableIRCameraOnce()
-    // is one attempt at the 7-step WiiBrew sequence, with the recommended
-    // >=50ms delay enforced between every write. VerifyIRCameraEnabled()
-    // confirms the attempt actually worked by requesting a fresh status
-    // report and checking its "IR camera enabled" bit, rather than treating
-    // "every HID write returned success" as proof the camera is producing
-    // data.
+    // correct delays, and recommends repeating the whole sequence rather
+    // than trusting one pass. EnableIRCameraOnce() is one attempt at the
+    // 7-step sequence with the recommended >=50ms inter-write delay.
+    // VerifyIRCameraEnabled() confirms it actually worked via a fresh
+    // status report's "IR camera enabled" bit, not just "writes succeeded".
     bool EnableIRCamera();
     bool EnableIRCameraOnce();
     bool VerifyIRCameraEnabled();
 
     // Tries the "new way" (unencrypted) init first; if the resulting ID
     // doesn't decode to a recognizable extension, falls back to the "old
-    // way" (encrypted) init and retries, setting m_ExtensionEncrypted /
-    // WiimoteSnapshot::extension_encrypted so DecodeCoreAccelIR10Ext6() and
-    // friends know to decrypt live data bytes too. See WiimoteProtocol.h.
+    // way" (encrypted) init, setting m_ExtensionEncrypted /
+    // WiimoteSnapshot::extension_encrypted so decoding knows to decrypt
+    // live data bytes too. See WiimoteProtocol.h.
     bool InitExtension();
-    // The unencrypted ("new way") encryption-reset write sequence that
-    // InitExtension() begins with, factored out so ActivateMotionPlus() can
-    // redo just this part before writing a passthrough-activation register
-    // without recursing back into the rest of InitExtension(). See the
-    // comment in ActivateMotionPlus() for why that recursion was a bug.
+    // The unencrypted ("new way") encryption-reset write sequence
+    // InitExtension() begins with, factored out so ActivateMotionPlus()
+    // can redo just this part before writing a passthrough-activation
+    // register, without recursing into the rest of InitExtension().
     bool ResetExtensionEncryption();
     bool LoadBalanceBoardCalibration();
 
-    // Wii Motion Plus lives at its own register base (0xA60000) separate
-    // from the regular extension port (0xA40000) and must be explicitly
-    // activated before it starts feeding gyro data into the extension byte
-    // slot of normal input reports. DetectMotionPlus() probes for it
-    // (harmless no-op if nothing answers - a bare Wiimote or one with only
-    // a Nunchuk/Classic Controller simply won't have anything at 0xA600FA);
-    // ActivateMotionPlus() performs the write that switches it into
-    // reporting mode, using passthrough if a Nunchuk/Classic Controller was
-    // already detected on the regular extension port so both keep working
-    // at once (per WiiBrew, this is the only way to get MotionPlus + an
-    // extension simultaneously - the MotionPlus intercepts and re-encodes
-    // the passthrough device's data alongside its own gyro bytes).
+    // Wii Motion Plus lives at its own register base (0xA60000), separate
+    // from the regular extension port (0xA40000), and must be explicitly
+    // activated before it feeds gyro data into normal input reports'
+    // extension byte slot. DetectMotionPlus() probes for it (harmless
+    // no-op if nothing answers at 0xA600FA). ActivateMotionPlus() sends
+    // the activation write, using passthrough if a Nunchuk/Classic
+    // Controller was already on the regular port so both keep working -
+    // per WiiBrew this is the only way to run MotionPlus + an extension
+    // simultaneously (MotionPlus intercepts and re-encodes the
+    // passthrough device's data alongside its own gyro bytes).
     bool DetectMotionPlus();
     bool ActivateMotionPlus();
 
-    // Watchdog for the "one or more sensors disabled" Balance Board quirk
-    // documented on WiiBrew: detects the pattern (most corners flatlined
-    // while real weight is on the board) and re-runs InitExtension() to
-    // try to clear it, the same fix WiiBrew describes working for their
-    // PC interface. Cheap no-op for anything that isn't a Balance Board.
+    // Watchdog for WiiBrew's documented "one or more sensors disabled"
+    // Balance Board quirk: detects the pattern (most corners flatlined
+    // while real weight is on the board) and re-runs InitExtension(),
+    // same fix WiiBrew describes for their PC interface. No-op for
+    // anything that isn't a Balance Board.
     void CheckBalanceBoardStuckSensors();
 
-    // Watchdog for a second process (in practice, almost always Steam
-    // Input - see TickIRWatchdog()'s comment for why) silently changing
-    // the Wiimote's data reporting mode after we've successfully enabled
-    // and configured the IR camera. Detects the resulting "IR data just
-    // stops arriving" pattern and re-asserts our mode; also flags
-    // ir_possibly_hijacked so the UI can tell the user this isn't the same
-    // failure as EnableIRCamera() itself failing.
+    // Watchdog for a second process (almost always Steam Input) silently
+    // changing the Wiimote's reporting mode after we've enabled/configured
+    // IR. Detects "IR data just stops arriving" and re-asserts our mode;
+    // also flags ir_possibly_hijacked so the UI can distinguish this from
+    // EnableIRCamera() itself failing.
     void TickIRWatchdog();
 
     // Drives the software-PWM approximation described on SetRumble(float).
-    // Called once per Poll() (so at whatever cadence DeviceManager polls
-    // Wiimotes at - see WiimoteDevice.cpp for why that's fine even though
-    // it's not a hard real-time scheduler) and also once immediately from
-    // SetRumble() itself so a new intensity takes effect right away rather
-    // than waiting up to one Poll() tick. Only writes to the device when
-    // the on/off line actually needs to change state, not every call.
+    // Called once per Poll() and once immediately from SetRumble() itself
+    // so a new intensity takes effect right away. Only writes to the
+    // device when the on/off line actually needs to change.
     void UpdateRumblePWM();
 
     // Drains m_SpeakerQueue into Report 0x18 writes, kSpeakerMaxChunkBytes
-    // at a time, no faster than m_SpeakerChunkIntervalMs apart (computed in
-    // EnableSpeaker() from the requested sample rate). Called once per
-    // Poll(), same cadence rationale as UpdateRumblePWM(). No-op when the
-    // speaker isn't enabled or the queue is empty.
+    // at a time, no faster than m_SpeakerChunkIntervalMs apart (computed
+    // in EnableSpeaker() from the requested rate). Called once per Poll().
+    // No-op when the speaker isn't enabled or the queue is empty.
     void TickSpeaker();
 
     // Subtracts m_BalanceTareKg from a freshly-decoded BalanceBoardState's
-    // four corners in place and recomputes kg_total/cog_x/cog_y from the
-    // tared values. No-op (all offsets 0) until TareBalanceBoard() is
-    // called.
+    // four corners in place and recomputes kg_total/cog_x/cog_y. No-op
+    // (all offsets 0) until TareBalanceBoard() is called.
     void ApplyBalanceBoardTare(BalanceBoardState &bb);
 
-    SDL_hid_device *m_Dev = nullptr;
+    std::unique_ptr<IWiimoteTransport> m_Transport;
     std::string m_Path;
     WiimoteSnapshot m_Snapshot;
 
@@ -445,25 +370,22 @@ private:
     Uint64 m_RumbleCycleStartMs = 0;  // start of the current PWM period, reset on every SetRumble() call
     static constexpr Uint64 kRumblePwmPeriodMs = 20; // ~50 Hz nominal carrier, see SetRumble(float)
 
-    // Duty-cycle debt carried across periods Poll() didn't run during at
-    // all (see UpdateRumblePWM()) - ms of "on" time owed (positive) or
-    // over-delivered (negative), paid back by nudging later periods'
-    // on/off boundary instead of the target intensity itself. Reset
-    // alongside m_RumbleCycleStartMs on every SetRumble() call so a new
-    // target doesn't inherit the previous one's leftover correction.
+    // Duty-cycle debt carried across periods Poll() didn't run during (see
+    // UpdateRumblePWM()) - ms of "on" time owed (positive) or
+    // over-delivered (negative), paid back by nudging later on/off
+    // boundaries rather than the target intensity. Reset with
+    // m_RumbleCycleStartMs on every SetRumble() call.
     float  m_RumbleDutyDebtMs = 0.0f;
     // Last time UpdateRumblePWM() actually ran, independent of
-    // m_RumbleCycleStartMs (which only moves on SetRumble()) - the gap
-    // between this and "now" on each call is what reveals a skipped
-    // period in the first place.
+    // m_RumbleCycleStartMs (which only moves on SetRumble()) - the gap to
+    // "now" on each call is what reveals a skipped period.
     Uint64 m_RumbleLastPollMs = 0;
 
     std::optional<BalanceBoardCalibration> m_BalanceCal;
 
     // Speaker playback queue (see EnableSpeaker()/QueuePCM8()/
     // QueueADPCM4()/TickSpeaker()). Bytes here are already in whatever
-    // format m_SpeakerFormat says - TickSpeaker() just streams them out
-    // kSpeakerMaxChunkBytes at a time without caring what they mean.
+    // format m_SpeakerFormat says - TickSpeaker() just streams them out.
     bool   m_SpeakerEnabled = false;
     uint32_t m_SpeakerSampleRateHz = 0; // rate last passed to EnableSpeaker(), 0 = never enabled
     uint8_t  m_SpeakerVolume = 0;       // volume last passed to EnableSpeaker() (see PlayBeep())
@@ -473,77 +395,88 @@ private:
     Uint64 m_SpeakerNextChunkAtMs = 0;
     Uint32 m_SpeakerChunkIntervalMs = 10; // recomputed by EnableSpeaker() from sample_rate_hz/format
 
-    // Running Yamaha ADPCM encoder state for QueueADPCM4() - see that
-    // method's comment on why this has to persist across calls instead of
-    // resetting per-call, and EnableSpeaker()/StopSpeaker() for where it
-    // gets reset.
+    // Running Yamaha ADPCM encoder state for QueueADPCM4() - persists
+    // across calls (see that method's comment); reset in
+    // EnableSpeaker()/StopSpeaker().
     YamahaAdpcm4Encoder m_AdpcmEncoder;
 
     bool m_MotionPlusPresent = false;   // detected at 0xA600FA
     bool m_MotionPlusActive = false;    // activation write sent + acknowledged by data arriving
 
+    // A Motion Plus that ISN'T behind a Nunchuk/Classic Controller (i.e.
+    // the common case: a bare external Motion Plus, or a Wii Remote Plus's
+    // built-in one) never toggles the status report's regular extension-
+    // connected bit (byte 3, 0x02) - per WiiBrew, that bit only reflects
+    // the 0xA40000 port, which a not-yet-activated Motion Plus doesn't
+    // occupy. HandleExtensionChanged() (and therefore InitExtension()/
+    // DetectMotionPlus()) is gated entirely on that bit changing, so
+    // without this timer a bare Motion Plus would simply never be probed
+    // for. Set to a real deadline once Init() completes; Poll() then
+    // calls DetectMotionPlus() directly (not the heavier InitExtension())
+    // once that deadline passes and re-arms it for ~8s later - WiiBrew's
+    // own recommended re-poll interval for an inactive Motion Plus -
+    // until one is actually found (m_MotionPlusPresent stops the retries).
+    Uint64 m_MotionPlusNextProbeAtMs = 0;
+
     // Re-request extension identification a short time after the status
     // report flags a connect/disconnect - the extension needs a moment to
-    // settle before it will answer ID reads reliably.
+    // settle before it answers ID reads reliably.
     Uint64 m_ExtensionSettleAtMs = 0;
     bool m_ExtensionPendingInit = false;
 
+    // A single post-settle identification attempt isn't always enough -
+    // slower/third-party Nunchuks can still be powering up at the 150ms
+    // mark and answer the ID read with garbage, classifying as Unknown.
+    // Without a retry that sticks until the cable is pulled and reinserted
+    // (the only thing that re-arms m_ExtensionSettleAtMs). Poll() retries
+    // roughly once a second, using this deadline, for as long as the port
+    // is connected but still unclassified; a successful classification
+    // moves m_Snapshot.extension off Unknown/None and the retries stop.
+    Uint64 m_ExtensionRetryAtMs = 0;
+
     // Tracks the physical extension-port connected bit (status report byte
     // 3, 0x02) as of the last status report, independent of whether
-    // InitExtension() has actually run yet. HandleStatusReport() diffs the
-    // incoming bit against THIS, not against m_Snapshot.extension - see
-    // HandleExtensionChanged()'s comment for why using
-    // "m_Snapshot.extension != None" as the "was it already connected"
-    // check is a bug (it self-retriggers for as long as any status report
-    // - ours or a competing process's - arrives before the 150ms settle
-    // window closes, which can starve InitExtension()/DetectMotionPlus()
-    // of ever actually running).
+    // InitExtension() has run yet. HandleStatusReport() diffs the incoming
+    // bit against THIS, not m_Snapshot.extension - using
+    // "m_Snapshot.extension != None" as the "already connected" check
+    // self-retriggers for as long as any status report (ours or a
+    // competing process's) arrives before the 150ms settle window closes,
+    // which can starve InitExtension()/DetectMotionPlus() of ever running.
     bool m_ExtensionPortConnected = false;
 
-    // Once a Motion Plus is present, status report byte 3's extension-
-    // connected bit (m_ExtensionPortConnected above) stops being a
-    // trustworthy signal for "did the passthrough Nunchuk/Classic
-    // Controller behind it change" - WiiBrew notes this bit gets flaky
-    // once a Motion Plus occupies the port, and in practice it can flip
-    // on essentially any status report (ours or a competing process's)
-    // while nothing physically changed. HandleStatusReport() used to
-    // treat every flip as authoritative and tear down/re-detect the whole
-    // extension+MotionPlus state via HandleExtensionChanged() each time,
-    // which is what produced the "motion plus/nunchuk jump in and out of
-    // active" symptom - a single spurious status reply could wipe a
-    // perfectly fine, already-active MotionPlus.
+    // Once a Motion Plus is present, the status report's extension-
+    // connected bit (m_ExtensionPortConnected above) stops being
+    // trustworthy for "did the passthrough device behind it change" -
+    // WiiBrew notes this bit gets flaky once a Motion Plus occupies the
+    // port, and it can flip on essentially any status report while
+    // nothing physically changed. Treating every flip as authoritative
+    // used to tear down/re-detect the whole extension+MotionPlus state via
+    // HandleExtensionChanged() each time, producing a "jumps in and out of
+    // active" symptom from a single spurious status reply.
     //
     // Once m_MotionPlusPresent is true, HandleStatusReport() stops acting
-    // on m_ExtensionPortConnected changes entirely and defers to THIS
-    // instead: the Motion Plus's own passthrough data carries its own
-    // extension_connected bit (ext[4] bit 0 - see Decode::MotionPlus),
-    // which reflects what's actually behind it right now rather than a
-    // possibly-stale/flaky port-level flag. -1 = not yet observed (don't
-    // trigger on the first reading, just record a baseline); 0/1 once a
-    // real reading has come in.
+    // on m_ExtensionPortConnected and defers to THIS instead: the Motion
+    // Plus's own passthrough data carries its own extension_connected bit
+    // (ext[4] bit 0 - see Decode::MotionPlus), reflecting what's actually
+    // behind it right now. -1 = not yet observed (don't trigger on the
+    // first reading, just record a baseline); 0/1 once real data arrives.
     int8_t m_MotionPlusExtConnected = -1;
 
-    // Same rationale as m_ExtensionSettleAtMs above, but for the initial
-    // handshake (Init(), in particular EnableIRCamera()) itself. A
-    // successful SDL_hid_open_path() only means the HID *node* is openable
-    // - on Bluetooth it does not guarantee the underlying HID
-    // control/interrupt channels have finished being negotiated, and
-    // writes sent into that window can be silently swallowed even though
-    // SDL_hid_write() itself reports success. This is invisible when the
-    // Wiimote was already on (and therefore already connected/settled) for
-    // some time before InputBridge started - by the time Scan() gets
-    // around to opening it, the connection is old news. It reproduces
-    // reliably when InputBridge is already running and the Wiimote is
-    // turned on afterwards, because the HID-open-to-Init() gap is then
-    // just a few milliseconds, right as the connection is at its freshest
-    // and least reliable. Deferring Init() to run from Poll() once
-    // m_InitSettleAtMs has passed (set from the constructor, i.e. from the
-    // moment the handle was opened) fixes that without touching the
-    // still-necessary per-write kIRInitStepDelayMs spacing or the
-    // verify-and-retry loop already in EnableIRCamera() - those handle a
-    // different problem (WiiBrew's documented "which of 3 states you land
-    // in is pretty much random" flakiness) than a connection that hasn't
-    // finished establishing yet.
+    // Same settle rationale as m_ExtensionSettleAtMs, but for the initial
+    // handshake (Init(), especially EnableIRCamera()). A successfully-
+    // constructed transport only means the node/socket is openable - on
+    // Bluetooth it doesn't guarantee the HID control/interrupt channels
+    // have finished negotiating, and writes into that window can be
+    // silently swallowed even though Write() reports success. Invisible
+    // for a Wiimote already on before InputBridge started (connection is
+    // old news by the time Scan() opens it); reproduces reliably when the
+    // Wiimote is turned on while InputBridge is already running, since the
+    // open-to-Init() gap is then just milliseconds. Deferring Init() to
+    // run from Poll() once m_InitSettleAtMs has passed (set at
+    // construction) fixes this without touching the separate
+    // kIRInitStepDelayMs spacing or verify-and-retry loop already in
+    // EnableIRCamera(), which handle WiiBrew's unrelated "random" init
+    // flakiness.
     Uint64 m_InitSettleAtMs = 0;
     bool m_InitPending = false;
 
@@ -565,17 +498,16 @@ private:
     Uint64 m_LastIRReassertAtMs = 0;    // cooldown between corrective re-sends
     int    m_IRReassertAttempts = 0;    // capped, same rationale as balance board recovery
 
-    // IR Extended mode toggle (see SetIRExtendedMode()). This is the single
-    // source of truth PreferredReportMode() and EnableIRCameraOnce() read
-    // to decide between report 0x37/IRMode::Basic and report 0x33/
-    // IRMode::Extended; m_Snapshot.ir_extended_mode mirrors it only once
-    // the switch has actually been re-programmed on the hardware.
+    // IR Extended mode toggle (see SetIRExtendedMode()) - the source of
+    // truth PreferredReportMode()/EnableIRCameraOnce() read to pick report
+    // 0x37/IRMode::Basic vs. 0x33/IRMode::Extended. m_Snapshot.ir_extended_mode
+    // mirrors it only once the hardware switch has actually happened.
     bool m_IRExtendedMode = false;
 
     // Balance Board software tare/zero. m_BalanceRawKg holds the most
-    // recent PRE-tare corner readings (factory-calibrated, offset not yet
-    // applied) so TareBalanceBoard() has something to capture from;
-    // m_BalanceTareKg holds the offset currently being subtracted.
+    // recent PRE-tare corner readings (factory-calibrated, offset not
+    // applied) for TareBalanceBoard() to capture from; m_BalanceTareKg
+    // holds the offset currently being subtracted.
     float m_BalanceRawKg[4]  = {0.f, 0.f, 0.f, 0.f}; // order: TR, BR, TL, BL
     float m_BalanceTareKg[4] = {0.f, 0.f, 0.f, 0.f};
     bool  m_BalanceHasRawReading = false;

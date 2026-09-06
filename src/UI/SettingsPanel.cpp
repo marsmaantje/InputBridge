@@ -2,6 +2,7 @@
 
 #include "UI/EditableSlider.h"
 #include "UI/FontManager.h"
+#include "UI/IconsFontAwesome6.h"
 #include "UI/ThemeManager.h"
 #include "Devices/DeviceManager.h"
 
@@ -14,6 +15,224 @@
 #include <filesystem>
 #include <iterator>
 #include <vector>
+
+#if defined(__linux__)
+#include "Devices/Wiimote/Linux/LinuxUdevInstaller.h"
+#include "Devices/Wiimote/Linux/WiimoteLinuxDiagnostics.h"
+#include <chrono>
+#include <future>
+#endif
+
+#if defined(__linux__)
+namespace {
+
+// Backs the "Install"/"Remove" buttons in the Linux Permissions section
+// below. Same async/poll shape as SidebarLayout.cpp's udev-fix banner
+// (pkexec blocks on the user interacting with the auth dialog, so the
+// call runs on a background thread and this is polled once per frame),
+// but kept as its own copy here since install and remove are independent,
+// user-initiated actions rather than one error-recovery flow, and each
+// needs its own in-flight/result state.
+struct UdevJobUiState {
+    std::future<InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome> pending;
+    bool has_result = false;
+    // True once the current last_result has been shown in the modal at
+    // least once - starts true (nothing to show yet), flips false the
+    // frame Poll() picks up a fresh result, and back to true as soon as
+    // DrawUdevResultModal() has opened the popup for it. This is what
+    // lets the modal detect "there's a new result to pop up for" without
+    // reopening every frame the popup happens to already be open.
+    bool modal_shown = true;
+    InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome last_result;
+
+    bool IsRunning() const {
+        return pending.valid() &&
+               pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+    }
+
+    void Poll() {
+        if (pending.valid() && pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            last_result = pending.get();
+            has_result = true;
+            modal_shown = false;
+        }
+    }
+};
+UdevJobUiState s_UdevInstallJob;
+UdevJobUiState s_UdevRemoveJob;
+
+// Renders the outcome of a finished install/remove run. Success shows the
+// script's own stdout verbatim - both install and --uninstall end with a
+// "Next steps" / "Done." block, and that's the only place those steps are
+// written down, so showing anything else here would just be a paraphrase
+// the script itself already wrote correctly. Failure shows the reason and
+// a stderr tail, same wording as the Devices-tab permission banner.
+void DrawUdevJobResult(const UdevJobUiState& job) {
+    using Result = InputBridge::Wiimote::LinuxUdevInstaller::Result;
+    if (!job.has_result || job.IsRunning()) return;
+
+    if (job.last_result.result == Result::Success) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK " Done.");
+        if (!job.last_result.stdout_tail.empty())
+            ImGui::TextWrapped("%s", job.last_result.stdout_tail.c_str());
+    } else {
+        const char* why =
+            job.last_result.result == Result::UserCancelled  ? "Authentication was cancelled." :
+            job.last_result.result == Result::ScriptNotFound ? "install-udev-rules.sh wasn't found "
+                                                                 "next to the InputBridge binary." :
+            job.last_result.result == Result::PkexecNotFound ? "pkexec isn't available on this system." :
+                                                                 "The script failed.";
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", why);
+        if (!job.last_result.stderr_tail.empty() && job.last_result.result == Result::Failed)
+            ImGui::TextWrapped("%s", job.last_result.stderr_tail.c_str());
+    }
+}
+
+// Same ESC-to-close convenience used by the other BeginPopupModal blocks
+// in this codebase (e.g. ProtocolEditorWindow.cpp) - kept as its own copy
+// here since it's a small file-local static, not worth sharing a header for.
+void CloseUdevResultModalOnEscape() {
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
+}
+
+// Shows the outcome of the last Install/Remove run in a modal instead of
+// as text sitting under the buttons - same reasoning as the diagnostics
+// modal below: the stdout/stderr tail can run several lines, and a modal
+// gives it an explicit dismissal instead of permanently taking up space
+// in the settings panel after the first run.
+//
+// One shared popup serves both jobs since only one can run at a time
+// (the buttons are mutually disabled via any_running below); each job's
+// own modal_shown flag independently tracks whether *it* has a fresh,
+// not-yet-shown result, so a completed Install doesn't get overwritten
+// or skipped if Remove finishes moments later.
+void DrawUdevResultModal() {
+    static const UdevJobUiState* s_ResultToShow = nullptr;
+
+    if (!s_UdevInstallJob.modal_shown) {
+        s_ResultToShow = &s_UdevInstallJob;
+        s_UdevInstallJob.modal_shown = true;
+        ImGui::OpenPopup("Permission Rule##udev_modal");
+    } else if (!s_UdevRemoveJob.modal_shown) {
+        s_ResultToShow = &s_UdevRemoveJob;
+        s_UdevRemoveJob.modal_shown = true;
+        ImGui::OpenPopup("Permission Rule##udev_modal");
+    }
+
+    bool open = true;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(480, 280), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(360, 180), ImVec2(FLT_MAX, FLT_MAX));
+    if (ImGui::BeginPopupModal("Permission Rule##udev_modal", &open)) {
+        CloseUdevResultModalOnEscape();
+
+        const float footerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
+        ImGui::BeginChild("##udev_result", ImVec2(0, -footerH), false);
+        if (s_ResultToShow) DrawUdevJobResult(*s_ResultToShow);
+        ImGui::EndChild();
+
+        ImGui::Separator();
+        if (ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
+    }
+}
+
+// Results of the last "Check for common issues" run, and whether the modal
+// showing them still needs to be opened this frame (set on button click,
+// consumed the next time DrawDiagnosticsModal runs). The results persist
+// across frames/re-opens rather than being cleared when the modal is
+// closed, so re-opening without re-running still shows the last run.
+std::vector<InputBridge::Wiimote::WiimoteLinuxDiagnostics::CheckResult> s_DiagnosticsResults;
+bool s_ShouldOpenDiagnosticsModal = false;
+
+// Same ESC-to-close convenience used by the other BeginPopupModal blocks
+// in this codebase (e.g. ProtocolEditorWindow.cpp) - kept as its own copy
+// here since it's a small file-local static, not worth sharing a header for.
+void CloseDiagnosticsModalOnEscape() {
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
+}
+
+void DrawDiagnosticsResult(const InputBridge::Wiimote::WiimoteLinuxDiagnostics::CheckResult& r) {
+    using Status = InputBridge::Wiimote::WiimoteLinuxDiagnostics::Status;
+    const ImVec4 color = r.status == Status::Ok      ? ImVec4(0.4f, 0.85f, 0.4f, 1.0f) :
+                          r.status == Status::Warning ? ImVec4(1.0f, 0.75f, 0.3f, 1.0f) :
+                                                         ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+    const char* icon = r.status == Status::Ok      ? ICON_FA_CHECK :
+                        r.status == Status::Warning ? "!" : "i";
+    ImGui::TextColored(color, "%s %s", icon, r.title.c_str());
+    ImGui::TextWrapped("%s", r.detail.c_str());
+}
+
+// Shows the results of the last "Check for common issues" run in a modal
+// dialog rather than inline in the settings panel - the list can get long
+// enough (permissions, group membership, tooling, Bluetooth, Steam IR
+// conflict) that leaving it inline pushed the rest of the panel down every
+// time it was run, and a modal gives it an explicit "done reading this"
+// dismissal instead.
+void DrawDiagnosticsModal() {
+    if (s_ShouldOpenDiagnosticsModal) {
+        ImGui::OpenPopup("Common Issues Check##modal");
+        s_ShouldOpenDiagnosticsModal = false;
+    }
+
+    bool open = true;
+
+    // Auto-center on the main viewport each time the popup opens (not
+    // ImGuiCond_Always, so the user's own drag/resize afterwards sticks
+    // instead of snapping back to center every frame).
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // No ImGuiWindowFlags_AlwaysAutoResize/NoResize here (unlike the other
+    // modals in this codebase) - the result list's length varies with how
+    // many checks warn, so letting the user drag it larger is more useful
+    // than forcing an exact-content-fit size every time.
+    ImGui::SetNextWindowSize(ImVec2(480, 360), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(360, 200), ImVec2(FLT_MAX, FLT_MAX));
+    if (ImGui::BeginPopupModal("Common Issues Check##modal", &open)) {
+        CloseDiagnosticsModalOnEscape();
+
+        // Results scroll in their own region so Re-check/Close stay pinned
+        // at the bottom regardless of how the user resizes the window.
+        // Reserve room for the Separator (which adds its own ItemSpacing.y
+        // above and below) plus the button row below it, so Re-check/Close
+        // stay fully on-screen - and outside any scrolling region - however
+        // small the user resizes the window, rather than being clipped or
+        // needing a scroll to reach.
+        const float footerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
+        ImGui::BeginChild("##diag_results", ImVec2(0, -footerH), false);
+        if (s_DiagnosticsResults.empty()) {
+            ImGui::TextDisabled("No results yet.");
+        } else {
+            for (size_t i = 0; i < s_DiagnosticsResults.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                DrawDiagnosticsResult(s_DiagnosticsResults[i]);
+                ImGui::PopID();
+                if (i + 1 < s_DiagnosticsResults.size()) ImGui::Spacing();
+            }
+        }
+        ImGui::EndChild();
+
+        ImGui::Separator();
+
+        if (ImGui::Button("Re-check", ImVec2(120, 0))) {
+            s_DiagnosticsResults = InputBridge::Wiimote::WiimoteLinuxDiagnostics::RunAll();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
+    }
+}
+
+} // namespace
+#endif // __linux__
 
 void DrawSettingsContent(float&              user_ui_scale,
                          float&              user_font_scale,
@@ -320,4 +539,62 @@ void DrawSettingsContent(float&              user_ui_scale,
         ImGui::TextWrapped("Error: %s", s_openFolderError.c_str());
         ImGui::PopStyleColor();
     }
+
+#if defined(__linux__)
+    // -- Linux Permissions ---------------------------------------------
+    // The Devices tab only ever offers to *install* the udev rule, and
+    // only reactively when a scan just hit a permission error. Removing
+    // it again isn't tied to any error state, so it needs a home that's
+    // available regardless - here, alongside the app's other persistent
+    // maintenance actions.
+    {
+        using InputBridge::Wiimote::LinuxUdevInstaller;
+
+        ImGui::Separator();
+        ImGui::Text("Linux Permissions");
+        ImGui::TextWrapped(
+            "Controls the udev rule that lets InputBridge open a Wii Remote / "
+            "Balance Board's hidraw device without root - needed when it's "
+            "connected through a USB Bluetooth dongle. Both actions prompt "
+            "for authentication via pkexec.");
+
+        s_UdevInstallJob.Poll();
+        s_UdevRemoveJob.Poll();
+
+        const bool pkexec_available = LinuxUdevInstaller::IsPkexecAvailable();
+        const bool any_running = s_UdevInstallJob.IsRunning() || s_UdevRemoveJob.IsRunning();
+
+        ImGui::BeginDisabled(!pkexec_available || any_running);
+        if (ImGui::Button("Install permission rule")) {
+            s_UdevInstallJob.has_result = false;
+            s_UdevInstallJob.pending = std::async(std::launch::async, &LinuxUdevInstaller::InstallRules);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Remove permission rule")) {
+            s_UdevRemoveJob.has_result = false;
+            s_UdevRemoveJob.pending = std::async(std::launch::async, &LinuxUdevInstaller::UninstallRules);
+        }
+        ImGui::EndDisabled();
+
+        if (!pkexec_available) {
+            ImGui::TextDisabled("pkexec not found - install it, or run "
+                                 "packaging/linux/install-udev-rules.sh manually as root.");
+        } else if (any_running) {
+            ImGui::TextDisabled("Waiting for authentication...");
+        }
+
+        DrawUdevResultModal();
+
+        // -- Diagnostics --------------------------------------------------
+        // Separate from Install/Remove above: those two change system
+        // state and need pkexec, this only ever reads things, so it stays
+        // enabled and usable even when pkexec isn't available.
+        ImGui::Spacing();
+        if (ImGui::Button("Check for common issues")) {
+            s_DiagnosticsResults = InputBridge::Wiimote::WiimoteLinuxDiagnostics::RunAll();
+            s_ShouldOpenDiagnosticsModal = true;
+        }
+        DrawDiagnosticsModal();
+    }
+#endif // __linux__
 }

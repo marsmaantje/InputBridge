@@ -64,44 +64,34 @@ namespace Registers {
     constexpr uint32_t ExtensionInitNew1 = 0xA400F0; // write 0x55 (new-style unencrypted init, step 1)
     constexpr uint32_t ExtensionInitNew2 = 0xA400FB; // write 0x00 (new-style unencrypted init, step 2)
     constexpr uint32_t ExtensionEncryption = 0xA400F0; // write 0x00 to complete encryption reset sequence
-    // "Old way" init (WiiBrew "Wiimote/Extension Controllers#The Old Way"):
-    // write the single byte 0x00 to register 0xA40040 (the same register the
-    // 16-byte encryption key would otherwise be written to - this is a
-    // 1-byte "null key" instead of the 0x55/0x00 pair above). This leaves
-    // the extension's factory-default encryption ON, so every subsequent
-    // ID/data byte read from the extension must be run through
-    // DecryptExtensionByte() below. Some wireless/third-party Nunchuks
-    // either ignore the "new way" write or never disable encryption in the
-    // first place and only work through this path - see WiiBrew's Nunchuk
-    // page, "Wireless Nunchuks" section.
+    // "Old way" init (WiiBrew "Extension Controllers#The Old Way"): write
+    // 0x00 to 0xA40040 (a 1-byte "null key", same register the 16-byte
+    // encryption key would otherwise use). Leaves factory encryption ON,
+    // so every subsequent ID/data byte needs DecryptExtensionByte() below.
+    // Some wireless/third-party Nunchuks only work through this path.
     constexpr uint32_t ExtensionInitOld  = 0xA40040;
     constexpr uint32_t ExtensionCalib    = 0xA40020; // Balance Board calibration block start
-    // Reference Temperature (+1 unknown byte, always 0x01) - not part of the
-    // 0xA40020 32-byte calibration block itself, but folded into that
-    // block's trailing CRC32 (see WiiBrew's "Calibration Data" section: the
-    // checksum covers 0x24-0x3B, then 0x20-0x21, then these two bytes at
-    // 0x60-0x61).
+    // Reference Temperature (+1 unknown byte, always 0x01) - outside the
+    // 0xA40020 calibration block, but folded into its trailing CRC32
+    // (covers 0x24-0x3B, then 0x20-0x21, then these two bytes).
     constexpr uint32_t ExtensionCalibRefTemp = 0xA40060;
     constexpr uint32_t ExtensionData     = 0xA40000; // live data, 11 bytes for Balance Board / 6-8 for others
     constexpr uint32_t ExtensionId       = 0xA400FA; // 6-byte extension ID (Wiimote) / 0xA400FE 2-byte (Balance Board)
     constexpr uint32_t ExtensionIdShort  = 0xA400FE; // 2-byte short form, also the "data format" byte pair
     constexpr uint32_t ExtensionDataFormat = 0xA400FE; // 1-byte data format configuration register
-    // Balance Board "wake" register (WiiBrew's captured Wii init trace,
-    // "Wii Initialisation Sequence" section): writing 0xAA here several
-    // times, interspersed with reads of the calibration block, is what the
-    // real Wii does before trusting the board's 4 weight sensors - skip it
-    // and one or more sensors are commonly reported stuck near a constant
-    // raw value (reads as ~0kg after calibration) until the next power/
-    // connect cycle. Undocumented meaning; WiiBrew speculates calibration-
-    // related. Present on the Balance Board only - writing it to a regular
-    // Wiimote/extension is a documented no-op there.
+    // Balance Board "wake" register (WiiBrew's "Wii Initialisation
+    // Sequence"): the real Wii writes 0xAA here several times, interspersed
+    // with calibration-block reads, before trusting the 4 weight sensors -
+    // skip it and sensors commonly get stuck near a constant raw value
+    // until the next power cycle. Meaning undocumented; no-op on a regular
+    // Wiimote/extension.
     constexpr uint32_t BalanceBoardWake  = 0xA400F1;
     constexpr uint32_t MotionPlusBase    = 0xA60000; // - 0xA600FF
     constexpr uint32_t MotionPlusId      = 0xA600FA; // 6-byte ID, same shape as ExtensionId
     // All three activation modes are writes to the *same* register, 0xA600FE -
     // they only differ in the byte written. (0xA600F0 is a different, unrelated
     // register - writing there does not activate the Motion Plus.)
-    constexpr uint32_t MotionPlusInit    = 0xA600FE; // write 0x55 (activate, "standalone" mode)
+    constexpr uint32_t MotionPlusInit    = 0xA600FE; // write 0x04 (activate, "standalone" mode)
     constexpr uint32_t MotionPlusInitNunchukPass  = 0xA600FE; // write 0x05 (activate w/ Nunchuk passthrough)
     constexpr uint32_t MotionPlusInitClassicPass  = 0xA600FE; // write 0x07 (activate w/ Classic passthrough)
     constexpr uint32_t IRCameraBase      = 0xB00000; // - 0xB00033
@@ -179,14 +169,10 @@ struct ExtensionId6 { std::array<uint8_t, 6> bytes; };
 
 inline ExtensionType ClassifyExtension(const ExtensionId6 &id) {
     const auto &b = id.bytes;
-    // Guard: must look like a real ID (bytes[2..3] == A4 20 or A6 20),
-    // otherwise treat as none/unknown - avoids misclassifying a disconnected
-    // slot (all 0xFF) or a mid-handshake read. Regular extensions (Nunchuk,
-    // Classic Controller, Balance Board, ...) live at 0xA4xxxx and report
-    // A4 20 here; a Motion Plus, however, is read from its own register
-    // base at 0xA6xxxx and reports A6 20 in this same position (see
-    // WiiBrew "Wii Motion Plus#Identifying" - this is not a typo/alias of
-    // A4, the hardware genuinely answers with A6 here).
+    // Guard: bytes[2..3] must be A4 20 or A6 20, else treat as unknown
+    // (disconnected slot reads all 0xFF, or a mid-handshake read). Regular
+    // extensions report A4 20; a Motion Plus, read from its own 0xA6xxxx
+    // base, genuinely reports A6 20 here - not a typo.
     if ((b[2] != 0xA4 && b[2] != 0xA6) || b[3] != 0x20) return ExtensionType::Unknown;
 
     const uint16_t sub = (uint16_t(b[0]) << 8) | b[1]; // XXXX
@@ -205,18 +191,20 @@ inline ExtensionType ClassifyExtension(const ExtensionId6 &id) {
 }
 
 // Which passthrough mode a detected MotionPlus ID indicates, per WiiBrew's
-// "Wii Motion Plus#Identifying" table. Only meaningful when
-// ClassifyExtension() above returned ExtensionType::MotionPlus.
+// "Wii Motion Plus" page (0x0405 = activated standalone, 0x0505 = Nunchuk
+// passthrough, 0x0705 = Classic Controller passthrough; 0x0005 is the
+// inactive/not-yet-activated state). Only meaningful when ClassifyExtension()
+// above returned ExtensionType::MotionPlus.
 enum class MotionPlusPassthrough { None, Nunchuk, Classic, Unknown };
 
 inline MotionPlusPassthrough ClassifyMotionPlusPassthrough(const ExtensionId6 &id) {
     const auto &b = id.bytes;
     const uint16_t typ = (uint16_t(b[4]) << 8) | b[5];
     switch (typ) {
-        case 0x0005: return MotionPlusPassthrough::None;
-        case 0x0405: return MotionPlusPassthrough::Nunchuk;
-        case 0x0505: return MotionPlusPassthrough::Classic;
-        default:     return MotionPlusPassthrough::Unknown;
+        case 0x0405: return MotionPlusPassthrough::None;    // activated, standalone
+        case 0x0505: return MotionPlusPassthrough::Nunchuk;
+        case 0x0705: return MotionPlusPassthrough::Classic;
+        default:     return MotionPlusPassthrough::Unknown; // includes 0x0005 (inactive)
     }
 }
 
