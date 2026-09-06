@@ -15,6 +15,13 @@
 #include "UI/IconsFontAwesome6.h"
 #include "UI/SettingsPanel.h"
 
+#if defined(__linux__)
+#include "Devices/Wiimote/WiimoteManager.h"
+#include "Devices/Wiimote/Linux/LinuxUdevInstaller.h"
+#include <chrono>
+#include <future>
+#endif
+
 #include <string>
 #include <vector>
 
@@ -34,6 +41,110 @@ static bool  s_GamepadNavLoaded  = false;
 static bool  s_DisableKeyboardNav = false;
 static bool  s_KeyboardNavLoaded  = false;
 static bool  s_BatteryIntervalLoaded = false;
+
+#if defined(__linux__)
+// State for the "Fix permissions" button shown when
+// WiimoteManager::HadRecentLinuxPermissionError() is true (see
+// SidebarLayout.cpp's Devices tab body). pkexec blocks on user interaction
+// with the polkit auth dialog, so it runs on a background thread via
+// std::async and this struct is polled once per frame rather than the UI
+// thread calling LinuxUdevInstaller directly and freezing the render loop
+// until the dialog is dismissed.
+namespace {
+struct UdevInstallUiState {
+    std::future<InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome> pending;
+    bool has_result = false;
+    InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome last_result;
+
+    bool IsRunning() const {
+        return pending.valid() &&
+               pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+    }
+
+    // Call once per frame; picks up the result the frame it completes.
+    void Poll() {
+        if (pending.valid() && pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            last_result = pending.get();
+            has_result = true;
+        }
+    }
+};
+UdevInstallUiState s_UdevInstallUi;
+} // namespace
+
+// Panel-wide (not per-device) banner offering to fix the udev rule when
+// the most recent WiimoteManager::Scan() hit EACCES opening a hidraw
+// node - see WiimoteManager.h's HadRecentLinuxPermissionError() doc
+// comment for why this only reflects the latest scan.
+static void DrawLinuxUdevPermissionBanner() {
+    using InputBridge::Wiimote::LinuxUdevInstaller;
+    using InputBridge::Wiimote::WiimoteManager;
+
+    s_UdevInstallUi.Poll();
+
+    // Once installed successfully, stop nagging even if the device hasn't
+    // been replugged yet this session - the flag itself will clear on its
+    // own the next time a scan actually succeeds in opening the device.
+    if (s_UdevInstallUi.has_result &&
+        s_UdevInstallUi.last_result.result == LinuxUdevInstaller::Result::Success &&
+        !s_UdevInstallUi.IsRunning()) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK
+                            " Permissions installed. Unplug and replug the Wiimote/"
+                            "Balance Board (or its Bluetooth dongle) to finish.");
+        return;
+    }
+
+    if (!WiimoteManager::HadRecentLinuxPermissionError() && !s_UdevInstallUi.IsRunning())
+        return;
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.35f, 0.25f, 0.05f, 0.35f));
+    ImGui::BeginChild("##udev_permission_banner", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY,
+                       ImGuiWindowFlags_NoScrollbar);
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
+                        "! A Wiimote or Balance Board was found but couldn't be opened "
+                        "(permission denied).");
+    ImGui::TextWrapped("This is common when connecting through a USB Bluetooth dongle: "
+                        "the device needs a one-time permission rule installed.");
+
+    if (s_UdevInstallUi.IsRunning()) {
+        ImGui::TextDisabled("Waiting for authentication...");
+    } else {
+        const bool pkexec_available = LinuxUdevInstaller::IsPkexecAvailable();
+        ImGui::BeginDisabled(!pkexec_available);
+        if (ImGui::Button("Fix permissions...")) {
+            s_UdevInstallUi.has_result = false;
+            s_UdevInstallUi.pending = std::async(std::launch::async,
+                                                  &LinuxUdevInstaller::InstallRules);
+        }
+        ImGui::EndDisabled();
+        if (!pkexec_available) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(pkexec not found)");
+        }
+
+        ImGui::SameLine();
+        ImGui::TextDisabled("or run: sudo ./packaging/linux/install-udev-rules.sh");
+
+        if (s_UdevInstallUi.has_result &&
+            s_UdevInstallUi.last_result.result != LinuxUdevInstaller::Result::Success) {
+            using Result = LinuxUdevInstaller::Result;
+            const char *why =
+                s_UdevInstallUi.last_result.result == Result::UserCancelled  ? "Authentication was cancelled." :
+                s_UdevInstallUi.last_result.result == Result::ScriptNotFound ? "install-udev-rules.sh wasn't found "
+                                                                                "next to the InputBridge binary." :
+                s_UdevInstallUi.last_result.result == Result::PkexecNotFound ? "pkexec isn't available on this system." :
+                                                                                "The installer script failed.";
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", why);
+            if (!s_UdevInstallUi.last_result.stderr_tail.empty() &&
+                s_UdevInstallUi.last_result.result == Result::Failed) {
+                ImGui::TextWrapped("%s", s_UdevInstallUi.last_result.stderr_tail.c_str());
+            }
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+#endif // __linux__
 
 // ---------------------------------------------------------------------------
 
@@ -405,6 +516,10 @@ void DrawSidebarLayout(SidebarContext& ctx)
                     ImGui::Unindent();
                 }
             }
+
+#if defined(__linux__)
+            DrawLinuxUdevPermissionBanner();
+#endif
 
             // Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero.
             // Not SDL_Joystick-backed (see Devices/Wiimote/README.md), so they
