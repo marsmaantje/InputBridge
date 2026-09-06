@@ -590,6 +590,18 @@ if(UNIX AND NOT APPLE)
 
     file(WRITE ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='#333'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='10'>IB</text></svg>")
     install(FILES ${CMAKE_BINARY_DIR}/org.inputbridge.InputBridge.svg DESTINATION share/icons/hicolor/scalable/apps)
+
+    # Wiimote/Balance Board hidraw permissions (see packaging/linux/README.md).
+    # These are host system config, not app payload, so `cmake --install`
+    # deliberately does NOT write to /etc/udev/rules.d itself (that would
+    # make a plain, non-root `cmake --install` fail, or silently need
+    # root). Instead we ship the rules file + installer script under
+    # share/inputbridge/udev so packagers/users can apply it explicitly:
+    #   sudo <prefix>/share/inputbridge/udev/install-udev-rules.sh
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/99-inputbridge-wiimote.rules"
+        DESTINATION share/inputbridge/udev)
+    install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
+        DESTINATION share/inputbridge/udev)
 endif()
 
 if(WIN32)
