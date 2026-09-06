@@ -194,6 +194,16 @@ jobs:
 
                 test -f build/AppDir/usr/bin/InputBridge
 
+                # LinuxUdevInstaller::ResolveScriptPath() needs these one
+                # directory up from the binary (usr/bin/../share/...) -
+                # verify cmake --install actually put them there, since
+                # nothing else in this job would otherwise catch it if a
+                # future change silently dropped them (see the equivalent
+                # check added to build-ubuntu's tarball for the class of
+                # bug this guards against).
+                test -f build/AppDir/usr/share/inputbridge/udev/install-udev-rules.sh || { echo "install-udev-rules.sh missing from AppDir"; exit 1; }
+                test -f build/AppDir/usr/share/inputbridge/udev/71-inputbridge-wiimote.rules || { echo "71-inputbridge-wiimote.rules missing from AppDir"; exit 1; }
+
           - name: Create AppImage
             run: |
                 wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
@@ -212,6 +222,14 @@ jobs:
                   --output appimage
 
                 mv InputBridge*.AppImage InputBridge-Ubuntu.AppImage
+
+          - name: Verify udev assets survived AppImage bundling
+            run: |
+                chmod +x InputBridge-Ubuntu.AppImage
+                ./InputBridge-Ubuntu.AppImage --appimage-extract >/dev/null
+                test -f squashfs-root/usr/share/inputbridge/udev/install-udev-rules.sh || { echo "install-udev-rules.sh missing from the built AppImage - linuxdeploy dropped it"; exit 1; }
+                test -f squashfs-root/usr/share/inputbridge/udev/71-inputbridge-wiimote.rules || { echo "71-inputbridge-wiimote.rules missing from the built AppImage - linuxdeploy dropped it"; exit 1; }
+                rm -rf squashfs-root
 
           - name: Smoke test (launch check)
             if: ${{ github.event.inputs.smoke_test == 'yes' }}
@@ -317,8 +335,26 @@ jobs:
                   cmake --install build --config Release --prefix package
                   # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
                   if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
+
+                  # Bring share/ (udev installer script + rules file, themes,
+                  # etc.) into the same directory as the binary before
+                  # tarring. LinuxUdevInstaller::ResolveScriptPath() looks
+                  # for share/inputbridge/udev/install-udev-rules.sh
+                  # directly beside the running binary first (the same
+                  # "dev-build" layout CMake's own POST_BUILD step uses) -
+                  # without this, the tarball only ever contained
+                  # package/bin's contents, so a binary run straight from
+                  # the extracted tarball could never find its own udev
+                  # installer script.
+                  if [ -d "package/share" ]; then cp -r package/share package/bin/share; fi
+
                   mkdir -p dist
                   tar -czvf dist/InputBridge-Ubuntu.tar.gz -C package/bin .
+
+            - name: Verify udev packaging assets
+              run: |
+                  test -f package/bin/share/inputbridge/udev/install-udev-rules.sh || { echo "install-udev-rules.sh missing from tarball layout"; exit 1; }
+                  test -f package/bin/share/inputbridge/udev/71-inputbridge-wiimote.rules || { echo "71-inputbridge-wiimote.rules missing from tarball layout"; exit 1; }
 
             - name: Smoke test (launch check)
               if: ${{ github.event.inputs.smoke_test == 'yes' }}
