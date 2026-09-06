@@ -53,6 +53,29 @@ To remove the rule later:
 sudo ./packaging/linux/install-udev-rules.sh --uninstall
 ```
 
+## Flatpak
+
+The Flatpak build (`org.inputbridge.InputBridge.yml`) grants
+`--filesystem=/etc/udev/rules.d:create` so the sandboxed app sees the
+*real* host `/etc/udev/rules.d` instead of the runtime's own private
+copy - without it, "Check for common issues" would report the rule as
+never installed regardless of what's actually on the host, and a rule
+installed from inside the sandbox wouldn't end up anywhere udevd on the
+host would ever read.
+
+It also grants `--talk-name=org.freedesktop.Flatpak` so the in-app
+Install/Remove buttons can run `flatpak-spawn --host pkexec ...` - a
+plain `pkexec` call from inside the sandbox can't reach the host's
+PolicyKit authority at all. `LinuxUdevInstaller` stages a copy of this
+script and the `.rules` file under `$XDG_RUNTIME_DIR` first, since
+`flatpak-spawn --host`'s argv is resolved on the host and the app's own
+`/app/share/...` copy isn't visible there.
+
+If you're building or auditing the Flatpak manifest yourself and either
+permission is missing, expect exactly those two symptoms: a permanently
+"not installed" diagnostic despite a real rule on the host, and/or a
+disabled or failing Install/Remove button.
+
 ## Packagers (deb/rpm/AUR/etc.)
 
 If you're building a distro package, prefer installing
