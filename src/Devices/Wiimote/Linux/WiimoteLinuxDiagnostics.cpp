@@ -49,8 +49,46 @@ bool BinaryOnPath(const char *name) {
     return false;
 }
 
+// Reads the installed rules file and flags a known-bad pattern: a single
+// rule line combining TAG+="uaccess" with GROUP="plugdev" (an early
+// version of the shipped rules file did exactly this). On systems with
+// no "plugdev" group, systemd-udevd fails to resolve that GROUP= and -
+// confirmed via `udevadm test` - invalidates the ENTIRE line, silently
+// dropping the TAG+="uaccess" grant along with it. Splitting the two
+// assignments into separate lines (see the current rules file) avoids
+// this, but there's no way to tell from here whether a *running*
+// system's udevd actually has this bug (it varies by version), so this
+// only warns when it can see the risky pattern still present on disk -
+// it can't detect the failure mode itself without shelling out to
+// `udevadm test`, which this diagnostic deliberately avoids doing.
+bool RulesFileHasCombinedUaccessGroupLine(const std::string &path) {
+    std::ifstream file(path);
+    if (!file) return false;
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.find("TAG+=\"uaccess\"") != std::string::npos &&
+            line.find("GROUP=") != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
 CheckResult CheckUdevRule() {
     if (FileExists(kUdevRulesPath)) {
+        if (RulesFileHasCombinedUaccessGroupLine(kUdevRulesPath)) {
+            return {Status::Warning, "Permission rule",
+                    std::string("Installed at ") + kUdevRulesPath +
+                    ", but at least one rule line combines TAG+=\"uaccess\" "
+                    "with GROUP=\"plugdev\" on the same line. On a system "
+                    "with no 'plugdev' group, some udevd versions fail the "
+                    "*entire* line when GROUP can't be resolved - silently "
+                    "dropping the uaccess grant too, even though Device "
+                    "access below reports EACCES. Reinstall the current "
+                    "permission rule from Settings > Linux Permissions to "
+                    "get the fixed version, which splits these onto "
+                    "separate lines."};
+        }
         return {Status::Ok, "Permission rule",
                 std::string("Installed at ") + kUdevRulesPath + "."};
     }

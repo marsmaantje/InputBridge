@@ -9,38 +9,60 @@
 # to these devices over hidraw (see WiimoteManager.cpp), so without a rule
 # like this one it fails to open the node with EACCES.
 #
-# These rules match Nintendo's USB vendor ID (057e) and the two product
+# This rule matches Nintendo's USB vendor ID (057e) and the two product
 # IDs Wiimotes and Wii Remote Plus / Balance Boards report (0306, 0330 -
-# the Balance Board shares 0330 with the Wiimote Plus; the two are told
-# apart at the protocol level, not by PID, so both must be covered here).
-# It grants access two ways so it works whether or not the local distro
-# defines/uses a "plugdev" group:
-#   1. TAG+="uaccess" - the systemd-logind/udev mechanism most modern
-#      distros (Fedora, Arch, recent Debian/Ubuntu, etc.) use to grant the
-#      currently logged-in seat's user access automatically, no group
-#      membership required.
-#   2. GROUP="plugdev", MODE="0660" - a fallback for older/minimal distros
-#      that still rely on plugdev-style group ownership instead of uaccess.
-#      Harmless if plugdev doesn't exist; uaccess (1) covers those systems.
+# the Balance Board shares 0330 with the Wiimote Plus - and, per
+# real-world testing, some Balance Boards also report 0306 - the two
+# product families aren't told apart by PID, so both must be covered
+# for both device types).
+#
+# Each match below is deliberately written as TWO separate rule lines,
+# not one line combining both assignments:
+#   1. TAG+="uaccess" alone - the systemd-logind/udev mechanism most
+#      modern distros (Fedora, Arch, recent Debian/Ubuntu, etc.) use to
+#      grant the currently logged-in seat's user access automatically,
+#      no group membership required.
+#   2. GROUP="plugdev", MODE="0660" alone - a fallback for older/minimal
+#      distros that still rely on plugdev-style group ownership instead
+#      of uaccess.
+# This split matters: on a system with no "plugdev" group,
+# systemd-udevd logs "Failed to resolve group 'plugdev', ignoring:
+# Unknown group" for line 2 and - critically - invalidates that ENTIRE
+# rule line, not just the unresolvable GROUP= assignment. If TAG+="uaccess"
+# had been combined onto the same line (as an earlier version of this
+# file did), the failed GROUP lookup silently took the uaccess grant
+# down with it too, leaving the device root:root/0600 with no error
+# anywhere in the app - only visible via `udevadm test`. Splitting them
+# means a missing "plugdev" group only costs line 2; line 1 still grants
+# access via uaccess independently. Confirmed with:
+#   sudo udevadm test /sys/class/hidraw/hidrawN
 
 # Wiimote (RVL-CNT-01) and Wiimote Plus / Balance Board (RVL-CNT-01-TR),
 # connected via USB Bluetooth dongle or built-in adapter.
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0306", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0330", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0306", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0306", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0330", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0330", GROUP="plugdev", MODE="0660"
 
 # Some Bluetooth stacks surface the vendor/product IDs on the parent
 # Bluetooth HID device node rather than (or in addition to) the hidraw
 # grandchild's own ATTRS. Walking up to match there too covers dongles
 # whose hidraw node doesn't inherit idVendor/idProduct directly.
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01-TR", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-WBC-01", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01-TR", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01-TR", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-WBC-01", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-WBC-01", GROUP="plugdev", MODE="0660"
 
-# Additional match for the Bluetooth case: the hidraw node's immediate
-# parent is a "hid"-bus device (not "usb"), whose *kernel* name is always
-# "<bus>:<vendor>:<product>.<instance>" in uppercase hex - bus 0005 is
-# BUS_BLUETOOTH. This doesn't depend on a "name" attribute being present
-# or exactly matching, unlike the ATTRS{name} rules above, so it's kept
-# as a third, independent way to reach the same node.
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0306.*", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0330.*", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+# Most robust match for the Bluetooth/uhid case: the hidraw node's
+# immediate parent is a virtual "hid"-bus device (see
+# /devices/virtual/misc/uhid/... in `udevadm info -a`), whose *kernel*
+# name is always "<bus>:<vendor>:<product>.<instance>" in uppercase hex
+# - bus 0005 is BUS_BLUETOOTH. This doesn't depend on a "name" attribute
+# being present or exactly matching, unlike the ATTRS{name} rules above,
+# so it's kept as a third, independent way to reach the same node.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0306.*", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0306.*", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0330.*", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0330.*", GROUP="plugdev", MODE="0660"
