@@ -32,6 +32,10 @@ public:
         int exit_code = -1;
         std::string script_path;  // What we tried to run, for diagnostics/logging.
         std::string stderr_tail;  // Last bit of stderr, if any, for error messages.
+        std::string stdout_tail;  // Last bit of stdout, if any. On success this is the
+                                   // script's "Next steps" block - the UI should show it
+                                   // to the user directly rather than relying on the app
+                                   // log, since that's the only place those steps appear.
     };
 
     // Locates install-udev-rules.sh relative to the running binary (see

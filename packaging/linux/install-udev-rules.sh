@@ -71,6 +71,45 @@ reload_udev() {
     udevadm trigger --subsystem-match=hidraw
 }
 
+# Look for any *other* pre-existing udev rules file that already appears to
+# grant access to Wii hardware (matching on Nintendo's vendor ID, the
+# Wiimote/Balance Board product IDs, or the device names our own rule
+# matches on). This can happen if a distro package (e.g. dolphin-emu,
+# some Steam Input/controller-permissions packages) or a rule the user
+# added themselves already handles these devices. We don't want to
+# silently shadow or duplicate that - two rules for the same device are
+# harmless individually, but if this script's rule is ever
+# uninstalled/changed while an unrelated rule is still relying on the
+# same file name assumption, or if the pre-existing rule is stricter/looser
+# than ours, it's worth surfacing rather than staying silent.
+check_preexisting_wii_rules() {
+    local rules_dir="/etc/udev/rules.d"
+    local match_pattern='057e|0306|0330|RVL-CNT-01|RVL-CNT-01-TR|RVL-WBC-01'
+    local found=()
+    local f
+
+    [[ -d "${rules_dir}" ]] || return 0
+
+    for f in "${rules_dir}"/*.rules; do
+        [[ -e "${f}" ]] || continue
+        # Skip our own rule; we only care about *other* files.
+        [[ "$(basename -- "${f}")" == "${RULES_FILENAME}" ]] && continue
+        if grep -Eq "${match_pattern}" -- "${f}" 2>/dev/null; then
+            found+=("${f}")
+        fi
+    done
+
+    if [[ "${#found[@]}" -gt 0 ]]; then
+        echo "note: found existing udev rule(s) that also appear to reference Wii Remote / Balance Board hardware:" >&2
+        for f in "${found[@]}"; do
+            echo "        ${f}" >&2
+        done
+        echo "      This script will still install/manage its own ${DEST_RULES_PATH}," >&2
+        echo "      but if the device still isn't accessible afterwards, check whether the" >&2
+        echo "      rule(s) above conflict with (e.g. a narrower MODE/GROUP than) this one." >&2
+    fi
+}
+
 if [[ "${UNINSTALL}" -eq 1 ]]; then
     if [[ -e "${DEST_RULES_PATH}" ]]; then
         rm -f -- "${DEST_RULES_PATH}"
@@ -79,6 +118,7 @@ if [[ "${UNINSTALL}" -eq 1 ]]; then
         echo "Nothing to remove (${DEST_RULES_PATH} not present)."
     fi
     reload_udev
+    check_preexisting_wii_rules
     echo "Done. Unplug and replug the Wiimote/Balance Board (or its Bluetooth dongle) to apply."
     exit 0
 fi
@@ -87,6 +127,8 @@ if [[ ! -f "${SOURCE_RULES_PATH}" ]]; then
     echo "error: expected to find ${SOURCE_RULES_PATH} next to this script, but it's missing." >&2
     exit 1
 fi
+
+check_preexisting_wii_rules
 
 install -D -m 0644 -- "${SOURCE_RULES_PATH}" "${DEST_RULES_PATH}"
 echo "Installed ${DEST_RULES_PATH}"

@@ -88,9 +88,21 @@ static void DrawLinuxUdevPermissionBanner() {
     if (s_UdevInstallUi.has_result &&
         s_UdevInstallUi.last_result.result == LinuxUdevInstaller::Result::Success &&
         !s_UdevInstallUi.IsRunning()) {
-        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK
-                            " Permissions installed. Unplug and replug the Wiimote/"
-                            "Balance Board (or its Bluetooth dongle) to finish.");
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK " Permissions installed.");
+        // Show the script's own "Next steps" block (unplug/replug, log out
+        // if it added the user to plugdev, relaunch) rather than a
+        // hardcoded summary - those steps only exist in the script's
+        // stdout, so if the UI doesn't surface it here the user never
+        // sees them (they'd otherwise only end up wherever the process's
+        // stdout happens to go, not in the app itself).
+        if (!s_UdevInstallUi.last_result.stdout_tail.empty()) {
+            ImGui::TextWrapped("%s", s_UdevInstallUi.last_result.stdout_tail.c_str());
+        } else {
+            // Fallback for an older/customized script that prints nothing
+            // to stdout - still give the user something actionable.
+            ImGui::TextWrapped("Unplug and replug the Wiimote/Balance Board (or its "
+                                "Bluetooth dongle) to finish.");
+        }
         return;
     }
 

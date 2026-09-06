@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <poll.h>
 #include <spawn.h>
 #include <string>
 #include <sys/wait.h>
@@ -30,7 +31,14 @@ bool FileExists(const std::string &path) {
 // Runs argv via posix_spawn (no shell involved - argv entries are passed
 // exactly as given, so a path containing spaces or other characters that
 // would need shell-escaping is still handled correctly), waits for it,
-// and captures a tail of its stderr for error reporting.
+// and captures a tail of its stdout and stderr for the UI.
+//
+// stdout matters as much as stderr here: on success, install-udev-rules.sh
+// prints a multi-step "Next steps" block (replug the device, log out/in if
+// it added the user to plugdev, relaunch InputBridge) to stdout, and that
+// text is the only place those steps are written down - the UI needs to
+// show it to the user directly rather than just logging that install
+// succeeded.
 //
 // posix_spawn rather than fork()+exec(): this process is a multi-threaded
 // GUI app (ImGui/SDL render loop, background D-Bus thread for Bluetooth
@@ -42,8 +50,9 @@ bool FileExists(const std::string &path) {
 LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv_strings) {
     LinuxUdevInstaller::RunOutcome outcome;
 
+    int stdout_pipe[2] = {-1, -1};
     int stderr_pipe[2] = {-1, -1};
-    if (::pipe(stderr_pipe) != 0) {
+    if (::pipe(stdout_pipe) != 0 || ::pipe(stderr_pipe) != 0) {
         LOG_ERROR(kTag, "pipe() failed: %s", std::strerror(errno));
         outcome.result = LinuxUdevInstaller::Result::Failed;
         return outcome;
@@ -56,17 +65,23 @@ LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv
 
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
-    // Child's stderr -> write end of the pipe; child doesn't need the read end.
+    // Child's stdout/stderr -> write end of the respective pipe; child
+    // doesn't need the read ends.
+    posix_spawn_file_actions_adddup2(&actions, stdout_pipe[1], STDOUT_FILENO);
     posix_spawn_file_actions_adddup2(&actions, stderr_pipe[1], STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&actions, stdout_pipe[0]);
+    posix_spawn_file_actions_addclose(&actions, stdout_pipe[1]);
     posix_spawn_file_actions_addclose(&actions, stderr_pipe[0]);
     posix_spawn_file_actions_addclose(&actions, stderr_pipe[1]);
 
     pid_t pid = -1;
     const int spawn_rc = posix_spawnp(&pid, argv[0], &actions, nullptr, argv.data(), environ);
     posix_spawn_file_actions_destroy(&actions);
+    ::close(stdout_pipe[1]);
     ::close(stderr_pipe[1]);
 
     if (spawn_rc != 0) {
+        ::close(stdout_pipe[0]);
         ::close(stderr_pipe[0]);
         LOG_ERROR(kTag, "posix_spawnp('%s') failed: %s", argv[0], std::strerror(spawn_rc));
         outcome.result = (spawn_rc == ENOENT) ? LinuxUdevInstaller::Result::PkexecNotFound
@@ -74,14 +89,41 @@ LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv
         return outcome;
     }
 
-    // Drain stderr as we go (rather than after waitpid()) so the child
-    // can't block forever writing to a full pipe while we're not reading.
+    // Drain both pipes as we go (rather than after waitpid()) so the child
+    // can't block forever writing to a full pipe while we're not reading -
+    // and use poll() to read whichever pipe has data rather than reading
+    // stderr to EOF first, which would deadlock if the child fills the
+    // stdout pipe (e.g. the "Next steps" block) before it closes stderr.
+    std::string stdout_all;
     std::string stderr_all;
-    std::array<char, 512> buf{};
-    ssize_t n;
-    while ((n = ::read(stderr_pipe[0], buf.data(), buf.size())) > 0)
-        stderr_all.append(buf.data(), static_cast<size_t>(n));
-    ::close(stderr_pipe[0]);
+    {
+        std::array<pollfd, 2> fds{{
+            {stdout_pipe[0], POLLIN, 0},
+            {stderr_pipe[0], POLLIN, 0},
+        }};
+        int open_fds = 2;
+        std::array<char, 512> buf{};
+        while (open_fds > 0) {
+            const int ready = ::poll(fds.data(), fds.size(), -1);
+            if (ready < 0) {
+                if (errno == EINTR) continue;
+                break;
+            }
+            for (auto &pfd : fds) {
+                if (pfd.fd == -1 || !(pfd.revents & (POLLIN | POLLHUP | POLLERR))) continue;
+                ssize_t n = ::read(pfd.fd, buf.data(), buf.size());
+                if (n > 0) {
+                    (pfd.fd == stdout_pipe[0] ? stdout_all : stderr_all)
+                        .append(buf.data(), static_cast<size_t>(n));
+                } else {
+                    // EOF or error on this fd - stop polling it.
+                    ::close(pfd.fd);
+                    pfd.fd = -1;
+                    --open_fds;
+                }
+            }
+        }
+    }
 
     int status = 0;
     if (::waitpid(pid, &status, 0) < 0) {
@@ -91,12 +133,17 @@ LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv
     }
 
     outcome.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-    // Keep only the last ~1KB of stderr for the caller - plenty for a
-    // one-line error message, without the UI needing to handle arbitrarily
-    // long text from a misbehaving script.
-    constexpr size_t kTailLen = 1024;
-    outcome.stderr_tail = stderr_all.size() > kTailLen
-        ? stderr_all.substr(stderr_all.size() - kTailLen)
+    // Keep only the last ~4KB of stdout / ~1KB of stderr for the caller -
+    // stdout gets more room since a successful run's "Next steps" block is
+    // meant to be shown to the user in full, while stderr is only ever
+    // used for a one-line error message.
+    constexpr size_t kStdoutTailLen = 4096;
+    constexpr size_t kStderrTailLen = 1024;
+    outcome.stdout_tail = stdout_all.size() > kStdoutTailLen
+        ? stdout_all.substr(stdout_all.size() - kStdoutTailLen)
+        : stdout_all;
+    outcome.stderr_tail = stderr_all.size() > kStderrTailLen
+        ? stderr_all.substr(stderr_all.size() - kStderrTailLen)
         : stderr_all;
 
     if (!WIFEXITED(status)) {
