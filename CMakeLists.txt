@@ -262,6 +262,10 @@ add_executable(InputBridge
     # just above - empty translation unit on other platforms via the
     # #ifdef __linux__ wrapping the whole file.
     src/Devices/Wiimote/Linux/LinuxUdevInstaller.cpp
+    # Read-only "check for common issues" diagnostics backing the button
+    # in Settings > Linux Permissions - same #ifdef __linux__-wrapped
+    # empty-translation-unit convention as the files above.
+    src/Devices/Wiimote/Linux/WiimoteLinuxDiagnostics.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp

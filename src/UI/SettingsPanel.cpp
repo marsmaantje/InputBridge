@@ -2,6 +2,7 @@
 
 #include "UI/EditableSlider.h"
 #include "UI/FontManager.h"
+#include "UI/IconsFontAwesome6.h"
 #include "UI/ThemeManager.h"
 #include "Devices/DeviceManager.h"
 
@@ -14,6 +15,89 @@
 #include <filesystem>
 #include <iterator>
 #include <vector>
+
+#if defined(__linux__)
+#include "Devices/Wiimote/Linux/LinuxUdevInstaller.h"
+#include "Devices/Wiimote/Linux/WiimoteLinuxDiagnostics.h"
+#include <chrono>
+#include <future>
+#endif
+
+#if defined(__linux__)
+namespace {
+
+// Backs the "Install"/"Remove" buttons in the Linux Permissions section
+// below. Same async/poll shape as SidebarLayout.cpp's udev-fix banner
+// (pkexec blocks on the user interacting with the auth dialog, so the
+// call runs on a background thread and this is polled once per frame),
+// but kept as its own copy here since install and remove are independent,
+// user-initiated actions rather than one error-recovery flow, and each
+// needs its own in-flight/result state.
+struct UdevJobUiState {
+    std::future<InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome> pending;
+    bool has_result = false;
+    InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome last_result;
+
+    bool IsRunning() const {
+        return pending.valid() &&
+               pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+    }
+
+    void Poll() {
+        if (pending.valid() && pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            last_result = pending.get();
+            has_result = true;
+        }
+    }
+};
+UdevJobUiState s_UdevInstallJob;
+UdevJobUiState s_UdevRemoveJob;
+
+// Renders the outcome of a finished install/remove run. Success shows the
+// script's own stdout verbatim - both install and --uninstall end with a
+// "Next steps" / "Done." block, and that's the only place those steps are
+// written down, so showing anything else here would just be a paraphrase
+// the script itself already wrote correctly. Failure shows the reason and
+// a stderr tail, same wording as the Devices-tab permission banner.
+void DrawUdevJobResult(const UdevJobUiState& job) {
+    using Result = InputBridge::Wiimote::LinuxUdevInstaller::Result;
+    if (!job.has_result || job.IsRunning()) return;
+
+    if (job.last_result.result == Result::Success) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK " Done.");
+        if (!job.last_result.stdout_tail.empty())
+            ImGui::TextWrapped("%s", job.last_result.stdout_tail.c_str());
+    } else {
+        const char* why =
+            job.last_result.result == Result::UserCancelled  ? "Authentication was cancelled." :
+            job.last_result.result == Result::ScriptNotFound ? "install-udev-rules.sh wasn't found "
+                                                                 "next to the InputBridge binary." :
+            job.last_result.result == Result::PkexecNotFound ? "pkexec isn't available on this system." :
+                                                                 "The script failed.";
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", why);
+        if (!job.last_result.stderr_tail.empty() && job.last_result.result == Result::Failed)
+            ImGui::TextWrapped("%s", job.last_result.stderr_tail.c_str());
+    }
+}
+
+// Results of the last "Check for common issues" run - empty until the
+// button's pressed at least once, then persists across frames so the
+// list stays visible (rather than only flashing up for one frame).
+std::vector<InputBridge::Wiimote::WiimoteLinuxDiagnostics::CheckResult> s_DiagnosticsResults;
+
+void DrawDiagnosticsResult(const InputBridge::Wiimote::WiimoteLinuxDiagnostics::CheckResult& r) {
+    using Status = InputBridge::Wiimote::WiimoteLinuxDiagnostics::Status;
+    const ImVec4 color = r.status == Status::Ok      ? ImVec4(0.4f, 0.85f, 0.4f, 1.0f) :
+                          r.status == Status::Warning ? ImVec4(1.0f, 0.75f, 0.3f, 1.0f) :
+                                                         ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+    const char* icon = r.status == Status::Ok      ? ICON_FA_CHECK :
+                        r.status == Status::Warning ? "!" : "i";
+    ImGui::TextColored(color, "%s %s", icon, r.title.c_str());
+    ImGui::TextWrapped("%s", r.detail.c_str());
+}
+
+} // namespace
+#endif // __linux__
 
 void DrawSettingsContent(float&              user_ui_scale,
                          float&              user_font_scale,
@@ -320,4 +404,70 @@ void DrawSettingsContent(float&              user_ui_scale,
         ImGui::TextWrapped("Error: %s", s_openFolderError.c_str());
         ImGui::PopStyleColor();
     }
+
+#if defined(__linux__)
+    // -- Linux Permissions ---------------------------------------------
+    // The Devices tab only ever offers to *install* the udev rule, and
+    // only reactively when a scan just hit a permission error. Removing
+    // it again isn't tied to any error state, so it needs a home that's
+    // available regardless - here, alongside the app's other persistent
+    // maintenance actions.
+    {
+        using InputBridge::Wiimote::LinuxUdevInstaller;
+
+        ImGui::Separator();
+        ImGui::Text("Linux Permissions");
+        ImGui::TextWrapped(
+            "Controls the udev rule that lets InputBridge open a Wii Remote / "
+            "Balance Board's hidraw device without root - needed when it's "
+            "connected through a USB Bluetooth dongle. Both actions prompt "
+            "for authentication via pkexec.");
+
+        s_UdevInstallJob.Poll();
+        s_UdevRemoveJob.Poll();
+
+        const bool pkexec_available = LinuxUdevInstaller::IsPkexecAvailable();
+        const bool any_running = s_UdevInstallJob.IsRunning() || s_UdevRemoveJob.IsRunning();
+
+        ImGui::BeginDisabled(!pkexec_available || any_running);
+        if (ImGui::Button("Install permission rule")) {
+            s_UdevInstallJob.has_result = false;
+            s_UdevInstallJob.pending = std::async(std::launch::async, &LinuxUdevInstaller::InstallRules);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Remove permission rule")) {
+            s_UdevRemoveJob.has_result = false;
+            s_UdevRemoveJob.pending = std::async(std::launch::async, &LinuxUdevInstaller::UninstallRules);
+        }
+        ImGui::EndDisabled();
+
+        if (!pkexec_available) {
+            ImGui::TextDisabled("pkexec not found - install it, or run "
+                                 "packaging/linux/install-udev-rules.sh manually as root.");
+        } else if (any_running) {
+            ImGui::TextDisabled("Waiting for authentication...");
+        }
+
+        DrawUdevJobResult(s_UdevInstallJob);
+        DrawUdevJobResult(s_UdevRemoveJob);
+
+        // -- Diagnostics --------------------------------------------------
+        // Separate from Install/Remove above: those two change system
+        // state and need pkexec, this only ever reads things, so it stays
+        // enabled and usable even when pkexec isn't available.
+        ImGui::Spacing();
+        if (ImGui::Button("Check for common issues")) {
+            s_DiagnosticsResults = InputBridge::Wiimote::WiimoteLinuxDiagnostics::RunAll();
+        }
+        if (!s_DiagnosticsResults.empty()) {
+            ImGui::Spacing();
+            for (size_t i = 0; i < s_DiagnosticsResults.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                DrawDiagnosticsResult(s_DiagnosticsResults[i]);
+                ImGui::PopID();
+                if (i + 1 < s_DiagnosticsResults.size()) ImGui::Spacing();
+            }
+        }
+    }
+#endif // __linux__
 }
