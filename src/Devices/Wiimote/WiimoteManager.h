@@ -46,6 +46,20 @@ public:
     // True if `product` looks like a Wiimote product string SDL might
     // otherwise also try to claim as a generic gamepad.
     static bool IsWiimoteProductString(const char *product);
+
+#if defined(__linux__)
+    // True if the most recent Scan() failed to open at least one
+    // Wiimote/Balance Board-shaped hidraw node specifically due to EACCES
+    // (as opposed to it being transiently held by another process, or not
+    // existing yet). Reset to false at the start of every Scan(), so this
+    // reflects only the latest pass - once the udev rule is installed and
+    // the device replugs successfully, this goes back to false on its own.
+    //
+    // Intended for the UI to offer "install udev rules to fix this" - see
+    // DevicePanel.cpp - rather than that guidance only ever living in the
+    // log.
+    static bool HadRecentLinuxPermissionError();
+#endif
 };
 
 } // namespace InputBridge::Wiimote

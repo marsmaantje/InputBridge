@@ -13,11 +13,25 @@
 #include <unistd.h>
 #include <cerrno>
 #include <sys/stat.h>
+#include <atomic>
 #include "Linux/WiimoteL2CAPTransport.h"
 #include "Linux/WiimoteBluetoothUtil.h"
 #endif
 
 namespace InputBridge::Wiimote {
+
+#if defined(__linux__)
+namespace {
+// Set by Scan() each pass; read by HadRecentLinuxPermissionError() from
+// whatever thread the UI polls it on (see WiimoteManager.h). A plain
+// atomic is enough - this is one bool published by one writer (whichever
+// thread calls Scan(), normally DeviceManager's update loop) and read by
+// possibly another (the UI thread), with no ordering requirement beyond
+// "eventually visible".
+std::atomic<bool> s_had_recent_linux_permission_error{false};
+} // namespace
+#endif
+
 
 bool WiimoteManager::IsWiimoteProductString(const char *product) {
     if (!product) return false;
@@ -48,7 +62,11 @@ SDL_hid_device *OpenWithRetry(const char *path) {
 // real I/O) to tell EACCES (permissions/udev rule), EBUSY (something else
 // has it open exclusively - unusual for hidraw), and ENOENT (stale
 // enumerate() result) apart in the logs.
-void LogLinuxOpenDiagnostics(const char *path) {
+//
+// Returns true if this was specifically a permissions problem (EACCES),
+// so Scan() can surface "install the udev rule" guidance to the UI
+// instead of that only ever living in the log.
+bool LogLinuxOpenDiagnostics(const char *path) {
     struct stat st{};
     const bool stat_ok = ::stat(path, &st) == 0;
     const int fd = ::open(path, O_RDWR);
@@ -59,7 +77,7 @@ void LogLinuxOpenDiagnostics(const char *path) {
                  "hidapi-internal ioctl failure, not a permissions/exclusivity issue",
                  path, stat_ok ? (st.st_mode & 0777) : 0);
         ::close(fd);
-        return;
+        return false;
     }
     const char *meaning =
         (open_errno == EACCES) ? "permission denied - check the hidraw udev rule/group for this device" :
@@ -76,6 +94,7 @@ void LogLinuxOpenDiagnostics(const char *path) {
     } else {
         LOG_WARN("WiimoteManager", "  diagnostic: stat() on '%s' also failed - node likely doesn't exist", path);
     }
+    return open_errno == EACCES;
 }
 #endif
 
@@ -125,6 +144,14 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
     const std::vector<std::string> &already_open_paths, bool try_linux_l2cap) {
     std::vector<std::unique_ptr<WiimoteDevice>> out;
 
+#if defined(__linux__)
+    // Reset at the top of every scan so this reflects only the most recent
+    // pass - a permission problem that gets fixed (udev rule installed,
+    // device replugged) should stop being reported once a scan actually
+    // succeeds in opening the device, not linger from an earlier attempt.
+    bool saw_permission_error_this_scan = false;
+#endif
+
     SDL_hid_device_info *devs = SDL_hid_enumerate(kVendorNintendo, 0);
     for (auto d = devs; d; d = d->next) {
         if (d->product_id != kProductWiimote && d->product_id != kProductWiimotePlus)
@@ -152,7 +179,8 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
                 LOG_WARN("WiimoteManager", "  SDL_GetError(): %s", sdl_err);
             }
 #if defined(__linux__)
-            LogLinuxOpenDiagnostics(path.c_str());
+            if (LogLinuxOpenDiagnostics(path.c_str()))
+                saw_permission_error_this_scan = true;
 #endif
             continue;
         }
@@ -191,7 +219,18 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
     }
     SDL_hid_free_enumeration(devs);
 
+#if defined(__linux__)
+    s_had_recent_linux_permission_error.store(saw_permission_error_this_scan,
+                                               std::memory_order_relaxed);
+#endif
+
     return out;
 }
+
+#if defined(__linux__)
+bool WiimoteManager::HadRecentLinuxPermissionError() {
+    return s_had_recent_linux_permission_error.load(std::memory_order_relaxed);
+}
+#endif
 
 } // namespace InputBridge::Wiimote

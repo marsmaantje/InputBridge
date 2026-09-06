@@ -279,7 +279,8 @@ void WiimoteVirtualBridge::Sync(const std::vector<std::unique_ptr<WiimoteDevice>
         // never catch drift between the live SDL device and what we think
         // we attached. Fall back to the cached bool only if the name can't
         // be read at all.
-        const bool attached_as_balance = AttachedAsBalanceBoard(existing->joystick).value_or(existing->is_balance_board);
+        const bool attached_as_balance = AttachedAsBalanceBoard(existing->joystick)
+                                         .value_or(existing->is_balance_board);
         if (attached_as_balance != dev->Snapshot().is_balance_board) {
             LOG_INFO(kTag, "Wiimote '%s' balance-board classification changed "
                       "(%s -> %s) after the virtual joystick was already "
