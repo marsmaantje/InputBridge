@@ -9,7 +9,7 @@
 # to these devices over hidraw (see WiimoteManager.cpp), so without a rule
 # like this one it fails to open the node with EACCES.
 #
-# This rule matches Nintendo's USB vendor ID (057e) and the two product
+# These rules match Nintendo's USB vendor ID (057e) and the two product
 # IDs Wiimotes and Wii Remote Plus / Balance Boards report (0306, 0330 -
 # the Balance Board shares 0330 with the Wiimote Plus; the two are told
 # apart at the protocol level, not by PID, so both must be covered here).
@@ -35,3 +35,12 @@ KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="057e", ATTRS{idProduct
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01", TAG+="uaccess", GROUP="plugdev", MODE="0660"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-CNT-01-TR", TAG+="uaccess", GROUP="plugdev", MODE="0660"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{name}=="Nintendo RVL-WBC-01", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+
+# Additional match for the Bluetooth case: the hidraw node's immediate
+# parent is a "hid"-bus device (not "usb"), whose *kernel* name is always
+# "<bus>:<vendor>:<product>.<instance>" in uppercase hex - bus 0005 is
+# BUS_BLUETOOTH. This doesn't depend on a "name" attribute being present
+# or exactly matching, unlike the ATTRS{name} rules above, so it's kept
+# as a third, independent way to reach the same node.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0306.*", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:057E:0330.*", TAG+="uaccess", GROUP="plugdev", MODE="0660"
