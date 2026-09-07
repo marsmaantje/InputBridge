@@ -17,8 +17,8 @@ on:
                     - windows
                     - macos
                     - ubuntu
-                    - ubuntu-appimage
-                    - ubuntu-flatpak
+                    - appimage
+                    - flatpak
                     - fedora
                     - arch
             run_tests:
@@ -144,8 +144,8 @@ jobs:
                   name: InputBridge-macOS
                   path: build/*.zip
 
-    build-ubuntu-appimage:
-      if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-appimage') && github.event.inputs.run_tests != 'only' }}
+    build-appimage:
+      if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'appimage') && github.event.inputs.run_tests != 'only' }}
       runs-on: ubuntu-24.04
 
       steps:
@@ -221,12 +221,12 @@ jobs:
                   --desktop-file build/org.inputbridge.InputBridge.desktop \
                   --output appimage
 
-                mv InputBridge*.AppImage InputBridge-Ubuntu.AppImage
+                mv InputBridge*.AppImage InputBridge.AppImage
 
           - name: Verify udev assets survived AppImage bundling
             run: |
-                chmod +x InputBridge-Ubuntu.AppImage
-                ./InputBridge-Ubuntu.AppImage --appimage-extract >/dev/null
+                chmod +x InputBridge.AppImage
+                ./InputBridge.AppImage --appimage-extract >/dev/null
                 test -f squashfs-root/usr/share/inputbridge/udev/install-udev-rules.sh || { echo "install-udev-rules.sh missing from the built AppImage - linuxdeploy dropped it"; exit 1; }
                 test -f squashfs-root/usr/share/inputbridge/udev/71-inputbridge-wiimote.rules || { echo "71-inputbridge-wiimote.rules missing from the built AppImage - linuxdeploy dropped it"; exit 1; }
                 rm -rf squashfs-root
@@ -234,9 +234,9 @@ jobs:
           - name: Smoke test (launch check)
             if: ${{ github.event.inputs.smoke_test == 'yes' }}
             run: |
-                chmod +x InputBridge-Ubuntu.AppImage
+                chmod +x InputBridge.AppImage
                 set +e
-                APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run --auto-servernum timeout 5s ./InputBridge-Ubuntu.AppImage
+                APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run --auto-servernum timeout 5s ./InputBridge.AppImage
                 CODE=$?
                 set -e
                 echo "Exit code: $CODE"
@@ -258,11 +258,11 @@ jobs:
           - name: Upload Artifact
             uses: actions/upload-artifact@v6
             with:
-                name: InputBridge-Ubuntu-AppImage
-                path: InputBridge-Ubuntu.AppImage
+                name: InputBridge-AppImage
+                path: InputBridge.AppImage
 
-    build-ubuntu-flatpak:
-        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu-flatpak') && github.event.inputs.run_tests != 'only' }}
+    build-flatpak:
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'flatpak') && github.event.inputs.run_tests != 'only' }}
         runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v6
@@ -279,12 +279,12 @@ jobs:
             - name: Build Flatpak
               run: |
                   flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --repo=repo --force-clean build-dir org.inputbridge.InputBridge.yml
-                  flatpak build-bundle repo InputBridge-Ubuntu.flatpak org.inputbridge.InputBridge
+                  flatpak build-bundle repo InputBridge.flatpak org.inputbridge.InputBridge
 
             - name: Smoke test (launch check)
               if: ${{ github.event.inputs.smoke_test == 'yes' }}
               run: |
-                  flatpak install --user -y InputBridge-Ubuntu.flatpak
+                  flatpak install --user -y InputBridge.flatpak
                   set +e
                   timeout 5s flatpak run org.inputbridge.InputBridge
                   CODE=$?
@@ -308,8 +308,8 @@ jobs:
             - name: Upload Artifact
               uses: actions/upload-artifact@v6
               with:
-                  name: InputBridge-Ubuntu-Flatpak
-                  path: InputBridge-Ubuntu.flatpak
+                  name: InputBridge-Flatpak
+                  path: InputBridge.flatpak
 
     build-ubuntu:
         if: ${{ (startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'ubuntu') && github.event.inputs.run_tests != 'only' }}
@@ -573,8 +573,8 @@ jobs:
             - build-windows
             - build-macos
             - build-ubuntu
-            - build-ubuntu-appimage
-            - build-ubuntu-flatpak
+            - build-appimage
+            - build-flatpak
             - build-fedora
             - build-arch
         runs-on: ubuntu-24.04
@@ -603,12 +603,12 @@ jobs:
                      release-assets/InputBridge-Ubuntu-${{ github.ref_name }}.tar.gz
 
                   # AppImage
-                  cp artifacts/InputBridge-Ubuntu-AppImage/InputBridge-Ubuntu.AppImage \
-                     release-assets/InputBridge-Ubuntu-${{ github.ref_name }}.AppImage
+                  cp artifacts/InputBridge-AppImage/InputBridge.AppImage \
+                     release-assets/InputBridge-${{ github.ref_name }}.AppImage
 
                   # Flatpak
-                  cp artifacts/InputBridge-Ubuntu-Flatpak/InputBridge-Ubuntu.flatpak \
-                     release-assets/InputBridge-Ubuntu-${{ github.ref_name }}.flatpak
+                  cp artifacts/InputBridge-Flatpak/InputBridge.flatpak \
+                     release-assets/InputBridge-${{ github.ref_name }}.flatpak
 
                   # Fedora tar.gz
                   cp artifacts/InputBridge-Fedora/InputBridge-Fedora.tar.gz \
