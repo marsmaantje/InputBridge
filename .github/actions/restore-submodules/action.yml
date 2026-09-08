@@ -14,6 +14,14 @@ description: >
 runs:
   using: "composite"
   steps:
+    # Container jobs (fedora/arch) run git as a different UID than
+    # whatever owns the checked-out files, which git treats as
+    # "dubious ownership" and refuses to touch by default. Mark the
+    # workspace as trusted before running any git commands below.
+    - name: Mark workspace as a safe git directory
+      shell: bash
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
     # actions/cache keys can only be computed from files, so pin the
     # cache to the exact commits recorded for each submodule (not
     # just .gitmodules, which only has the URLs/paths and wouldn't
