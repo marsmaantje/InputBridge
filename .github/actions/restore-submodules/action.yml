@@ -1,0 +1,39 @@
+name: "Restore submodules from cache"
+description: >
+  Restores the git submodules (lib/sdl, lib/imgui, lib/uWebSockets,
+  lib/nlohmann_json, lib/liblo) from an actions/cache entry instead
+  of re-cloning them from GitHub on every job/run, then checks them
+  out. Falls back to a normal clone on a cache miss and saves a
+  fresh cache entry for next time.
+
+  NOTE: local composite actions can only be referenced after the
+  repo has been checked out, so callers must run
+  `actions/checkout@v6` with `submodules: false` immediately before
+  this action - this action does not check out the repo itself.
+
+runs:
+  using: "composite"
+  steps:
+    # actions/cache keys can only be computed from files, so pin the
+    # cache to the exact commits recorded for each submodule (not
+    # just .gitmodules, which only has the URLs/paths and wouldn't
+    # change when a submodule is bumped to a new commit).
+    - name: Record submodule commit pins
+      shell: bash
+      run: git submodule status > .submodule-shas
+
+    - name: Cache submodules
+      uses: actions/cache@v5
+      with:
+        path: .git/modules
+        key: submodules-${{ runner.os }}-${{ hashFiles('.gitmodules', '.submodule-shas') }}
+        restore-keys: |
+          submodules-${{ runner.os }}-
+
+    # If the cache hit, this reuses the objects already fetched into
+    # .git/modules and just checks them out (fast, no network). On a
+    # cache miss it clones normally, and the cache step above will
+    # save a fresh entry for subsequent runs.
+    - name: Fetch/update submodules
+      shell: bash
+      run: git submodule update --init --recursive
