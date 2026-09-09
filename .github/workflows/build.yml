@@ -70,7 +70,7 @@ jobs:
               uses: ilammy/msvc-dev-cmd@v1
 
             - name: Set up ccache
-              uses: hendrikmuhs/ccache-action@v1.2
+              uses: hendrikmuhs/ccache-action@v1.2.22
               with:
                   key: windows-release
                   variant: ccache
@@ -125,7 +125,7 @@ jobs:
             - uses: ./.github/actions/restore-submodules
 
             - name: Set up ccache
-              uses: hendrikmuhs/ccache-action@v1.2
+              uses: hendrikmuhs/ccache-action@v1.2.22
               with:
                   key: macos-release
 
@@ -223,14 +223,15 @@ jobs:
 
           - name: Fix apt cache permissions
             # apt-get install runs via sudo (root), so newly downloaded
-            # .deb files land back with restrictive root ownership even
-            # though the directory itself is now world-writable. Re-open
-            # read/list permissions here so the cache's post-job save step
-            # (running as the non-root runner user) can read everything.
-            run: sudo chmod -R o+rX /var/cache/apt/archives
+            # .deb files (and some dpkg temp files under partial/) land
+            # back owned by root. chmod alone wasn't enough - tar (run by
+            # the non-root runner user during the cache-save step) still
+            # failed on a handful of entries - so hand ownership over
+            # entirely instead of just poking at permission bits.
+            run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
           - name: Set up ccache
-            uses: hendrikmuhs/ccache-action@v1.2
+            uses: hendrikmuhs/ccache-action@v1.2.22
             with:
                 key: appimage-release
 
@@ -435,14 +436,15 @@ jobs:
 
             - name: Fix apt cache permissions
               # apt-get install runs via sudo (root), so newly downloaded
-              # .deb files land back with restrictive root ownership even
-              # though the directory itself is now world-writable. Re-open
-              # read/list permissions here so the cache's post-job save step
-              # (running as the non-root runner user) can read everything.
-              run: sudo chmod -R o+rX /var/cache/apt/archives
+              # .deb files (and some dpkg temp files under partial/) land
+              # back owned by root. chmod alone wasn't enough - tar (run by
+              # the non-root runner user during the cache-save step) still
+              # failed on a handful of entries - so hand ownership over
+              # entirely instead of just poking at permission bits.
+              run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
             - name: Set up ccache
-              uses: hendrikmuhs/ccache-action@v1.2
+              uses: hendrikmuhs/ccache-action@v1.2.22
               with:
                   key: ubuntu-release
 
@@ -571,18 +573,20 @@ jobs:
             - name: Fix apt cache permissions
               if: runner.os == 'Linux'
               # apt-get install runs via sudo (root), so newly downloaded
-              # .deb files land back with restrictive root ownership even
-              # though the directory itself is now world-writable. Re-open
-              # read/list permissions here so the cache's post-job save step
-              # (running as the non-root runner user) can read everything.
-              run: sudo chmod -R o+rX /var/cache/apt/archives
+              # .deb files (and some dpkg temp files under partial/) land
+              # back owned by root. chmod alone isn't reliably enough -
+              # tar (run by the non-root runner user during the
+              # cache-save step) can still fail on a handful of entries -
+              # so hand ownership over entirely instead of just poking at
+              # permission bits.
+              run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
             - name: Add OpenSSL to PATH (Windows)
               if: runner.os == 'Windows'
               run: echo "C:/Program Files/OpenSSL/bin" >> $env:GITHUB_PATH
 
             - name: Set up ccache
-              uses: hendrikmuhs/ccache-action@v1.2
+              uses: hendrikmuhs/ccache-action@v1.2.22
               with:
                   key: tests-${{ matrix.os }}
 
