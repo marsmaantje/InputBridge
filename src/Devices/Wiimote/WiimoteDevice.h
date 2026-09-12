@@ -1,11 +1,12 @@
 // src/Devices/Wiimote/WiimoteDevice.h
 //
-// Owns one raw SDL_hid_device* to a Wii Remote / Wii Remote Plus / Wii
-// Balance Board and drives the full report protocol directly, bypassing
+// Owns one IWiimoteTransport connection to a Wii Remote / Wii Remote Plus /
+// Wii Balance Board and drives the full report protocol directly, bypassing
 // SDL_Joystick entirely, since SDL's HIDAPI Wii driver only models
 // buttons/accel/rumble through SDL_Gamepad and has no representation for
 // the IR camera, Nunchuk/Classic Controller/Guitar Hero extension data, or
-// Balance Board weight sensors.
+// Balance Board weight sensors. See WiimoteTransport.h for why this talks
+// to an abstract transport rather than SDL_hid_device* directly.
 //
 // This is deliberately NOT an SDL_Joystick / DeviceState - see
 // src/Devices/Wiimote/README.md (design doc) for how this plugs into
@@ -461,6 +462,17 @@ private:
     // behind it right now. -1 = not yet observed (don't trigger on the
     // first reading, just record a baseline); 0/1 once real data arrives.
     int8_t m_MotionPlusExtConnected = -1;
+
+    // Debounce for the bit above: some Motion Plus units (particularly
+    // external/third-party ones - see this bit's own comment on why the
+    // *regular* status report's connect bit is already known-flaky in the
+    // same way) report a handful of single-frame blips on this bit with
+    // nothing physically changing. Require the new value to hold for
+    // several consecutive reports before treating it as real - a genuine
+    // plug/unplug stays changed for far longer than one report interval,
+    // so this costs no real responsiveness.
+    uint8_t m_MotionPlusExtConnectedStableCount = 0;
+    static constexpr uint8_t kMotionPlusExtConnectedDebounce = 5;
 
     // Same settle rationale as m_ExtensionSettleAtMs, but for the initial
     // handshake (Init(), especially EnableIRCamera()). A successfully-
