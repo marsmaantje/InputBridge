@@ -47,13 +47,14 @@ enum WiimoteAxis {
 constexpr int kWiimoteNumHats = 1;
 enum WiimoteHat { Hat_DPad = 0 };
 
-constexpr int kWiimoteNumButtons = 21;
+constexpr int kWiimoteNumButtons = 24;
 enum WiimoteButton {
     Btn_A = 0, Btn_B, Btn_One, Btn_Two, Btn_Plus, Btn_Minus, Btn_Home,
     Btn_NunchukC, Btn_NunchukZ,
     Btn_ClassicA, Btn_ClassicB, Btn_ClassicX, Btn_ClassicY,
     Btn_ClassicL, Btn_ClassicR, Btn_ClassicZL, Btn_ClassicZR,
     Btn_ClassicUp, Btn_ClassicDown, Btn_ClassicLeft, Btn_ClassicRight,
+    Btn_ClassicPlus, Btn_ClassicMinus, Btn_ClassicHome,
 };
 
 // Same append-only rule as WiimoteAxis - BAxis_Battery was appended after

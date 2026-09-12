@@ -132,6 +132,9 @@ const char *WiimoteBridgeButtonName(int button) {
         case Btn_ClassicDown:  return "Classic D-Pad Down";
         case Btn_ClassicLeft:  return "Classic D-Pad Left";
         case Btn_ClassicRight: return "Classic D-Pad Right";
+        case Btn_ClassicPlus:  return "Classic +";
+        case Btn_ClassicMinus: return "Classic -";
+        case Btn_ClassicHome:  return "Classic Home";
         default: return nullptr;
     }
 }
@@ -427,6 +430,9 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setBtn(Btn_ClassicDown, snap.classic.dpad_down);
         setBtn(Btn_ClassicLeft, snap.classic.dpad_left);
         setBtn(Btn_ClassicRight, snap.classic.dpad_right);
+        setBtn(Btn_ClassicPlus, snap.classic.plus);
+        setBtn(Btn_ClassicMinus, snap.classic.minus);
+        setBtn(Btn_ClassicHome, snap.classic.home);
     }
 }
 
