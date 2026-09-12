@@ -26,7 +26,7 @@ namespace InputBridge::Wiimote {
 // enum name, so an index already in use must never shift - always APPEND
 // new axes at the end, never insert. (Axis_IRX/Y were renamed to
 // Axis_IR1X/Y in place, same slot, to preserve old saved profiles.)
-constexpr int kWiimoteNumAxes = 28;
+constexpr int kWiimoteNumAxes = 30;
 enum WiimoteAxis {
     Axis_AccelX = 0, Axis_AccelY, Axis_AccelZ,
     Axis_IR1X, Axis_IR1Y, Axis_IR2X, Axis_IR2Y,
@@ -37,6 +37,7 @@ enum WiimoteAxis {
     Axis_NunchukAccelX, Axis_NunchukAccelY, Axis_NunchukAccelZ,
     Axis_MotionPlusYaw, Axis_MotionPlusPitch, Axis_MotionPlusRoll,
     Axis_ClassicLX, Axis_ClassicLY, Axis_ClassicRX, Axis_ClassicRY,
+    Axis_ClassicLTrigger, Axis_ClassicRTrigger,
 };
 
 // The main D-Pad is a hat (not 4 buttons) so it maps/displays like a

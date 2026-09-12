@@ -99,6 +99,8 @@ const char *WiimoteBridgeAxisName(int axis) {
         case Axis_ClassicLY:      return "Classic Left Stick Y";
         case Axis_ClassicRX:      return "Classic Right Stick X";
         case Axis_ClassicRY:      return "Classic Right Stick Y";
+        case Axis_ClassicLTrigger: return "Classic Left Trigger";
+        case Axis_ClassicRTrigger: return "Classic Right Trigger";
         case Axis_MotionPlusYaw:  return "Motion Plus Yaw";
         case Axis_MotionPlusPitch: return "Motion Plus Pitch";
         case Axis_MotionPlusRoll: return "Motion Plus Roll";
@@ -384,6 +386,13 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setAxis(Axis_ClassicLY, (float(snap.classic.left_y)  - 32.f) / 32.f);
         setAxis(Axis_ClassicRX, (float(snap.classic.right_x) - 16.f) / 16.f);
         setAxis(Axis_ClassicRY, (float(snap.classic.right_y) - 16.f) / 16.f);
+
+        // Classic Controller triggers: 5-bit analog (0-31), digital 0/31 on
+        // Pro - see ClassicControllerState's comment. Same "rest = -1, full
+        // = +1" convention as the other one-directional analogs above
+        // (IR dot size, Balance Board weight).
+        setAxis(Axis_ClassicLTrigger, Norm01ToBipolar(float(snap.classic.left_trigger),  0.f, 31.f));
+        setAxis(Axis_ClassicRTrigger, Norm01ToBipolar(float(snap.classic.right_trigger), 0.f, 31.f));
 
         setAxis(Axis_MotionPlusYaw,   NormSymmetric(snap.motion_plus.deg_s_yaw,   kMotionPlusMaxDegPerSec));
         setAxis(Axis_MotionPlusPitch, NormSymmetric(snap.motion_plus.deg_s_pitch, kMotionPlusMaxDegPerSec));

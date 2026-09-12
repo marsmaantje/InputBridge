@@ -490,6 +490,10 @@ ImWchar WiimoteBridgeAxisIcon(int axis)
     case WiimoteAxis::Axis_ClassicLY: return KENNEY_WII_STICK_L_VERTICAL_CP;
     case WiimoteAxis::Axis_ClassicRX: return KENNEY_WII_STICK_R_HORIZONTAL_CP;
     case WiimoteAxis::Axis_ClassicRY: return KENNEY_WII_STICK_R_VERTICAL_CP;
+    // Same physical control as Btn_ClassicZL/ZR below - this is just its
+    // analog reading rather than a digital press.
+    case WiimoteAxis::Axis_ClassicLTrigger: return KENNEY_WII_BUTTON_ZL_CP;
+    case WiimoteAxis::Axis_ClassicRTrigger: return KENNEY_WII_BUTTON_ZR_CP;
     // Axis_AccelX/Y/Z, Axis_IR1X/Y..Axis_IR4X/Y, Axis_MotionPlusYaw/Pitch/Roll: no icon.
     default: return 0;
     }
