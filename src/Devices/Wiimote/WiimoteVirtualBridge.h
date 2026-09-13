@@ -40,12 +40,14 @@ enum WiimoteAxis {
     Axis_ClassicLTrigger, Axis_ClassicRTrigger,
 };
 
-// The main D-Pad is a hat (not 4 buttons) so it maps/displays like a
-// regular gamepad's D-Pad - InputMapper already understands hats
-// generically (MappingTypes.h). The Classic Controller's D-Pad is a
-// separate physical pad and stays as plain buttons below.
-constexpr int kWiimoteNumHats = 1;
-enum WiimoteHat { Hat_DPad = 0 };
+// Both D-Pads are hats (not buttons) so they map/display like a regular
+// gamepad's D-Pad - InputMapper already understands hats generically
+// (MappingTypes.h). Hat_ClassicDPad was appended after Hat_DPad rather
+// than reordered in, for the same reason WiimoteAxis is append-only above:
+// MappingProfileStore persists bindings by raw hat index, so an index
+// already in use must never shift.
+constexpr int kWiimoteNumHats = 2;
+enum WiimoteHat { Hat_DPad = 0, Hat_ClassicDPad };
 
 constexpr int kWiimoteNumButtons = 24;
 enum WiimoteButton {
@@ -54,7 +56,7 @@ enum WiimoteButton {
     Btn_ClassicA, Btn_ClassicB, Btn_ClassicX, Btn_ClassicY,
     Btn_ClassicL, Btn_ClassicR, Btn_ClassicZL, Btn_ClassicZR,
     Btn_ClassicUp, Btn_ClassicDown, Btn_ClassicLeft, Btn_ClassicRight,
-    Btn_ClassicPlus, Btn_ClassicMinus, Btn_ClassicHome,
+    Btn_ClassicPlus, Btn_ClassicMinus, Btn_ClassicHome
 };
 
 // Same append-only rule as WiimoteAxis - BAxis_Battery was appended after

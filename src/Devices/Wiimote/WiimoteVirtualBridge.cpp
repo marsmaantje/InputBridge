@@ -141,7 +141,8 @@ const char *WiimoteBridgeButtonName(int button) {
 
 const char *WiimoteBridgeHatName(int hat) {
     switch (hat) {
-        case Hat_DPad: return "D-Pad";
+        case Hat_DPad:        return "D-Pad";
+        case Hat_ClassicDPad: return "Classic D-Pad";
         default: return nullptr;
     }
 }
@@ -426,6 +427,15 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         setBtn(Btn_ClassicX, snap.classic.x); setBtn(Btn_ClassicY, snap.classic.y);
         setBtn(Btn_ClassicL, snap.classic.l); setBtn(Btn_ClassicR, snap.classic.r);
         setBtn(Btn_ClassicZL, snap.classic.zl); setBtn(Btn_ClassicZR, snap.classic.zr);
+
+        // Classic Controller D-Pad as a hat (see WiimoteHat)
+        Uint8 classic_dpad_hat = SDL_HAT_CENTERED;
+        if (snap.classic.dpad_up)    classic_dpad_hat |= SDL_HAT_UP;
+        if (snap.classic.dpad_down)  classic_dpad_hat |= SDL_HAT_DOWN;
+        if (snap.classic.dpad_left)  classic_dpad_hat |= SDL_HAT_LEFT;
+        if (snap.classic.dpad_right) classic_dpad_hat |= SDL_HAT_RIGHT;
+        SDL_SetJoystickVirtualHat(e->joystick, Hat_ClassicDPad, classic_dpad_hat);
+
         setBtn(Btn_ClassicUp, snap.classic.dpad_up);
         setBtn(Btn_ClassicDown, snap.classic.dpad_down);
         setBtn(Btn_ClassicLeft, snap.classic.dpad_left);

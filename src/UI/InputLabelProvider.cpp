@@ -685,12 +685,13 @@ InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint
     result.name = "Hat " + std::to_string(hat);
 
     // WiimoteVirtualBridge attaches a real Wiimote's bridge joystick with
-    // nhats=1 for its main D-Pad (Balance Boards have no D-Pad and stay at
-    // nhats=0 - see Attach()), so this can be reached for that device;
+    // nhats=2 - Hat_DPad for the main D-Pad and Hat_ClassicDPad for the
+    // Classic Controller's (Balance Boards have no D-Pad at all and stay at
+    // nhats=0 - see Attach()) - so this can be reached for that device;
     // override the numbered fallback name with the real label the same way
     // GetAxisLabel/GetButtonLabel do. Icon selection below already produces
-    // a reasonable generic D-Pad glyph for this device family, so only the
-    // name needs the Wiimote-aware override.
+    // a reasonable generic D-Pad glyph for this device family regardless of
+    // which hat it is, so only the name needs the Wiimote-aware override.
     bool isBalance = false;
     if (IsWiimoteBridgeDevice(dev, &isBalance) && !isBalance)
     {

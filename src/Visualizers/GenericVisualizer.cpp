@@ -1,5 +1,6 @@
 #include "GenericVisualizer.h"
 #include "UI/InputLabelProvider.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
@@ -174,7 +175,26 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
             // Cumulative width used on the current row.
             float rowUsedW = 0.0f;
 
+            // The Classic Controller's D-Pad is also exposed as a hat
+            // (Hat_ClassicDPad, shown in the Hats section below) in addition
+            // to these four digital buttons, so showing it again here as
+            // icons/text is redundant - skip it in this section.
+            const bool isWiimoteBridge = dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName;
+
+            // Tracks how many buttons have actually been drawn so far, so
+            // the wrap/SameLine decision below (which used to key off the
+            // raw loop index i) stays correct once some indices are skipped.
+            int drawnCount = 0;
+
             for (int i = 0; i < dev.num_buttons; ++i) {
+                if (isWiimoteBridge &&
+                    (i == InputBridge::Wiimote::Btn_ClassicUp ||
+                     i == InputBridge::Wiimote::Btn_ClassicDown ||
+                     i == InputBridge::Wiimote::Btn_ClassicLeft ||
+                     i == InputBridge::Wiimote::Btn_ClassicRight)) {
+                    continue;
+                }
+
                 const bool pressed = SDL_GetJoystickButton(dev.joystick, i) != 0;
                 InputLabel lbl     = InputLabelProvider::GetButtonLabel(dev, i);
 
@@ -227,13 +247,14 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                 const float slotW          = slotSizeActual + itemSpacing;
 
                 // -- Wrap / SameLine ---------------------------------------
-                if (i > 0 && rowUsedW + slotW <= availW) {
+                if (drawnCount > 0 && rowUsedW + slotW <= availW) {
                     ImGui::SameLine(0.0f, itemSpacing);
                     rowUsedW += slotW;
                 } else {
-                    // Starts a new row (or is the very first item).
+                    // Starts a new row (or is the very first drawn item).
                     rowUsedW = slotSizeActual;
                 }
+                ++drawnCount;
 
                 // Choose tint: bright green when pressed, dim when released.
                 const ImVec4 tint = pressed
