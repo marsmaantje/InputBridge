@@ -175,23 +175,18 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
             // Cumulative width used on the current row.
             float rowUsedW = 0.0f;
 
-            // The Classic Controller's D-Pad is also exposed as a hat
-            // (Hat_ClassicDPad, shown in the Hats section below) in addition
-            // to these four digital buttons, so showing it again here as
-            // icons/text is redundant - skip it in this section.
-            const bool isWiimoteBridge = dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName;
-
             // Tracks how many buttons have actually been drawn so far, so
             // the wrap/SameLine decision below (which used to key off the
             // raw loop index i) stays correct once some indices are skipped.
             int drawnCount = 0;
 
             for (int i = 0; i < dev.num_buttons; ++i) {
-                if (isWiimoteBridge &&
-                    (i == InputBridge::Wiimote::Btn_ClassicUp ||
-                     i == InputBridge::Wiimote::Btn_ClassicDown ||
-                     i == InputBridge::Wiimote::Btn_ClassicLeft ||
-                     i == InputBridge::Wiimote::Btn_ClassicRight)) {
+                // The Classic Controller's D-Pad is also exposed as a hat
+                // (Hat_ClassicDPad, shown in the Hats section below), so
+                // showing it again here as icons/text is redundant - see
+                // ShouldSkipButtonInButtonsSection for the shared, tested
+                // predicate.
+                if (InputBridge::Wiimote::ShouldSkipButtonInButtonsSection(dev.name, i)) {
                     continue;
                 }
 

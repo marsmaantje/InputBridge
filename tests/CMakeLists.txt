@@ -181,3 +181,17 @@ add_executable(test_wiimote_adpcm
 target_include_directories(test_wiimote_adpcm PRIVATE ${IB_SRC})
 target_link_libraries(test_wiimote_adpcm PRIVATE GTest::gtest_main)
 gtest_discover_tests(test_wiimote_adpcm)
+
+# 14. test_classic_dpad_button_skip ─────────────────────────────────────────────
+# Tests IsClassicDPadButtonIndex()/ShouldSkipButtonInButtonsSection() in
+# Devices/Wiimote/WiimoteVirtualBridge.h - the predicate GenericVisualizer's
+# "Buttons" section uses to avoid drawing the Classic Controller's D-Pad
+# twice (once as Hat_ClassicDPad, once as four separate digital buttons).
+# Header-only logic, no .cpp source needed; links SDL3 only because the
+# header transitively includes WiimoteDevice.h.
+add_executable(test_classic_dpad_button_skip
+    test_classic_dpad_button_skip.cpp
+)
+target_include_directories(test_classic_dpad_button_skip PRIVATE ${IB_SRC})
+target_link_libraries(test_classic_dpad_button_skip PRIVATE GTest::gtest_main SDL3::SDL3)
+gtest_discover_tests(test_classic_dpad_button_skip)

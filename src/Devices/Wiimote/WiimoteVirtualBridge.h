@@ -76,6 +76,34 @@ enum BalanceButton { BBtn_A = 0 };
 constexpr const char *kWiimoteBridgeDeviceName       = "Wii Controller (Mapped Inputs)";
 constexpr const char *kBalanceBoardBridgeDeviceName  = "Wii Balance Board (Mapped Inputs)";
 
+// The Classic Controller's D-Pad is exposed twice in the raw bridge layout:
+// as Hat_ClassicDPad (a real hat, shown in the visualizer's "Hats" section)
+// and as the four Btn_Classic{Up,Down,Left,Right} digital buttons above
+// (kept for MappingProfileStore/InputMapper, which bind by raw button index
+// and need each direction individually bindable). GenericVisualizer's
+// "Buttons" section should skip those four indices for the Wiimote bridge
+// device so the D-Pad isn't drawn twice - this predicate is the single
+// source of truth for that skip, callable without any ImGui/SDL dependency
+// so it's unit-testable in isolation.
+constexpr bool IsClassicDPadButtonIndex(int button)
+{
+    return button == WiimoteButton::Btn_ClassicUp   ||
+           button == WiimoteButton::Btn_ClassicDown ||
+           button == WiimoteButton::Btn_ClassicLeft ||
+           button == WiimoteButton::Btn_ClassicRight;
+}
+
+// Whether GenericVisualizer's "Buttons" section should skip drawing this raw
+// button index for the given device. Only true for the Wiimote bridge's
+// Classic D-Pad buttons (see IsClassicDPadButtonIndex above) - every other
+// device/button combination is drawn as before, including the Balance Board
+// bridge (which has no D-Pad of any kind) and the Wiimote bridge's own
+// non-Classic buttons.
+inline bool ShouldSkipButtonInButtonsSection(const std::string &deviceName, int button)
+{
+    return deviceName == kWiimoteBridgeDeviceName && IsClassicDPadButtonIndex(button);
+}
+
 // Human-readable names for the layouts above, in index order. Returns
 // nullptr out of range (caller falls back to a numbered label).
 const char *WiimoteBridgeAxisName(int axis);
