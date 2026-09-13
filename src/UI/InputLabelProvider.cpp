@@ -522,10 +522,10 @@ ImWchar WiimoteBridgeButtonIcon(int button)
     case WiimoteButton::Btn_ClassicPlus:  return KENNEY_WII_BUTTON_PLUS_CP;
     case WiimoteButton::Btn_ClassicMinus: return KENNEY_WII_BUTTON_MINUS_CP;
     case WiimoteButton::Btn_ClassicHome:  return KENNEY_WII_BUTTON_HOME_CP;
-    case WiimoteButton::Btn_ClassicUp:    return KENNEY_WII_DPAD_UP_CP;
-    case WiimoteButton::Btn_ClassicDown:  return KENNEY_WII_DPAD_DOWN_CP;
-    case WiimoteButton::Btn_ClassicLeft:  return KENNEY_WII_DPAD_LEFT_CP;
-    case WiimoteButton::Btn_ClassicRight: return KENNEY_WII_DPAD_RIGHT_CP;
+    case WiimoteButton::Btn_ClassicUp:    return KENNEY_WII_DPAD_UP_OUTLINE_CP;
+    case WiimoteButton::Btn_ClassicDown:  return KENNEY_WII_DPAD_DOWN_OUTLINE_CP;
+    case WiimoteButton::Btn_ClassicLeft:  return KENNEY_WII_DPAD_LEFT_OUTLINE_CP;
+    case WiimoteButton::Btn_ClassicRight: return KENNEY_WII_DPAD_RIGHT_OUTLINE_CP;
     default: return 0;
     }
 }
