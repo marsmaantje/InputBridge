@@ -31,6 +31,8 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 
 See the [Wiki](../../wiki) for a full step-by-step guide and reference documentation.
 
+> **Linux + Wii Remote/Balance Board via a Bluetooth dongle:** if the device doesn't show up or fails to open, run `sudo ./packaging/linux/install-udev-rules.sh` (or the copy under `share/inputbridge/udev/` if you installed a package) to grant hidraw permissions, then replug the device. See [`packaging/linux/README.md`](packaging/linux/README.md) for details.
+
 ---
 
 ## Features

@@ -1,10 +1,10 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // "Listen for the next input and bind it" state machine, used by the mapping
 // UI's Bind buttons.
 // Utilizing one ApplyDigitalBinding() helper.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include "Devices/SensorState.h"
 #include "Mappers/ButtonBinder.h"

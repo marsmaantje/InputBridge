@@ -4,9 +4,9 @@
 
 static constexpr const char* kTag = "VirtualDeviceManager";
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Preset tables
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 namespace {
 
 struct Preset {
@@ -80,17 +80,17 @@ const Preset& GetPreset(VirtualDeviceType t) {
 
 } // namespace
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Singleton
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 VirtualDeviceManager& VirtualDeviceManager::GetInstance() {
     static VirtualDeviceManager s_instance;
     return s_instance;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // State factory
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 std::unique_ptr<VirtualDeviceState> VirtualDeviceManager::MakeState(
     VirtualDeviceType type, const std::string& name,
     SDL_JoystickID id, SDL_Joystick* joystick)
@@ -116,9 +116,9 @@ std::unique_ptr<VirtualDeviceState> VirtualDeviceManager::MakeState(
     return state;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // AddDevice
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 SDL_JoystickID VirtualDeviceManager::AddDevice(VirtualDeviceType type,
                                                 const std::string& name)
 {
@@ -156,9 +156,9 @@ SDL_JoystickID VirtualDeviceManager::AddDevice(VirtualDeviceType type,
     return id;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // RemoveDevice
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 void VirtualDeviceManager::RemoveDevice(SDL_JoystickID id) {
     auto it = std::find_if(m_Devices.begin(), m_Devices.end(),
         [id](const auto& s) { return s->joystick_id == id; });
@@ -176,10 +176,10 @@ void VirtualDeviceManager::RemoveDevice(SDL_JoystickID id) {
             static_cast<unsigned>(id));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // PushState  –  called each frame; writes into SDL so SDL_GetJoystickAxis etc.
 //              return the values that the UI has set.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 void VirtualDeviceManager::PushState(SDL_JoystickID id) {
     VirtualDeviceState* s = GetState(id);
     if (!s || !s->joystick) return;
@@ -201,9 +201,9 @@ void VirtualDeviceManager::PushAllStates() {
         PushState(dev->joystick_id);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Accessors
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 VirtualDeviceState* VirtualDeviceManager::GetState(SDL_JoystickID id) {
     for (auto& s : m_Devices)
         if (s->joystick_id == id) return s.get();

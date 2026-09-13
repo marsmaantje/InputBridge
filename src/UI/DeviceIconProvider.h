@@ -18,6 +18,8 @@
 
 #include "imgui.h"
 
+#include <cstddef>
+
 #include <string>
 
 struct DeviceState;
@@ -63,12 +65,33 @@ struct KenneyFonts
 // ---------------------------------------------------------------------------
 struct DeviceIcon
 {
-    ImFont*     font      = nullptr;  ///< Kenney font containing the glyph (may be null)
-    const char* glyph     = nullptr;  ///< UTF-8 encoded codepoint string   (may be null)
-    ImWchar     codepoint = 0;        ///< Unicode codepoint - used to look up glyph metrics via ImFontBaked::FindGlyph()
+    ImFont*  font         = nullptr;  ///< Kenney font containing the glyph (may be null)
+    char     glyphBuf[4]  = {};       ///< UTF-8 encoded codepoint bytes, owned by this instance (NUL-terminated)
+    ImWchar  codepoint    = 0;        ///< Unicode codepoint - used to look up glyph metrics via ImFontBaked::FindGlyph()
+
+    DeviceIcon() = default;
+
+    /// Builds from a font + compile-time UTF-8 string literal (from the
+    /// paired KENNEY_<NAME> / KENNEY_<NAME>_CP macros) + codepoint, e.g.
+    ///   return { fonts.generic, KENNEY_GENERIC_JOYSTICK, KENNEY_GENERIC_JOYSTICK_CP };
+    /// utf8 is copied into glyphBuf (max 4 bytes incl. NUL) so this instance
+    /// owns its bytes independently, same as the MakeIcon() path below.
+    DeviceIcon(ImFont* f, const char* utf8, ImWchar cp) : font(f), codepoint(cp)
+    {
+        if (utf8) {
+            std::size_t i = 0;
+            for (; i < 3 && utf8[i] != '\0'; ++i) glyphBuf[i] = utf8[i];
+            glyphBuf[i] = '\0';
+        }
+    }
+
+    /// UTF-8 encoded codepoint string for rendering (e.g. via ImGui::Text/AddText).
+    /// Points at this instance's own glyphBuf - safe to copy the struct by
+    /// value (unlike a shared/static buffer, each copy keeps its own bytes).
+    const char* glyph() const { return codepoint != 0 ? glyphBuf : nullptr; }
 
     /// Returns true when all fields are valid and the icon can be rendered.
-    bool IsValid() const { return font != nullptr && glyph != nullptr && codepoint != 0; }
+    bool IsValid() const { return font != nullptr && codepoint != 0 && glyphBuf[0] != '\0'; }
 };
 
 class DeviceIconProvider

@@ -247,7 +247,7 @@ void InputMapperUI::DrawInputProtocolSelector() {
     if (!profile) return;
     bool changed = false;
 
-    // ── Active Protocol Selection ─────────────────────────────────────────────
+    // -- Active Protocol Selection ---------------------------------------------
     bool oscActive = !OSCServer::GetInstance().GetInputDefinitionId().empty();
     bool oscRunning = OSCServer::GetInstance().IsRunning();
 #ifdef ENABLE_WEBSOCKETS
@@ -380,7 +380,7 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
             changed = true;
         }
 
-        // ── Regular device axes ─────────────────────────────────────────
+        // -- Regular device axes -----------------------------------------
         for (const auto& dev : m_DeviceManager.GetDevices())
             for (int i = 0; i < dev.num_axes; ++i) {
                 std::string lbl = dev.name + " - Axis " + std::to_string(i);
@@ -394,7 +394,7 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
                 }
             }
 
-        // ── Sensor channels (DualSense / Steam Controller) ──────────────
+        // -- Sensor channels (DualSense / Steam Controller) --------------
         for (const auto& dev : m_DeviceManager.GetDevices()) {
             if (!dev.gamepad) continue;
             bool hasGyro = SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO);
@@ -643,7 +643,7 @@ void InputMapperUI::DrawMappingContent() {
     MappingProfile& profile = *profilePtr;
     bool changed = false;
 
-    // ── Active Protocol Selection (top of page) ───────────────────────────────
+    // -- Active Protocol Selection (top of page) -------------------------------
     bool oscActive = !OSCServer::GetInstance().GetOutputDefinitionId().empty();
     bool oscRunning = OSCServer::GetInstance().IsRunning();
 #ifdef ENABLE_WEBSOCKETS
@@ -1011,7 +1011,7 @@ void InputMapperUI::DrawChannelMixSection(MappingProfile& profile, const Protoco
         ImGui::PushID(8000 + mi);
         ImGui::Spacing();
 
-        // ── Mix header: target field, clamp, delete ──────────────────
+        // -- Mix header: target field, clamp, delete ------------------
         std::string mixLabel = mix.target_field_id.empty() ? "None" : mix.target_field_id;
         for (auto& [pf2, fd2] : analogFields)
             if (pf2->fieldId == mix.target_field_id) { mixLabel = fd2->label; break; }
@@ -1045,7 +1045,7 @@ void InputMapperUI::DrawChannelMixSection(MappingProfile& profile, const Protoco
         ImGui::SameLine();
         if (ImGui::Button("Delete Mix")) mixToDelete = mi;
 
-        // ── Sources table ────────────────────────────────────────────
+        // -- Sources table --------------------------------------------
         if (!mix.sources.empty()) {
             if (ImGui::BeginTable("t_mix_src", 3,
                                    ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {

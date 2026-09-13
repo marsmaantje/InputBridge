@@ -25,6 +25,13 @@
 static constexpr const char* kTag = "DevicePanel";
 
 static void DrawDeviceHideControls(DeviceState& dev, DeviceManager& deviceManager);
+static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                      const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                      int index);
+static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                    const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                    PreferencesManager& prefs,
+                                    int index);
 
 // ---------------------------------------------------------------------------
 // DrawDeviceSettingsTab
@@ -418,7 +425,7 @@ void DrawDeviceItem(DeviceState&        dev,
         draw_list->AddText(icon.font, render_sz,
                            ImVec2(glyph_x, glyph_y),
                            ImGui::GetColorU32(ImGuiCol_Text),
-                           icon.glyph);
+                           icon.glyph());
     }
 
     // -- Battery indicator -------------------------------------------------
@@ -526,4 +533,227 @@ void DrawDeviceItem(DeviceState&        dev,
     }
 
     ImGui::PopID();
+}
+
+// ---------------------------------------------------------------------------
+// DrawWiimoteItem
+// ---------------------------------------------------------------------------
+
+void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, PreferencesManager& prefs, int index) {
+    using namespace InputBridge::Wiimote;
+    static WiimoteVisualizer wiimote_viz;
+
+    const WiimoteSnapshot &snap = dev.Snapshot();
+
+    ImGui::PushID(index);
+
+    // Mirrors DrawDeviceItem's header format ("<name> [ID: N] (Gamepad)") so
+    // a Wiimote reads as the same class of entry as any other connected
+    // device in the sidebar, rather than a visually distinct special case.
+    // `index` (this device's position in DeviceManager::GetWiimotes(), not
+    // an SDL_JoystickID) fills the [ID: N] slot, since Wiimotes aren't
+    // SDL_Joystick-backed and have no instance_id of their own.
+    std::string label = snap.is_balance_board ? "Wii Balance Board" : "Wii Remote";
+    label += " [ID: " + std::to_string(index) + "] (Gamepad)";
+    if (!snap.connected) label += "  [no data yet]";
+
+    const bool header_open = ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+
+    if (header_open) {
+        ImGui::Indent();
+
+        // Same tab bar ID/structure as DrawDeviceVisualizer's "DeviceMode"
+        // bar for ordinary gamepads/joysticks - Raw Inputs shows live data,
+        // Haptic Test exercises feedback, Settings holds device config.
+        // Reusing the identical label set (rather than Wiimote-specific
+        // names) is the point: the person switching between a regular
+        // gamepad and a Wiimote in the sidebar shouldn't have to learn a
+        // different tab layout for one device.
+        if (ImGui::BeginTabBar("DeviceMode")) {
+            if (ImGui::BeginTabItem("Raw Inputs")) {
+                wiimote_viz.Draw(snap, index);
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Haptic Test")) {
+                DrawWiimoteHapticTestTab(dev, snap, index);
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Settings")) {
+                DrawWiimoteSettingsTab(dev, snap, prefs, index);
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
+        }
+
+        ImGui::Unindent();
+    }
+
+    ImGui::PopID();
+}
+
+// ---------------------------------------------------------------------------
+// DrawWiimoteHapticTestTab
+// ---------------------------------------------------------------------------
+// A Wiimote's rumble motor has only an on/off drive line in hardware - no
+// SDL_Haptic effects, no native amplitude control - so this is deliberately
+// much simpler than GamepadHapticsVisualizer/etc. Variable strength is
+// still offered here: WiimoteDevice::SetRumble(float) approximates it with
+// software PWM (rapidly toggling the on/off line - see its comment for
+// details), so the slider below is a real, if motor-inertia-smoothed,
+// strength control rather than just a relabeled on/off switch. This still
+// lives under the same "Haptic Test" tab name for layout consistency.
+
+static void DrawWiimoteHapticTestTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                      const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                      int index)
+{
+    if (snap.is_balance_board) {
+        ImGui::TextDisabled("No haptic feedback on the Wii Balance Board.");
+        return;
+    }
+
+    ImGui::TextDisabled("The Wiimote's rumble motor is on/off only in hardware - "
+                         "strength below is approximated with software PWM.");
+    ImGui::Spacing();
+
+    static float s_rumble[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
+    float &rumble = s_rumble[index % 8];
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::SliderFloat("Rumble Strength", &rumble, 0.0f, 1.0f, "%.2f"))
+        dev.SetRumble(rumble);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Speaker test: 8-bit PCM (EnableSpeaker()/PlayBeep()) is confirmed
+    // working on real hardware; 4-bit ADPCM is not yet independently
+    // verified against real hardware (see Devices/Wiimote/README.md's
+    // Speaker row) - this button exists to make both easy to check
+    // without writing any code. A single tone is enough to confirm the
+    // enable/configure/unmute sequence actually produces sound; it's not
+    // meant as a general audio player.
+    ImGui::TextDisabled("4-bit ADPCM (recommended) or 8-bit PCM - see README.md.");
+
+    using InputBridge::Wiimote::SpeakerAudioFormat;
+    static SpeakerAudioFormat s_format[8] = {
+        SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4,
+        SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4, SpeakerAudioFormat::ADPCM4,
+    }; // per-index scratch, good enough for a handful of Wiimotes
+    SpeakerAudioFormat &format = s_format[index % 8];
+    int format_int = format == SpeakerAudioFormat::ADPCM4 ? 0 : 1;
+    ImGui::SetNextItemWidth(220.0f);
+    if (ImGui::Combo("Speaker Format", &format_int, "4-bit ADPCM\0" "8-bit PCM\0"))
+        format = format_int == 0 ? SpeakerAudioFormat::ADPCM4 : SpeakerAudioFormat::PCM8;
+
+    // Volume is the hardware gain register, not a software multiplier -
+    // EnableSpeaker()'s default (0x40) is already a conservative starting
+    // point in either format because the register's own max gain audibly
+    // distorts this speaker. The register's *range* differs by format
+    // though (0x00-0xFF for PCM8, 0x00-0x40 for ADPCM4 - WiiBrew), so the
+    // slider's max (and what counts as "loud") tracks whichever format is
+    // currently selected rather than assuming PCM8's wider range.
+    static uint8_t s_volume[8] = {0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40}; // per-index scratch, good enough for a handful of Wiimotes
+    uint8_t &volume = s_volume[index % 8];
+    const int volume_max = format == SpeakerAudioFormat::ADPCM4 ? 0x40 : 0xFF;
+    volume = std::min<uint8_t>(volume, uint8_t(volume_max)); // clamp after a format switch that shrank the range
+    int volume_int = int(volume);
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::SliderInt("Speaker Volume", &volume_int, 0x00, volume_max))
+        volume = uint8_t(volume_int);
+    if (volume >= (volume_max * 3) / 4) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.0f, 1.0f), "(loud - likely to distort)");
+    }
+
+    if (ImGui::Button("Test Speaker (beep)"))
+        dev.PlayBeep(440.0f, 200, 0, volume, format);
+}
+
+// ---------------------------------------------------------------------------
+// DrawWiimoteSettingsTab
+// ---------------------------------------------------------------------------
+
+static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
+                                    const InputBridge::Wiimote::WiimoteSnapshot& snap,
+                                    PreferencesManager& prefs,
+                                    int index)
+{
+    // hid_path is the only stable identifier a raw-HID WiimoteDevice has -
+    // see PreferencesManager::GetWiimotePlayerLED's comment. Guard against
+    // restoring from an empty key (e.g. drawn a frame before the first
+    // status report has populated it) since that would collide across
+    // every not-yet-identified Wiimote.
+    const std::string& path = snap.hid_path;
+
+    static int s_player[8] = {}; // per-index scratch, good enough for a handful of Wiimotes
+    int &player = s_player[index % 8];
+
+    // Restore saved settings once per appearance, the same one-shot
+    // pattern DrawDeviceSettingsTab uses for haptic keepalive - gated on
+    // WiimoteDevice::prefs_applied since these devices have no
+    // SDL_JoystickID for PreferencesManager's own applied-tracking.
+    if (!dev.prefs_applied && !path.empty()) {
+        dev.prefs_applied = true;
+        if (!snap.is_balance_board) {
+            player = prefs.GetWiimotePlayerLED(path);
+            dev.SetPlayerLED(player);
+            if (prefs.GetWiimoteIRExtendedMode(path))
+                dev.SetIRExtendedMode(true);
+        } else {
+            float tareKg[4];
+            if (prefs.GetWiimoteBalanceTareKg(path, tareKg))
+                dev.SetBalanceBoardTareValues(tareKg[0], tareKg[1], tareKg[2], tareKg[3]);
+        }
+    }
+
+    if (!snap.is_balance_board) {
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::SliderInt("Player LED", &player, 1, 4)) {
+            dev.SetPlayerLED(player);
+            prefs.SetWiimotePlayerLED(path, player);
+        }
+
+        // IR Extended mode: trades away Nunchuk/Classic Controller/Guitar
+        // Hero data (report 0x33 carries no extension bytes - see
+        // WiimoteDevice::SetIRExtendedMode's comment) for a per-dot IR
+        // size reading. Re-programs the physical IR camera synchronously
+        // when toggled (a handful of ~50ms-spaced register writes), so
+        // there's a brief, deliberate pause on click rather than being
+        // wired to update every frame.
+        bool extended = snap.ir_extended_mode;
+        if (ImGui::Checkbox("IR Extended Mode (dot size)", &extended)) {
+            dev.SetIRExtendedMode(extended);
+            prefs.SetWiimoteIRExtendedMode(path, extended);
+        }
+        if (snap.ir_extended_mode) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(Nunchuk/Classic/Guitar data frozen while active)");
+        }
+        return;
+    }
+
+    // Software zero point: subtracts whatever the board currently reads
+    // from every future reading, without touching its own factory
+    // calibration. Useful for a rug/mount/uneven floor adding a fixed
+    // offset, or just to zero out before stepping on. Persisted so it
+    // survives a reconnect/relaunch rather than only lasting the session.
+    if (ImGui::Button("Tare / Zero")) {
+        dev.TareBalanceBoard();
+        float tareKg[4];
+        dev.GetBalanceBoardTareValues(tareKg);
+        prefs.SetWiimoteBalanceTareKg(path, tareKg);
+    }
+    if (snap.balance_board_tared) {
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Tare")) {
+            dev.ClearBalanceBoardTare();
+            prefs.ClearWiimoteBalanceTareKg(path);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(tared)");
+    }
 }

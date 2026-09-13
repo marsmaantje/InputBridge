@@ -198,7 +198,7 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
 
     RunAsync([this, slot, largeMagnitude, smallMagnitude, durationMs]() {
 
-        // ── Steam Controller V1 path (D0G, PIDs 0x1102 / 0x1106) ─────────────
+        // -- Steam Controller V1 path (D0G, PIDs 0x1102 / 0x1106) -------------
         // V1 has no rumble motors; SDL_RumbleGamepad does nothing on it.
         // Haptic feedback requires vendor HID reports to the trackpad actuators.
         //
@@ -225,7 +225,7 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
             return;
         }
 
-        // ── Standard SDL path (all other gamepads, including Steam Controller V2) ─
+        // -- Standard SDL path (all other gamepads, including Steam Controller V2) -
         if (m_gamepad) {
             const Uint16 lowFreq  = static_cast<Uint16>(largeMagnitude * 0xFFFF);
             const Uint16 highFreq = static_cast<Uint16>(smallMagnitude * 0xFFFF);

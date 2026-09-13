@@ -2,6 +2,7 @@
 
 #include "App/Log.h"
 #include "Devices/DeviceManager.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 #include "Mappers/OutputMapper.h"
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
@@ -46,7 +47,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(AnalogToDigitalMapping::Mode, {
 
 namespace {
 
-// ── JSON ⇄ InputSource ──────────────────────────────────────────────────────
+// -- JSON ⇄ InputSource ------------------------------------------------------
 // All three places an InputSource is embedded in the profile JSON (the
 // top-level "mappings" map, an analog→digital mapping's "source", and a
 // channel-mix source) use the exact same key names, so one pair of
@@ -79,7 +80,7 @@ json SerializeInputSource(const InputSource& src) {
     };
 }
 
-// ── JSON ⇄ MappingProfile, one collection at a time ────────────────────────
+// -- JSON ⇄ MappingProfile, one collection at a time ------------------------
 
 void ParseOutputMappings(const json& data, MappingProfile& p) {
     if (!data.contains("mappings")) return;
@@ -523,6 +524,19 @@ void MappingProfileStore::HandleDeviceConnectionChange() {
     for (const auto& d : m_DeviceManager.GetDevices())
         guidMap[DeviceManager::GetDeviceGUIDString(d)] = d.instance_id;
 
+    // Wiimotes are never present in DeviceManager::GetDevices() (see the
+    // comment on DeviceManager::ScanWiimotes()/m_Wiimotes) - they're only
+    // reachable as SDL joysticks through WiimoteVirtualBridge's virtual
+    // joysticks. Fold those in too, or every saved Wiimote binding/haptic
+    // target/mapping GUID would fail to remap to a live instance_id here
+    // and silently appear unbound after every profile activation, device
+    // (re)connect, or app relaunch.
+    for (SDL_JoystickID id : InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().GetAllJoystickIds()) {
+        DeviceState fake;
+        fake.instance_id = id;
+        guidMap[DeviceManager::GetDeviceGUIDString(fake)] = id;
+    }
+
     auto remap = [&](const std::string& guid) -> SDL_JoystickID {
         auto it = guidMap.find(guid);
         return it != guidMap.end() ? it->second : 0;
@@ -553,7 +567,7 @@ void MappingProfileStore::UpdateActiveProtocols() {
     const auto& p = m_Profiles[m_SelectedProfileIndex];
     ProtocolManager::GetInstance().SetActiveInputProtocolId(p.oscInputProtocolId);
 
-    // ── OSC server ────────────────────────────────────────────────────────────
+    // -- OSC server ------------------------------------------------------------
     auto& osc = OSCServer::GetInstance();
 
     // Snapshot what the server is actually running on *before* touching the
@@ -594,7 +608,7 @@ void MappingProfileStore::UpdateActiveProtocols() {
     }
 
 #ifdef ENABLE_WEBSOCKETS
-    // ── WebSocket server ──────────────────────────────────────────────────────
+    // -- WebSocket server ------------------------------------------------------
     auto& ws = WebSocketServer::GetInstance();
     ws.SetOutputDefinition(p.wsOutputProtocolId);
     ws.SetInputDefinition(p.wsInputProtocolId);

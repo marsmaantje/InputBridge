@@ -1,0 +1,71 @@
+name: "Package Linux tarball"
+description: >
+  Installs the CMake build into ./package, tars it up as
+  dist/InputBridge-<distro_name>.tar.gz, verifies the udev packaging
+  assets made it into the tarball layout, optionally runs the smoke
+  test, and uploads the result as a workflow artifact. Shared by
+  build-ubuntu, build-fedora and build-arch, which differ only in
+  distro_name.
+
+inputs:
+  distro_name:
+    description: "Distro label used in the tarball/artifact name, e.g. Ubuntu, Fedora, Arch"
+    required: true
+  run_smoke_test:
+    description: "Whether to run the launch smoke test ('yes' to run it)"
+    required: false
+    default: "no"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Package
+      shell: bash
+      run: |
+          cmake --install build --config Release --prefix package
+          # Copy shared libs (e.g. liblo.so) from lib to bin so they are included in the tarball
+          if [ -d "package/lib" ]; then cp -P package/lib/* package/bin/ || true; fi
+
+          # Bring share/ (udev installer script + rules file, themes,
+          # etc.) into the same directory as the binary before
+          # tarring. LinuxUdevInstaller::ResolveScriptPath() looks
+          # for share/inputbridge/udev/install-udev-rules.sh directly
+          # beside the running binary first (the same "dev-build"
+          # layout CMake's own POST_BUILD step uses) - without this,
+          # the tarball only ever contained package/bin's contents,
+          # so a binary run straight from the extracted tarball could
+          # never find its own udev installer script.
+          if [ -d "package/share" ]; then cp -r package/share package/bin/share; fi
+
+          mkdir -p dist
+          tar -czvf "dist/InputBridge-${{ inputs.distro_name }}.tar.gz" -C package/bin .
+
+    - name: Verify udev packaging assets
+      shell: bash
+      run: |
+          test -f package/bin/share/inputbridge/udev/install-udev-rules.sh || { echo "install-udev-rules.sh missing from tarball layout"; exit 1; }
+          test -f package/bin/share/inputbridge/udev/71-inputbridge-wiimote.rules || { echo "71-inputbridge-wiimote.rules missing from tarball layout"; exit 1; }
+
+    - name: Smoke test (launch check)
+      if: ${{ inputs.run_smoke_test == 'yes' }}
+      shell: bash
+      run: |
+          BIN="package/bin/InputBridge"
+          test -f "$BIN" || { echo "Binary not found: $BIN"; exit 1; }
+          set +e
+          xvfb-run --auto-servernum timeout 5s "$BIN"
+          CODE=$?
+          set -e
+          echo "Exit code: $CODE"
+          if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
+              echo "Smoke test passed (exit $CODE)."
+          else
+              echo "Smoke test FAILED - binary crashed with exit code $CODE."
+              exit 1
+          fi
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v6
+      with:
+          name: InputBridge-${{ inputs.distro_name }}
+          path: dist/InputBridge-${{ inputs.distro_name }}.tar.gz

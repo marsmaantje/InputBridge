@@ -25,7 +25,7 @@ class ITransport {
 public:
     virtual ~ITransport() = default;
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────
+    // -- Lifecycle ---------------------------------------------------------
 
     /**
      * @brief Start the transport (open sockets, bind ports, spawn threads).
@@ -50,7 +50,7 @@ public:
     /** @return true while the transport is running. */
     virtual bool IsRunning() const = 0;
 
-    // ── Output (server → clients) ─────────────────────────────────────────
+    // -- Output (server → clients) -----------------------------------------
 
     /**
      * @brief Send a named float value to all connected clients.
@@ -69,7 +69,7 @@ public:
      */
     virtual void SendString(const std::string& address, const std::string& value) = 0;
 
-    // ── Haptic input (clients → server) ──────────────────────────────────
+    // -- Haptic input (clients → server) ----------------------------------
 
     /**
      * @brief Attach the OutputMapper that will receive queued haptic commands.
@@ -79,7 +79,7 @@ public:
      */
     virtual void SetOutputMapper(OutputMapper* mapper) = 0;
 
-    // ── Direction enable flags ────────────────────────────────────────────
+    // -- Direction enable flags --------------------------------------------
 
     /** Enable or disable outgoing data (server → clients). */
     virtual void SetOutputEnabled(bool enabled) = 0;
@@ -89,7 +89,7 @@ public:
     virtual void SetInputEnabled(bool enabled) = 0;
     virtual bool IsInputEnabled() const = 0;
 
-    // ── Inactivity handling ───────────────────────────────────────────────
+    // -- Inactivity handling -----------------------------------------------
 
     /**
      * @brief Call once per frame.
@@ -100,7 +100,7 @@ public:
      */
     virtual void CheckInactivity() = 0;
 
-    // ── Client introspection ──────────────────────────────────────────────
+    // -- Client introspection ----------------------------------------------
 
     /** @return The number of currently connected clients (0 if not applicable). */
     virtual int GetClientCount() const = 0;

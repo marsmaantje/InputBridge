@@ -14,7 +14,7 @@
 // Font file name expected in the fonts/ directory
 #define FONT_ICON_FILE_NAME_FAS "fa-solid-900.ttf"
 
-// ── Icons used in the sidebar ────────────────────────────────────────────────
+// -- Icons used in the sidebar ------------------------------------------------
 // Raw UTF-8 byte sequences (plain const char*) - avoids the C++20 char8_t
 // incompatibility that u8"" literals introduced.
 //

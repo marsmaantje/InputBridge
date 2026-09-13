@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-// ─── Field descriptors ──────────────────────────────────────────────────────
+// --- Field descriptors ------------------------------------------------------
 
 enum class FieldType {
     AnalogAxis,   // float, range [-1, 1] or [0, 1]
@@ -19,7 +19,7 @@ struct FieldDescriptor {
     bool        isBuiltIn = false;
 };
 
-// ─── A single field slot inside a protocol definition ──────────────────────
+// --- A single field slot inside a protocol definition ----------------------
 
 struct ProtocolField {
     std::string fieldId;   // references FieldDescriptor::id
@@ -37,21 +37,21 @@ struct ProtocolField {
     bool        hasInlineDef = false;  // true when the above fields are populated
 };
 
-// ─── Protocol direction ─────────────────────────────────────────────────────
+// --- Protocol direction -----------------------------------------------------
 
 enum class ProtocolDirection {
     Send,    // server → client  (send input / sensor data)
     Receive  // client → server  (receive haptic / command data)
 };
 
-// ─── Transport type ─────────────────────────────────────────────────────────
+// --- Transport type ---------------------------------------------------------
 
 enum class ProtocolTransport {
     OSC,
     WebSocket
 };
 
-// ─── A complete protocol definition (serialised to a JSON file) ─────────────
+// --- A complete protocol definition (serialised to a JSON file) -------------
 
 struct ProtocolDefinition {
     std::string        id;          // unique UUID / slug (generated on creation)

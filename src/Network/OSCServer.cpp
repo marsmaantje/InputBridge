@@ -952,7 +952,7 @@ void OSCServer::DrawContent() {
     ImGui::InputInt("Send Port",    &m_send_port);
     ImGui::InputInt("Receive Port", &m_recv_port);
 
-    // ── Read state under lock ─────────────────────────────────────────────────
+    // -- Read state under lock -------------------------------------------------
     std::string outDefId, inDefId, currentProto;
     bool outputEnabled, inputEnabled;
     {
@@ -967,7 +967,7 @@ void OSCServer::DrawContent() {
     std::string currentInputProto = ProtocolManager::GetInstance().GetActiveInputLegacyProtocol();
     if (currentInputProto.empty()) currentInputProto = currentProto;
 
-    // ── Combo helpers ─────────────────────────────────────────────────────────
+    // -- Combo helpers ---------------------------------------------------------
     struct Entry {
         std::string label;
         bool isSeparator  = false;
@@ -1020,7 +1020,7 @@ void OSCServer::DrawContent() {
         }
     };
 
-    // ── Output protocol (server → client) ─────────────────────────────────────
+    // -- Output protocol (server → client) -------------------------------------
     {
         if (ImGui::Checkbox("##osc_out_en", &outputEnabled)) {
             SetOutputEnabled(outputEnabled);
@@ -1043,7 +1043,7 @@ void OSCServer::DrawContent() {
         if (!outputEnabled) ImGui::EndDisabled();
     }
 
-    // ── Input protocol (client → server) ──────────────────────────────────────
+    // -- Input protocol (client → server) --------------------------------------
     {
         if (ImGui::Checkbox("##osc_in_en", &inputEnabled)) {
             SetInputEnabled(inputEnabled);
@@ -1069,7 +1069,7 @@ void OSCServer::DrawContent() {
         if (!inputEnabled) ImGui::EndDisabled();
     }
 
-    // ── Inactivity Timeout ────────────────────────────────────────────────────
+    // -- Inactivity Timeout ----------------------------------------------------
     {
         ImGui::Separator();
         if (ImGui::Checkbox("Inactivity Timeout", &m_inactivityTimeoutEnabled)) {
@@ -1085,7 +1085,7 @@ void OSCServer::DrawContent() {
         if (!m_inactivityTimeoutEnabled) ImGui::EndDisabled();
     }
 
-    // ── Start / stop ──────────────────────────────────────────────────────────
+    // -- Start / stop ----------------------------------------------------------
     if (IsRunning()) {
         bool settingsChanged = (m_send_port != m_running_send_port) ||
                                (m_recv_port != m_running_recv_port) ||
