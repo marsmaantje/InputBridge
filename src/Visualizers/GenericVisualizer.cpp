@@ -171,19 +171,24 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
             const float availW      = ImGui::GetContentRegionAvail().x;
             const float cellSize    = ImGui::GetTextLineHeight(); // minimum slot width
 
+            // Cumulative width used on the current row.
+            float rowUsedW = 0.0f;
+
             for (int i = 0; i < dev.num_buttons; ++i) {
                 const bool pressed = SDL_GetJoystickButton(dev.joystick, i) != 0;
                 InputLabel lbl     = InputLabelProvider::GetButtonLabel(dev, i);
 
-                // -- Per-glyph size probe ----------------------------------
+                // -- Per-glyph / fallback-text size probe -------------------
                 // We must know the slot width *before* the wrap/SameLine
-                // decision, so probe the glyph metrics up front and reuse
-                // the results when drawing.
+                // decision, so probe the glyph metrics (or, if there's no
+                // glyph, the fallback text's rendered width) up front and
+                // reuse the results when drawing.
                 const float textH    = ImGui::GetTextLineHeight();
                 const float bakeSize = ImGui::GetStyle().FontSizeBase * 4.0f;
                 float renderSize     = textH;
                 float y0_scaled      = 0.0f;
                 float glyphH_scaled  = textH;
+                float fallbackTextW  = 0.0f;
 
                 if (lbl.icon.IsValid()) {
                     if (ImFontBaked* baked = lbl.icon.font->GetFontBaked(bakeSize)) {
@@ -198,22 +203,36 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                             }
                         }
                     }
+                } else {
+                    // No font glyph for this button (e.g. several Wii Remote
+                    // buttons - "Home", "ZL", "ZR", "Two", etc. - fall back to
+                    // printing lbl.name as plain text below). The wrap check
+                    // was still sizing this slot from the icon-cell default
+                    // (~textH, a roughly square cell) rather than the text
+                    // that's actually about to be drawn, so a multi-character
+                    // label was assumed to fit when it didn't, stayed on the
+                    // same line via SameLine(), and clipped off the edge of
+                    // the panel instead of wrapping to a new line.
+                    fallbackTextW = ImGui::CalcTextSize(lbl.name.c_str()).x;
                 }
 
-                // The slot must be at least as wide as the glyph we will draw.
-                // Using a fixed cellSize (= textH) was the bug: glyphs with a
-                // low fill ratio get a large renderSize and bleed into the next
-                // slot when only textH of Dummy space was reserved.
-                const float slotSizeActual = std::max(renderSize, cellSize);
+                // The slot must be at least as wide as whatever we're about
+                // to draw: the glyph, or - when there's no glyph - the
+                // fallback text label. Using a fixed cellSize (= textH) was
+                // the original bug: glyphs with a low fill ratio get a large
+                // renderSize and bleed into the next slot when only textH of
+                // Dummy space was reserved, and text fallbacks wider than
+                // textH (almost all of them) weren't accounted for at all.
+                const float slotSizeActual = std::max({renderSize, cellSize, fallbackTextW});
                 const float slotW          = slotSizeActual + itemSpacing;
 
                 // -- Wrap / SameLine ---------------------------------------
-                if (i > 0) {
-                    float curX = ImGui::GetCursorScreenPos().x
-                                 - ImGui::GetWindowPos().x
-                                 - ImGui::GetScrollX();
-                    if (curX + slotW <= availW)
-                        ImGui::SameLine(0.0f, itemSpacing);
+                if (i > 0 && rowUsedW + slotW <= availW) {
+                    ImGui::SameLine(0.0f, itemSpacing);
+                    rowUsedW += slotW;
+                } else {
+                    // Starts a new row (or is the very first item).
+                    rowUsedW = slotSizeActual;
                 }
 
                 // Choose tint: bright green when pressed, dim when released.
