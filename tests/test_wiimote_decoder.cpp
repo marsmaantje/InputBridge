@@ -99,6 +99,48 @@ TEST(WiimoteDecoder, IRExtendedMaxSize) {
     EXPECT_EQ(dots[0].size, 0xF);
 }
 
+TEST(WiimoteDecoder, IRFullFieldsAreIndependent) {
+    // Bytes 0-2 use the same packing as Extended mode: X low=0x11, Y
+    // low=0x22, byte2 = Yhi(10) Xhi(01) size(1010) -> Y=0x222, X=0x111,
+    // size=0xA. Bytes 3-6 (bounding box) and byte 8 (intensity) use
+    // distinct, easily-recognized values so a copy/paste mixup between
+    // fields is caught immediately; byte 7 is the documented-unused byte
+    // and is deliberately non-zero here to confirm it's ignored.
+    uint8_t byte2 = 0b10'01'1010;
+    uint8_t nine[9] = {0x11, 0x22, byte2,
+                        0x10 /*bbox min x*/, 0x20 /*bbox min y*/,
+                        0x30 /*bbox max x*/, 0x40 /*bbox max y*/,
+                        0xFF /*unused*/, 0x55 /*intensity*/};
+    auto dot = Decode::IRFullDot(nine);
+    EXPECT_TRUE(dot.visible);
+    EXPECT_EQ(dot.x, 0x111);
+    EXPECT_EQ(dot.y, 0x222);
+    EXPECT_EQ(dot.size, 0xA);
+    EXPECT_EQ(dot.bbox_min_x, 0x10);
+    EXPECT_EQ(dot.bbox_min_y, 0x20);
+    EXPECT_EQ(dot.bbox_max_x, 0x30);
+    EXPECT_EQ(dot.bbox_max_y, 0x40);
+    EXPECT_EQ(dot.intensity, 0x55);
+}
+
+TEST(WiimoteDecoder, IRFullBoundingBoxTopBitIgnored) {
+    // WiiBrew documents bit 7 of bytes 3-6 as always 0 - mask it off rather
+    // than trusting the wire, so a stray/undocumented set bit there can't
+    // silently double a bounding-box coordinate.
+    uint8_t nine[9] = {0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0};
+    auto dot = Decode::IRFullDot(nine);
+    EXPECT_EQ(dot.bbox_min_x, 0x7F);
+    EXPECT_EQ(dot.bbox_min_y, 0x7F);
+    EXPECT_EQ(dot.bbox_max_x, 0x7F);
+    EXPECT_EQ(dot.bbox_max_y, 0x7F);
+}
+
+TEST(WiimoteDecoder, IRFullEmptySlotIsInvisible) {
+    uint8_t nine[9] = {0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0};
+    auto dot = Decode::IRFullDot(nine);
+    EXPECT_FALSE(dot.visible);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Extension identification
 // ═══════════════════════════════════════════════════════════════════════════

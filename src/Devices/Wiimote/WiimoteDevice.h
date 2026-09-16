@@ -53,12 +53,22 @@ struct WiimoteSnapshot {
     // out from under us; the fix differs from an init failure, hence the
     // separate flag.
     bool        ir_possibly_hijacked = false;
-    // Mirrors IsIRExtendedModeActive(): true once the Extended IR toggle
-    // has actually taken effect on hardware. Report 0x33 carries no
-    // extension bytes, so nunchuk/classic/guitar below stay frozen at
+    // Mirrors IsIRModeActive(IRCameraMode::Extended): true once the
+    // Extended OR Full IR toggle has actually taken effect on hardware -
+    // kept for back-compat with code that only distinguishes "basic vs
+    // richer" rather than the specific mode. Reports 0x33/0x3e/0x3f carry
+    // no extension bytes, so nunchuk/classic/guitar below stay frozen at
     // their last values while this is true - treat as stale, not
-    // "unplugged".
+    // "unplugged". Prefer ir_camera_mode for new code that needs to tell
+    // Extended and Full apart (e.g. to know whether bbox/intensity are
+    // populated).
     bool        ir_extended_mode = false;
+    // Which IR format is actually active on hardware right now - see
+    // IRCameraMode's own comment for what each value implies about IRDot's
+    // fields and which report ID(s) carry IR data. Mirrors
+    // IsIRModeActive()'s target only once the hardware switch has taken
+    // effect, same caveat as ir_extended_mode above.
+    IRCameraMode ir_camera_mode = IRCameraMode::Basic;
 
     ExtensionType extension = ExtensionType::None;
     // True if InitExtension() had to fall back to the "old way" (encrypted)
@@ -264,21 +274,30 @@ public:
     // SetBalanceBoardTareValues() - for persisting the current tare.
     void GetBalanceBoardTareValues(float outKg[4]) const;
 
-    // -- IR Extended mode toggle ---------------------------------------------
+    // -- IR camera mode selection ---------------------------------------------
     // Switches between IR Basic mode (report 0x37: X/Y, with room left for
-    // extension data in the same report) and IR Extended mode (report
-    // 0x33: X/Y + a 4-bit dot size, but no extension bytes at all - WiiBrew
-    // has no report combining size with extension data; Full mode's
-    // separate 0x3e/0x3f pair isn't covered here). While Extended mode is
-    // active, nunchuk/classic/guitar in the snapshot stay frozen at their
-    // last values - check ir_extended_mode before trusting them.
+    // extension data in the same report), IR Extended mode (report 0x33:
+    // X/Y + a 4-bit dot size, but no extension bytes at all - WiiBrew has
+    // no report combining size with extension data), and IR Full mode
+    // (interleaved report pair 0x3e/0x3f: X/Y + size + bounding box +
+    // intensity, also no extension bytes, and half the update rate since
+    // two reports are needed per data unit - see WiiBrew's "0x3e/0x3f"
+    // section). While Extended or Full mode is active, nunchuk/classic/
+    // guitar in the snapshot stay frozen at their last values - check
+    // ir_extended_mode (true for either) before trusting them.
     //
     // Re-programs the running Wiimote synchronously (same IR mode register
     // write used at connect time, plus the data reporting mode) - sleeps
     // briefly between writes like EnableIRCameraOnce(), so treat this as a
     // deliberate user action (a settings toggle), not a hot-path call.
     // No-op if already in the requested mode or on a Balance Board.
-    bool SetIRExtendedMode(bool enabled);
+    bool SetIRMode(IRCameraMode mode);
+    bool IsIRModeActive(IRCameraMode mode) const { return m_Snapshot.ir_camera_mode == mode; }
+
+    // Back-compat wrapper: true/false map to the old Extended/Basic-only
+    // toggle. Prefer SetIRMode()/IsIRModeActive() for new code, since they
+    // also reach Full mode.
+    bool SetIRExtendedMode(bool enabled) { return SetIRMode(enabled ? IRCameraMode::Extended : IRCameraMode::Basic); }
     bool IsIRExtendedModeActive() const { return m_Snapshot.ir_extended_mode; }
 
 private:
@@ -288,6 +307,7 @@ private:
     void DecodeCoreAccelIR10Ext6(const uint8_t *buf); // report 0x37, Wiimote steady-state mode
     void DecodeCoreAccelIR12(const uint8_t *buf);      // report 0x33, Extended IR mode (adds dot size)
     void DecodeCoreExt19(const uint8_t *buf);          // report 0x34, Balance Board steady-state mode
+    void DecodeInterleavedIR(const uint8_t *buf);      // reports 0x3e/0x3f, Full IR mode (adds bbox+intensity)
 
     uint8_t PreferredReportMode() const;
 
@@ -503,18 +523,27 @@ private:
     int    m_BalanceRecoveryAttempts = 0;      // capped so we don't spam re-init forever
 
     // IR-hijack watchdog state (see TickIRWatchdog()). Tracks the last
-    // time an IR-carrying report (0x37 or 0x33) was actually decoded,
+    // time an IR-carrying report (0x37, 0x33, or a completed 0x3e/0x3f
+    // pair) was actually decoded,
     // separately from last_report_ms (which updates for ANY report,
     // including ones a competing process's reconfiguration switched us to).
     Uint64 m_LastIRReportMs = 0;
     Uint64 m_LastIRReassertAtMs = 0;    // cooldown between corrective re-sends
     int    m_IRReassertAttempts = 0;    // capped, same rationale as balance board recovery
 
-    // IR Extended mode toggle (see SetIRExtendedMode()) - the source of
-    // truth PreferredReportMode()/EnableIRCameraOnce() read to pick report
-    // 0x37/IRMode::Basic vs. 0x33/IRMode::Extended. m_Snapshot.ir_extended_mode
-    // mirrors it only once the hardware switch has actually happened.
-    bool m_IRExtendedMode = false;
+    // IR camera mode toggle (see SetIRMode()) - the source of truth
+    // PreferredReportMode()/EnableIRCameraOnce() read to pick
+    // 0x37/IRMode::Basic, 0x33/IRMode::Extended, or 0x3e-0x3f/IRMode::Full.
+    // m_Snapshot.ir_camera_mode/ir_extended_mode mirror it only once the
+    // hardware switch has actually happened.
+    IRCameraMode m_IRMode = IRCameraMode::Basic;
+
+    // Full mode's data arrives split across two alternating reports (0x3e
+    // then 0x3f, each carrying 2 of the 4 dots - see DecodeInterleavedIR())
+    // - this holds dots 0-1 (decoded from the most recent 0x3e) until the
+    // matching 0x3f completes the set. Not meaningful outside Full mode.
+    IRDot m_PendingFullDots[2];
+    bool  m_HavePendingFullDots = false;
 
     // Balance Board software tare/zero. m_BalanceRawKg holds the most
     // recent PRE-tare corner readings (factory-calibrated, offset not

@@ -289,6 +289,15 @@ void PreferencesManager::SetWiimoteIRExtendedMode(const std::string &hid_path, b
     Save();
 }
 
+int PreferencesManager::GetWiimoteIRMode(const std::string &hid_path, int defaultValue) const {
+    return GetInt(std::string(kWiimoteSectionPrefix) + hid_path, kWiiIRModeKey, defaultValue);
+}
+
+void PreferencesManager::SetWiimoteIRMode(const std::string &hid_path, int mode) {
+    SetInt(std::string(kWiimoteSectionPrefix) + hid_path, kWiiIRModeKey, mode);
+    Save();
+}
+
 bool PreferencesManager::GetWiimoteBalanceTareKg(const std::string &hid_path, float outKg[4]) const {
     std::string section = std::string(kWiimoteSectionPrefix) + hid_path;
     if (!m_Sections.count(section))

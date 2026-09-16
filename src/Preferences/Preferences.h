@@ -68,6 +68,16 @@ class PreferencesManager {
     bool GetWiimoteIRExtendedMode(const std::string &hid_path, bool defaultValue = false) const;
     void SetWiimoteIRExtendedMode(const std::string &hid_path, bool enabled);
 
+    // Full 3-way IR camera mode (Basic/Extended/Full - see
+    // Wiimote::IRCameraMode), stored as that enum's underlying int value.
+    // Prefer this over GetWiimoteIRExtendedMode()/SetWiimoteIRExtendedMode()
+    // for new code since it can also reach Full mode; kept alongside it
+    // (as a distinct key, not sharing storage) since a boolean can't
+    // round-trip a 3-way value and older prefs files only ever wrote the
+    // bool key.
+    int  GetWiimoteIRMode(const std::string &hid_path, int defaultValue = 0) const;
+    void SetWiimoteIRMode(const std::string &hid_path, int mode);
+
     // Balance Board software tare/zero (see WiimoteDevice::TareBalanceBoard).
     // Returns false (leaving outKg untouched) if no tare has ever been
     // saved for this path; a saved-but-all-zero tare and "never saved"
@@ -100,5 +110,6 @@ class PreferencesManager {
     static constexpr const char* kWiimoteSectionPrefix = "Wiimote_";
     static constexpr const char* kWiiPlayerLEDKey = "PlayerLED";
     static constexpr const char* kWiiIRExtendedKey = "IRExtendedMode";
+    static constexpr const char* kWiiIRModeKey = "IRMode"; // int, see Wiimote::IRCameraMode
     static constexpr const char* kWiiTareKeyPrefix = "BalanceTare"; // + 0..3
 };

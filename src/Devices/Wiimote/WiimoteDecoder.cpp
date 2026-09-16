@@ -98,6 +98,25 @@ IRState IRExtended(const uint8_t ir[12]) {
     return out;
 }
 
+IRDot IRFullDot(const uint8_t nine_bytes[9]) {
+    IRDot d{};
+    // Per WiiBrew "IR Camera#Full Mode": byte0/1/2 are the same X/Y/size
+    // packing as Extended mode. Bytes 3-6 are the bounding box (each only
+    // 7 bits wide - bit 7 is always 0, so no masking beyond & 0x7F is
+    // needed), byte 7 is unused/reserved, byte 8 is intensity.
+    const uint8_t *p = nine_bytes;
+    d.x    = uint16_t(p[0]) | (uint16_t(p[2] & 0x30) << 4);
+    d.y    = uint16_t(p[1]) | (uint16_t(p[2] & 0xC0) << 2);
+    d.size = p[2] & 0x0F;
+    d.visible = !(p[0] == 0xFF && p[1] == 0xFF && p[2] == 0xFF);
+    d.bbox_min_x = p[3] & 0x7F;
+    d.bbox_min_y = p[4] & 0x7F;
+    d.bbox_max_x = p[5] & 0x7F;
+    d.bbox_max_y = p[6] & 0x7F;
+    d.intensity  = p[8];
+    return d;
+}
+
 NunchukState Nunchuk(const uint8_t *ext, size_t len) {
     NunchukState s;
     if (len < 6) return s; // disconnected/insufficient data

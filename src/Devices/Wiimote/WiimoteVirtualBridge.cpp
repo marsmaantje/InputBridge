@@ -363,8 +363,8 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
             setAxis(kIRAxisY[i], dot.visible ? (float(dot.y) / 767.0f)  * 2.f - 1.f : 0.f);
         }
 
-        // Dot size (0-15), only meaningful in IR Extended mode
-        // (WiimoteDevice::SetIRExtendedMode; stays 0 otherwise). Magnitude
+        // Dot size (0-15), only meaningful in IR Extended/Full mode
+        // (WiimoteDevice::SetIRMode; stays 0 in Basic mode). Magnitude
         // with no natural sign, so uses the "rest = -1" convention like
         // the Balance Board weight axes: 0/not-visible -> -1, 15 -> +1.
         static constexpr int kIRAxisSize[4] = {Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size};

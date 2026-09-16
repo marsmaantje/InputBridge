@@ -11,7 +11,7 @@ namespace InputBridge::Wiimote {
 
 namespace {
 constexpr const char *kTag = "WiimoteDevice";
-constexpr int kReportBufSize = 22; // largest fixed report we consume (0x37 = 22 incl. report ID)
+constexpr int kReportBufSize = 22; // largest fixed report we consume (0x37/0x3e/0x3f = 22 incl. report ID)
 constexpr int kRegisterReadTimeoutMs = 250;
 
 // WiiBrew "IR Camera#Initialization": "To avoid the random state put a
@@ -122,7 +122,16 @@ bool WiimoteDevice::Init() {
 
 uint8_t WiimoteDevice::PreferredReportMode() const {
     if (m_Snapshot.is_balance_board) return InReport::CoreExt19;
-    return m_IRExtendedMode ? InReport::CoreAccelIR12 : InReport::CoreAccelIR10Ext6;
+    switch (m_IRMode) {
+        case IRCameraMode::Extended: return InReport::CoreAccelIR12;
+        // Full mode alternates between 0x3e and 0x3f on hardware, but the
+        // Data Reporting Mode write (Report 0x12) only takes a single MM
+        // byte - per WiiBrew, requesting either ID starts the alternating
+        // pair, so 0x3e is as good a choice as 0x3f here.
+        case IRCameraMode::Full: return InReport::InterleavedA;
+        case IRCameraMode::Basic:
+        default: return InReport::CoreAccelIR10Ext6;
+    }
 }
 
 bool WiimoteDevice::EnableIRCamera() {
@@ -212,7 +221,9 @@ bool WiimoteDevice::EnableIRCameraOnce() {
     ok &= WriteRegister(Registers::IRSensitivity2, kIRSensitivityWiiLevel3.block2.data(),
                          uint8_t(kIRSensitivityWiiLevel3.block2.size()));
     SDL_Delay(kIRInitStepDelayMs);
-    uint8_t mode = m_IRExtendedMode ? IRMode::Extended : IRMode::Basic;
+    uint8_t mode = static_cast<uint8_t>(
+        m_IRMode == IRCameraMode::Full ? IRMode::Full :
+        m_IRMode == IRCameraMode::Extended ? IRMode::Extended : IRMode::Basic);
     ok &= WriteRegister(Registers::IRMode, &mode, 1);
     SDL_Delay(kIRInitStepDelayMs);
     ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
@@ -1106,6 +1117,10 @@ void WiimoteDevice::HandleReport(const uint8_t *buf, int len) {
         case InReport::CoreExt19:
             if (len >= 22) DecodeCoreExt19(buf);
             break;
+        case InReport::InterleavedA:
+        case InReport::InterleavedB:
+            if (len >= 22) DecodeInterleavedIR(buf);
+            break;
         case InReport::ReadMemoryData:
         case InReport::Acknowledge:
             // Consumed synchronously inside ReadRegister()/write acks; a
@@ -1273,7 +1288,7 @@ void WiimoteDevice::DecodeCoreAccelIR10Ext6(const uint8_t *buf) {
 void WiimoteDevice::DecodeCoreAccelIR12(const uint8_t *buf) {
     // (a1) 33 BB BB AA AA AA II II II II II II II II II II II II
     //       1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18
-    // No extension bytes in this report at all - see SetIRExtendedMode()'s
+    // No extension bytes in this report at all - see SetIRMode()'s
     // comment for why. nunchuk/classic/guitar are deliberately left
     // untouched here (not zeroed) so they hold their last known values;
     // ir_extended_mode tells callers those values are frozen, not live.
@@ -1288,6 +1303,56 @@ void WiimoteDevice::DecodeCoreAccelIR12(const uint8_t *buf) {
     m_Snapshot.ir_possibly_hijacked = false; // this report proves our mode is still in effect right now
 }
 
+void WiimoteDevice::DecodeInterleavedIR(const uint8_t *buf) {
+    // (a1) 3e BB BB AA II II II II II II II II II II II II II II II II II II
+    // (a1) 3f BB BB AA II II II II II II II II II II II II II II II II II II
+    //       1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22
+    // Full IR mode. No extension bytes here either, same rationale as
+    // DecodeCoreAccelIR12() - nunchuk/classic/guitar stay frozen while
+    // this mode is active (ir_extended_mode covers Full too, see its
+    // header comment).
+    //
+    // Two objects (9 bytes each = 18 II bytes) arrive per report, half the
+    // set at a time; 0x3e and 0x3f together carry all 4. The accelerometer
+    // is also split differently here than every other mode (WiiBrew
+    // "Interleaved Accelerometer Reporting"): a single AA byte per report
+    // for X (0x3e) / Y (0x3f), with Z spread across 2 bits in each
+    // report's BB BB buttons bytes. We don't have a dedicated interleaved-
+    // accel decoder/struct yet, so core buttons are still decoded (they're
+    // valid every report) but accel is deliberately left at its last
+    // value here rather than half-updated from a mismatched normal-mode
+    // decoder, which would corrupt it.
+    const uint8_t *bb = buf + 1;
+    const bool is_first_half = (buf[0] == InReport::InterleavedA);
+    const uint8_t *ir = buf + 4; // 18 bytes: two 9-byte objects
+
+    m_Snapshot.core = Decode::Buttons(bb);
+
+    if (is_first_half) {
+        // Start (or restart) the pair. A dropped/duplicate 0x3e simply
+        // means we overwrite whatever was pending - the old half was
+        // already incomplete and unusable on its own.
+        m_PendingFullDots[0] = Decode::IRFullDot(ir + 0);
+        m_PendingFullDots[1] = Decode::IRFullDot(ir + 9);
+        m_HavePendingFullDots = true;
+        return; // wait for the matching 0x3f before publishing a full IRState
+    }
+
+    // This is the second half (0x3f). Only publish if it's actually
+    // completing a pair we started - a stray 0x3f with no preceding 0x3e
+    // (e.g. right after a mode switch, or one report lost on the link)
+    // would otherwise pair fresh dots 2-3 with a stale/zeroed dots 0-1.
+    if (!m_HavePendingFullDots) return;
+
+    m_Snapshot.ir[0] = m_PendingFullDots[0];
+    m_Snapshot.ir[1] = m_PendingFullDots[1];
+    m_Snapshot.ir[2] = Decode::IRFullDot(ir + 0);
+    m_Snapshot.ir[3] = Decode::IRFullDot(ir + 9);
+    m_HavePendingFullDots = false;
+
+    m_LastIRReportMs = SDL_GetTicks(); // fed to TickIRWatchdog() - see its comment
+    m_Snapshot.ir_possibly_hijacked = false; // this report proves our mode is still in effect right now
+}
 
 void WiimoteDevice::DecodeCoreExt19(const uint8_t *buf) {
     // (a1) 34 BB BB EE(x19)  - Balance Board steady-state mode. First 11 of
@@ -1366,11 +1431,11 @@ void WiimoteDevice::GetBalanceBoardTareValues(float outKg[4]) const {
     for (int i = 0; i < 4; ++i) outKg[i] = m_BalanceTareKg[i];
 }
 
-bool WiimoteDevice::SetIRExtendedMode(bool enabled) {
+bool WiimoteDevice::SetIRMode(IRCameraMode mode) {
     if (m_Snapshot.is_balance_board) return false; // no camera hardware
-    if (enabled == m_IRExtendedMode) return true;   // already there
+    if (mode == m_IRMode) return true;              // already there
 
-    m_IRExtendedMode = enabled;
+    m_IRMode = mode;
 
     // Re-run just the mode-select portion of EnableIRCameraOnce()'s WiiBrew
     // sequence (toggle -> mode write -> toggle) rather than all 7 steps -
@@ -1383,37 +1448,46 @@ bool WiimoteDevice::SetIRExtendedMode(bool enabled) {
     uint8_t toggle08 = 0x08;
     ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
     SDL_Delay(kIRInitStepDelayMs);
-    uint8_t mode = enabled ? IRMode::Extended : IRMode::Basic;
-    ok &= WriteRegister(Registers::IRMode, &mode, 1);
+    uint8_t reg_mode = static_cast<uint8_t>(
+        mode == IRCameraMode::Full ? IRMode::Full :
+        mode == IRCameraMode::Extended ? IRMode::Extended : IRMode::Basic);
+    ok &= WriteRegister(Registers::IRMode, &reg_mode, 1);
     SDL_Delay(kIRInitStepDelayMs);
     ok &= WriteRegister(Registers::IRModeToggle, &toggle08, 1);
     SDL_Delay(kIRInitStepDelayMs);
 
     // Re-assert the data reporting mode so the report ID itself switches
-    // (0x37 <-> 0x33) - per WiiBrew this is required after any data format
-    // change, mirroring what HandleStatusReport()/TickIRWatchdog() already
-    // do for other report-mode transitions.
+    // (0x37 <-> 0x33 <-> 0x3e) - per WiiBrew this is required after any
+    // data format change, mirroring what HandleStatusReport()/
+    // TickIRWatchdog() already do for other report-mode transitions.
     uint8_t p[2] = {0x04, PreferredReportMode()};
     ok &= SendReport(m_Transport.get(), OutReport::DataReportMode, m_RumbleBit, p, 2);
 
     if (!ok) {
-        LOG_WARN(kTag, "SetIRExtendedMode(%s) had a write failure for %s - "
+        LOG_WARN(kTag, "SetIRMode(%d) had a write failure for %s - "
                         "mode may not have taken effect",
-                 enabled ? "on" : "off", m_Path.c_str());
+                 static_cast<int>(mode), m_Path.c_str());
     }
 
     // Give TickIRWatchdog() a clean slate through the transition, same as
-    // a fresh EnableIRCamera() success does - we're switching which report
-    // ID carries IR data, and don't want a few transitional milliseconds
-    // of silence on the old one misread as a hijack.
+    // a fresh EnableIRCamera() success does - we're switching which
+    // report ID(s) carry IR data, and don't want a few transitional
+    // milliseconds of silence on the old one misread as a hijack.
     m_LastIRReportMs = 0;
     m_Snapshot.ir_possibly_hijacked = false;
     m_IRReassertAttempts = 0;
-    m_Snapshot.ir_extended_mode = enabled;
+    m_Snapshot.ir_camera_mode = mode;
+    m_Snapshot.ir_extended_mode = (mode != IRCameraMode::Basic);
 
-    LOG_INFO(kTag, "IR Extended mode %s for %s%s", enabled ? "enabled" : "disabled",
+    // Full mode's dot pairing (see DecodeInterleavedIR()) is meaningless
+    // across a mode switch - drop any half-received pair from before the
+    // switch so it can't get merged with fresh post-switch data.
+    m_HavePendingFullDots = false;
+
+    static const char *kModeNames[] = {"Basic", "Extended", "Full"};
+    LOG_INFO(kTag, "IR camera mode set to %s for %s%s", kModeNames[static_cast<int>(mode)],
              m_Path.c_str(),
-             enabled ? " - Nunchuk/Classic/Guitar data is frozen while this is active" : "");
+             (mode != IRCameraMode::Basic) ? " - Nunchuk/Classic/Guitar data is frozen while this is active" : "");
 
     return ok;
 }

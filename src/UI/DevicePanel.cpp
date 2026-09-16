@@ -701,8 +701,14 @@ static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
         if (!snap.is_balance_board) {
             player = prefs.GetWiimotePlayerLED(path);
             dev.SetPlayerLED(player);
-            if (prefs.GetWiimoteIRExtendedMode(path))
-                dev.SetIRExtendedMode(true);
+            // GetWiimoteIRMode() is the source of truth going forward; fall
+            // back to the legacy bool key (as Extended/Basic only) so a
+            // prefs file saved before Full mode existed still restores
+            // correctly.
+            int saved_mode = prefs.GetWiimoteIRMode(path,
+                prefs.GetWiimoteIRExtendedMode(path) ? 1 : 0);
+            if (saved_mode != 0)
+                dev.SetIRMode(static_cast<InputBridge::Wiimote::IRCameraMode>(saved_mode));
         } else {
             float tareKg[4];
             if (prefs.GetWiimoteBalanceTareKg(path, tareKg))
@@ -717,20 +723,30 @@ static void DrawWiimoteSettingsTab(InputBridge::Wiimote::WiimoteDevice& dev,
             prefs.SetWiimotePlayerLED(path, player);
         }
 
-        // IR Extended mode: trades away Nunchuk/Classic Controller/Guitar
-        // Hero data (report 0x33 carries no extension bytes - see
-        // WiimoteDevice::SetIRExtendedMode's comment) for a per-dot IR
-        // size reading. Re-programs the physical IR camera synchronously
-        // when toggled (a handful of ~50ms-spaced register writes), so
-        // there's a brief, deliberate pause on click rather than being
-        // wired to update every frame.
-        bool extended = snap.ir_extended_mode;
-        if (ImGui::Checkbox("IR Extended Mode (dot size)", &extended)) {
-            dev.SetIRExtendedMode(extended);
-            prefs.SetWiimoteIRExtendedMode(path, extended);
+        // IR camera mode: Basic is X/Y only; Extended adds a per-dot size
+        // reading; Full additionally adds a bounding box + intensity per
+        // dot, at half the IR update rate (interleaved 0x3e/0x3f reports -
+        // see WiimoteDevice::SetIRMode's comment). Extended and Full both
+        // trade away Nunchuk/Classic Controller/Guitar Hero data, since
+        // none of their reports carry extension bytes. Re-programs the
+        // physical IR camera synchronously when changed (a handful of
+        // ~50ms-spaced register writes), so there's a brief, deliberate
+        // pause on click rather than being wired to update every frame.
+        using InputBridge::Wiimote::IRCameraMode;
+        int mode_idx = static_cast<int>(snap.ir_camera_mode);
+        static const char *kModeLabels[] = {
+            "Basic (X/Y only)",
+            "Extended (+ dot size)",
+            "Full (+ bounding box, intensity)",
+        };
+        ImGui::SetNextItemWidth(260.0f);
+        if (ImGui::Combo("IR Camera Mode", &mode_idx, kModeLabels, 3)) {
+            auto mode = static_cast<IRCameraMode>(mode_idx);
+            dev.SetIRMode(mode);
+            prefs.SetWiimoteIRMode(path, mode_idx);
+            prefs.SetWiimoteIRExtendedMode(path, mode != IRCameraMode::Basic); // keep legacy key in sync
         }
         if (snap.ir_extended_mode) {
-            ImGui::SameLine();
             ImGui::TextDisabled("(Nunchuk/Classic/Guitar data frozen while active)");
         }
         return;

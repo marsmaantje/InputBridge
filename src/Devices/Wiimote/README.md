@@ -29,7 +29,7 @@ your own decoded state separate from anything SDL owns.
 | --- | :-: | :-: |
 | Buttons | ✅ | ✅ |
 | Accelerometer | ✅ | ✅ (nominal 0g/1g; see `AccelState` comment for calibrated version) |
-| IR camera (4-point) | ✅ | ✅ basic mode (X/Y only) and extended mode (adds 4-bit dot size) via `WiimoteDevice::SetIRExtendedMode()`. Full mode (bounding box + intensity, needs the interleaved 0x3e/0x3f report pair) still not wired up - `IRMode::Full` constant exists, decoder does not yet. |
+| IR camera (4-point) | ✅ | ✅ basic mode (X/Y only), extended mode (adds 4-bit dot size), and full mode (adds bounding box + intensity, via the interleaved 0x3e/0x3f report pair at half the update rate) via `WiimoteDevice::SetIRMode()`. |
 | Nunchuk | ✅ | ✅ |
 | Classic Controller (+ Pro) | ✅ | ✅ |
 | Guitar Hero Guitar/Drums | ✅ | ⚠️ Frets/strum/whammy/joystick decoded via the Classic-Controller-shaped byte layout, which is how existing OSS drivers do it - **not verified against real hardware**. Drum pad velocities not implemented. |

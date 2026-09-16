@@ -22,9 +22,35 @@ IRState IRBasic(const uint8_t ir[10]);
 
 // Extended-mode IR: 12 bytes -> 4 dots, same X/Y as Basic plus a 4-bit dot
 // size. Only valid while the Wiimote is actually in Extended IR mode
-// (WiimoteDevice::SetIRExtendedMode) - the bytes don't self-identify their
-// mode, so feeding Basic-mode bytes here silently produces garbage sizes.
+// (WiimoteDevice::SetIRMode(IRCameraMode::Extended)) - the bytes don't
+// self-identify their mode, so feeding Basic-mode bytes here silently
+// produces garbage sizes.
 IRState IRExtended(const uint8_t ir[12]);
+
+// Full-mode IR: one dot's worth of the interleaved 0x3e/0x3f report pair (9
+// bytes each, per WiiBrew "Wiimote#0x3e/0x3f: Interleaved Core Buttons and
+// Accelerometer with IR" - two dots per report, four dots total across the
+// pair). Byte layout per dot, WiiBrew "IR Camera#Full Mode":
+//   byte0    = X low 8 bits
+//   byte1    = Y low 8 bits
+//   byte2    = Y-high(7:6) X-high(5:4) size(3:0)  - same nibble order as
+//              Extended mode's packing byte
+//   byte3    = bounding box min X
+//   byte4    = bounding box min Y
+//   byte5    = bounding box max X
+//   byte6    = bounding box max Y
+//   byte7    = unused/reserved
+//   byte8    = intensity
+// An empty slot reads all-1s across byte0/byte1/byte2, matching Extended
+// mode's sentinel. Only valid while the Wiimote is actually in Full IR mode
+// (WiimoteDevice::SetIRMode(IRCameraMode::Full)) - like IRExtended(), these
+// bytes don't self-identify their mode.
+//
+// Each 0x3e/0x3f report carries two of these 9-byte blocks (two objects);
+// callers decode both halves and merge across the interleaved report pair
+// into a single 4-dot IRState. See WiimoteDevice::DecodeInterleavedIR()
+// for how the two reports combine.
+IRDot IRFullDot(const uint8_t nine_bytes[9]);
 
 // Extension payload starting at extension-register offset 0x08 (the EE...EE
 // bytes in reports 0x32/0x34/0x35/0x36/0x37/0x3d). `len` must cover the

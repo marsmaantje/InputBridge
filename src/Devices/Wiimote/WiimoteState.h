@@ -33,13 +33,31 @@ struct AccelState {
 // One tracked IR point. Basic mode gives 10-bit X (0-1023) / Y (0-767); an
 // empty slot reports visible=false. Extended mode (see
 // WiimoteDevice::SetIRExtendedMode) adds a 4-bit dot size but drops all
-// extension data while active - `size` stays 0 otherwise.
+// extension data while active - `size` stays 0 otherwise. Full mode (see
+// WiimoteDevice::SetIRMode / IRCameraMode::Full) additionally reports an
+// 8-bit intensity and the dot's pixel bounding box (min/max corners); those
+// four fields stay 0 outside Full mode.
 struct IRDot {
     bool visible = false;
     uint16_t x = 0, y = 0;
-    uint8_t size = 0; // 0-15, extended mode only
+    uint8_t size = 0; // 0-15, extended and full mode only
+    uint8_t intensity = 0; // 0-255, full mode only - roughly the dot's peak brightness
+    // Pixel-space bounding box of the blob the camera tracked as this dot,
+    // full mode only. Independent of x/y (the reported centroid) - a bright
+    // or elongated source can have a wide box around a centroid that isn't
+    // its midpoint. All zero outside full mode.
+    uint8_t bbox_min_x = 0, bbox_min_y = 0, bbox_max_x = 0, bbox_max_y = 0;
 };
 using IRState = std::array<IRDot, 4>;
+
+// Which IR data format the camera is currently programmed for (see
+// WiimoteDevice::SetIRMode()). Determines which of IRDot's fields are
+// meaningful and which single input report carries IR data:
+//   Basic    -> report 0x37, x/y only
+//   Extended -> report 0x33, x/y + size
+//   Full     -> reports 0x3e+0x3f (interleaved pair), x/y + size + intensity
+//               + bounding box
+enum class IRCameraMode : uint8_t { Basic, Extended, Full };
 
 struct NunchukState {
     bool connected = false;
