@@ -110,10 +110,12 @@ if(ENABLE_WEBSOCKETS)
         endif()
 
         # uSockets
+        # Pinned to the exact commit that uWebSockets v20.80.0 was built/tested against
+        # (see uWebSockets' .gitmodules at that tag), rather than a floating branch.
         FetchContent_Declare(
             usockets_lib
             GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
-            GIT_TAG master
+            GIT_TAG 86097c490263ab662d62e8e7b541390bdec7d149
             GIT_SUBMODULES ""
         )
         FetchContent_GetProperties(usockets_lib)
@@ -122,11 +124,15 @@ if(ENABLE_WEBSOCKETS)
         endif()
 
         # uWebSockets
+        # Pinned to the latest tagged release instead of the floating `master`
+        # branch, so upstream regressions (e.g. the HttpCache.h ODR bug) can't
+        # silently break the build. Bump deliberately when ready.
         FetchContent_Declare(
             uwebsockets_lib
             GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
-            GIT_TAG master
+            GIT_TAG v20.80.0
             GIT_SUBMODULES ""
+            PATCH_COMMAND bash -c "test -f src/HttpCache.h && sed -i 's/^unsigned long time_ms()/inline unsigned long time_ms()/' src/HttpCache.h || true"
         )
         FetchContent_GetProperties(uwebsockets_lib)
         if(NOT uwebsockets_lib_POPULATED)
