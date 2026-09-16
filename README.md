@@ -4,7 +4,7 @@
 
 InputBridge reads joystick, gamepad, steering wheel, and flight stick input and streams it over **OSC** and **WebSocket** to any receiving application. It also accepts haptic commands back - rumble, force feedback, adaptive triggers - and dispatches them to connected devices in real time.
 
-![InputBridge screenshot](docs/0.10.0_InputBridge_device_screen.png)
+![InputBridge screenshot](docs/0.12.0_InputBridge_device_screen_merged.png)
 
 ---
 
