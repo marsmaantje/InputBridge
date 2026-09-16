@@ -31,6 +31,6 @@ generic_stick_horizontal: U+E01D
 generic_stick_left: U+E01E
 generic_stick_press: U+E01F
 generic_stick_right: U+E020
-generic_stick_side: U+E021
-generic_stick_up: U+E022
-generic_stick_vertical: U+E023
+generic_stick_up: U+E021
+generic_stick_vertical: U+E022
+switch_stick_side: U+E023

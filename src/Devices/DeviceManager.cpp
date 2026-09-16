@@ -2,9 +2,12 @@
 #include "DeviceManager.h"
 #include "DeviceFactory.h"
 #include "SensorReader.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 #include "SDL3/SDL_joystick.h"
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
+#include <functional>
 
 static constexpr const char* kTag = "DeviceManager";
 
@@ -29,22 +32,145 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
     SDL_GUID guid = SDL_GetJoystickGUID(joystick);
     char guidStr[33];
     SDL_GUIDToString(guid, guidStr, sizeof(guidStr));
-    return std::string(guidStr);
+    std::string guidString(guidStr);
+
+    // Every WiimoteVirtualBridge joystick of a given kind (Wii Remote vs
+    // Balance Board) is attached with the exact same SDL_VirtualJoystickDesc
+    // (same name, same type, no vendor/product/serial set - see
+    // WiimoteVirtualBridge::Attach()), so SDL synthesizes the identical
+    // SDL_GUID for every one of them. With two+ Wiimotes connected at once,
+    // every caller above that keys off this string (MappingProfileStore,
+    // OutputMapper's HapticTarget, InputBindingListener, ...) would
+    // therefore treat them as the same device, silently colliding onto
+    // whichever one's instance_id happened to be found first. Disambiguate
+    // by folding in the bridge's hid_path, which WiimoteVirtualBridge
+    // already uses as the unique key per physical Wiimote within a session
+    // (see its Find()/Sync()). This only affects Wiimote bridge joysticks -
+    // every other device keeps its plain SDL-synthesized GUID unchanged, so
+    // existing saved profiles for non-Wiimote devices are unaffected.
+    bool is_balance_board = false;
+    if (const std::string* hid_path = InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance()
+            .FindHidPathForJoystick(dev.instance_id, &is_balance_board)) {
+        guidString += "-" + std::to_string(std::hash<std::string>{}(*hid_path));
+    }
+    return guidString;
 }
 
 void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
+    // Wii Remote / Wii Remote Plus / Wii Balance Board are owned exclusively
+    // by WiimoteManager over raw HID (see Devices/Wiimote/README.md) - they
+    // expose IR/extension/Balance-Board data that has no representation in
+    // SDL_Gamepad, so a generic DeviceState for them is actively wrong, not
+    // just redundant.
+    //
+    // Disabling SDL_HINT_JOYSTICK_HIDAPI_WII in Application.cpp does NOT
+    // reliably stop SDL from creating a joystick for these VID/PIDs - that
+    // hint only opts out of SDL's *own* dedicated Wii HIDAPI driver, but
+    // other SDL backends (raw HID gamepad heuristics, platform joystick
+    // subsystems, etc, depending on OS/SDL version) can still pick the
+    // device up and hand it to us as a plain "Gamepad" with none of its
+    // real capabilities decoded. Worse, if we call SDL_OpenJoystick() on it
+    // here (which CreateDevice() below does), that open can win the race
+    // for the underlying HID handle before WiimoteManager::Scan() gets to
+    // it, silently starving the real Wiimote support entirely - which is
+    // exactly the "generic gamepad only, no real Wiimote panel" symptom
+    // this filter fixes.
+    //
+    // VID/PID alone isn't reliable enough to catch this pre-open, in
+    // practice: on at least one real-world Linux setup (CachyOS, Wiimote
+    // over Bluetooth) SDL_GetJoystickVendorForID/ProductForID did NOT match
+    // the expected 057e:0306/0330 for this device, even though the device
+    // is genuinely a Wii Remote (its post-open SDL_GetJoystickName clearly
+    // reads "Nintendo Wii Remote" - that's what ends up in the generic
+    // panel's title when this filter fails to catch it). Root cause not
+    // fully pinned down (likely a Linux joystick-backend quirk where
+    // extended HID identifiers aren't populated until first open, possibly
+    // specific to this BlueZ/hid-wiimote path) - rather than chase the
+    // exact backend behavior, fall back to a name-based check too, since
+    // the name is clearly available pre-open on every backend we've seen
+    // (it's what's rendering in the screenshot that reported this bug).
+    // Excludes "Wii U Pro Controller" deliberately - that's a distinct
+    // device WiimoteManager doesn't implement (see README's gap list), and
+    // works fine through SDL's normal gamepad path.
+    const Uint16 vendor  = SDL_GetJoystickVendorForID(instance_id);
+    const Uint16 product = SDL_GetJoystickProductForID(instance_id);
+    const char  *name    = SDL_GetJoystickNameForID(instance_id);
+
+    const bool vidpid_match = (vendor == InputBridge::Wiimote::kVendorNintendo) &&
+        (product == InputBridge::Wiimote::kProductWiimote ||
+         product == InputBridge::Wiimote::kProductWiimotePlus);
+    const bool name_match = name && (
+        std::strstr(name, "Wii Remote") != nullptr ||
+        std::strstr(name, "RVL-CNT")    != nullptr ||
+        std::strstr(name, "RVL-WBC")    != nullptr);
+    const bool is_wii_u_pro = name && std::strstr(name, "Wii U Pro") != nullptr;
+
+    if ((vidpid_match || name_match) && !is_wii_u_pro) {
+        LOG_INFO(kTag, "Ignoring SDL joystick %d '%s' (vendor=0x%04x product=0x%04x, vidpid_match=%d name_match=%d) - handled by WiimoteManager",
+                  instance_id, name ? name : "(null)", vendor, product, vidpid_match, name_match);
+        // Don't wait for the next periodic ScanWiimotes() tick (up to
+        // kWiimoteScanIntervalMs away) to pick this device up over raw
+        // HID - scan right now, while SDL hasn't opened a joystick/gamepad
+        // handle for it (this filter fired BEFORE CreateDevice() below),
+        // so WiimoteManager gets the earliest possible shot at the node
+        // before anything else has a chance to grab it.
+        ScanWiimotes();
+        m_LastWiimoteScanMs = SDL_GetTicks();
+        return;
+    }
+
     auto result = InputBridge::DeviceFactory::CreateDevice(instance_id);
     if (!result) {
         LOG_ERROR(kTag, "Failed to create device %d", instance_id);
         return;
     }
-    
+
+    // Defense-in-depth: the pre-open filter above depends on SDL_hid/SDL
+    // capability queries that are, in practice, not reliably populated
+    // pre-open on every backend (confirmed on at least one real Linux/
+    // Bluetooth setup, where vendor/product came back wrong for a genuine
+    // Wiimote even though its post-open name was correct). Now that
+    // CreateDevice() has actually opened it, result->state.name comes from
+    // SDL_GetJoystickName() - the same call DeviceFactory already uses and
+    // that reliably returns "Nintendo Wii Remote" etc, per the report that
+    // led to this check. Catch it here too and back the open out, rather
+    // than leaving a wrong DeviceState in place until the next restart.
+    {
+        const std::string &n = result->state.name;
+        const bool post_open_match =
+            (n.find("Wii Remote") != std::string::npos ||
+             n.find("RVL-CNT")    != std::string::npos ||
+             n.find("RVL-WBC")    != std::string::npos) &&
+            n.find("Wii U Pro") == std::string::npos;
+        if (post_open_match) {
+            LOG_INFO(kTag, "Joystick %d ('%s') slipped past the pre-open Wiimote filter - "
+                             "closing it now and leaving it for WiimoteManager", instance_id, n.c_str());
+            // Mirrors CloseAllDevices()'s close order below: a gamepad
+            // handle owns its underlying joystick, so closing the joystick
+            // directly when it was opened via SDL_OpenGamepad (state.gamepad
+            // set) would be wrong - close whichever one was actually opened.
+            if (result->state.gamepad)
+                SDL_CloseGamepad(result->state.gamepad);
+            else if (result->state.joystick)
+                SDL_CloseJoystick(result->state.joystick);
+            // Retry the raw-HID scan now that SDL's own handle on this node
+            // has just been released - WiimoteManager's SDL_hid_open_path()
+            // was very likely failing against that still-open handle until
+            // this exact point, so waiting for the next periodic tick would
+            // just repeat the same failure for up to kWiimoteScanIntervalMs
+            // longer than necessary.
+            ScanWiimotes();
+            m_LastWiimoteScanMs = SDL_GetTicks();
+            return;
+        }
+    }
+
     m_Devices.push_back(std::move(result->state));
     
     // Initialize battery info for the new device
     UpdateBatteryInfo(m_Devices.back());
     
-    // ── Enable all IMU sensors at connect-time ──────────────────────────────
+    // -- Enable all IMU sensors at connect-time ------------------------------
     // SDL3 requires sensors to be enabled before the first read. For a combined
     // Joy-Con pair, SDL_SENSOR_GYRO_L and SDL_SENSOR_ACCEL_L (left Joy-Con)
     // are separate streams from SDL_SENSOR_GYRO_R / SDL_SENSOR_ACCEL_R (right).
@@ -52,16 +178,10 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     // available=false because SDL never starts the left-side sensor pipeline.
     if (m_Devices.back().gamepad)
         SensorReader::EnableAll(m_Devices.back().gamepad);
-    // ── End sensor enable ─────────────────────────────────────────────────── 
+    // -- End sensor enable --------------------------------------------------- 
 
     if (result->haptic) {
         m_HapticDevices[instance_id] = std::move(result->haptic);
-    }
-
-    // When a steering wheel is connected, re-scan for RPM-capable devices via
-    // wheel-rpm-lib so the visualizer can immediately offer LED control.
-    if (SDL_GetJoystickTypeForID(instance_id) == SDL_JOYSTICK_TYPE_WHEEL) {
-        ScanWheelRPMDevices();
     }
 }
 
@@ -94,16 +214,13 @@ void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
         m_Devices.erase(it, m_Devices.end());
     }
 
-    // If no steering wheels remain, clear the RPM device list.
+    // If no steering wheels remain, clear the device list.
     bool anyWheelLeft = false;
     for (const auto& dev : m_Devices) {
         if (SDL_GetJoystickTypeForID(dev.instance_id) == SDL_JOYSTICK_TYPE_WHEEL) {
             anyWheelLeft = true;
             break;
         }
-    }
-    if (!anyWheelLeft) {
-        m_WheelRPMDevices.clear();
     }
 }
 
@@ -115,9 +232,19 @@ void DeviceManager::CloseAllDevices() {
         }
     }
     m_HapticDevices.clear();
-    
-    // Release wheel RPM devices
-    m_WheelRPMDevices.clear();
+
+    // Note: bridge virtual joysticks are deliberately NOT explicitly
+    // detached here. VirtualDeviceManager's own virtual joysticks (see
+    // VirtualDeviceManager.cpp) follow the same pattern - neither is torn
+    // down proactively on shutdown; both rely on the m_Devices bulk-close
+    // loop below plus SDL_Quit() at process exit. Calling
+    // SDL_DetachVirtualJoystick() here, immediately before that loop closes
+    // the same handle via SDL_CloseGamepad/SDL_CloseJoystick, would risk a
+    // double-close/use-after-detach with no precedent elsewhere in this
+    // codebase to confirm it's safe.
+
+    // Release Wiimotes (each destructor closes its HID handle)
+    m_Wiimotes.clear();
 
     // Now close SDL devices
     for (auto &dev : m_Devices) {
@@ -127,6 +254,59 @@ void DeviceManager::CloseAllDevices() {
             SDL_CloseJoystick(dev.joystick);
     }
     m_Devices.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero
+// ---------------------------------------------------------------------------
+
+void DeviceManager::ScanWiimotes() {
+    // Prune stale entries FIRST, so a since-vanished path frees up before we
+    // build the "don't touch these" list below - otherwise a genuinely
+    // reconnected device (same path, new physical pairing) could be kept
+    // out of Scan() by its own stale ghost entry until the next cycle.
+    constexpr Uint64 kStaleTimeoutMs = 5000;
+    const Uint64 now = SDL_GetTicks();
+    auto stale_it = std::remove_if(m_Wiimotes.begin(), m_Wiimotes.end(), [&](const auto &dev) {
+        const auto &snap = dev->Snapshot();
+        return snap.last_report_ms != 0 && (now - snap.last_report_ms) > kStaleTimeoutMs;
+    });
+    if (stale_it != m_Wiimotes.end()) {
+        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(stale_it, m_Wiimotes.end()));
+        m_Wiimotes.erase(stale_it, m_Wiimotes.end());
+    }
+
+    // Tell Scan() which HID paths we already have open, so it never opens a
+    // second concurrent handle to a device we're already tracking - see the
+    // hazard documented on WiimoteManager::Scan() (races Init() against
+    // itself on the same physical device, which is the kind of thing that
+    // can crash rather than just misbehave on some Bluetooth HID stacks).
+    std::vector<std::string> already_open;
+    already_open.reserve(m_Wiimotes.size());
+    for (auto &dev : m_Wiimotes) already_open.push_back(dev->Snapshot().hid_path);
+
+    auto found = InputBridge::Wiimote::WiimoteManager::Scan(already_open);
+    for (auto &dev : found) {
+        LOG_INFO(kTag, "Wiimote found: %s", dev->Snapshot().hid_path.c_str());
+        m_Wiimotes.push_back(std::move(dev));
+    }
+}
+
+const std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>>&
+DeviceManager::GetWiimotes() const {
+    return m_Wiimotes;
+}
+
+InputBridge::Wiimote::WiimoteDevice* DeviceManager::GetWiimoteForBridgeJoystick(SDL_JoystickID instance_id) const {
+    bool is_balance_board = false;
+    const std::string *hid_path = InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance()
+        .FindHidPathForJoystick(instance_id, &is_balance_board);
+    if (!hid_path || is_balance_board) return nullptr; // no bridge entry, or a Balance Board (no rumble motor)
+
+    for (const auto &dev : m_Wiimotes) {
+        if (dev->Snapshot().hid_path == *hid_path) return dev.get();
+    }
+    return nullptr;
 }
 
 void DeviceManager::Update(bool isMinimized) {
@@ -147,21 +327,30 @@ void DeviceManager::Update(bool isMinimized) {
         }
         lastBatteryUpdate = now;
     }
-}
 
-// ---------------------------------------------------------------------------
-// wheel-rpm-lib integration
-// ---------------------------------------------------------------------------
+    // -- Wiimote polling --------------------------------------------------
+    // Unlike SDL_Joystick devices, Wiimotes pair over Bluetooth outside
+    // SDL's own joystick hotplug events, so we periodically re-scan for new
+    // ones rather than relying solely on HandleDeviceAdded(). Every tracked
+    // device gets drained every frame (each Poll() is a cheap no-op when
+    // nothing is pending, since the underlying handle is non-blocking).
+    if (m_LastWiimoteScanMs == 0 || now - m_LastWiimoteScanMs > kWiimoteScanIntervalMs) {
+        ScanWiimotes();
+        m_LastWiimoteScanMs = now;
+    }
+    for (auto &dev : m_Wiimotes) {
+        dev->Poll();
+    }
 
-void DeviceManager::ScanWheelRPMDevices() {
-    m_WheelRPMDevices = wheel::WheelManager::scan();
-    LOG_INFO(kTag, "WheelRPM scan complete: %zu device(s) found",
-            m_WheelRPMDevices.size());
-}
-
-const std::vector<std::unique_ptr<wheel::Wheel>>&
-DeviceManager::GetWheelRPMDevices() const {
-    return m_WheelRPMDevices;
+    // Bridge each Wiimote into a real (virtual) SDL_Joystick so InputMapper
+    // can address it - see Devices/Wiimote/WiimoteVirtualBridge.h for why
+    // this exists instead of teaching the mapping system a second device
+    // type. Sync() first so a just-connected Wiimote's bridge joystick
+    // exists before PushAllStates() writes into it; PushAllStates() after
+    // Poll() above so it reflects this frame's freshest decoded data.
+    InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().Sync(m_Wiimotes);
+    InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().PushAllStates(m_Wiimotes);
+    // -- End Wiimote polling ----------------------------------------------
 }
 
 HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
@@ -214,7 +403,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             }
         }
 
-        // ── Left Joy-Con battery (combined pair only) ─────────────────────
+        // -- Left Joy-Con battery (combined pair only) ---------------------
         // When two Joy-Cons are merged into one virtual gamepad, SDL exposes
         // SDL_SENSOR_GYRO_L on the combined handle.  In that case we find the
         // left Joy-Con's physical joystick by scanning all connected joystick
@@ -258,7 +447,7 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
             dev.battery_state_L   = SDL_POWERSTATE_UNKNOWN;
             dev.battery_percent_L = -1;
         }
-        // ── End Left Joy-Con battery ──────────────────────────────────────
+        // -- End Left Joy-Con battery --------------------------------------
     } else if (dev.joystick) {
         int percent = 0;
         dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);

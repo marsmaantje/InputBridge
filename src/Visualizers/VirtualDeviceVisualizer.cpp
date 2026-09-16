@@ -1,5 +1,6 @@
 #include "VirtualDeviceVisualizer.h"
 #include "imgui.h"
+#include "UI/EditableSlider.h"
 #include <SDL3/SDL.h>
 
 // Hat direction names and SDL_HAT_* constant pairs.
@@ -9,10 +10,10 @@ static const struct { const char* label; Uint8 mask; } kHatDirs[] = {
     { "DL", SDL_HAT_LEFTDOWN }, { "D",  SDL_HAT_DOWN  }, { "DR", SDL_HAT_RIGHTDOWN },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Hat widget - a 3x3 grid of buttons for 8 directions + centred.
 // Returns true if the hat value changed.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 static bool DrawHatWidget(Uint8& hat) {
     bool changed = false;
     const float  btnSz  = ImGui::GetFontSize() * 2.0f;
@@ -41,9 +42,9 @@ static bool DrawHatWidget(Uint8& hat) {
     return changed;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Main draw function
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
     auto& mgr   = VirtualDeviceManager::GetInstance();
     auto* state = mgr.GetState(dev.instance_id);
@@ -55,7 +56,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
 
     bool dirty = false;
 
-    // ── Axes ─────────────────────────────────────────────────────────────────
+    // -- Axes -----------------------------------------------------------------
     if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {
 
         const float labelColW = ImGui::CalcTextSize("R Trigger").x + 8.0f;
@@ -74,7 +75,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
 
             // Slider
             ImGui::SetNextItemWidth(sliderW > 50.0f ? sliderW : 50.0f);
-            if (ImGui::SliderFloat("##ax", &state->axes[i], -1.0f, 1.0f, "%.3f"))
+            if (UI::SliderFloat("##ax", &state->axes[i], -1.0f, 1.0f, "%.3f"))
                 dirty = true;
 
             // Reset button
@@ -91,7 +92,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
         ImGui::PopID(); // "axes"
     }
 
-    // ── Buttons ──────────────────────────────────────────────────────────────
+    // -- Buttons --------------------------------------------------------------
     if (ImGui::CollapsingHeader("Buttons", ImGuiTreeNodeFlags_DefaultOpen)) {
 
         const float btnSz   = ImGui::GetFontSize() * 2.8f;
@@ -133,7 +134,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
         }
     }
 
-    // ── Hat ──────────────────────────────────────────────────────────────────
+    // -- Hat ------------------------------------------------------------------
     if (ImGui::CollapsingHeader("Hat / D-Pad", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("Hat direction:");
         ImGui::SameLine();
@@ -150,7 +151,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
         ImGui::PopID(); // "hat"
     }
 
-    // ── Reset all ────────────────────────────────────────────────────────────
+    // -- Reset all ------------------------------------------------------------
     ImGui::Spacing();
     ImGui::Separator();
     if (ImGui::Button("Reset All Inputs")) {
@@ -163,7 +164,7 @@ void VirtualDeviceVisualizer::Draw(const DeviceState& dev) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Reset all axes to centre, release all buttons");
 
-    // ── Push to SDL ──────────────────────────────────────────────────────────
+    // -- Push to SDL ----------------------------------------------------------
     // Always push every frame so that the InputMapper sees current values even
     // if only the SDL event loop has changed (e.g. on first display).
     mgr.PushState(dev.instance_id);

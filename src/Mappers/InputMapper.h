@@ -1,6 +1,6 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // InputMapper provides the central interface for the input-mapping system.
 //
 // Features:
@@ -14,7 +14,7 @@
 //
 // InputExclusiveMode / device-hide functionality is managed by
 // DeviceManager, not InputMapper.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include "InputMapping/InputBindingListener.h"
 #include "InputMapping/InputMapperUI.h"

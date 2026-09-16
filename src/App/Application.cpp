@@ -18,6 +18,7 @@
 #include "Protocols/OSCProtocol.h"
 #include "Protocols/ProtocolManager.h"
 #include "Protocols/ProtocolRegistry.h"
+#include "UI/EditableSlider.h"
 #include "UI/FontManager.h"
 #include "UI/SidebarLayout.h"
 #include "UI/ThemeManager.h"
@@ -36,7 +37,7 @@
 
 static constexpr const char* kTag = "Application";
 
-// ── RegisterProtocols ─────────────────────────────────────────────────────────
+// -- RegisterProtocols ---------------------------------------------------------
 
 void Application::RegisterProtocols()
 {
@@ -48,7 +49,7 @@ void Application::RegisterProtocols()
 #endif
 }
 
-// ── SetSDLHints ───────────────────────────────────────────────────────────────
+// -- SetSDLHints ---------------------------------------------------------------
 
 void Application::SetSDLHints()
 {
@@ -58,10 +59,29 @@ void Application::SetSDLHints()
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI,                  "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS,        "1");
 
-    // ── Nintendo Switch / Joy-Con ────────────────────────────────────────────
+    // -- Nintendo Switch / Joy-Con --------------------------------------------
     // Enable the HIDAPI driver so gyro, accel, and rumble are accessible on
     // Switch Pro Controllers and Joy-Cons.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
+
+    // -- Nintendo Wii / Wii U -------------------------------------------------
+    // Deliberately left OFF (was "1"). Wii Remote / Wii Remote Plus / Wii
+    // Balance Board are now driven directly over raw HID by
+    // Devices/Wiimote/WiimoteManager, which exposes buttons, accelerometer,
+    // IR camera, Nunchuk, Classic Controller, Guitar Hero, and Balance Board
+    // weight data - none of which fit through SDL_Gamepad's generic
+    // abstraction. Leaving this hint on would race WiimoteManager for the
+    // same HID handle (whichever opens first wins; the other gets nothing).
+    //
+    // Trade-off: if a bare Wii U Pro Controller (not a Wiimote) is ever
+    // plugged in, it will also stop being claimed by SDL's HIDAPI Wii
+    // driver and currently isn't handled by WiimoteManager either (its
+    // report format differs from a Wiimote's and isn't implemented yet
+    // Re-enable this hint and special-case
+    // Wiimote-only PIDs in WiimoteManager::Scan() if Wii U Pro Controller
+    // support turns out to matter.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "0");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII_PLAYER_LED, "0");
 
     // When a Left and Right Joy-Con are both connected, merge them into a
     // single virtual gamepad.  In merged mode SDL exposes SDL_SENSOR_GYRO_L
@@ -71,14 +91,27 @@ void Application::SetSDLHints()
     // IMU independently.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_COMBINE_JOY_CONS, "1");
 
-    // ── PlayStation ──────────────────────────────────────────────────────────
+    // -- PlayStation ----------------------------------------------------------
     // Enable HIDAPI for DualShock 4 and DualSense so touchpad, gyro, and accel
     // are available even when connected over USB without Steam Input.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
+
+    // -- Xbox -----------------------------------------------------------------
+    // Without this, SDL may open Xbox controllers through the platform-native
+    // backend (e.g. XInput on Windows) instead of SDL's own HIDAPI Xbox
+    // driver. XboxController::SetImpulseTriggers() delegates to
+    // SDL_RumbleJoystickTriggers(), which only the HIDAPI Xbox driver
+    // implements - on the XInput backend it returns false (SDL_Unsupported),
+    // so impulse triggers never actually move, but at least SetImpulseTriggers()
+    // now surfaces that as a real failure instead of reporting success.
+    // SDL_GetRealGamepadTypeForID() (used for Xbox controller detection - see
+    // XboxController::IsXboxController()) is unaffected by this hint either
+    // way, since it doesn't depend on which backend opened the device.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_XBOX, "1");
 }
 
-// ── CreateWindow ─────────────────────────────────────────────────────────────
+// -- CreateWindow -------------------------------------------------------------
 
 bool Application::CreateAppWindow()
 {
@@ -105,7 +138,7 @@ bool Application::CreateAppWindow()
     return true;
 }
 
-// ── SetupImGui ────────────────────────────────────────────────────────────────
+// -- SetupImGui ----------------------------------------------------------------
 
 void Application::SetupImGui()
 {
@@ -128,7 +161,7 @@ void Application::SetupImGui()
     ImGui_ImplSDLRenderer3_Init(m_renderer);
 }
 
-// ── InitialDeviceScan ────────────────────────────────────────────────────────
+// -- InitialDeviceScan --------------------------------------------------------
 
 void Application::InitialDeviceScan()
 {
@@ -142,7 +175,7 @@ void Application::InitialDeviceScan()
     }
 }
 
-// ── MigrateUserData ───────────────────────────────────────────────────────────
+// -- MigrateUserData -----------------------------------------------------------
 //
 // Versions of InputBridge prior to the XDG path migration stored all user data
 // under the SDL pref path, which on Linux resolves to the double-nested:
@@ -180,7 +213,7 @@ void Application::MigrateUserData()
     const fs::path newConfig = XdgDirs::configDir(); // ~/.config/InputBridge/
     const fs::path newData   = XdgDirs::dataDir();   // ~/.local/share/InputBridge/
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // -- Helpers ---------------------------------------------------------------
 
     // Copy a single file src → dst.  A missing source or pre-existing
     // destination are both silent no-ops (returns false, not an error).
@@ -219,12 +252,12 @@ void Application::MigrateUserData()
         return count;
     };
 
-    // ── Config files (root of old SDL pref dir) ───────────────────────────────
+    // -- Config files (root of old SDL pref dir) -------------------------------
     int total = 0;
     total += migrateFile(oldRoot / "visualizer_prefs.toml", newConfig / "visualizer_prefs.toml") ? 1 : 0;
     total += migrateFile(oldRoot / "imgui.ini",             newConfig / "imgui.ini")             ? 1 : 0;
 
-    // ── Data directories ──────────────────────────────────────────────────────
+    // -- Data directories ------------------------------------------------------
     total += migrateDir(oldRoot / "mappings",  newData / "mappings");
     total += migrateDir(oldRoot / "protocols", newData / "protocols");
 
@@ -237,7 +270,7 @@ void Application::MigrateUserData()
 #endif
 }
 
-// ── RestorePreferences ────────────────────────────────────────────────────────
+// -- RestorePreferences --------------------------------------------------------
 
 void Application::RestorePreferences()
 {
@@ -247,6 +280,8 @@ void Application::RestorePreferences()
     m_fontScale       = m_prefs.GetFloat(PrefKeys::FontScale,         1.0f);
     m_scaleWithWindow = m_prefs.GetBool(PrefKeys::ScaleWithWindow,    false);
     m_showNamedInputs = m_prefs.GetBool("ShowNamedInputs",           false);
+    m_showSliderEditButtons = m_prefs.GetBool("ShowSliderEditButtons", true);
+    UI::SetSliderEditButtonsEnabled(m_showSliderEditButtons);
     m_serverUpdateRate  = m_prefs.GetInt(PrefKeys::NetworkSection, PrefKeys::UpdateRate, 60);
     m_serverDynamicRate = m_prefs.GetBool(PrefKeys::NetworkSection, PrefKeys::DynamicRate, false);
 
@@ -286,7 +321,7 @@ void Application::RestorePreferences()
     WebSocketServer::GetInstance().LoadConfig(m_prefs);
 }
 
-// ── Init ─────────────────────────────────────────────────────────────────────
+// -- Init ---------------------------------------------------------------------
 
 bool Application::Init()
 {
@@ -311,7 +346,7 @@ bool Application::Init()
     return true;
 }
 
-// ── ProcessEvents ─────────────────────────────────────────────────────────────
+// -- ProcessEvents -------------------------------------------------------------
 
 void Application::ProcessEvents()
 {
@@ -387,7 +422,7 @@ void Application::ProcessEvents()
     }
 }
 
-// ── UpdateLogic ───────────────────────────────────────────────────────────────
+// -- UpdateLogic ---------------------------------------------------------------
 
 void Application::UpdateLogic(Uint64 frame_start_time)
 {
@@ -476,7 +511,7 @@ void Application::UpdateLogic(Uint64 frame_start_time)
     }
 }
 
-// ── RenderFrame ───────────────────────────────────────────────────────────────
+// -- RenderFrame ---------------------------------------------------------------
 
 void Application::RenderFrame(Uint64 frame_start_time)
 {
@@ -507,11 +542,12 @@ void Application::RenderFrame(Uint64 frame_start_time)
         k_InitialWidth,
         k_InitialHeight,
         m_running,
-        m_showNamedInputs
+        m_showNamedInputs,
+        m_showSliderEditButtons
     };
     DrawSidebarLayout(ctx);
 
-    // ── SDL render ────────────────────────────────────────────────────────
+    // -- SDL render --------------------------------------------------------
     ImGui::Render();
 
     int w = 0, h = 0, bbw = 0, bbh = 0;
@@ -536,7 +572,7 @@ void Application::RenderFrame(Uint64 frame_start_time)
     }
 }
 
-// ── Run ───────────────────────────────────────────────────────────────────────
+// -- Run -----------------------------------------------------------------------
 
 void Application::Run()
 {
@@ -548,25 +584,25 @@ void Application::Run()
     }
 }
 
-// ── Shutdown ──────────────────────────────────────────────────────────────────
+// -- Shutdown ------------------------------------------------------------------
 
 void Application::Shutdown()
 {
-    // ── Release all protocol instances first ──────────────────────────────────
+    // -- Release all protocol instances first ----------------------------------
     // ProtocolManager is a static singleton constructed before OSCServer, so it
     // would be destroyed AFTER OSCServer during normal static teardown.
     // Protocol destructors (e.g. OSCProtocol::~OSCProtocol) call back into
     // OSCServer::GetInstance(), which would be a use-after-destruction crash.
-    // Clearing the protocol map now - while all singletons are still alive -
+    // Clearing the protocol map now, while all singletons are still alive
     // prevents that entire class of ordering bugs.
     ProtocolManager::GetInstance().Clear();
 
-    // ── Stop network servers BEFORE destroying mappers ────────────────────────
+    // -- Stop network servers BEFORE destroying mappers ------------------------
     // Both OSCServer::Stop() and WebSocketServer::Stop() call
     // m_OutputMapper->StopAllHapticEffects() synchronously via their stored raw
-    // pointer.  If OutputMapper::Shutdown() runs first it frees the OutputMapper
+    // pointer. If OutputMapper::Shutdown() runs first it frees the OutputMapper
     // object, turning those calls into use-after-free crashes (segfault at
-    // OutputMapper.cpp StopAllHapticEffects).  Stopping the servers here -
+    // OutputMapper.cpp StopAllHapticEffects). Stopping the servers here
     // while OutputMapper is still alive - prevents that entirely.
     OSCServer::GetInstance().SaveConfig(m_prefs);
     WebSocketServer::GetInstance().SaveConfig(m_prefs);
@@ -574,7 +610,7 @@ void Application::Shutdown()
     WebSocketServer::GetInstance().Stop();
 
     // Wait for the OSC liblo cleanup thread and the uWS event-loop thread to
-    // fully exit before OutputMapper is destroyed.  Both Stop() calls above
+    // fully exit before OutputMapper is destroyed. Both Stop() calls above
     // return immediately and move their blocking teardown to background threads;
     // those threads hold raw OutputMapper* pointers and can still invoke
     // callbacks (e.g. StopAllHapticEffects) until they have fully terminated.

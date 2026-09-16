@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Devices/DeviceState.h"
+#include "Devices/Wiimote/WiimoteDevice.h"
 
 class DeviceManager;
 class PreferencesManager;
@@ -23,3 +24,10 @@ void DrawDeviceItem(DeviceState&        dev,
                     DeviceManager&      deviceManager,
                     PreferencesManager& prefs,
                     bool                show_named_inputs);
+
+/// Draws a collapsible header for one connected Wiimote / Balance Board /
+/// Nunchuk / Classic Controller / Guitar Hero, driven by the raw-HID
+/// WiimoteDevice snapshot (see Devices/Wiimote/README.md). These are not
+/// SDL_Joystick-backed and so are not part of DeviceManager::GetDevices() -
+/// call this in its own loop over DeviceManager::GetWiimotes().
+void DrawWiimoteItem(InputBridge::Wiimote::WiimoteDevice& dev, PreferencesManager& prefs, int index);

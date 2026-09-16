@@ -115,20 +115,12 @@ bool GamepadHaptics::IsDualSense() const {
 }
 
 bool GamepadHaptics::IsXboxController() const {
-    const Uint16 vendor = SDL_GetJoystickVendor(m_joystick);
-
-    if (vendor != 0x045E) {  // Microsoft
-        return false;
-    }
-
-    const Uint16 product = SDL_GetJoystickProduct(m_joystick);
-
-    // Known Xbox controllers with impulse triggers
-    return (product == 0x02D1 ||  // Xbox One
-            product == 0x02EA ||  // Xbox One S
-            product == 0x02E3 ||  // Xbox One Elite
-            product == 0x0B00 ||  // Xbox One Elite 2
-            product == 0x0B13);   // Xbox Series X|S
+    // Detection lives solely in XboxController - delegate to its static
+    // check rather than keeping a second, separately-maintained copy of the
+    // vendor/product ID list here. (That duplication previously drifted:
+    // this copy was missing the wired/BLE Series X|S product IDs that
+    // XboxController's own list had already been updated with.)
+    return XboxController::IsXboxController(m_joystick);
 }
 
 bool GamepadHaptics::IsSteamController() const {
@@ -206,7 +198,7 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
 
     RunAsync([this, slot, largeMagnitude, smallMagnitude, durationMs]() {
 
-        // ── Steam Controller V1 path (D0G, PIDs 0x1102 / 0x1106) ─────────────
+        // -- Steam Controller V1 path (D0G, PIDs 0x1102 / 0x1106) -------------
         // V1 has no rumble motors; SDL_RumbleGamepad does nothing on it.
         // Haptic feedback requires vendor HID reports to the trackpad actuators.
         //
@@ -233,7 +225,7 @@ int GamepadHaptics::PlayRumble(int slot, float largeMagnitude, float smallMagnit
             return;
         }
 
-        // ── Standard SDL path (all other gamepads, including Steam Controller V2) ─
+        // -- Standard SDL path (all other gamepads, including Steam Controller V2) -
         if (m_gamepad) {
             const Uint16 lowFreq  = static_cast<Uint16>(largeMagnitude * 0xFFFF);
             const Uint16 highFreq = static_cast<Uint16>(smallMagnitude * 0xFFFF);

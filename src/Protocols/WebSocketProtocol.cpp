@@ -215,16 +215,6 @@ bool WebSocketProtocol::parse(const std::string &message) {
                 int value = params.at("value");
                 OutputMapper::GetInstance().QueueSetGain(0, value);
             }
-        } else if (type == "wheel" && effect == "led_rpm" &&
-                   m_version == ProtocolVersion::MarsmaantjeNew) {
-            // RPM LED meter (MarsmaantjeNew only for now)
-            // {"type":"wheel","effect":"led_rpm","params":{"value":0.75}}
-            float rpm_percent = params.value("value", 0.0f);
-            if (rpm_percent < 0.0f) rpm_percent = 0.0f;
-            if (rpm_percent > 1.0f) rpm_percent = 1.0f;
-            for (const auto& w : DeviceManager::GetInstance().GetWheelRPMDevices()) {
-                w->setRPM(rpm_percent);
-            }
         }
         handled = true;
     } catch (const json::exception &e) {

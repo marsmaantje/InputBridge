@@ -43,6 +43,9 @@ struct SidebarContext {
 
     // Generic visualizer option persisted in Settings
     bool& show_named_inputs;
+
+    // Whether the pen "manual entry" button is drawn next to sliders app-wide
+    bool& show_slider_edit_buttons;
 };
 
 /// Renders the full sidebar navigation panel and the right-hand content area.

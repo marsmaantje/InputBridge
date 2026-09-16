@@ -9,6 +9,21 @@ finish-args:
     - --device=all
     - --share=network
     - --share=ipc
+    # Wiimote/Balance Board udev permission rule support (see
+    # packaging/linux/README.md and Devices/Wiimote/Linux/*):
+    # - Bind-mounts the HOST's real /etc/udev/rules.d through at the same
+    #   path, instead of the sandbox's own private copy, so
+    #   WiimoteLinuxDiagnostics's "Check for common issues" can actually see
+    #   a rule installed from outside the sandbox (or one installed via the
+    #   flatpak-spawn path below), and so a rule installed from in here
+    #   lands somewhere the host's udevd will actually read. ":create" lets
+    #   the in-app installer create the file if it isn't there yet.
+    - --filesystem=/etc/udev/rules.d:create
+    # - pkexec can't reach the host's PolicyKit authority from inside the
+    #   sandbox, so the in-app installer shells out via `flatpak-spawn
+    #   --host pkexec ...` instead (see LinuxUdevInstaller::RunScript).
+    #   That requires talk access to the Flatpak session-bus service.
+    - --talk-name=org.freedesktop.Flatpak
 modules:
     - name: InputBridge
       buildsystem: cmake-ninja

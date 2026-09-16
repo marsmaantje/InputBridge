@@ -1,5 +1,6 @@
 #include "GenericVisualizer.h"
 #include "UI/InputLabelProvider.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
@@ -65,7 +66,7 @@ void DrawInlineIcon(const DeviceIcon& icon)
     ImGui::GetWindowDrawList()->AddText(
         icon.font, renderSize, ImVec2(iconX, iconY),
         ImGui::GetColorU32(ImGuiCol_Text),
-        icon.glyph);
+        icon.glyph());
 }
 
 // Draws the progress bar + center tick for one axis row in whichever is the
@@ -97,7 +98,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
 
     ImGui::Text("Name: %s", SDL_GetJoystickName(dev.joystick));
 
-    // ── Axes ─────────────────────────────────────────────────────────────
+    // -- Axes -------------------------------------------------------------
     if (ImGui::CollapsingHeader("Axes", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (m_showLabels) {
             // Size the label column from real text metrics so values are never
@@ -161,7 +162,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
         }
     }
 
-    // ── Buttons ──────────────────────────────────────────────────────────
+    // -- Buttons ----------------------------------------------------------
     if (ImGui::CollapsingHeader("Buttons", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (m_showLabels) {
             // Named mode: icons flow inline just like the numbered compact
@@ -171,19 +172,38 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
             const float availW      = ImGui::GetContentRegionAvail().x;
             const float cellSize    = ImGui::GetTextLineHeight(); // minimum slot width
 
+            // Cumulative width used on the current row.
+            float rowUsedW = 0.0f;
+
+            // Tracks how many buttons have actually been drawn so far, so
+            // the wrap/SameLine decision below (which used to key off the
+            // raw loop index i) stays correct once some indices are skipped.
+            int drawnCount = 0;
+
             for (int i = 0; i < dev.num_buttons; ++i) {
+                // The Classic Controller's D-Pad is also exposed as a hat
+                // (Hat_ClassicDPad, shown in the Hats section below), so
+                // showing it again here as icons/text is redundant - see
+                // ShouldSkipButtonInButtonsSection for the shared, tested
+                // predicate.
+                if (InputBridge::Wiimote::ShouldSkipButtonInButtonsSection(dev.name, i)) {
+                    continue;
+                }
+
                 const bool pressed = SDL_GetJoystickButton(dev.joystick, i) != 0;
                 InputLabel lbl     = InputLabelProvider::GetButtonLabel(dev, i);
 
-                // ── Per-glyph size probe ──────────────────────────────────
+                // -- Per-glyph / fallback-text size probe -------------------
                 // We must know the slot width *before* the wrap/SameLine
-                // decision, so probe the glyph metrics up front and reuse
-                // the results when drawing.
+                // decision, so probe the glyph metrics (or, if there's no
+                // glyph, the fallback text's rendered width) up front and
+                // reuse the results when drawing.
                 const float textH    = ImGui::GetTextLineHeight();
                 const float bakeSize = ImGui::GetStyle().FontSizeBase * 4.0f;
                 float renderSize     = textH;
                 float y0_scaled      = 0.0f;
                 float glyphH_scaled  = textH;
+                float fallbackTextW  = 0.0f;
 
                 if (lbl.icon.IsValid()) {
                     if (ImFontBaked* baked = lbl.icon.font->GetFontBaked(bakeSize)) {
@@ -198,30 +218,45 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                             }
                         }
                     }
+                } else {
+                    // No font glyph for this button (e.g. several Wii Remote
+                    // buttons - "Home", "ZL", "ZR", "Two", etc. - fall back to
+                    // printing lbl.name as plain text below). The wrap check
+                    // was still sizing this slot from the icon-cell default
+                    // (~textH, a roughly square cell) rather than the text
+                    // that's actually about to be drawn, so a multi-character
+                    // label was assumed to fit when it didn't, stayed on the
+                    // same line via SameLine(), and clipped off the edge of
+                    // the panel instead of wrapping to a new line.
+                    fallbackTextW = ImGui::CalcTextSize(lbl.name.c_str()).x;
                 }
 
-                // The slot must be at least as wide as the glyph we will draw.
-                // Using a fixed cellSize (= textH) was the bug: glyphs with a
-                // low fill ratio get a large renderSize and bleed into the next
-                // slot when only textH of Dummy space was reserved.
-                const float slotSizeActual = std::max(renderSize, cellSize);
+                // The slot must be at least as wide as whatever we're about
+                // to draw: the glyph, or - when there's no glyph - the
+                // fallback text label. Using a fixed cellSize (= textH) was
+                // the original bug: glyphs with a low fill ratio get a large
+                // renderSize and bleed into the next slot when only textH of
+                // Dummy space was reserved, and text fallbacks wider than
+                // textH (almost all of them) weren't accounted for at all.
+                const float slotSizeActual = std::max({renderSize, cellSize, fallbackTextW});
                 const float slotW          = slotSizeActual + itemSpacing;
 
-                // ── Wrap / SameLine ───────────────────────────────────────
-                if (i > 0) {
-                    float curX = ImGui::GetCursorScreenPos().x
-                                 - ImGui::GetWindowPos().x
-                                 - ImGui::GetScrollX();
-                    if (curX + slotW <= availW)
-                        ImGui::SameLine(0.0f, itemSpacing);
+                // -- Wrap / SameLine ---------------------------------------
+                if (drawnCount > 0 && rowUsedW + slotW <= availW) {
+                    ImGui::SameLine(0.0f, itemSpacing);
+                    rowUsedW += slotW;
+                } else {
+                    // Starts a new row (or is the very first drawn item).
+                    rowUsedW = slotSizeActual;
                 }
+                ++drawnCount;
 
                 // Choose tint: bright green when pressed, dim when released.
                 const ImVec4 tint = pressed
                     ? ImVec4(0.2f, 1.0f, 0.2f, 1.0f)
                     : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
-                // ── Draw ─────────────────────────────────────────────────
+                // -- Draw -------------------------------------------------
                 if (lbl.icon.IsValid()) {
                     const ImVec2 cursor = ImGui::GetCursorScreenPos();
                     const float  iconX  = cursor.x + (slotSizeActual - renderSize) * 0.5f;
@@ -236,7 +271,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
                     ImGui::GetWindowDrawList()->AddText(
                         lbl.icon.font, renderSize, ImVec2(iconX, iconY),
                         ImGui::GetColorU32(tint),
-                        lbl.icon.glyph);
+                        lbl.icon.glyph());
                 } else {
                     // No icon - fall back to the short button name.
                     ImGui::TextColored(tint, "%s", lbl.name.c_str());
@@ -256,7 +291,7 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
         }
     }
 
-    // ── Hats ─────────────────────────────────────────────────────────────
+    // -- Hats -------------------------------------------------------------
     if (ImGui::CollapsingHeader("Hats", ImGuiTreeNodeFlags_DefaultOpen)) {
         for (int i = 0; i < dev.num_hats; ++i) {
             Uint8       hat = SDL_GetJoystickHat(dev.joystick, i);
@@ -272,6 +307,13 @@ void GenericVisualizer::Draw(const DeviceState &dev, bool m_showLabels) {
 
             if (m_showLabels) {
                 InputLabel lbl = InputLabelProvider::GetHatLabel(dev, i, hat);
+
+                // GetHatLabel() already resolves to a single icon that
+                // matches the held direction - for the Wii font that's one
+                // of the distinct per-direction held/outline glyph pairs
+                // (KENNEY_WII_DPAD_{UP,DOWN,LEFT,RIGHT}_CP, each visually
+                // distinct from the others, with KENNEY_WII_DPAD_NONE_CP
+                // for the centered/idle state), so just draw it directly.
                 DrawInlineIcon(lbl.icon);
                 ImGui::SameLine(0.0f, 4.0f);
                 ImGui::Text("%s: %s (%d)", lbl.name.c_str(), dir, hat);

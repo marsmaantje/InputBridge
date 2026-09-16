@@ -25,4 +25,5 @@ void DrawSettingsContent(float&              user_ui_scale,
                          bool&               disable_gamepad_nav,
                          bool&               disable_keyboard_nav,
                          class DeviceManager& deviceManager,
-                         bool&               show_named_inputs);
+                         bool&               show_named_inputs,
+                         bool&               show_slider_edit_buttons);

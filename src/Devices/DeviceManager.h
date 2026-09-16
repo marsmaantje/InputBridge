@@ -7,7 +7,7 @@
 #include <map>
 
 #include "Haptics/HapticDevice.h"
-#include "wheel/wheel_manager.hpp"
+#include "Devices/Wiimote/WiimoteManager.h"
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
 #include "ExclusiveMode/InputExclusiveMode.h"
@@ -35,11 +35,26 @@ class DeviceManager {
 
     void UpdateBatteryInfo(DeviceState& dev);
 
-    // ── Wheel RPM ────────────────────────────────────────────────────────────
-    void ScanWheelRPMDevices();
-    const std::vector<std::unique_ptr<wheel::Wheel>>& GetWheelRPMDevices() const;
+    // -- Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero --
+    // Driven directly over raw HID (see Devices/Wiimote/README.md) - these
+    // are NOT SDL_Joystick-backed DeviceState entries in m_Devices, since
+    // IR/Balance-Board/Guitar data has no representation in SDL's gamepad
+    // abstraction. ScanWiimotes() is idempotent: already-tracked devices
+    // (matched by HID path) are left alone, new ones are appended.
+    void ScanWiimotes();
+    const std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>>& GetWiimotes() const;
 
-    // ── Device hide (HidHide / evdev grab / IOKit seize) ─────────────────────
+    // Resolves a WiimoteVirtualBridge bridge joystick's SDL_JoystickID (as
+    // seen on a normal DeviceState/HapticTarget) back to the real
+    // WiimoteDevice that backs it, so callers that only deal in
+    // SDL_JoystickID (e.g. OutputMapper routing a rumble command) can reach
+    // WiimoteDevice::SetRumble() - the bridge joystick itself is virtual
+    // and has no SDL_Haptic backing. Returns nullptr if instance_id isn't a
+    // currently-tracked Wiimote bridge joystick, or if it belongs to a
+    // Balance Board (which has no rumble motor).
+    InputBridge::Wiimote::WiimoteDevice* GetWiimoteForBridgeJoystick(SDL_JoystickID instance_id) const;
+
+    // -- Device hide (HidHide / evdev grab / IOKit seize) ---------------------
     // Toggle the hide state for a single device.  Updates dev.hide_from_other_apps
     // and calls through to the platform backend.
     // Returns true on success; false when the backend is unavailable or fails.
@@ -60,7 +75,9 @@ class DeviceManager {
     std::map<SDL_JoystickID, std::unique_ptr<HapticDevice>> m_HapticDevices;
     Uint64 m_BatteryUpdateIntervalMs = 5000;
 
-    std::vector<std::unique_ptr<wheel::Wheel>> m_WheelRPMDevices;
+    std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>> m_Wiimotes;
+    Uint64 m_LastWiimoteScanMs = 0;
+    static constexpr Uint64 kWiimoteScanIntervalMs = 3000; // BT pairing happens outside SDL's joystick events
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_HideManager;

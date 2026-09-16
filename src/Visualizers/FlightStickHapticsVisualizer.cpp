@@ -1,6 +1,7 @@
 #include "FlightStickHapticsVisualizer.h"
 #include "imgui.h"
 #include "Haptics/FlightStickHaptics.h"
+#include "UI/EditableSlider.h"
 #include <SDL3/SDL.h>
 
 void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& deviceManager,
@@ -64,11 +65,11 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
     // -----------------------------------------------------------------------
     if (ImGui::TreeNode("Constant Force")) {
         ImGui::TextDisabled("Simulates sustained aerodynamic load or G-force on the stick.");
-        ImGui::SliderInt("Slot##const_fs", &m_constant_slot, 0, 7);
-        ImGui::SliderFloat("Strength##const_fs", &m_constant_strength, -1.0f, 1.0f);
+        UI::SliderInt("Slot##const_fs", &m_constant_slot, 0, 7);
+        UI::SliderFloat("Strength##const_fs", &m_constant_strength, -1.0f, 1.0f);
         ImGui::Checkbox("Infinite Duration##const_fs", &m_constant_infinite_duration);
         if (!m_constant_infinite_duration)
-            ImGui::SliderInt("Duration (ms)##const_fs", &m_constant_duration, 0, 5000);
+            UI::SliderInt("Duration (ms)##const_fs", &m_constant_duration, 0, 5000);
 
         if (ImGui::Button("Play Constant##fs")) {
             fsHaptics->PlayConstant(
@@ -90,15 +91,15 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
         ImGui::TextDisabled("Engine hum, turbulence, weapons fire, buffet effects.");
         const char* wave_types[] = { "Sine", "Square", "Triangle", "Sawtooth Up", "Sawtooth Down" };
         ImGui::Combo("Wave Type##per_fs", &m_periodic_wave_type, wave_types, IM_ARRAYSIZE(wave_types));
-        ImGui::SliderInt("Slot##per_fs", &m_periodic_slot, 0, 7);
-        ImGui::SliderFloat("Strength##per_fs",   &m_periodic_strength,  0.0f, 1.0f);
-        ImGui::SliderInt("Period (ms)##per_fs",  &m_periodic_period,    1, 2000);
-        ImGui::SliderFloat("Magnitude##per_fs",  &m_periodic_magnitude, 0.0f, 1.0f);
-        ImGui::SliderFloat("Offset##per_fs",     &m_periodic_offset,   -1.0f, 1.0f);
-        ImGui::SliderInt("Phase (0.01°)##per_fs",&m_periodic_phase,     0, 36000);
+        UI::SliderInt("Slot##per_fs", &m_periodic_slot, 0, 7);
+        UI::SliderFloat("Strength##per_fs",   &m_periodic_strength,  0.0f, 1.0f);
+        UI::SliderInt("Period (ms)##per_fs",  &m_periodic_period,    1, 2000);
+        UI::SliderFloat("Magnitude##per_fs",  &m_periodic_magnitude, 0.0f, 1.0f);
+        UI::SliderFloat("Offset##per_fs",     &m_periodic_offset,   -1.0f, 1.0f);
+        UI::SliderInt("Phase (0.01°)##per_fs",&m_periodic_phase,     0, 36000);
         ImGui::Checkbox("Infinite Duration##per_fs", &m_periodic_infinite_duration);
         if (!m_periodic_infinite_duration)
-            ImGui::SliderInt("Duration (ms)##per_fs", &m_periodic_duration, 0, 5000);
+            UI::SliderInt("Duration (ms)##per_fs", &m_periodic_duration, 0, 5000);
 
         if (ImGui::Button("Play Periodic##fs")) {
             fsHaptics->PlayPeriodic(
@@ -136,18 +137,18 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
                 SDL_CloseHaptic(sdl_haptic);
             }
         }
-        ImGui::SliderInt("Slot##cond_fs", &m_condition_slot, 0,
+        UI::SliderInt("Slot##cond_fs", &m_condition_slot, 0,
                          max_slots > 0 ? max_slots - 1 : 0);
 
-        ImGui::SliderFloat("Right Sat##cond_fs",   &m_condition_right_sat,    0.0f,  1.0f);
-        ImGui::SliderFloat("Left Sat##cond_fs",    &m_condition_left_sat,     0.0f,  1.0f);
-        ImGui::SliderFloat("Right Coeff##cond_fs", &m_condition_right_coeff, -1.0f,  1.0f);
-        ImGui::SliderFloat("Left Coeff##cond_fs",  &m_condition_left_coeff,  -1.0f,  1.0f);
-        ImGui::SliderFloat("Deadband##cond_fs",    &m_condition_deadband,     0.0f,  1.0f);
-        ImGui::SliderFloat("Center##cond_fs",      &m_condition_center,      -1.0f,  1.0f);
+        UI::SliderFloat("Right Sat##cond_fs",   &m_condition_right_sat,    0.0f,  1.0f);
+        UI::SliderFloat("Left Sat##cond_fs",    &m_condition_left_sat,     0.0f,  1.0f);
+        UI::SliderFloat("Right Coeff##cond_fs", &m_condition_right_coeff, -1.0f,  1.0f);
+        UI::SliderFloat("Left Coeff##cond_fs",  &m_condition_left_coeff,  -1.0f,  1.0f);
+        UI::SliderFloat("Deadband##cond_fs",    &m_condition_deadband,     0.0f,  1.0f);
+        UI::SliderFloat("Center##cond_fs",      &m_condition_center,      -1.0f,  1.0f);
         ImGui::Checkbox("Infinite Duration##cond_fs", &m_condition_infinite_duration);
         if (!m_condition_infinite_duration)
-            ImGui::SliderInt("Duration (ms)##cond_fs", &m_condition_duration, 0, 10000);
+            UI::SliderInt("Duration (ms)##cond_fs", &m_condition_duration, 0, 10000);
 
         if (ImGui::Button("Play Condition##fs")) {
             fsHaptics->PlayCondition(
@@ -171,12 +172,12 @@ void FlightStickHapticsVisualizer::Draw(const DeviceState& dev, DeviceManager& d
     if (ImGui::TreeNode("Rumble (Impact)")) {
         ImGui::TextDisabled("Simulates impact hits via a low-frequency vibration burst.\n"
                             "Implemented as a periodic effect on haptic-only devices.");
-        ImGui::SliderInt("Slot##rum_fs", &m_rumble_slot, 0, 7);
-        ImGui::SliderFloat("Large Motor##rum_fs", &m_rumble_large, 0.0f, 1.0f);
-        ImGui::SliderFloat("Small Motor##rum_fs", &m_rumble_small, 0.0f, 1.0f);
+        UI::SliderInt("Slot##rum_fs", &m_rumble_slot, 0, 7);
+        UI::SliderFloat("Large Motor##rum_fs", &m_rumble_large, 0.0f, 1.0f);
+        UI::SliderFloat("Small Motor##rum_fs", &m_rumble_small, 0.0f, 1.0f);
         ImGui::Checkbox("Infinite Duration##rum_fs", &m_rumble_infinite_duration);
         if (!m_rumble_infinite_duration)
-            ImGui::SliderInt("Duration (ms)##rum_fs", &m_rumble_duration, 0, 2000);
+            UI::SliderInt("Duration (ms)##rum_fs", &m_rumble_duration, 0, 2000);
 
         if (ImGui::Button("Play Rumble##fs")) {
             fsHaptics->PlayRumble(

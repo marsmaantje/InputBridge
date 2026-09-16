@@ -72,7 +72,7 @@ public:
      */
     static SensorCapabilities EnableAll(SDL_Gamepad* gamepad);
 
-    // ── Motion sensors ───────────────────────────────────────────────────────
+    // -- Motion sensors -------------------------------------------------------
 
     /** @brief Read main gyroscope. Returns available=false if absent. */
     static GyroState  ReadGyro (SDL_Gamepad* gamepad);
@@ -89,7 +89,7 @@ public:
     /** @brief Read right-side accelerometer. Returns available=false if absent. */
     static AccelState ReadAccelR(SDL_Gamepad* gamepad);
 
-    // ── Touch input ──────────────────────────────────────────────────────────
+    // -- Touch input ----------------------------------------------------------
 
     /**
      * @brief Read touchpad finger positions.

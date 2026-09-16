@@ -54,6 +54,39 @@ class PreferencesManager {
     bool GetDeviceKeepalive(const std::string &guid) const;
     void SetDeviceKeepalive(const std::string &guid, bool enabled);
 
+    // Wiimote / Balance Board settings. Keyed by HID device path rather
+    // than an SDL GUID, since raw-HID Wiimote::WiimoteDevice bypasses
+    // SDL_Joystick entirely and has no GUID/instance_id of its own (see
+    // Devices/Wiimote/README.md). The HID path is stable across polls
+    // within a session and, on the platforms this targets, is derived
+    // from the underlying Bluetooth address, so it also tends to survive
+    // reconnects - the best identifier available without adding our own
+    // pairing/serial database.
+    int  GetWiimotePlayerLED(const std::string &hid_path, int defaultValue = 1) const;
+    void SetWiimotePlayerLED(const std::string &hid_path, int player_1to4);
+
+    bool GetWiimoteIRExtendedMode(const std::string &hid_path, bool defaultValue = false) const;
+    void SetWiimoteIRExtendedMode(const std::string &hid_path, bool enabled);
+
+    // Full 3-way IR camera mode (Basic/Extended/Full - see
+    // Wiimote::IRCameraMode), stored as that enum's underlying int value.
+    // Prefer this over GetWiimoteIRExtendedMode()/SetWiimoteIRExtendedMode()
+    // for new code since it can also reach Full mode; kept alongside it
+    // (as a distinct key, not sharing storage) since a boolean can't
+    // round-trip a 3-way value and older prefs files only ever wrote the
+    // bool key.
+    int  GetWiimoteIRMode(const std::string &hid_path, int defaultValue = 0) const;
+    void SetWiimoteIRMode(const std::string &hid_path, int mode);
+
+    // Balance Board software tare/zero (see WiimoteDevice::TareBalanceBoard).
+    // Returns false (leaving outKg untouched) if no tare has ever been
+    // saved for this path; a saved-but-all-zero tare and "never saved"
+    // are otherwise indistinguishable, which is fine since both mean
+    // "don't offset anything" to the caller.
+    bool GetWiimoteBalanceTareKg(const std::string &hid_path, float outKg[4]) const;
+    void SetWiimoteBalanceTareKg(const std::string &hid_path, const float kg[4]);
+    void ClearWiimoteBalanceTareKg(const std::string &hid_path);
+
     bool IsPreferenceApplied(SDL_JoystickID instance_id) const;
     void MarkPreferenceApplied(SDL_JoystickID instance_id);
     void ClearAppliedPreference(SDL_JoystickID instance_id);
@@ -72,4 +105,11 @@ class PreferencesManager {
     static constexpr const char* kMappingPrefix = "Mapping.";
     static constexpr const char* kKeepaliveKey = "HapticKeepalive";
     static constexpr size_t kMappingPrefixLen = 8; // strlen("Mapping.")
+
+    // Wiimote settings, see GetWiimotePlayerLED() etc above.
+    static constexpr const char* kWiimoteSectionPrefix = "Wiimote_";
+    static constexpr const char* kWiiPlayerLEDKey = "PlayerLED";
+    static constexpr const char* kWiiIRExtendedKey = "IRExtendedMode";
+    static constexpr const char* kWiiIRModeKey = "IRMode"; // int, see Wiimote::IRCameraMode
+    static constexpr const char* kWiiTareKeyPrefix = "BalanceTare"; // + 0..3
 };

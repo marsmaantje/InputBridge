@@ -12,14 +12,14 @@ static constexpr const char* kTag = "ExclusiveMode";
 #define kIOMainPortDefault kIOMasterPortDefault
 #endif
 
-// ─── IsAvailable ──────────────────────────────────────────────────────────────
+// --- IsAvailable --------------------------------------------------------------
 
 bool MacOSExclusiveMode::IsAvailable() const {
     // IOHIDManager is always present on macOS 10.5+.
     return true;
 }
 
-// ─── FindHIDDevice ────────────────────────────────────────────────────────────
+// --- FindHIDDevice ------------------------------------------------------------
 
 IOHIDDeviceRef MacOSExclusiveMode::FindHIDDevice(Uint16 vendorId, Uint16 productId) {
     CFMutableDictionaryRef matching = IOServiceMatching(kIOHIDDeviceKey);
@@ -48,7 +48,7 @@ IOHIDDeviceRef MacOSExclusiveMode::FindHIDDevice(Uint16 vendorId, Uint16 product
     return found;
 }
 
-// ─── HideDevice ───────────────────────────────────────────────────────────────
+// --- HideDevice ---------------------------------------------------------------
 
 bool MacOSExclusiveMode::HideDevice(SDL_Joystick* joystick) {
     SDL_JoystickID id = SDL_GetJoystickID(joystick);
@@ -79,7 +79,7 @@ bool MacOSExclusiveMode::HideDevice(SDL_Joystick* joystick) {
     return true;
 }
 
-// ─── UnhideDevice ─────────────────────────────────────────────────────────────
+// --- UnhideDevice -------------------------------------------------------------
 
 bool MacOSExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
     SDL_JoystickID id = SDL_GetJoystickID(joystick);
@@ -93,7 +93,7 @@ bool MacOSExclusiveMode::UnhideDevice(SDL_Joystick* joystick) {
     return true;
 }
 
-// ─── Destructor ───────────────────────────────────────────────────────────────
+// --- Destructor ---------------------------------------------------------------
 
 MacOSExclusiveMode::~MacOSExclusiveMode() {
     for (auto& [id, dev] : m_SeizedDevices) {

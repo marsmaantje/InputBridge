@@ -217,14 +217,14 @@ static std::vector<std::pair<std::string, std::string>> GetQuickAccessPaths() {
  *
  * Layout:
  *   [← Back] [→ Fwd] [↑ Up]  [ Address bar (click to edit) ]  [🔍 Search]
- *   ┌─────────────┬──────────────────────────────────────────────────────┐
+ *   ┌-------------┬------------------------------------------------------┐
  *   │ Quick       │  Name ▲  │  Date Modified     │  Type       │ Size  │
- *   │ Access      │──────────────────────────────────────────────────────│
+ *   │ Access      │------------------------------------------------------│
  *   │  Home       │  📁 folder                                            │
  *   │  Desktop    │  📄 file.json                                         │
  *   │  Documents  │                                                       │
  *   │  Downloads  │                                                       │
- *   └─────────────┴──────────────────────────────────────────────────────┘
+ *   └-------------┴------------------------------------------------------┘
  *
  * @param currentDir  In/out: current directory
  * @param pathBuf     Buffer to write the selected file path into
@@ -244,7 +244,7 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
         currentDir = curPath.string();
     }
 
-    // ── Helper: navigate to a new directory ─────────────────────────────────
+    // -- Helper: navigate to a new directory ---------------------------------
     auto navigateTo = [&](const std::string& newDir) {
         std::error_code ec2;
         fs::path p = fs::weakly_canonical(newDir, ec2);
@@ -259,7 +259,7 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
         }
     };
 
-    // ── Toolbar ──────────────────────────────────────────────────────────────
+    // -- Toolbar --------------------------------------------------------------
     // Back
     bool canBack = !s_fbBackHistory.empty();
     if (!canBack) ImGui::BeginDisabled();
@@ -393,7 +393,7 @@ bool ProtocolEditorWindow::DrawFileBrowser(std::string& currentDir,
 
     ImGui::Spacing();
 
-    // ── Main content area ────────────────────────────────────────────────────
+    // -- Main content area ----------------------------------------------------
     // Reserve a fixed height; caller's modal has buttons below us
     float availH = ImGui::GetContentRegionAvail().y;
     ImGui::BeginChild("##fb_main_area", ImVec2(0, availH), false, ImGuiWindowFlags_NoScrollbar);
@@ -652,7 +652,7 @@ void ProtocolEditorWindow::DrawContent() {
         s_settingsLoaded = true;
     }
 
-    // ── Keyboard Shortcuts ───────────────────────────────────────────────────
+    // -- Keyboard Shortcuts ---------------------------------------------------
     if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Z))
         s_undoManager.Undo();
     if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Y) || ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiMod_Shift | ImGuiKey_Z))
@@ -667,7 +667,7 @@ void ProtocolEditorWindow::DrawContent() {
         ImGui::EndDragDropTarget();
     }
 
-    // ── Toolbar ──────────────────────────────────────────────────────────────
+    // -- Toolbar --------------------------------------------------------------
     if (WrapButton("+ New Protocol")) {
         s_showNewModal = true;
         std::strncpy(s_newName, "New Protocol", sizeof(s_newName));
@@ -711,7 +711,7 @@ void ProtocolEditorWindow::DrawContent() {
 
     ImGui::Separator();
 
-    // ── Two-column layout: left=list, right=editor ────────────────────────
+    // -- Two-column layout: left=list, right=editor ------------------------
     static float s_splitWidth = 220.0f;
     const float splitterW  = 6.0f;
     const float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -744,7 +744,7 @@ void ProtocolEditorWindow::DrawContent() {
     DrawEditor();
     ImGui::EndChild();
 
-    // ── Modals ───────────────────────────────────────────────────────────────
+    // -- Modals ---------------------------------------------------------------
     DrawNewProtocolModal();
     DrawDeleteProtocolModal();
     DrawDuplicateProtocolModal();
@@ -892,7 +892,7 @@ void ProtocolEditorWindow::DrawEditor() {
     auto& definition = definitions[s_selectedIndex];
     bool needsSave = false;
 
-    // ── Protocol name ────────────────────────────────────────────────────────
+    // -- Protocol name --------------------------------------------------------
     ImGui::SeparatorText("Protocol Settings");
 
     char nameBuffer[128];
@@ -955,7 +955,7 @@ void ProtocolEditorWindow::DrawEditor() {
         }
     }
 
-    // ── Transport-specific settings ──────────────────────────────────────────
+    // -- Transport-specific settings ------------------------------------------
     if (definition.transport == ProtocolTransport::OSC) {
         char hostBuffer[128];
         std::strncpy(hostBuffer, definition.oscHost.c_str(), sizeof(hostBuffer));
@@ -997,7 +997,7 @@ void ProtocolEditorWindow::DrawEditor() {
 
     ImGui::Separator();
 
-    // ── Field selection ──────────────────────────────────────────────────────
+    // -- Field selection ------------------------------------------------------
     if (definition.direction == ProtocolDirection::Send) {
         DrawOutputFieldPicker();
     } else {
@@ -1799,7 +1799,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         bool idChanged       = false;
         bool categoryChanged = false;
 
-        // ── ID ────────────────────────────────────────────────────────────
+        // -- ID ------------------------------------------------------------
         if (s_cfIsEditing) {
             // ID is immutable when editing an existing field.
             ImGui::BeginDisabled();
@@ -1822,7 +1822,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
             }
         }
 
-        // ── Label ─────────────────────────────────────────────────────────
+        // -- Label ---------------------------------------------------------
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Label:");
         if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
@@ -1840,7 +1840,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 
         if (idChanged) updatePathDefaults();
 
-        // ── Category ──────────────────────────────────────────────────────
+        // -- Category ------------------------------------------------------
         std::vector<std::string> categories;
         for (const auto& f : registry.GetOutputFields())
             if (std::find(categories.begin(), categories.end(), f.category) == categories.end())
@@ -1875,7 +1875,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         }
         if (categoryChanged) updatePathDefaults();
 
-        // ── Type ──────────────────────────────────────────────────────────
+        // -- Type ----------------------------------------------------------
         const char* types[] = {"Analog Axis", "Digital Button"};
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Type:");
@@ -1883,7 +1883,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         ImGui::SetNextItemWidth(-FLT_MIN);
         ImGui::Combo("##cfType", &s_cfType, types, 2);
 
-        // ── OSC Path ──────────────────────────────────────────────────────
+        // -- OSC Path ------------------------------------------------------
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Default OSC Path:");
         if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
@@ -1891,7 +1891,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
         if (ImGui::InputText("##cfOsc", s_cfOsc, sizeof(s_cfOsc)))
             s_cfOscManuallyModified = true;
 
-        // ── WS Key ────────────────────────────────────────────────────────
+        // -- WS Key --------------------------------------------------------
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Default WS Key:");
         if (ImGui::GetContentRegionAvail().x > 300.0f) ImGui::SameLine();
@@ -1901,7 +1901,7 @@ void ProtocolEditorWindow::DrawCreateFieldModal() {
 
         ImGui::Separator();
 
-        // ── Validation ────────────────────────────────────────────────────
+        // -- Validation ----------------------------------------------------
         bool idExists = false;
         if (!s_cfIsEditing) {
             for (const auto& f : registry.GetOutputFields())

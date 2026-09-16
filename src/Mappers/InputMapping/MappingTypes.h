@@ -1,9 +1,9 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Pure data types describing a mapping profile: how device axes/buttons/
 // sensors map onto protocol output fields.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include <SDL3/SDL.h>
 #include <map>
@@ -54,7 +54,7 @@ struct InputSource {
     float customRangeMin = -1.f;
     float customRangeMax = 1.f;
 
-    // ── Sensor source ─────────────────────────────────────────────────
+    // -- Sensor source -------------------------------------------------
     // When sensorChannel is not None, this source reads from the device
     // sensor/touchpad instead of a regular joystick axis (axisIndex is
     // unused in that case).

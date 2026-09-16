@@ -1,6 +1,7 @@
 #include "InputLabelProvider.h"
 
 #include "Devices/DeviceState.h"
+#include "Devices/Wiimote/WiimoteVirtualBridge.h"
 #include "SDL3/SDL_gamepad.h"
 #include "UI/DeviceIconProvider.h"
 #include "UI/KenneyIcons.h"
@@ -20,10 +21,19 @@ namespace {
 // SteamController because the V2 (HEADCRAB) hardware swapped several inputs
 // for ones with no equivalent glyph in the Steam Controller font - those are
 // resolved from the Steam Deck font instead (see AxisInfoFor/ButtonInfoFor).
-enum class FontFamily { Xbox, PlayStation, Switch, SteamDeck, SteamController, SteamControllerV2, Generic, Unknown };
+enum class FontFamily { Xbox, PlayStation, Switch, SteamDeck, SteamController, SteamControllerV2, Wii, Generic, Unknown };
 
 FontFamily GetFontFamily(const DeviceState& dev)
 {
+    // Checked first: WiimoteVirtualBridge's own virtual joysticks (see
+    // Devices/Wiimote/WiimoteVirtualBridge.h), matched by exact name so
+    // nothing else can accidentally take this path. These are declared
+    // SDL_JOYSTICK_TYPE_UNKNOWN (dev.gamepad is null), so they'd otherwise
+    // fall into the "Unknown" bucket below with no per-input icons at all.
+    if (dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName ||
+        dev.name == InputBridge::Wiimote::kBalanceBoardBridgeDeviceName)
+        return FontFamily::Wii;
+
     std::string lower = dev.name;
     for (char& c : lower) c = (char)SDL_tolower(c);
 
@@ -90,12 +100,12 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
 
     case FontFamily::PlayStation:
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE064); // playstation_stick_l_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE069); // playstation_stick_l_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE06C); // playstation_stick_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE071); // playstation_stick_r_vertical
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("L2",                0xE07A); // playstation_trigger_l2
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("R2",                0xE082); // playstation_trigger_r2
+        case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE066); // playstation_stick_l_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE06B); // playstation_stick_l_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return withFam("Right Stick X",     0xE06E); // playstation_stick_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return withFam("Right Stick Y",     0xE073); // playstation_stick_r_vertical
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("L2",                0xE07C); // playstation_trigger_l2
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("R2",                0xE084); // playstation_trigger_r2
         default: break;
         }
         break;
@@ -158,9 +168,9 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
     // shared generic font, regardless of which device this was requested for.
     switch (ga) {
     case SDL_GAMEPAD_AXIS_LEFTX:         return { "Left Stick X",      0xE01D }; // generic_stick_horizontal
-    case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE023 }; // generic_stick_vertical
+    case SDL_GAMEPAD_AXIS_LEFTY:         return { "Left Stick Y",      0xE022 }; // generic_stick_vertical
     case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Stick X",     0xE01D }; // generic_stick_horizontal
-    case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE023 }; // generic_stick_vertical
+    case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Stick Y",     0xE022 }; // generic_stick_vertical
     case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return { "Left Trigger",      0 };
     case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return { "Right Trigger",     0 };
     default:                             return { "Axis",              0 };
@@ -202,23 +212,23 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
 
     case FontFamily::PlayStation:
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("Cross",         0xE049); // playstation_button_cross
-        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("Circle",        0xE03F); // playstation_button_circle
-        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("Square",        0xE04F); // playstation_button_square
-        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Triangle",      0xE051); // playstation_button_triangle
-        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Share/Create",  0xE01C); // playstation5_button_create (general)
+        case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("Cross",         0xE04B); // playstation_button_cross
+        case SDL_GAMEPAD_BUTTON_EAST:            return withFam("Circle",        0xE041); // playstation_button_circle
+        case SDL_GAMEPAD_BUTTON_WEST:            return withFam("Square",        0xE051); // playstation_button_square
+        case SDL_GAMEPAD_BUTTON_NORTH:           return withFam("Triangle",      0xE053); // playstation_button_triangle
+        case SDL_GAMEPAD_BUTTON_BACK:            return withFam("Share/Create",  0xE01E); // playstation5_button_create (general)
         //case SDL_GAMEPAD_BUTTON_GUIDE:           return withFam("PS",            0xE03D); // playstation5_button_create
-        case SDL_GAMEPAD_BUTTON_START:           return withFam("Options",       0xE022); // playstation5_button_options
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L3",            0xE04B); // playstation_button_l3
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R3",            0xE04D); // playstation_button_r3
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("L1",            0xE076); // playstation_trigger_l1
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("R1",            0xE07E); // playstation_trigger_r1
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE05E); // playstation_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE055); // playstation_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE059); // playstation_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE05C); // playstation_dpad_right
-        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return withFam("Touchpad",      0xE00F); // playstation_button_analog
-        case SDL_GAMEPAD_BUTTON_MISC1:           return withFam("Mute",          0xE020); // playstation5_button_mute
+        case SDL_GAMEPAD_BUTTON_START:           return withFam("Options",       0xE024); // playstation5_button_options
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:      return withFam("L3",            0xE04D); // playstation_button_l3
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:     return withFam("R3",            0xE04F); // playstation_button_r3
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:   return withFam("L1",            0xE078); // playstation_trigger_l1
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:  return withFam("R1",            0xE080); // playstation_trigger_r1
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      0xE060); // playstation_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    0xE057); // playstation_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    0xE05B); // playstation_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   0xE05E); // playstation_dpad_right
+        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return withFam("Touchpad",      0xE030); // playstation5_touchpad
+        case SDL_GAMEPAD_BUTTON_MISC1:           return withFam("Mute",          0xE022); // playstation5_button_mute
         default: break;
         }
         break;
@@ -316,6 +326,23 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         }
         break;
 
+    case FontFamily::Wii:
+        // Only the D-Pad directions are needed here: GetHatLabel() is the
+        // only caller that reaches this table for FontFamily::Wii (via the
+        // SDL_GamepadButton translation below), since GetAxisLabel/
+        // GetButtonLabel resolve Wiimote face buttons directly by raw
+        // bridge index instead (see WiimoteBridgeButtonIcon() below) - this
+        // bridge device was deliberately NOT typed as a gamepad, so there's
+        // no SDL_GamepadButton semantic for its other inputs to key off of.
+        switch (gb) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:         return withFam("D-Pad Up",      KENNEY_WII_DPAD_UP_OUTLINE_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:       return withFam("D-Pad Down",    KENNEY_WII_DPAD_DOWN_OUTLINE_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:       return withFam("D-Pad Left",    KENNEY_WII_DPAD_LEFT_OUTLINE_CP);
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:      return withFam("D-Pad Right",   KENNEY_WII_DPAD_RIGHT_OUTLINE_CP);
+        default: break;
+        }
+        break;
+
     default:
         break;
     }
@@ -366,12 +393,15 @@ DeviceIcon MakeIcon(ImFont* font, ImWchar cp)
     icon.font      = font;
     icon.codepoint = cp;
     // KENNEY_ICON_STR is a macro that may not accept runtime cp values here,
-    // so build the UTF-8 bytes locally into a thread-local buffer and
-    // point glyph at it.
-    static thread_local char _kenney_buf[4];
+    // so build the UTF-8 bytes locally and copy them into this DeviceIcon's
+    // own glyphBuf (NOT a shared/static buffer - a previous version used a
+    // single thread_local buffer here, which meant every DeviceIcon handed
+    // out since the last MakeIcon() call silently aliased the same bytes;
+    // as soon as more than one is alive at once - e.g. GetHatDirectionIcons()
+    // building four of these in a row - all of them would render whichever
+    // codepoint was requested *last*).
     auto _arr = KenneyIconUTF8(cp);
-    std::memcpy(_kenney_buf, _arr.data(), 4);
-    icon.glyph = _kenney_buf;
+    std::memcpy(icon.glyphBuf, _arr.data(), 4);
     return icon;
 }
 
@@ -393,6 +423,7 @@ ImFont* FontForFamily(FontFamily fam)
     case FontFamily::SteamDeck:       return fonts.steamDeck;
     case FontFamily::SteamController:
     case FontFamily::SteamControllerV2: return fonts.steamController;
+    case FontFamily::Wii:              return fonts.nintendoWii;
     case FontFamily::Generic:
     case FontFamily::Unknown:
     default:                          return fonts.generic;
@@ -413,12 +444,133 @@ ImFont* InputFont(const DeviceState& dev, FontFamily fam)
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
+// Wiimote virtual-bridge naming
+// ---------------------------------------------------------------------------
+// WiimoteVirtualBridge (Devices/Wiimote/WiimoteVirtualBridge.h) creates a
+// virtual joystick per connected Wiimote/Balance Board whose axis/button
+// indices hold Wiimote-specific data (accelerometer, IR, Nunchuk, Classic
+// Controller, Motion Plus, or Balance Board corner weights) rather than a
+// standard gamepad's sticks/triggers/face buttons. It's intentionally NOT
+// typed as SDL_JOYSTICK_TYPE_GAMEPAD (see its Attach()), so dev.gamepad is
+// null here and this never collides with the SDL_GamepadBinding path below
+// - but the exact-name match is checked first regardless, so this stays
+// correct even if that ever changes.
+namespace {
+bool IsWiimoteBridgeDevice(const DeviceState& dev, bool* isBalance)
+{
+    if (dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName) { *isBalance = false; return true; }
+    if (dev.name == InputBridge::Wiimote::kBalanceBoardBridgeDeviceName) { *isBalance = true; return true; }
+    return false;
+}
+
+// -- Wiimote bridge icon lookup ---------------------------------------------
+// Parallel to WiimoteBridgeAxisName()/WiimoteBridgeButtonName()/etc in
+// WiimoteVirtualBridge.cpp (which supply the *names* GetAxisLabel/
+// GetButtonLabel use below), keyed by the same raw bridge index rather than
+// an SDL_GamepadAxis/Button - this bridge isn't gamepad-typed, so there's no
+// SDL enum to translate through the way every other family in this file
+// does. Kept here instead of in WiimoteVirtualBridge.cpp since icon choice
+// is a UI-layer concern (that file has no KenneyIcons.h dependency).
+//
+// cp == 0 means "no matching glyph in the Wii font" - accelerometer, IR
+// position, Motion Plus gyro axes, and Balance Board weight/CoG axes have
+// no icon equivalent in kenney_input_nintendo_wii.ttf. Callers fall back to
+// a plain text label with no icon, same convention used everywhere else in
+// this file for untagged inputs.
+using InputBridge::Wiimote::WiimoteAxis;
+using InputBridge::Wiimote::WiimoteButton;
+using InputBridge::Wiimote::BalanceButton;
+
+ImWchar WiimoteBridgeAxisIcon(int axis)
+{
+    switch (axis) {
+    case WiimoteAxis::Axis_NunchukX:  return KENNEY_WII_STICK_HORIZONTAL_CP;
+    case WiimoteAxis::Axis_NunchukY:  return KENNEY_WII_STICK_VERTICAL_CP;
+    case WiimoteAxis::Axis_ClassicLX: return KENNEY_WII_STICK_L_HORIZONTAL_CP;
+    case WiimoteAxis::Axis_ClassicLY: return KENNEY_WII_STICK_L_VERTICAL_CP;
+    case WiimoteAxis::Axis_ClassicRX: return KENNEY_WII_STICK_R_HORIZONTAL_CP;
+    case WiimoteAxis::Axis_ClassicRY: return KENNEY_WII_STICK_R_VERTICAL_CP;
+    // Same physical control as Btn_ClassicZL/ZR below - this is just its
+    // analog reading rather than a digital press.
+    case WiimoteAxis::Axis_ClassicLTrigger: return KENNEY_WII_BUTTON_ZL_CP;
+    case WiimoteAxis::Axis_ClassicRTrigger: return KENNEY_WII_BUTTON_ZR_CP;
+    // Axis_AccelX/Y/Z, Axis_IR1X/Y..Axis_IR4X/Y, Axis_MotionPlusYaw/Pitch/Roll: no icon.
+    default: return 0;
+    }
+}
+
+ImWchar WiimoteBridgeButtonIcon(int button)
+{
+    switch (button) {
+    case WiimoteButton::Btn_A:            return KENNEY_WII_BUTTON_A_CP;
+    case WiimoteButton::Btn_B:            return KENNEY_WII_BUTTON_B_CP;
+    case WiimoteButton::Btn_One:          return KENNEY_WII_BUTTON_1_CP;
+    case WiimoteButton::Btn_Two:          return KENNEY_WII_BUTTON_2_CP;
+    case WiimoteButton::Btn_Plus:         return KENNEY_WII_BUTTON_PLUS_CP;
+    case WiimoteButton::Btn_Minus:        return KENNEY_WII_BUTTON_MINUS_CP;
+    case WiimoteButton::Btn_Home:         return KENNEY_WII_BUTTON_HOME_CP;
+    case WiimoteButton::Btn_NunchukC:     return KENNEY_WII_BUTTON_C_CP;
+    case WiimoteButton::Btn_NunchukZ:     return KENNEY_WII_BUTTON_Z_CP;
+    case WiimoteButton::Btn_ClassicA:     return KENNEY_WII_BUTTON_A_CP;
+    case WiimoteButton::Btn_ClassicB:     return KENNEY_WII_BUTTON_B_CP;
+    case WiimoteButton::Btn_ClassicX:     return KENNEY_WII_BUTTON_X_CP;
+    case WiimoteButton::Btn_ClassicY:     return KENNEY_WII_BUTTON_Y_CP;
+    case WiimoteButton::Btn_ClassicL:     return KENNEY_WII_BUTTON_L_CP;
+    case WiimoteButton::Btn_ClassicR:     return KENNEY_WII_BUTTON_R_CP;
+    case WiimoteButton::Btn_ClassicZL:    return KENNEY_WII_BUTTON_ZL_CP;
+    case WiimoteButton::Btn_ClassicZR:    return KENNEY_WII_BUTTON_ZR_CP;
+    case WiimoteButton::Btn_ClassicPlus:  return KENNEY_WII_BUTTON_PLUS_CP;
+    case WiimoteButton::Btn_ClassicMinus: return KENNEY_WII_BUTTON_MINUS_CP;
+    case WiimoteButton::Btn_ClassicHome:  return KENNEY_WII_BUTTON_HOME_CP;
+    case WiimoteButton::Btn_ClassicUp:    return KENNEY_WII_DPAD_UP_OUTLINE_CP;
+    case WiimoteButton::Btn_ClassicDown:  return KENNEY_WII_DPAD_DOWN_OUTLINE_CP;
+    case WiimoteButton::Btn_ClassicLeft:  return KENNEY_WII_DPAD_LEFT_OUTLINE_CP;
+    case WiimoteButton::Btn_ClassicRight: return KENNEY_WII_DPAD_RIGHT_OUTLINE_CP;
+    default: return 0;
+    }
+}
+
+ImWchar BalanceBoardBridgeButtonIcon(int button)
+{
+    switch (button) {
+    // The Balance Board's single physical button is silkscreened "A" on
+    // the hardware - reuse that glyph.
+    case BalanceButton::BBtn_A: return KENNEY_WII_BUTTON_A_CP;
+    default: return 0;
+    }
+}
+// BalanceAxisIcon intentionally omitted - every Balance Board axis (corner
+// weights, total, center of gravity) has no Wii-font equivalent, so it
+// would just be "default: return 0;" for every case.
+
+} // anonymous namespace
+
+// ---------------------------------------------------------------------------
 // InputLabelProvider - public API
 // ---------------------------------------------------------------------------
 
 InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
 {
     InputLabel result;
+
+    bool isBalance = false;
+    if (IsWiimoteBridgeDevice(dev, &isBalance))
+    {
+        const char* n = isBalance
+            ? InputBridge::Wiimote::BalanceBoardBridgeAxisName(axis)
+            : InputBridge::Wiimote::WiimoteBridgeAxisName(axis);
+        result.name = n ? n : ("Axis " + std::to_string(axis));
+        // Balance Board axes (corner weights, total, center of gravity)
+        // have no Wii-font equivalent at all - WiimoteBridgeAxisIcon()
+        // covers the Wiimote's own Nunchuk/Classic Controller stick axes
+        // (which do have real glyphs) and returns 0 for its accelerometer/
+        // IR/Motion Plus axes, which don't. cp==0 -> MakeIcon() returns an
+        // invalid icon and the caller shows text only, same as every other
+        // genuinely icon-less input in this file.
+        const ImWchar cp = isBalance ? 0 : WiimoteBridgeAxisIcon(axis);
+        result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), cp);
+        return result;
+    }
 
     if (dev.gamepad)
     {
@@ -464,7 +616,7 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
     // Non-gamepad path: no rich binding data available.
     result.name = "Axis " + std::to_string(axis);
     // generic_stick_horizontal for even indices (likely X), vertical for odd (likely Y)
-    const ImWchar cp = (axis % 2 == 0) ? 0xE01D : 0xE023; // generic_stick_horizontal / _vertical
+    const ImWchar cp = (axis % 2 == 0) ? 0xE01D : 0xE022; // generic_stick_horizontal / _vertical
     result.icon = MakeIcon(KenneyFonts::Get().generic, cp);
     return result;
 }
@@ -472,6 +624,19 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
 InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button)
 {
     InputLabel result;
+
+    bool isBalance = false;
+    if (IsWiimoteBridgeDevice(dev, &isBalance))
+    {
+        const char* n = isBalance
+            ? InputBridge::Wiimote::BalanceBoardBridgeButtonName(button)
+            : InputBridge::Wiimote::WiimoteBridgeButtonName(button);
+        result.name = n ? n : ("Button " + std::to_string(button));
+        const ImWchar cp = isBalance ? BalanceBoardBridgeButtonIcon(button)
+                                      : WiimoteBridgeButtonIcon(button);
+        result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), cp);
+        return result;
+    }
 
     if (dev.gamepad)
     {
@@ -519,6 +684,21 @@ InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint
     InputLabel result;
     result.name = "Hat " + std::to_string(hat);
 
+    // WiimoteVirtualBridge attaches a real Wiimote's bridge joystick with
+    // nhats=2 - Hat_DPad for the main D-Pad and Hat_ClassicDPad for the
+    // Classic Controller's (Balance Boards have no D-Pad at all and stay at
+    // nhats=0 - see Attach()) - so this can be reached for that device;
+    // override the numbered fallback name with the real label the same way
+    // GetAxisLabel/GetButtonLabel do. Icon selection below already produces
+    // a reasonable generic D-Pad glyph for this device family regardless of
+    // which hat it is, so only the name needs the Wiimote-aware override.
+    bool isBalance = false;
+    if (IsWiimoteBridgeDevice(dev, &isBalance) && !isBalance)
+    {
+        const char* n = InputBridge::Wiimote::WiimoteBridgeHatName(hat);
+        if (n) result.name = n;
+    }
+
     const FontFamily fam = GetFontFamily(dev);
 
     // Hats have no SDL gamepad binding equivalent (SDL maps them to D-Pad
@@ -534,18 +714,41 @@ InputLabel InputLabelProvider::GetHatLabel(const DeviceState& dev, int hat, uint
     else
     {
         // Centered - no direction held. Steam Controller V2 has a dedicated
-        // neutral D-Pad glyph in the Steam Deck font; everyone else falls
-        // back to the generic joystick glyph.
+        // neutral D-Pad glyph in the Steam Deck font, and the Wii font has
+        // its own neutral glyph too; everyone else falls back to the
+        // generic joystick glyph.
         if (fam == FontFamily::SteamController)
             result.icon = MakeIcon(InputFont(dev, FontFamily::SteamController), 0xE03A); // steam_dpad
         else if (fam == FontFamily::SteamControllerV2)
             result.icon = MakeIcon(InputFont(dev, FontFamily::SteamDeck), 0xE021); // steamdeck_dpad
+        else if (fam == FontFamily::Wii)
+            result.icon = MakeIcon(InputFont(dev, FontFamily::Wii), KENNEY_WII_DPAD_NONE_CP); // wii_dpad_none (idle)
         else
             result.icon = MakeIcon(KenneyFonts::Get().generic, 0xE013); // generic_joystick
         return result;
     }
 
+    // The Wii font ships two glyphs per direction - a filled/solid one and
+    // an outline one. ButtonInfoFor()'s Wii case now returns the outline
+    // codepoints for all four directions (shared with GetButtonLabel()'s
+    // regular D-Pad button icons), which is what both a Hat and a mapped
+    // D-Pad button should show, so no special-casing is needed here beyond
+    // the centered/idle state above.
     ButtonInfo info = ButtonInfoFor(dpad, fam);
     result.icon = MakeIcon(InputFont(dev, info.fam), info.cp);
+    return result;
+}
+
+DpadDirectionIcons InputLabelProvider::GetHatDirectionIcons(const DeviceState& dev, uint8_t hatValue)
+{
+    DpadDirectionIcons result; // all four default-constructed DeviceIcon{} -> !IsValid()
+
+    if (GetFontFamily(dev) != FontFamily::Wii) return result;
+
+    ImFont* font = InputFont(dev, FontFamily::Wii);
+    result.up    = MakeIcon(font, (hatValue & SDL_HAT_UP)    ? KENNEY_WII_DPAD_UP_CP    : KENNEY_WII_DPAD_UP_OUTLINE_CP);
+    result.down  = MakeIcon(font, (hatValue & SDL_HAT_DOWN)  ? KENNEY_WII_DPAD_DOWN_CP  : KENNEY_WII_DPAD_DOWN_OUTLINE_CP);
+    result.left  = MakeIcon(font, (hatValue & SDL_HAT_LEFT)  ? KENNEY_WII_DPAD_LEFT_CP  : KENNEY_WII_DPAD_LEFT_OUTLINE_CP);
+    result.right = MakeIcon(font, (hatValue & SDL_HAT_RIGHT) ? KENNEY_WII_DPAD_RIGHT_CP : KENNEY_WII_DPAD_RIGHT_OUTLINE_CP);
     return result;
 }

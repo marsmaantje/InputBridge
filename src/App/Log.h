@@ -1,5 +1,5 @@
 #pragma once
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // @file Log.h 
 // @brief provides a unified logging interface for the application.
 //
@@ -17,13 +17,13 @@
 // All log messages are emitted through SDL_LogMessage, ensuring
 // consistent formatting, severity handling, and log capture
 // throughout the application.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include <SDL3/SDL_log.h>
 
 // clang-format off
 
-// ── Macros ───────────────────────────────────────────────────────────────────
+// -- Macros -------------------------------------------------------------------
 // tag may be a string literal or a const char* variable (e.g. a file-scope
 // static constexpr const char* kTag).  SDL_LogMessage is used instead of the
 // SDL_LogXxx helpers so the format string can embed the tag at runtime via

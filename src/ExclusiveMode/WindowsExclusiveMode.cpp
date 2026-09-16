@@ -17,7 +17,7 @@ static constexpr const char* kTag = "ExclusiveMode";
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
 
-// ─── CTL_CODE macro ──────────────────────────────────────────────────────────
+// --- CTL_CODE macro ----------------------------------------------------------
 // Verified directly against HidHide's shared IOCTL contract
 // (Shared/HidHideIoctlContract.h in https://github.com/nefarius/HidHide):
 //
@@ -46,7 +46,7 @@ static constexpr DWORD kIoctlSetBlacklist = CTL_CODE(kHidHideDeviceType, 2051, 0
 static constexpr DWORD kIoctlGetActive    = CTL_CODE(kHidHideDeviceType, 2052, 0, FILE_READ_DATA);
 static constexpr DWORD kIoctlSetActive    = CTL_CODE(kHidHideDeviceType, 2053, 0, FILE_READ_DATA);
 
-// ─── ToFullImageName ───────────────────────────────────────────────────────────
+// --- ToFullImageName -----------------------------------------------------------
 //
 // HidHide's whitelist is matched against the NT "full image name" the kernel
 // records for a process (e.g. "\Device\HarddiskVolume3\Windows\System32\cmd.exe"),
@@ -76,7 +76,7 @@ std::wstring WindowsExclusiveMode::ToFullImageName(const std::wstring &win32Path
     return std::wstring(target) + rest;
 }
 
-// ─── Constructor / destructor ─────────────────────────────────────────────────
+// --- Constructor / destructor -------------------------------------------------
 
 WindowsExclusiveMode::WindowsExclusiveMode() {
     m_OwnExePath = ToFullImageName(GetOwnExePath());
@@ -88,7 +88,7 @@ WindowsExclusiveMode::~WindowsExclusiveMode() {
     // explicitly remove entries, which we do in UnhideDevice().
 }
 
-// ─── IsAvailable ─────────────────────────────────────────────────────────────
+// --- IsAvailable -------------------------------------------------------------
 
 bool WindowsExclusiveMode::IsAvailable() const {
     HANDLE h = OpenControlDevice();
@@ -98,7 +98,7 @@ bool WindowsExclusiveMode::IsAvailable() const {
     return true;
 }
 
-// ─── SetSteamInputCompatible ──────────────────────────────────────────────────
+// --- SetSteamInputCompatible --------------------------------------------------
 
 void WindowsExclusiveMode::SetSteamInputCompatible(bool enabled) {
     m_SteamCompatible = enabled;
@@ -118,7 +118,7 @@ void WindowsExclusiveMode::SetSteamInputCompatible(bool enabled) {
     SetAllowList(wl);
 }
 
-// ─── EnsureSelfWhitelisted (internal helper) ──────────────────────────────────
+// --- EnsureSelfWhitelisted (internal helper) ----------------------------------
 
 bool WindowsExclusiveMode::EnsureWhitelisted(const std::wstring &own, const std::wstring &steam, bool steamCompat, bool &selfWhitelistedFlag) {
     // Avoid repeated work.
@@ -147,7 +147,7 @@ bool WindowsExclusiveMode::EnsureWhitelisted(const std::wstring &own, const std:
     return true;
 }
 
-// ─── HideDevice ───────────────────────────────────────────────────────────────
+// --- HideDevice ---------------------------------------------------------------
 
 bool WindowsExclusiveMode::HideDevice(SDL_Joystick *joystick) {
     if (!IsAvailable())
@@ -194,7 +194,7 @@ bool WindowsExclusiveMode::HideDevice(SDL_Joystick *joystick) {
     return true;
 }
 
-// ─── UnhideDevice ─────────────────────────────────────────────────────────────
+// --- UnhideDevice -------------------------------------------------------------
 
 bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick *joystick) {
     if (!IsAvailable())
@@ -227,7 +227,7 @@ bool WindowsExclusiveMode::UnhideDevice(SDL_Joystick *joystick) {
     return true;
 }
 
-// ─── IOCTL helpers ────────────────────────────────────────────────────────────
+// --- IOCTL helpers ------------------------------------------------------------
 
 HANDLE WindowsExclusiveMode::OpenControlDevice() const {
     HANDLE h = CreateFileW(kHidHideDevice, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -294,7 +294,7 @@ bool WindowsExclusiveMode::SetAllowList(const std::set<std::wstring> &list) cons
     return ok != FALSE;
 }
 
-// ─── Multi-string parsing ─────────────────────────────────────────────────────
+// --- Multi-string parsing -----------------------------------------------------
 
 std::set<std::wstring> WindowsExclusiveMode::ParseMultiString(const std::vector<wchar_t> &buf) {
     std::set<std::wstring> result;
@@ -323,7 +323,7 @@ std::vector<wchar_t> WindowsExclusiveMode::BuildMultiString(const std::set<std::
     return buf;
 }
 
-// ─── GetInstancePaths ─────────────────────────────────────────────────────────
+// --- GetInstancePaths ---------------------------------------------------------
 //
 // HidHide identifies devices by their "device instance path" (the string you
 // see in Device Manager under "Details → Device instance path"), e.g.:
@@ -373,7 +373,7 @@ std::vector<std::wstring> WindowsExclusiveMode::GetInstancePaths(SDL_Joystick *j
     return result;
 }
 
-// ─── GetOwnExePath ────────────────────────────────────────────────────────────
+// --- GetOwnExePath ------------------------------------------------------------
 
 std::wstring WindowsExclusiveMode::GetOwnExePath() {
     wchar_t path[MAX_PATH]{};
@@ -381,7 +381,7 @@ std::wstring WindowsExclusiveMode::GetOwnExePath() {
     return path;
 }
 
-// ─── FindSteamExePath ─────────────────────────────────────────────────────────
+// --- FindSteamExePath ---------------------------------------------------------
 
 std::wstring WindowsExclusiveMode::FindSteamExePath() {
     // Check the registry key set by the Steam installer.

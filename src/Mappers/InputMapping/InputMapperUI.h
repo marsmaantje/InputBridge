@@ -1,8 +1,8 @@
 #pragma once
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // All of InputMapper's ImGui rendering.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #include "InputBindingListener.h"
 #include "MappingTypes.h"
@@ -39,7 +39,7 @@ class InputMapperUI {
     char m_NewProfileName[128] = "";
     char m_RenameProfileName[128] = "";
 
-    // ── Shared sub-widgets (previously duplicated lambdas) ─────────────────
+    // -- Shared sub-widgets (previously duplicated lambdas) -----------------
 
     // The "pick a protocol definition" combo. Was a copy-pasted lambda in
     // DrawOutputProtocolSelector, DrawInputProtocolSelector, and
@@ -63,7 +63,7 @@ class InputMapperUI {
     void DrawButtonInputCombo(const char* comboId, SDL_JoystickID instance_id, int& button_index, int* hat_index,
                                int* hat_mask, InputSource::SensorChannel* sensor_channel, bool& changed);
 
-    // ── DrawMappingContent's sections ───────────────────────────────────────
+    // -- DrawMappingContent's sections ---------------------------------------
     void DrawAnalogOutputSection(MappingProfile& profile, const ProtocolDefinition* outDef, bool& changed);
     void DrawDigitalOutputSection(MappingProfile& profile, const ProtocolDefinition* outDef, bool& changed);
     void DrawButtonToAnalogSection(MappingProfile& profile, const ProtocolDefinition* outDef, bool& changed);

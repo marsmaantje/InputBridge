@@ -152,3 +152,46 @@ add_executable(test_input_source
 target_include_directories(test_input_source PRIVATE ${IB_SRC} ${IB_WHEELRPM})
 target_link_libraries(test_input_source PRIVATE GTest::gtest_main SDL3::SDL3)
 gtest_discover_tests(test_input_source)
+
+# 12. test_wiimote_decoder ─────────────────────────────────────────────────────
+# Tests the pure byte->struct decode functions in Devices/Wiimote/WiimoteDecoder.*
+# (buttons, accelerometer LSB packing, IR basic-mode bit packing, extension-ID
+# classification, Nunchuk/Classic Controller/Balance Board payload decoding,
+# and Balance Board calibration + weight interpolation). No SDL_hid_* I/O is
+# exercised here - WiimoteDevice/WiimoteManager (the raw-HID layer) are
+# intentionally left untested until an injectable HID transport exists for
+# them (see Devices/Wiimote/README.md's gap list).
+add_executable(test_wiimote_decoder
+    test_wiimote_decoder.cpp
+    ${IB_SRC}/Devices/Wiimote/WiimoteDecoder.cpp
+)
+target_include_directories(test_wiimote_decoder PRIVATE ${IB_SRC})
+target_link_libraries(test_wiimote_decoder PRIVATE GTest::gtest_main)
+gtest_discover_tests(test_wiimote_decoder)
+
+# 13. test_wiimote_adpcm ────────────────────────────────────────────────────────
+# Tests the pure PCM16<->nibble encode/decode functions in
+# Devices/Wiimote/WiimoteADPCM.* (packing shape, incremental-vs-one-shot
+# equivalence, round-trip error bounds, Reset() semantics). No SDL_hid_* I/O
+# or WiimoteDevice - same rationale as test_wiimote_decoder above.
+add_executable(test_wiimote_adpcm
+    test_wiimote_adpcm.cpp
+    ${IB_SRC}/Devices/Wiimote/WiimoteADPCM.cpp
+)
+target_include_directories(test_wiimote_adpcm PRIVATE ${IB_SRC})
+target_link_libraries(test_wiimote_adpcm PRIVATE GTest::gtest_main)
+gtest_discover_tests(test_wiimote_adpcm)
+
+# 14. test_classic_dpad_button_skip ─────────────────────────────────────────────
+# Tests IsClassicDPadButtonIndex()/ShouldSkipButtonInButtonsSection() in
+# Devices/Wiimote/WiimoteVirtualBridge.h - the predicate GenericVisualizer's
+# "Buttons" section uses to avoid drawing the Classic Controller's D-Pad
+# twice (once as Hat_ClassicDPad, once as four separate digital buttons).
+# Header-only logic, no .cpp source needed; links SDL3 only because the
+# header transitively includes WiimoteDevice.h.
+add_executable(test_classic_dpad_button_skip
+    test_classic_dpad_button_skip.cpp
+)
+target_include_directories(test_classic_dpad_button_skip PRIVATE ${IB_SRC})
+target_link_libraries(test_classic_dpad_button_skip PRIVATE GTest::gtest_main SDL3::SDL3)
+gtest_discover_tests(test_classic_dpad_button_skip)

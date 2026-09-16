@@ -596,7 +596,7 @@ void WebSocketServer::DrawContent() {
     int portInput = currentPort;
     if (ImGui::InputInt("Port", &portInput)) SetPort(portInput);
 
-    // ── Shared combo helper ───────────────────────────────────────────────────
+    // -- Shared combo helper ---------------------------------------------------
     // We draw two independent combos: Output Protocol and Input Protocol.
     // Each shows built-in protocols (no direction) + filtered user definitions.
     struct Entry {
@@ -651,7 +651,7 @@ void WebSocketServer::DrawContent() {
         }
     };
 
-    // ── Send protocol (server → client) ──────────────────────────────────────
+    // -- Send protocol (server → client) --------------------------------------
     {
         if (ImGui::Checkbox("##ws_out_en", &outputEnabled)) {
             SetOutputEnabled(outputEnabled);
@@ -674,7 +674,7 @@ void WebSocketServer::DrawContent() {
         if (!outputEnabled) ImGui::EndDisabled();
     }
 
-    // ── Receive protocol (client → server) ───────────────────────────────────
+    // -- Receive protocol (client → server) -----------------------------------
     {
         if (ImGui::Checkbox("##ws_in_en", &inputEnabled)) {
             SetInputEnabled(inputEnabled);
@@ -695,7 +695,7 @@ void WebSocketServer::DrawContent() {
         if (!inputEnabled) ImGui::EndDisabled();
     }
 
-    // ── Inactivity Timeout ────────────────────────────────────────────────────
+    // -- Inactivity Timeout ----------------------------------------------------
     {
         ImGui::Separator();
         bool timeoutEnabled = m_Impl->inactivityTimeoutEnabled; // Read directly
@@ -712,7 +712,7 @@ void WebSocketServer::DrawContent() {
         if (!timeoutEnabled) ImGui::EndDisabled();
     }
 
-    // ── Status / start / stop ─────────────────────────────────────────────────
+    // -- Status / start / stop -------------------------------------------------
     if (running) {
         ImGui::TextColored(ImVec4(0,1,0,1), "Status: Running (Port %d)", runningPort);
         if (runningPort != currentPort) {

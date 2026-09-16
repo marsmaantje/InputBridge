@@ -2,6 +2,7 @@
 #include "Devices/DeviceState.h"
 #include "Devices/DeviceManager.h"
 #include "Preferences/Preferences.h"
+#include <string>
 
 class GamepadHapticsVisualizer {
 public:
@@ -29,4 +30,5 @@ private:
     int m_xbox_left_intensity = 0;
     int m_xbox_right_intensity = 0;
     int m_xbox_trigger_duration = 1000;
+    std::string m_xbox_trigger_error;
 };

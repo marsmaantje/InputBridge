@@ -242,3 +242,114 @@ TEST(PreferencesManager, MarkAlreadyAppliedDoesNotCrash) {
     EXPECT_NO_THROW(prefs.MarkPreferenceApplied(99));
     EXPECT_TRUE(prefs.IsPreferenceApplied(99));
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Wiimote settings (keyed by HID path, not SDL GUID - see
+// PreferencesManager::GetWiimotePlayerLED's comment)
+// ═════════════════════════════════════════════════════════════════════════════
+
+TEST(PreferencesManager, GetWiimotePlayerLEDReturnsDefaultWhenAbsent) {
+    PreferencesManager prefs;
+    EXPECT_EQ(prefs.GetWiimotePlayerLED("/dev/hidraw0"), 1);
+    EXPECT_EQ(prefs.GetWiimotePlayerLED("/dev/hidraw0", 3), 3);
+}
+
+TEST(PreferencesManager, SetAndGetWiimotePlayerLEDRoundtrip) {
+    PreferencesManager prefs;
+    prefs.SetWiimotePlayerLED("/dev/hidraw0", 3);
+    EXPECT_EQ(prefs.GetWiimotePlayerLED("/dev/hidraw0"), 3);
+}
+
+TEST(PreferencesManager, WiimotePlayerLEDPathsAreIndependent) {
+    PreferencesManager prefs;
+    prefs.SetWiimotePlayerLED("/dev/hidraw0", 2);
+    prefs.SetWiimotePlayerLED("/dev/hidraw1", 4);
+    EXPECT_EQ(prefs.GetWiimotePlayerLED("/dev/hidraw0"), 2);
+    EXPECT_EQ(prefs.GetWiimotePlayerLED("/dev/hidraw1"), 4);
+}
+
+TEST(PreferencesManager, GetWiimoteIRExtendedModeReturnsDefaultWhenAbsent) {
+    PreferencesManager prefs;
+    EXPECT_FALSE(prefs.GetWiimoteIRExtendedMode("/dev/hidraw0"));
+    EXPECT_TRUE(prefs.GetWiimoteIRExtendedMode("/dev/hidraw0", true));
+}
+
+TEST(PreferencesManager, SetAndGetWiimoteIRExtendedModeRoundtrip) {
+    PreferencesManager prefs;
+    prefs.SetWiimoteIRExtendedMode("/dev/hidraw0", true);
+    EXPECT_TRUE(prefs.GetWiimoteIRExtendedMode("/dev/hidraw0"));
+    prefs.SetWiimoteIRExtendedMode("/dev/hidraw0", false);
+    EXPECT_FALSE(prefs.GetWiimoteIRExtendedMode("/dev/hidraw0"));
+}
+
+TEST(PreferencesManager, WiimotePlayerLEDAndIRExtendedModeAreIndependentKeys) {
+    // Same section (same hid_path) - make sure the two settings don't
+    // collide under it.
+    PreferencesManager prefs;
+    prefs.SetWiimotePlayerLED("/dev/hidraw0", 4);
+    prefs.SetWiimoteIRExtendedMode("/dev/hidraw0", true);
+    EXPECT_EQ(prefs.GetWiimotePlayerLED("/dev/hidraw0"), 4);
+    EXPECT_TRUE(prefs.GetWiimoteIRExtendedMode("/dev/hidraw0"));
+}
+
+TEST(PreferencesManager, GetWiimoteBalanceTareKgReturnsFalseWhenAbsent) {
+    PreferencesManager prefs;
+    float kg[4] = {-1.f, -1.f, -1.f, -1.f};
+    EXPECT_FALSE(prefs.GetWiimoteBalanceTareKg("/dev/hidraw0", kg));
+    // Untouched on a miss.
+    EXPECT_FLOAT_EQ(kg[0], -1.f);
+}
+
+TEST(PreferencesManager, SetAndGetWiimoteBalanceTareKgRoundtrip) {
+    PreferencesManager prefs;
+    const float saved[4] = {1.5f, 2.25f, 0.75f, 3.0f};
+    prefs.SetWiimoteBalanceTareKg("/dev/hidraw0", saved);
+
+    float kg[4] = {};
+    EXPECT_TRUE(prefs.GetWiimoteBalanceTareKg("/dev/hidraw0", kg));
+    EXPECT_FLOAT_EQ(kg[0], 1.5f);
+    EXPECT_FLOAT_EQ(kg[1], 2.25f);
+    EXPECT_FLOAT_EQ(kg[2], 0.75f);
+    EXPECT_FLOAT_EQ(kg[3], 3.0f);
+}
+
+TEST(PreferencesManager, SetWiimoteBalanceTareKgAllZeroReadsBackAsFalse) {
+    // All-zero is indistinguishable from "never saved" by design (both
+    // mean "no offset" to the caller) - see the header comment.
+    PreferencesManager prefs;
+    const float zero[4] = {0.f, 0.f, 0.f, 0.f};
+    prefs.SetWiimoteBalanceTareKg("/dev/hidraw0", zero);
+
+    float kg[4] = {};
+    EXPECT_FALSE(prefs.GetWiimoteBalanceTareKg("/dev/hidraw0", kg));
+}
+
+TEST(PreferencesManager, ClearWiimoteBalanceTareKgRemovesSavedTare) {
+    PreferencesManager prefs;
+    const float saved[4] = {1.f, 2.f, 3.f, 4.f};
+    prefs.SetWiimoteBalanceTareKg("/dev/hidraw0", saved);
+    prefs.ClearWiimoteBalanceTareKg("/dev/hidraw0");
+
+    float kg[4] = {};
+    EXPECT_FALSE(prefs.GetWiimoteBalanceTareKg("/dev/hidraw0", kg));
+}
+
+TEST(PreferencesManager, ClearWiimoteBalanceTareKgDoesNotCrashForAbsentPath) {
+    PreferencesManager prefs;
+    EXPECT_NO_THROW(prefs.ClearWiimoteBalanceTareKg("/dev/hidraw0"));
+}
+
+TEST(PreferencesManager, WiimoteBalanceTareKgPathsAreIndependent) {
+    PreferencesManager prefs;
+    const float boardA[4] = {1.f, 1.f, 1.f, 1.f};
+    const float boardB[4] = {2.f, 2.f, 2.f, 2.f};
+    prefs.SetWiimoteBalanceTareKg("/dev/hidraw0", boardA);
+    prefs.SetWiimoteBalanceTareKg("/dev/hidraw1", boardB);
+
+    float kgA[4] = {};
+    float kgB[4] = {};
+    EXPECT_TRUE(prefs.GetWiimoteBalanceTareKg("/dev/hidraw0", kgA));
+    EXPECT_TRUE(prefs.GetWiimoteBalanceTareKg("/dev/hidraw1", kgB));
+    EXPECT_FLOAT_EQ(kgA[0], 1.f);
+    EXPECT_FLOAT_EQ(kgB[0], 2.f);
+}

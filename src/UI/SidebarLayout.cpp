@@ -15,10 +15,17 @@
 #include "UI/IconsFontAwesome6.h"
 #include "UI/SettingsPanel.h"
 
+#if defined(__linux__)
+#include "Devices/Wiimote/WiimoteManager.h"
+#include "Devices/Wiimote/Linux/LinuxUdevInstaller.h"
+#include <chrono>
+#include <future>
+#endif
+
 #include <string>
 #include <vector>
 
-// ── Persistent sidebar state ─────────────────────────────────────────────────
+// -- Persistent sidebar state -------------------------------------------------
 // Section IDs: 0=Devices  1=Input  2=Output  3=Network
 //              4=Protocols  5=Settings  6=About  7=DebugLog
 static int   g_ActiveSection   = 0;
@@ -35,11 +42,127 @@ static bool  s_DisableKeyboardNav = false;
 static bool  s_KeyboardNavLoaded  = false;
 static bool  s_BatteryIntervalLoaded = false;
 
+#if defined(__linux__)
+// State for the "Fix permissions" button shown when
+// WiimoteManager::HadRecentLinuxPermissionError() is true (see
+// SidebarLayout.cpp's Devices tab body). pkexec blocks on user interaction
+// with the polkit auth dialog, so it runs on a background thread via
+// std::async and this struct is polled once per frame rather than the UI
+// thread calling LinuxUdevInstaller directly and freezing the render loop
+// until the dialog is dismissed.
+namespace {
+struct UdevInstallUiState {
+    std::future<InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome> pending;
+    bool has_result = false;
+    InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome last_result;
+
+    bool IsRunning() const {
+        return pending.valid() &&
+               pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+    }
+
+    // Call once per frame; picks up the result the frame it completes.
+    void Poll() {
+        if (pending.valid() && pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            last_result = pending.get();
+            has_result = true;
+        }
+    }
+};
+UdevInstallUiState s_UdevInstallUi;
+} // namespace
+
+// Panel-wide (not per-device) banner offering to fix the udev rule when
+// the most recent WiimoteManager::Scan() hit EACCES opening a hidraw
+// node - see WiimoteManager.h's HadRecentLinuxPermissionError() doc
+// comment for why this only reflects the latest scan.
+static void DrawLinuxUdevPermissionBanner() {
+    using InputBridge::Wiimote::LinuxUdevInstaller;
+    using InputBridge::Wiimote::WiimoteManager;
+
+    s_UdevInstallUi.Poll();
+
+    // Once installed successfully, stop nagging even if the device hasn't
+    // been replugged yet this session - the flag itself will clear on its
+    // own the next time a scan actually succeeds in opening the device.
+    if (s_UdevInstallUi.has_result &&
+        s_UdevInstallUi.last_result.result == LinuxUdevInstaller::Result::Success &&
+        !s_UdevInstallUi.IsRunning()) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK " Permissions installed.");
+        // Show the script's own "Next steps" block (unplug/replug, log out
+        // if it added the user to plugdev, relaunch) rather than a
+        // hardcoded summary - those steps only exist in the script's
+        // stdout, so if the UI doesn't surface it here the user never
+        // sees them (they'd otherwise only end up wherever the process's
+        // stdout happens to go, not in the app itself).
+        if (!s_UdevInstallUi.last_result.stdout_tail.empty()) {
+            ImGui::TextWrapped("%s", s_UdevInstallUi.last_result.stdout_tail.c_str());
+        } else {
+            // Fallback for an older/customized script that prints nothing
+            // to stdout - still give the user something actionable.
+            ImGui::TextWrapped("Unplug and replug the Wiimote/Balance Board (or its "
+                                "Bluetooth dongle) to finish.");
+        }
+        return;
+    }
+
+    if (!WiimoteManager::HadRecentLinuxPermissionError() && !s_UdevInstallUi.IsRunning())
+        return;
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.35f, 0.25f, 0.05f, 0.35f));
+    ImGui::BeginChild("##udev_permission_banner", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY,
+                       ImGuiWindowFlags_NoScrollbar);
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
+                        "! A Wiimote or Balance Board was found but couldn't be opened "
+                        "(permission denied).");
+    ImGui::TextWrapped("This is common when connecting through a USB Bluetooth dongle: "
+                        "the device needs a one-time permission rule installed.");
+
+    if (s_UdevInstallUi.IsRunning()) {
+        ImGui::TextDisabled("Waiting for authentication...");
+    } else {
+        const bool pkexec_available = LinuxUdevInstaller::IsPkexecAvailable();
+        ImGui::BeginDisabled(!pkexec_available);
+        if (ImGui::Button("Fix permissions...")) {
+            s_UdevInstallUi.has_result = false;
+            s_UdevInstallUi.pending = std::async(std::launch::async,
+                                                  &LinuxUdevInstaller::InstallRules);
+        }
+        ImGui::EndDisabled();
+        if (!pkexec_available) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(pkexec not found)");
+        }
+
+        ImGui::SameLine();
+        ImGui::TextDisabled("or run: sudo ./packaging/linux/install-udev-rules.sh");
+
+        if (s_UdevInstallUi.has_result &&
+            s_UdevInstallUi.last_result.result != LinuxUdevInstaller::Result::Success) {
+            using Result = LinuxUdevInstaller::Result;
+            const char *why =
+                s_UdevInstallUi.last_result.result == Result::UserCancelled  ? "Authentication was cancelled." :
+                s_UdevInstallUi.last_result.result == Result::ScriptNotFound ? "install-udev-rules.sh wasn't found "
+                                                                                "next to the InputBridge binary." :
+                s_UdevInstallUi.last_result.result == Result::PkexecNotFound ? "pkexec isn't available on this system." :
+                                                                                "The installer script failed.";
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", why);
+            if (!s_UdevInstallUi.last_result.stderr_tail.empty() &&
+                s_UdevInstallUi.last_result.result == Result::Failed) {
+                ImGui::TextWrapped("%s", s_UdevInstallUi.last_result.stderr_tail.c_str());
+            }
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+#endif // __linux__
+
 // ---------------------------------------------------------------------------
 
 void DrawSidebarLayout(SidebarContext& ctx)
 {
-    // ── Sizing (adapts to font / DPI) ─────────────────────────────────────
+    // -- Sizing (adapts to font / DPI) -------------------------------------
     const float FONT_SZ        = ImGui::GetFontSize();
     const float PAD            = ImGui::GetStyle().WindowPadding.x;
     const float ITEM_SPC       = ImGui::GetStyle().ItemSpacing.y;
@@ -54,7 +177,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     const float sidebar_w = g_SidebarExpanded ? g_SidebarW : SIDEBAR_W_SML;
 
-    // ── Full-screen host window ───────────────────────────────────────────
+    // -- Full-screen host window -------------------------------------------
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
     ImGui::SetNextWindowSize(vp->WorkSize);
@@ -76,7 +199,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
     const float total_w   = ImGui::GetContentRegionAvail().x;
     const float content_w = total_w - sidebar_w - SPLITTER_W;
 
-    // ── LEFT SIDEBAR ──────────────────────────────────────────────────────
+    // -- LEFT SIDEBAR ------------------------------------------------------
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(PAD, PAD));
     ImGui::BeginChild("##Sidebar", ImVec2(sidebar_w, total_h),
                       ImGuiChildFlags_Borders,
@@ -102,7 +225,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── Scrollable navigation + utility area ──────────────────────────────
+    // -- Scrollable navigation + utility area ------------------------------
     const float sep_h    = ITEM_SPC * 2.0f + 1.0f;
     const float bottom_h = BTN_H + ITEM_SPC + sep_h + ITEM_SPC;
     float       scroll_h = ImGui::GetContentRegionAvail().y - bottom_h;
@@ -194,7 +317,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     ImGui::EndChild(); // ##NavScroll
 
-    // ── Pinned Exit button ────────────────────────────────────────────────
+    // -- Pinned Exit button ------------------------------------------------
     ImGui::Separator();
     ImGui::Spacing();
     {
@@ -239,7 +362,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     ImGui::EndChild(); // ##Sidebar
 
-    // ── Drag-to-resize splitter ───────────────────────────────────────────
+    // -- Drag-to-resize splitter -------------------------------------------
     ImGui::SameLine(0, 0);
     ImGui::InvisibleButton("##splitter", { SPLITTER_W, total_h });
     if (ImGui::IsItemActive()) {
@@ -254,7 +377,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     ImGui::SameLine(0, 0);
 
-    // ── RIGHT CONTENT AREA ────────────────────────────────────────────────
+    // -- RIGHT CONTENT AREA ------------------------------------------------
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
     ImGui::BeginChild("##ContentArea", { content_w, total_h },
                       ImGuiChildFlags_Borders,
@@ -278,7 +401,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
 
     switch (g_ActiveSection) {
 
-        case 0: { // ── Devices ─────────────────────────────────────────────
+        case 0: { // -- Devices ---------------------------------------------
             // Load battery LED preference once on first entry.
             if (!s_BatteryLEDLoaded) {
                 s_EnableBatteryLED = ctx.prefs.GetBool("EnableBatteryLED", true);
@@ -406,32 +529,50 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 }
             }
 
+#if defined(__linux__)
+            DrawLinuxUdevPermissionBanner();
+#endif
+
+            // Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero.
+            // Not SDL_Joystick-backed (see Devices/Wiimote/README.md), so they
+            // live in their own list rather than `devices` above.
+            {
+                const auto& wiimotes = ctx.deviceManager.GetWiimotes();
+                if (!wiimotes.empty()) {
+                    ImGui::Separator();
+                    ImGui::Text("Wiimotes: %d", static_cast<int>(wiimotes.size()));
+                    int idx = 0;
+                    for (auto& w : wiimotes)
+                        DrawWiimoteItem(*w, ctx.prefs, idx++);
+                }
+            }
+
             ImGui::Separator();
             for (auto& dev : devices)
                 DrawDeviceItem(dev, ctx.deviceManager, ctx.prefs, ctx.show_named_inputs);
             break;
         }
 
-        case 1: // ── Input Mapper ─────────────────────────────────────────
+        case 1: // -- Input Mapper -----------------------------------------
             ctx.inputMapper.DrawMappingContent();
             break;
 
-        case 2: // ── Output Mapper ────────────────────────────────────────
+        case 2: // -- Output Mapper ----------------------------------------
             ctx.outputMapper.DrawContentOnly();
             break;
 
-        case 3: // ── Network ──────────────────────────────────────────────
+        case 3: // -- Network ----------------------------------------------
             NetworkStatusWindow::DrawContentOnly(
                 ctx.server_update_rate,
                 ctx.server_dynamic_rate,
                 ctx.current_messages_per_second);
             break;
 
-        case 4: // ── Protocol Editor ──────────────────────────────────────
+        case 4: // -- Protocol Editor --------------------------------------
             ProtocolEditorWindow::DrawContent();
             break;
 
-        case 5: // ── Settings ─────────────────────────────────────────────
+        case 5: // -- Settings ---------------------------------------------
             if (!s_BatteryIntervalLoaded) {
                 int interval = ctx.prefs.GetInt("BatteryUpdateIntervalMs", 5000);
                 ctx.deviceManager.SetBatteryUpdateInterval(interval);
@@ -446,14 +587,15 @@ void DrawSidebarLayout(SidebarContext& ctx)
                 s_DisableGamepadNav,
                 s_DisableKeyboardNav,
                 ctx.deviceManager,
-                ctx.show_named_inputs);
+                ctx.show_named_inputs,
+                ctx.show_slider_edit_buttons);
             break;
 
-        case 6: // ── About ────────────────────────────────────────────────
+        case 6: // -- About ------------------------------------------------
             AboutWindow::DrawContent();
             break;
 
-        case 7: // ── Debug Log ────────────────────────────────────────────
+        case 7: // -- Debug Log --------------------------------------------
             DrawDebugLogContent();
             break;
     }

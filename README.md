@@ -4,7 +4,7 @@
 
 InputBridge reads joystick, gamepad, steering wheel, and flight stick input and streams it over **OSC** and **WebSocket** to any receiving application. It also accepts haptic commands back - rumble, force feedback, adaptive triggers - and dispatches them to connected devices in real time.
 
-![InputBridge screenshot](docs/0.10.0_InputBridge_device_screen.png)
+![InputBridge screenshot](docs/0.12.0_InputBridge_device_screen_merged.png)
 
 ---
 
@@ -16,6 +16,7 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 | Steam Controller (V1 & V2)  | Axes, buttons, dual touchpads, gyro, accelerometer, capacitive grip/stick | Touchpad haptics (raw HID), rumble                                                 |
 | Nintendo Joy-Con (L/R pair) | Axes, buttons, independent per-side gyro & accelerometer                  | Rumble                                                                             |
 | Sony DualSense (PS5)        | Axes, buttons, touchpad (2-finger), gyro, accelerometer                   | Rumble, LED control - USB & Bluetooth                                              |
+| Wii Remote / Remote Plus, Balance Board | Buttons, accelerometer, 4-point IR camera, Nunchuk & Classic Controller extension inputs, Balance Board per-sensor and total weight with center of gravity, battery | Rumble (in-app test panel; not yet dispatched over OSC/WebSocket) |
 | Steering Wheel              | Axes, buttons                                                             | Constant force, periodic, condition effects (Spring / Damper / Inertia / Friction) |
 | Flight Stick / Throttle     | Axes, buttons                                                             | Constant force, periodic, condition on both pitch and roll axes                    |
 
@@ -31,6 +32,8 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 
 See the [Wiki](../../wiki) for a full step-by-step guide and reference documentation.
 
+> **Linux + Wii Remote/Balance Board via a Bluetooth dongle:** if the device doesn't show up or fails to open, InputBridge will show a **Fix permissions** button that runs the udev install script for you through a polkit prompt, no terminal needed. To do it manually instead, run `sudo ./packaging/linux/install-udev-rules.sh` (or the copy under `share/inputbridge/udev/` if you installed a package) to grant hidraw permissions, then replug the device. See [`packaging/linux/README.md`](packaging/linux/README.md) for details.
+
 ---
 
 ## Features
@@ -41,6 +44,7 @@ See the [Wiki](../../wiki) for a full step-by-step guide and reference documenta
 * **Kenney Input Prompts Integration** - Integrated Kenney Input Prompts icon font (v1.5) provides controller-aware device, button, axis, and input icons throughout the UI. Includes configurable toggles for device icons and icon-based input labels.
 * **Gyro, Accelerometer & Touchpad Mapping** - map gyroscope rates, accelerometer axes, and touchpad position/pressure directly to output protocol fields, just like regular axes. Split L/R sensors on Joy-Con and Steam Controller are each independently mappable.
 * **Battery Level Output** - battery percentage and charging state are available as mappable analog sources for any connected device, including separate Left Joy-Con battery for split pairs.
+* **Wii Remote & Balance Board Support** - talks to Wii Remotes, Wii Remote Plus, Nunchuk, Classic Controller, and Balance Boards directly over raw HID rather than SDL's built-in Wii driver, so IR camera data, extension controller inputs, and full Balance Board weight sensing all show up as regular mappable inputs alongside your other devices. Pair via your OS's Bluetooth settings; on Linux, InputBridge offers a one-click hidraw permission fix if the device doesn't open.
 * **Protocol Editor** - define exactly which fields to send, with custom OSC paths and WebSocket keys. Import, export, duplicate, and version-control protocol files.
 * **Mapping Profiles** - multiple named profiles, each with independent analog mappings, digital mappings, analog-to-digital mappings, channel mixes, server settings, and protocol selections.
 * **Virtual Devices** - create simulated joysticks to test protocols without real hardware.
