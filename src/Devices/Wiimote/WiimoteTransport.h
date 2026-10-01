@@ -16,10 +16,12 @@
 // Method semantics mirror the SDL_hid_* calls WiimoteDevice used to make
 // directly (report ID as first byte, non-blocking Read returns 0 when
 // idle), so WiimoteDevice.cpp doesn't need to know which transport it's
-// using.
+// using. Wire data is passed as std::span<std::byte> - the transports are
+// the only place that converts to/from the unsigned char* the OS/SDL APIs
+// want.
 #pragma once
 #include <cstddef>
-#include <cstdint>
+#include <span>
 
 namespace InputBridge::Wiimote {
 
@@ -34,12 +36,12 @@ public:
     // SDL_hid_write). WiimoteL2CAPTransport adds the WiiBrew Bluetooth HID
     // "0xA2 DATA|Output" framing underneath, not the caller. Returns bytes
     // accepted, or -1 on error.
-    virtual int Write(const uint8_t *data, size_t len) = 0;
+    virtual int Write(std::span<const std::byte> data) = 0;
 
     // Non-blocking read of the next pending input report (buf[0] = report
     // ID on success). Returns bytes read, 0 if nothing pending, or -1 on
     // error/disconnect.
-    virtual int Read(uint8_t *buf, size_t bufsize) = 0;
+    virtual int Read(std::span<std::byte> buf) = 0;
 
     // Closes the connection. Safe to call more than once or from a
     // destructor.

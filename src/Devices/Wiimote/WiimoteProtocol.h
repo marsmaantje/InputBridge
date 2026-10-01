@@ -8,11 +8,34 @@
 // This header intentionally contains ONLY numeric constants + tiny structs -
 // no I/O - so it can be unit tested without a real device or SDL_hid handle.
 #pragma once
-#include <cstdint>
-#include <cstddef>
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <span>
 
 namespace InputBridge::Wiimote {
+
+// -- Byte helpers --------------------------------------------------------
+// Raw wire data (report IDs, register payloads, extension bytes) is held as
+// std::byte throughout this module; plain integers are only used for decoded
+// numeric values. `0x16_b` spells a std::byte literal without a static_cast
+// at every use site; consteval, so an out-of-range value (e.g. 0x1FF_b) is a
+// compile error rather than a silent truncation.
+consteval std::byte operator""_b(unsigned long long value) {
+    if (value > 0xFFull) throw "std::byte literal out of range (> 0xFF)";
+    return static_cast<std::byte>(value);
+}
+
+// Low 8 bits of `value` as a byte (explicit, intentional truncation).
+constexpr std::byte LowByte(uint32_t value) {
+    return static_cast<std::byte>(value & 0xFFu);
+}
+
+// Big-endian pair of bytes -> uint16_t (hi byte first, as the Wiimote sends
+// multi-byte fields).
+constexpr uint16_t ToU16BE(std::byte hi, std::byte lo) {
+    return static_cast<uint16_t>((std::to_integer<unsigned>(hi) << 8) | std::to_integer<unsigned>(lo));
+}
 
 // -- USB VID/PID (also used over the Bluetooth HID transport) --------------
 constexpr uint16_t kVendorNintendo        = 0x057e;
@@ -21,42 +44,42 @@ constexpr uint16_t kProductWiimotePlus    = 0x0330; // RVL-CNT-01-TR (incl. Bala
 
 // -- Output report IDs (host -> Wiimote) ------------------------------------
 namespace OutReport {
-    constexpr uint8_t Rumble          = 0x10;
-    constexpr uint8_t LEDs            = 0x11;
-    constexpr uint8_t DataReportMode  = 0x12;
-    constexpr uint8_t IRCameraEnable1 = 0x13;
-    constexpr uint8_t SpeakerEnable   = 0x14;
-    constexpr uint8_t StatusRequest   = 0x15;
-    constexpr uint8_t WriteMemory     = 0x16;
-    constexpr uint8_t ReadMemory      = 0x17;
-    constexpr uint8_t SpeakerData     = 0x18;
-    constexpr uint8_t SpeakerMute     = 0x19;
-    constexpr uint8_t IRCameraEnable2 = 0x1a;
+    constexpr std::byte Rumble          = 0x10_b;
+    constexpr std::byte LEDs            = 0x11_b;
+    constexpr std::byte DataReportMode  = 0x12_b;
+    constexpr std::byte IRCameraEnable1 = 0x13_b;
+    constexpr std::byte SpeakerEnable   = 0x14_b;
+    constexpr std::byte StatusRequest   = 0x15_b;
+    constexpr std::byte WriteMemory     = 0x16_b;
+    constexpr std::byte ReadMemory      = 0x17_b;
+    constexpr std::byte SpeakerData     = 0x18_b;
+    constexpr std::byte SpeakerMute     = 0x19_b;
+    constexpr std::byte IRCameraEnable2 = 0x1a_b;
 }
 
 // -- Input report IDs (Wiimote -> host) --------------------------------------
 namespace InReport {
-    constexpr uint8_t Status          = 0x20;
-    constexpr uint8_t ReadMemoryData  = 0x21;
-    constexpr uint8_t Acknowledge     = 0x22;
+    constexpr std::byte Status          = 0x20_b;
+    constexpr std::byte ReadMemoryData  = 0x21_b;
+    constexpr std::byte Acknowledge     = 0x22_b;
 
-    constexpr uint8_t Core              = 0x30; // buttons only
-    constexpr uint8_t CoreAccel         = 0x31; // buttons + accel
-    constexpr uint8_t CoreExt8          = 0x32; // buttons + 8 ext bytes (Balance Board default)
-    constexpr uint8_t CoreAccelIR12     = 0x33; // buttons + accel + 12 IR bytes (basic/ext IR)
-    constexpr uint8_t CoreExt19         = 0x34; // buttons + 19 ext bytes (Balance Board + battery)
-    constexpr uint8_t CoreAccelExt16    = 0x35; // buttons + accel + 16 ext bytes
-    constexpr uint8_t CoreIR10Ext9      = 0x36; // buttons + 10 IR + 9 ext
-    constexpr uint8_t CoreAccelIR10Ext6 = 0x37; // buttons + accel + 10 IR (basic mode) + 6 ext  <- primary mode we use
-    constexpr uint8_t Ext21             = 0x3d; // 21 ext bytes only
-    constexpr uint8_t InterleavedA      = 0x3e; // interleaved accel+IR (full mode), half 1
-    constexpr uint8_t InterleavedB      = 0x3f; // interleaved accel+IR (full mode), half 2
+    constexpr std::byte Core              = 0x30_b; // buttons only
+    constexpr std::byte CoreAccel         = 0x31_b; // buttons + accel
+    constexpr std::byte CoreExt8          = 0x32_b; // buttons + 8 ext bytes (Balance Board default)
+    constexpr std::byte CoreAccelIR12     = 0x33_b; // buttons + accel + 12 IR bytes (basic/ext IR)
+    constexpr std::byte CoreExt19         = 0x34_b; // buttons + 19 ext bytes (Balance Board + battery)
+    constexpr std::byte CoreAccelExt16    = 0x35_b; // buttons + accel + 16 ext bytes
+    constexpr std::byte CoreIR10Ext9      = 0x36_b; // buttons + 10 IR + 9 ext
+    constexpr std::byte CoreAccelIR10Ext6 = 0x37_b; // buttons + accel + 10 IR (basic mode) + 6 ext  <- primary mode we use
+    constexpr std::byte Ext21             = 0x3d_b; // 21 ext bytes only
+    constexpr std::byte InterleavedA      = 0x3e_b; // interleaved accel+IR (full mode), half 1
+    constexpr std::byte InterleavedB      = 0x3f_b; // interleaved accel+IR (full mode), half 2
 }
 
 // -- Memory / register address space ----------------------------------------
 // Bit 2 (0x04) of the flags byte in ReadMemory/WriteMemory selects Control
 // Registers instead of EEPROM. Must always be set for anything below.
-constexpr uint8_t kRegisterFlag = 0x04;
+constexpr std::byte kRegisterFlag = 0x04_b;
 
 namespace Registers {
     constexpr uint32_t SpeakerBase       = 0xA20000; // - 0xA20009
@@ -128,8 +151,8 @@ namespace Registers {
 // Registers::SpeakerConfig: [0]=unknown(always 0x00) [1]=format
 // [2:3]=rate, little-endian [4]=volume [5:6]=unknown(always 0x00).
 namespace SpeakerFormat {
-    constexpr uint8_t Pcm8   = 0x40; // signed 8-bit PCM; volume range 0x00-0xFF
-    constexpr uint8_t Adpcm4 = 0x00; // 4-bit Yamaha ADPCM; volume range 0x00-0x40
+    constexpr std::byte Pcm8   = 0x40_b; // signed 8-bit PCM; volume range 0x00-0xFF
+    constexpr std::byte Adpcm4 = 0x00_b; // 4-bit Yamaha ADPCM; volume range 0x00-0x40
 }
 
 // rate register value = clock / desired_sample_rate_hz (WiiBrew's formula,
@@ -154,12 +177,15 @@ constexpr std::size_t kSpeakerMaxChunkBytes = 20;
 // through this transform (WiiBrew "Wiimote/Extension Controllers#The New
 // Way", decrypt direction):
 //   decrypted = ((encrypted ^ 0x17) + 0x17) & 0xFF
-inline uint8_t DecryptExtensionByte(uint8_t encrypted) {
-    return static_cast<uint8_t>((encrypted ^ 0x17) + 0x17);
+inline std::byte DecryptExtensionByte(std::byte encrypted) {
+    // Arithmetic happens on the integer value; the result wraps mod 256 by
+    // construction of the cast back to a byte.
+    const unsigned value = (std::to_integer<unsigned>(encrypted) ^ 0x17u) + 0x17u;
+    return LowByte(value);
 }
 
-inline void DecryptExtensionBytes(uint8_t *data, std::size_t len) {
-    for (std::size_t i = 0; i < len; ++i) data[i] = DecryptExtensionByte(data[i]);
+inline void DecryptExtensionBytes(std::span<std::byte> data) {
+    for (std::byte &b : data) b = DecryptExtensionByte(b);
 }
 
 enum class ExtensionType {
@@ -175,7 +201,7 @@ enum class ExtensionType {
 };
 
 // 6-byte extension IDs as returned unencrypted, format: XX XX A4 20 ZZ ZZ
-struct ExtensionId6 { std::array<uint8_t, 6> bytes; };
+struct ExtensionId6 { std::array<std::byte, 6> bytes; };
 
 inline ExtensionType ClassifyExtension(const ExtensionId6 &id) {
     const auto &b = id.bytes;
@@ -187,10 +213,10 @@ inline ExtensionType ClassifyExtension(const ExtensionId6 &id) {
     // base at 0xA6xxxx and reports A6 20 in this same position (see
     // WiiBrew "Wii Motion Plus#Identifying" - this is not a typo/alias of
     // A4, the hardware genuinely answers with A6 here).
-    if ((b[2] != 0xA4 && b[2] != 0xA6) || b[3] != 0x20) return ExtensionType::Unknown;
+    if ((b[2] != 0xA4_b && b[2] != 0xA6_b) || b[3] != 0x20_b) return ExtensionType::Unknown;
 
-    const uint16_t sub = (uint16_t(b[0]) << 8) | b[1]; // XXXX
-    const uint16_t typ = (uint16_t(b[4]) << 8) | b[5]; // ZZZZ
+    const uint16_t sub = ToU16BE(b[0], b[1]); // XXXX
+    const uint16_t typ = ToU16BE(b[4], b[5]); // ZZZZ
 
     if (typ == 0x0000) return ExtensionType::Nunchuk;
     if (typ == 0x0101) return (sub == 0x0100) ? ExtensionType::ClassicControllerPro
@@ -211,7 +237,7 @@ enum class MotionPlusPassthrough { None, Nunchuk, Classic, Unknown };
 
 inline MotionPlusPassthrough ClassifyMotionPlusPassthrough(const ExtensionId6 &id) {
     const auto &b = id.bytes;
-    const uint16_t typ = (uint16_t(b[4]) << 8) | b[5];
+    const uint16_t typ = ToU16BE(b[4], b[5]);
     switch (typ) {
         case 0x0005: return MotionPlusPassthrough::None;
         case 0x0405: return MotionPlusPassthrough::Nunchuk;
@@ -225,20 +251,20 @@ inline MotionPlusPassthrough ClassifyMotionPlusPassthrough(const ExtensionId6 &i
 // Registers::IRSensitivity2. "Wii level 3" is what the console itself
 // defaults to and is a safe general-purpose choice.
 struct IRSensitivity {
-    std::array<uint8_t, 9> block1;
-    std::array<uint8_t, 2> block2;
+    std::array<std::byte, 9> block1;
+    std::array<std::byte, 2> block2;
 };
 
 inline constexpr IRSensitivity kIRSensitivityWiiLevel3 = {
-    {0x02, 0x00, 0x00, 0x71, 0x01, 0x00, 0xaa, 0x00, 0x64},
-    {0x63, 0x03},
+    {0x02_b, 0x00_b, 0x00_b, 0x71_b, 0x01_b, 0x00_b, 0xaa_b, 0x00_b, 0x64_b},
+    {0x63_b, 0x03_b},
 };
 
 // IR data format mode numbers (written to Registers::IRMode)
 namespace IRMode {
-    constexpr uint8_t Basic    = 1; // 10 bytes, 4 dots, X/Y only - fits report 0x37/0x36
-    constexpr uint8_t Extended = 3; // 12 bytes, 4 dots, X/Y + size  - fits report 0x33
-    constexpr uint8_t Full     = 5; // 36 bytes, 4 dots, X/Y+size+bbox+intensity - needs 0x3e/0x3f
+    constexpr std::byte Basic    = 0x01_b; // 10 bytes, 4 dots, X/Y only - fits report 0x37/0x36
+    constexpr std::byte Extended = 0x03_b; // 12 bytes, 4 dots, X/Y + size  - fits report 0x33
+    constexpr std::byte Full     = 0x05_b; // 36 bytes, 4 dots, X/Y+size+bbox+intensity - needs 0x3e/0x3f
 }
 
 } // namespace InputBridge::Wiimote

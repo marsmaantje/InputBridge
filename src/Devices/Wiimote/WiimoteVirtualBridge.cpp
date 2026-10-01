@@ -2,6 +2,8 @@
 #include "WiimoteVirtualBridge.h"
 #include "App/Log.h"
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstring>
 #include <optional>
 
@@ -355,9 +357,9 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         // - "dot 1" just means "whatever is in ir[0] right now", no
         // persistent identity across frames. Rests at center (0), not a
         // rail, when its slot isn't visible.
-        static constexpr int kIRAxisX[4] = {Axis_IR1X, Axis_IR2X, Axis_IR3X, Axis_IR4X};
-        static constexpr int kIRAxisY[4] = {Axis_IR1Y, Axis_IR2Y, Axis_IR3Y, Axis_IR4Y};
-        for (int i = 0; i < 4; ++i) {
+        static constexpr std::array<int, 4> kIRAxisX = {Axis_IR1X, Axis_IR2X, Axis_IR3X, Axis_IR4X};
+        static constexpr std::array<int, 4> kIRAxisY = {Axis_IR1Y, Axis_IR2Y, Axis_IR3Y, Axis_IR4Y};
+        for (std::size_t i = 0; i < kIRAxisX.size(); ++i) {
             const auto &dot = snap.ir[i];
             setAxis(kIRAxisX[i], dot.visible ? (float(dot.x) / 1023.0f) * 2.f - 1.f : 0.f);
             setAxis(kIRAxisY[i], dot.visible ? (float(dot.y) / 767.0f)  * 2.f - 1.f : 0.f);
@@ -367,8 +369,8 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         // (WiimoteDevice::SetIRMode; stays 0 in Basic mode). Magnitude
         // with no natural sign, so uses the "rest = -1" convention like
         // the Balance Board weight axes: 0/not-visible -> -1, 15 -> +1.
-        static constexpr int kIRAxisSize[4] = {Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size};
-        for (int i = 0; i < 4; ++i) {
+        static constexpr std::array<int, 4> kIRAxisSize = {Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size};
+        for (std::size_t i = 0; i < kIRAxisSize.size(); ++i) {
             const auto &dot = snap.ir[i];
             setAxis(kIRAxisSize[i], dot.visible ? Norm01ToBipolar(float(dot.size), 0.f, 15.f) : -1.f);
         }

@@ -158,9 +158,8 @@ gtest_discover_tests(test_input_source)
 # (buttons, accelerometer LSB packing, IR basic-mode bit packing, extension-ID
 # classification, Nunchuk/Classic Controller/Balance Board payload decoding,
 # and Balance Board calibration + weight interpolation). No SDL_hid_* I/O is
-# exercised here - WiimoteDevice/WiimoteManager (the raw-HID layer) are
-# intentionally left untested until an injectable HID transport exists for
-# them (see Devices/Wiimote/README.md's gap list).
+# exercised here - WiimoteDevice is covered separately through a mock
+# IWiimoteTransport in test_wiimote_device.cpp (target 15 below).
 add_executable(test_wiimote_decoder
     test_wiimote_decoder.cpp
     ${IB_SRC}/Devices/Wiimote/WiimoteDecoder.cpp
@@ -195,3 +194,18 @@ add_executable(test_classic_dpad_button_skip
 target_include_directories(test_classic_dpad_button_skip PRIVATE ${IB_SRC})
 target_link_libraries(test_classic_dpad_button_skip PRIVATE GTest::gtest_main SDL3::SDL3)
 gtest_discover_tests(test_classic_dpad_button_skip)
+
+# 15. test_wiimote_device ──────────────────────────────────────────────────────
+# Drives WiimoteDevice through a scripted IWiimoteTransport mock (no SDL_hid I/O,
+# no hardware): pins the outgoing wire format (report IDs, register address/size
+# framing, rumble-bit merging) and checks incoming reports decode into the
+# snapshot. SDL3 is linked for SDL_GetTicks/SDL_Delay and logging.
+add_executable(test_wiimote_device
+    test_wiimote_device.cpp
+    ${IB_SRC}/Devices/Wiimote/WiimoteDevice.cpp
+    ${IB_SRC}/Devices/Wiimote/WiimoteDecoder.cpp
+    ${IB_SRC}/Devices/Wiimote/WiimoteADPCM.cpp
+)
+target_include_directories(test_wiimote_device PRIVATE ${IB_SRC})
+target_link_libraries(test_wiimote_device PRIVATE GTest::gtest_main SDL3::SDL3)
+gtest_discover_tests(test_wiimote_device)

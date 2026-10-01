@@ -22,8 +22,8 @@ public:
     WiimoteHidTransport &operator=(const WiimoteHidTransport &) = delete;
 
     bool IsOpen() const override { return m_Dev != nullptr; }
-    int Write(const uint8_t *data, size_t len) override;
-    int Read(uint8_t *buf, size_t bufsize) override;
+    int Write(std::span<const std::byte> data) override;
+    int Read(std::span<std::byte> buf) override;
     void Close() override;
 
 private:

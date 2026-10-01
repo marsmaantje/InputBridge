@@ -2,14 +2,30 @@
 #include "Devices/Wiimote/WiimoteDecoder.h"
 #include "Devices/Wiimote/WiimoteProtocol.h"
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
+
 using namespace InputBridge::Wiimote;
+
+namespace {
+// Builds a std::array<std::byte, N> from integer values so wire captures can
+// be written as plain hex (the decoder API takes std::span<const std::byte>).
+// N is deduced from the argument count, so a test vector with the wrong
+// number of bytes fails to compile against the decoder's fixed-extent spans
+// instead of silently reading short.
+template <typename... Ts>
+constexpr std::array<std::byte, sizeof...(Ts)> Bytes(Ts... values) {
+    return {static_cast<std::byte>(values)...};
+}
+} // namespace
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Core buttons
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(WiimoteDecoder, NoButtonsPressed) {
-    uint8_t bb[2] = {0x00, 0x00};
+    const auto bb = Bytes(0x00, 0x00);
     auto b = Decode::Buttons(bb);
     EXPECT_FALSE(b.a); EXPECT_FALSE(b.b); EXPECT_FALSE(b.home);
     EXPECT_FALSE(b.left); EXPECT_FALSE(b.plus);
@@ -17,7 +33,7 @@ TEST(WiimoteDecoder, NoButtonsPressed) {
 
 TEST(WiimoteDecoder, AAndHomePressed) {
     // A = byte1 bit3 (0x08), Home = byte1 bit7 (0x80)
-    uint8_t bb[2] = {0x00, 0x88};
+    const auto bb = Bytes(0x00, 0x88);
     auto b = Decode::Buttons(bb);
     EXPECT_TRUE(b.a);
     EXPECT_TRUE(b.home);
@@ -26,7 +42,7 @@ TEST(WiimoteDecoder, AAndHomePressed) {
 
 TEST(WiimoteDecoder, DpadAndPlus) {
     // Left=0x01, Right=0x02, Down=0x04, Up=0x08, Plus=0x10
-    uint8_t bb[2] = {0x1F, 0x00};
+    const auto bb = Bytes(0x1F, 0x00);
     auto b = Decode::Buttons(bb);
     EXPECT_TRUE(b.left); EXPECT_TRUE(b.right); EXPECT_TRUE(b.down);
     EXPECT_TRUE(b.up);   EXPECT_TRUE(b.plus);
@@ -52,7 +68,7 @@ TEST(WiimoteDecoder, IRBasicFieldsAreIndependent) {
     // X2 low=0x33, high bits(byte2 bits1:0)=11 -> X2=0x333
     // Y2 low=0x44, high bits(byte2 bits3:2)=00 -> Y2=0x044
     uint8_t byte2 = 0b10'01'00'11; // Y1=10 X1=01 Y2=00 X2=11
-    uint8_t ir[10] = {0x11, 0x22, byte2, 0x33, 0x44, 0, 0, 0, 0, 0};
+    const auto ir = Bytes(0x11, 0x22, byte2, 0x33, 0x44, 0, 0, 0, 0, 0);
     auto dots = Decode::IRBasic(ir);
     EXPECT_EQ(dots[0].x, 0x111);
     EXPECT_EQ(dots[0].y, 0x222);
@@ -62,7 +78,7 @@ TEST(WiimoteDecoder, IRBasicFieldsAreIndependent) {
 }
 
 TEST(WiimoteDecoder, IRBasicEmptySlotIsInvisible) {
-    uint8_t ir[10] = {0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    const auto ir = Bytes(0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
     auto dots = Decode::IRBasic(ir);
     EXPECT_FALSE(dots[0].visible);
 }
@@ -76,7 +92,7 @@ TEST(WiimoteDecoder, IRExtendedFieldsAreIndependent) {
     // fail loudly. Dot 1 left zeroed/untouched to check no cross-talk
     // between dot slots.
     uint8_t byte2 = 0b10'01'1010;
-    uint8_t ir[12] = {0x11, 0x22, byte2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    const auto ir = Bytes(0x11, 0x22, byte2, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     auto dots = Decode::IRExtended(ir);
     EXPECT_EQ(dots[0].x, 0x111);
     EXPECT_EQ(dots[0].y, 0x222);
@@ -85,7 +101,7 @@ TEST(WiimoteDecoder, IRExtendedFieldsAreIndependent) {
 }
 
 TEST(WiimoteDecoder, IRExtendedEmptySlotIsInvisible) {
-    uint8_t ir[12] = {0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    const auto ir = Bytes(0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     auto dots = Decode::IRExtended(ir);
     EXPECT_FALSE(dots[0].visible);
 }
@@ -93,7 +109,7 @@ TEST(WiimoteDecoder, IRExtendedEmptySlotIsInvisible) {
 TEST(WiimoteDecoder, IRExtendedMaxSize) {
     // size = 0xF (max, not the "empty slot" sentinel unless X/Y are ALSO
     // 0xFF) - a real large/bright dot near the edge of a 10-bit axis.
-    uint8_t ir[12] = {0xFF, 0x00, 0x0F, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    const auto ir = Bytes(0xFF, 0x00, 0x0F, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     auto dots = Decode::IRExtended(ir);
     EXPECT_TRUE(dots[0].visible);
     EXPECT_EQ(dots[0].size, 0xF);
@@ -107,10 +123,10 @@ TEST(WiimoteDecoder, IRFullFieldsAreIndependent) {
     // fields is caught immediately; byte 7 is the documented-unused byte
     // and is deliberately non-zero here to confirm it's ignored.
     uint8_t byte2 = 0b10'01'1010;
-    uint8_t nine[9] = {0x11, 0x22, byte2,
+    const auto nine = Bytes(0x11, 0x22, byte2,
                         0x10 /*bbox min x*/, 0x20 /*bbox min y*/,
                         0x30 /*bbox max x*/, 0x40 /*bbox max y*/,
-                        0xFF /*unused*/, 0x55 /*intensity*/};
+                        0xFF /*unused*/, 0x55 /*intensity*/);
     auto dot = Decode::IRFullDot(nine);
     EXPECT_TRUE(dot.visible);
     EXPECT_EQ(dot.x, 0x111);
@@ -127,7 +143,7 @@ TEST(WiimoteDecoder, IRFullBoundingBoxTopBitIgnored) {
     // WiiBrew documents bit 7 of bytes 3-6 as always 0 - mask it off rather
     // than trusting the wire, so a stray/undocumented set bit there can't
     // silently double a bounding-box coordinate.
-    uint8_t nine[9] = {0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0};
+    const auto nine = Bytes(0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0);
     auto dot = Decode::IRFullDot(nine);
     EXPECT_EQ(dot.bbox_min_x, 0x7F);
     EXPECT_EQ(dot.bbox_min_y, 0x7F);
@@ -136,7 +152,7 @@ TEST(WiimoteDecoder, IRFullBoundingBoxTopBitIgnored) {
 }
 
 TEST(WiimoteDecoder, IRFullEmptySlotIsInvisible) {
-    uint8_t nine[9] = {0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0};
+    const auto nine = Bytes(0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0);
     auto dot = Decode::IRFullDot(nine);
     EXPECT_FALSE(dot.visible);
 }
@@ -146,25 +162,25 @@ TEST(WiimoteDecoder, IRFullEmptySlotIsInvisible) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(WiimoteDecoder, ClassifiesNunchuk) {
-    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x00, 0x00}};
+    ExtensionId6 id{Bytes(0x00, 0x00, 0xA4, 0x20, 0x00, 0x00)};
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::Nunchuk);
 }
 
 TEST(WiimoteDecoder, ClassifiesClassicControllerVsPro) {
-    ExtensionId6 stock{{0x00, 0x00, 0xA4, 0x20, 0x01, 0x01}};
-    ExtensionId6 pro  {{0x01, 0x00, 0xA4, 0x20, 0x01, 0x01}};
+    ExtensionId6 stock{Bytes(0x00, 0x00, 0xA4, 0x20, 0x01, 0x01)};
+    ExtensionId6 pro{Bytes(0x01, 0x00, 0xA4, 0x20, 0x01, 0x01)};
     EXPECT_EQ(ClassifyExtension(stock), ExtensionType::ClassicController);
     EXPECT_EQ(ClassifyExtension(pro),   ExtensionType::ClassicControllerPro);
 }
 
 TEST(WiimoteDecoder, ClassifiesBalanceBoard) {
-    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x04, 0x02}};
+    ExtensionId6 id{Bytes(0x00, 0x00, 0xA4, 0x20, 0x04, 0x02)};
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::BalanceBoard);
 }
 
 TEST(WiimoteDecoder, ClassifiesGuitarVsDrums) {
-    ExtensionId6 guitar{{0x00, 0x00, 0xA4, 0x20, 0x01, 0x03}};
-    ExtensionId6 drums {{0x01, 0x00, 0xA4, 0x20, 0x01, 0x03}};
+    ExtensionId6 guitar{Bytes(0x00, 0x00, 0xA4, 0x20, 0x01, 0x03)};
+    ExtensionId6 drums{Bytes(0x01, 0x00, 0xA4, 0x20, 0x01, 0x03)};
     EXPECT_EQ(ClassifyExtension(guitar), ExtensionType::GuitarHeroGuitar);
     EXPECT_EQ(ClassifyExtension(drums),  ExtensionType::GuitarHeroDrums);
 }
@@ -175,7 +191,7 @@ TEST(WiimoteDecoder, ClassifiesGuitarVsDrums) {
 
 // 0x17 is a fixed point of the transform: (0x17 ^ 0x17) + 0x17 == 0x17.
 TEST(WiimoteDecoder, DecryptFixedPoint) {
-    EXPECT_EQ(DecryptExtensionByte(0x17), 0x17);
+    EXPECT_EQ(DecryptExtensionByte(0x17_b), 0x17_b);
 }
 
 TEST(WiimoteDecoder, DecryptIsEncryptInverse) {
@@ -183,15 +199,15 @@ TEST(WiimoteDecoder, DecryptIsEncryptInverse) {
     // encrypted = (plain - 0x17) ^ 0x17. Round-trip every byte value and
     // confirm decrypt undoes it.
     for (int plain = 0; plain <= 0xFF; ++plain) {
-        const uint8_t encrypted = static_cast<uint8_t>((plain - 0x17) ^ 0x17);
-        EXPECT_EQ(DecryptExtensionByte(encrypted), static_cast<uint8_t>(plain));
+        const auto encrypted = static_cast<std::byte>((plain - 0x17) ^ 0x17);
+        EXPECT_EQ(DecryptExtensionByte(encrypted), static_cast<std::byte>(plain));
     }
 }
 
 TEST(WiimoteDecoder, DecryptExtensionBytesTransformsWholeBuffer) {
-    uint8_t buf[6] = {0x2F, 0x2F, 0x2F, 0x2F, 0x2F, 0x2F};
-    DecryptExtensionBytes(buf, 6);
-    for (uint8_t b : buf) EXPECT_EQ(b, DecryptExtensionByte(0x2F));
+    auto buf = Bytes(0x2F, 0x2F, 0x2F, 0x2F, 0x2F, 0x2F);
+    DecryptExtensionBytes(buf);
+    for (const std::byte b : buf) EXPECT_EQ(b, DecryptExtensionByte(0x2F_b));
 }
 
 TEST(WiimoteDecoder, EncryptedNunchukIdClassifiesAfterDecrypt) {
@@ -200,9 +216,9 @@ TEST(WiimoteDecoder, EncryptedNunchukIdClassifiesAfterDecrypt) {
     // third-party Nunchuk that never disables encryption would return from
     // Registers::ExtensionId even after the "new way" init, and what
     // InitExtension()'s "old way" fallback is meant to recover from.
-    ExtensionId6 id{{0xFE, 0xFE, 0x9A, 0x1E, 0xFE, 0xFE}};
+    ExtensionId6 id{Bytes(0xFE, 0xFE, 0x9A, 0x1E, 0xFE, 0xFE)};
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::Unknown); // raw bytes: not recognizable
-    DecryptExtensionBytes(id.bytes.data(), id.bytes.size());
+    DecryptExtensionBytes(id.bytes);
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::Nunchuk); // decrypted: recognizable
 }
 
@@ -212,23 +228,23 @@ TEST(WiimoteDecoder, EncryptedNunchukIdClassifiesAfterDecrypt) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(WiimoteDecoder, BalanceBoardCalibrationParsesUSBoardSample) {
-    uint8_t block[32] = {};
+    std::array<std::byte, 32> block{};
     // (4)A40020: 01 69 00 00
-    block[0] = 0x01; block[1] = 0x69; block[2] = 0x00; block[3] = 0x00;
+    block[0] = 0x01_b; block[1] = 0x69_b; block[2] = 0x00_b; block[3] = 0x00_b;
     // (4)A40024: 07 BC 11 8B  06 BA 46 52   <- 0kg: TR BR TL BL
-    const uint8_t kg0[8]  = {0x07, 0xBC, 0x11, 0x8B, 0x06, 0xBA, 0x46, 0x52};
+    const auto kg0 = Bytes(0x07, 0xBC, 0x11, 0x8B, 0x06, 0xBA, 0x46, 0x52);
     // (4)A4002C: 0E 6E 18 79  0D 5D 4D 4C   <- 17kg
-    const uint8_t kg17[8] = {0x0E, 0x6E, 0x18, 0x79, 0x0D, 0x5D, 0x4D, 0x4C};
+    const auto kg17 = Bytes(0x0E, 0x6E, 0x18, 0x79, 0x0D, 0x5D, 0x4D, 0x4C);
     // (4)A40034: 15 2E 1F 71  14 07 54 51   <- 34kg
-    const uint8_t kg34[8] = {0x15, 0x2E, 0x1F, 0x71, 0x14, 0x07, 0x54, 0x51};
-    memcpy(block + (0x24 - 0x20), kg0, 8);
-    memcpy(block + (0x2C - 0x20), kg17, 8);
-    memcpy(block + (0x34 - 0x20), kg34, 8);
+    const auto kg34 = Bytes(0x15, 0x2E, 0x1F, 0x71, 0x14, 0x07, 0x54, 0x51);
+    std::ranges::copy(kg0, block.begin() + (0x24 - 0x20));
+    std::ranges::copy(kg17, block.begin() + (0x2C - 0x20));
+    std::ranges::copy(kg34, block.begin() + (0x34 - 0x20));
     // (4)A4003C: A9 06 B4 F0  <- WiiBrew's documented checksum for this exact sample
-    block[0x3C - 0x20] = 0xA9; block[0x3D - 0x20] = 0x06;
-    block[0x3E - 0x20] = 0xB4; block[0x3F - 0x20] = 0xF0;
+    block[0x3C - 0x20] = 0xA9_b; block[0x3D - 0x20] = 0x06_b;
+    block[0x3E - 0x20] = 0xB4_b; block[0x3F - 0x20] = 0xF0_b;
     // (4)A40060: 19 01  <- Reference Temperature + unknown byte, folded into the CRC
-    const uint8_t ref_temp[2] = {0x19, 0x01};
+    const auto ref_temp = Bytes(0x19, 0x01);
 
     auto cal = Decode::ParseBalanceBoardCalibration(block, ref_temp);
     ASSERT_TRUE(cal.valid);
@@ -242,18 +258,18 @@ TEST(WiimoteDecoder, BalanceBoardCalibrationParsesUSBoardSample) {
 // temperature byte fed in - simulating a torn/partial read) must not
 // silently hand back the otherwise-plausible-looking calibration values.
 TEST(WiimoteDecoder, BalanceBoardCalibrationRejectsBadChecksum) {
-    uint8_t block[32] = {};
-    block[0] = 0x01; block[1] = 0x69; block[2] = 0x00; block[3] = 0x00;
-    const uint8_t kg0[8]  = {0x07, 0xBC, 0x11, 0x8B, 0x06, 0xBA, 0x46, 0x52};
-    const uint8_t kg17[8] = {0x0E, 0x6E, 0x18, 0x79, 0x0D, 0x5D, 0x4D, 0x4C};
-    const uint8_t kg34[8] = {0x15, 0x2E, 0x1F, 0x71, 0x14, 0x07, 0x54, 0x51};
-    memcpy(block + (0x24 - 0x20), kg0, 8);
-    memcpy(block + (0x2C - 0x20), kg17, 8);
-    memcpy(block + (0x34 - 0x20), kg34, 8);
-    block[0x3C - 0x20] = 0xA9; block[0x3D - 0x20] = 0x06;
-    block[0x3E - 0x20] = 0xB4; block[0x3F - 0x20] = 0xF0;
+    std::array<std::byte, 32> block{};
+    block[0] = 0x01_b; block[1] = 0x69_b; block[2] = 0x00_b; block[3] = 0x00_b;
+    const auto kg0 = Bytes(0x07, 0xBC, 0x11, 0x8B, 0x06, 0xBA, 0x46, 0x52);
+    const auto kg17 = Bytes(0x0E, 0x6E, 0x18, 0x79, 0x0D, 0x5D, 0x4D, 0x4C);
+    const auto kg34 = Bytes(0x15, 0x2E, 0x1F, 0x71, 0x14, 0x07, 0x54, 0x51);
+    std::ranges::copy(kg0, block.begin() + (0x24 - 0x20));
+    std::ranges::copy(kg17, block.begin() + (0x2C - 0x20));
+    std::ranges::copy(kg34, block.begin() + (0x34 - 0x20));
+    block[0x3C - 0x20] = 0xA9_b; block[0x3D - 0x20] = 0x06_b;
+    block[0x3E - 0x20] = 0xB4_b; block[0x3F - 0x20] = 0xF0_b;
     // Wrong reference-temperature bytes (should be 19 01) -> checksum won't match.
-    const uint8_t bad_ref_temp[2] = {0x00, 0x00};
+    const auto bad_ref_temp = Bytes(0x00, 0x00);
 
     auto cal = Decode::ParseBalanceBoardCalibration(block, bad_ref_temp);
     EXPECT_FALSE(cal.valid);
@@ -276,13 +292,13 @@ TEST(WiimoteDecoder, BalanceBoardInterpolatesWeightAtCalibrationPoints) {
     cal.valid = true;
     for (int i = 0; i < 4; ++i) { cal.kg0[i] = 1000; cal.kg17[i] = 2000; cal.kg34[i] = 3000; }
 
-    uint8_t ext[11] = {};
+    std::array<std::byte, 11> ext{};
     // TR = 2000 raw (== the 17kg calibration point exactly)
-    ext[0] = 0x07; ext[1] = 0xD0; // 2000
-    ext[2] = 0x03; ext[3] = 0xE8; // BR = 1000 -> should read ~0kg
-    ext[4] = 0x0B; ext[5] = 0xB8; // TL = 3000 -> should read ~34kg
-    ext[6] = 0x03; ext[7] = 0xE8; // BL = 1000 -> ~0kg
-    ext[8] = 0x1A; ext[9] = 0x00; ext[10] = 0x90;
+    ext[0] = 0x07_b; ext[1] = 0xD0_b; // 2000
+    ext[2] = 0x03_b; ext[3] = 0xE8_b; // BR = 1000 -> should read ~0kg
+    ext[4] = 0x0B_b; ext[5] = 0xB8_b; // TL = 3000 -> should read ~34kg
+    ext[6] = 0x03_b; ext[7] = 0xE8_b; // BL = 1000 -> ~0kg
+    ext[8] = 0x1A_b; ext[9] = 0x00_b; ext[10] = 0x90_b;
 
     auto bb = Decode::BalanceBoard(ext, cal);
     EXPECT_NEAR(bb.kg_top_right, 17.f, 0.01f);
@@ -298,8 +314,8 @@ TEST(WiimoteDecoder, BalanceBoardInterpolatesWeightAtCalibrationPoints) {
 
 TEST(WiimoteDecoder, NunchukCenterStickBothButtonsReleased) {
     // Center stick ~128, accel ~mid, both buttons released (bits set = 1).
-    uint8_t ext[6] = {128, 128, 0x80, 0x80, 0x80, 0x03};
-    auto n = Decode::Nunchuk(ext, 6);
+    const auto ext = Bytes(128, 128, 0x80, 0x80, 0x80, 0x03);
+    auto n = Decode::Nunchuk(ext);
     ASSERT_TRUE(n.connected);
     EXPECT_EQ(n.stick_x, 128);
     EXPECT_EQ(n.stick_y, 128);
@@ -308,14 +324,14 @@ TEST(WiimoteDecoder, NunchukCenterStickBothButtonsReleased) {
 }
 
 TEST(WiimoteDecoder, NunchukBothButtonsPressed) {
-    uint8_t ext[6] = {128, 128, 0x80, 0x80, 0x80, 0x00}; // bits 0,1 clear = both pressed
-    auto n = Decode::Nunchuk(ext, 6);
+    const auto ext = Bytes(128, 128, 0x80, 0x80, 0x80, 0x00); // bits 0,1 clear = both pressed
+    auto n = Decode::Nunchuk(ext);
     EXPECT_TRUE(n.button_c);
     EXPECT_TRUE(n.button_z);
 }
 
 TEST(WiimoteDecoder, NunchukDisconnectedWithInsufficientData) {
-    auto n = Decode::Nunchuk(nullptr, 0);
+    auto n = Decode::Nunchuk(std::span<const std::byte>{});
     EXPECT_FALSE(n.connected);
 }
 
@@ -324,8 +340,8 @@ TEST(WiimoteDecoder, NunchukDisconnectedWithInsufficientData) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(WiimoteDecoder, ClassicControllerAllButtonsReleased) {
-    uint8_t ext[6] = {0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF};
-    auto c = Decode::Classic(ext, 6, false);
+    const auto ext = Bytes(0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF);
+    auto c = Decode::Classic(ext, false);
     ASSERT_TRUE(c.connected);
     EXPECT_FALSE(c.a); EXPECT_FALSE(c.b); EXPECT_FALSE(c.home);
     EXPECT_FALSE(c.dpad_up); EXPECT_FALSE(c.dpad_down);
@@ -333,8 +349,8 @@ TEST(WiimoteDecoder, ClassicControllerAllButtonsReleased) {
 
 TEST(WiimoteDecoder, ClassicControllerAPressed) {
     // A = byte5 bit4 (0x10), active low -> clear that bit, others stay set.
-    uint8_t ext[6] = {0x00, 0x00, 0x00, 0x00, 0xFF, uint8_t(0xFF & ~0x10)};
-    auto c = Decode::Classic(ext, 6, false);
+    const auto ext = Bytes(0x00, 0x00, 0x00, 0x00, 0xFF, uint8_t(0xFF & ~0x10));
+    auto c = Decode::Classic(ext, false);
     EXPECT_TRUE(c.a);
     EXPECT_FALSE(c.b);
 }
@@ -344,19 +360,19 @@ TEST(WiimoteDecoder, ClassicControllerAPressed) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(WiimoteDecoder, ClassifyMotionPlusStandalone) {
-    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x00, 0x05}};
+    ExtensionId6 id{Bytes(0x00, 0x00, 0xA4, 0x20, 0x00, 0x05)};
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::MotionPlus);
     EXPECT_EQ(ClassifyMotionPlusPassthrough(id), MotionPlusPassthrough::None);
 }
 
 TEST(WiimoteDecoder, ClassifyMotionPlusNunchukPassthrough) {
-    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x04, 0x05}};
+    ExtensionId6 id{Bytes(0x00, 0x00, 0xA4, 0x20, 0x04, 0x05)};
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::MotionPlus);
     EXPECT_EQ(ClassifyMotionPlusPassthrough(id), MotionPlusPassthrough::Nunchuk);
 }
 
 TEST(WiimoteDecoder, ClassifyMotionPlusClassicPassthrough) {
-    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x05, 0x05}};
+    ExtensionId6 id{Bytes(0x00, 0x00, 0xA4, 0x20, 0x05, 0x05)};
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::MotionPlus);
     EXPECT_EQ(ClassifyMotionPlusPassthrough(id), MotionPlusPassthrough::Classic);
 }
@@ -364,7 +380,7 @@ TEST(WiimoteDecoder, ClassifyMotionPlusClassicPassthrough) {
 TEST(WiimoteDecoder, ClassifyBalanceBoardStillWorksAlongsideMotionPlus) {
     // Regression guard: adding MotionPlus's 0x0005/0x0405/0x0505/0x0705
     // cases must not shadow the pre-existing Balance Board (0x0402) case.
-    ExtensionId6 id{{0x00, 0x00, 0xA4, 0x20, 0x04, 0x02}};
+    ExtensionId6 id{Bytes(0x00, 0x00, 0xA4, 0x20, 0x04, 0x02)};
     EXPECT_EQ(ClassifyExtension(id), ExtensionType::BalanceBoard);
 }
 
@@ -375,15 +391,15 @@ TEST(WiimoteDecoder, ClassifyBalanceBoardStillWorksAlongsideMotionPlus) {
 TEST(WiimoteDecoder, MotionPlusZeroRateAtNominalCenter) {
     // raw = 8192 (0x2000) on all three axes, "fast"/normal precision range,
     // no passthrough extension attached.
-    uint8_t ext[6] = {
+    const auto ext = Bytes(
         0x00,       // yaw low
         0x00,       // roll low
         0x00,       // pitch low
         0x80,       // yaw high bits (0x2000 >> 6 = 0x80), slow_yaw=0, slow_pitch=0
         0x80,       // roll high bits, extension_connected=0
-        0x80,       // pitch high bits, slow_roll=0
-    };
-    auto mp = Decode::MotionPlus(ext, 6);
+        0x80       // pitch high bits, slow_roll=0
+    );
+    auto mp = Decode::MotionPlus(ext);
     ASSERT_TRUE(mp.connected);
     EXPECT_EQ(mp.raw_yaw, 8192);
     EXPECT_EQ(mp.raw_pitch, 8192);
@@ -398,10 +414,10 @@ TEST(WiimoteDecoder, MotionPlusZeroRateAtNominalCenter) {
 }
 
 TEST(WiimoteDecoder, MotionPlusExtensionConnectedBitAndSlowFlags) {
-    uint8_t ext[6] = {0x00, 0x00, 0x00, 0x83, 0x83, 0x80};
+    const auto ext = Bytes(0x00, 0x00, 0x00, 0x83, 0x83, 0x80);
     // ext[3] bit0 (slow_yaw)=1, bit1 (slow_pitch)=1              -> 0x83
     // ext[4] bit0 (extension_connected)=1, bit1 (slow_roll)=1    -> 0x83
-    auto mp = Decode::MotionPlus(ext, 6);
+    auto mp = Decode::MotionPlus(ext);
     EXPECT_TRUE(mp.slow_yaw);
     EXPECT_TRUE(mp.slow_pitch);
     EXPECT_TRUE(mp.slow_roll);
@@ -409,7 +425,7 @@ TEST(WiimoteDecoder, MotionPlusExtensionConnectedBitAndSlowFlags) {
 }
 
 TEST(WiimoteDecoder, MotionPlusDisconnectedWithInsufficientData) {
-    auto mp = Decode::MotionPlus(nullptr, 0);
+    auto mp = Decode::MotionPlus(std::span<const std::byte>{});
     EXPECT_FALSE(mp.connected);
 }
 
@@ -419,8 +435,8 @@ TEST(WiimoteDecoder, MotionPlusDisconnectedWithInsufficientData) {
 
 TEST(WiimoteDecoder, NunchukViaMotionPlusSticksUnaffected) {
     // SX/SY pass through untouched regardless of passthrough re-encoding.
-    uint8_t ext[6] = {0x7F, 0x81, 0x00, 0x00, 0x00, 0x00};
-    auto n = Decode::NunchukViaMotionPlus(ext, 6);
+    const auto ext = Bytes(0x7F, 0x81, 0x00, 0x00, 0x00, 0x00);
+    auto n = Decode::NunchukViaMotionPlus(ext);
     ASSERT_TRUE(n.connected);
     EXPECT_EQ(n.stick_x, 0x7F);
     EXPECT_EQ(n.stick_y, 0x81);
@@ -431,14 +447,14 @@ TEST(WiimoteDecoder, NunchukViaMotionPlusAccelReconstructsWithLsbZero) {
     // raw_x = (0xAA << 2) | (1 << 1) = 0x2A8 | 0x2 = 0x2AA, LSB forced 0.
     // Likewise AY (ext[3]=0x55, ext[5] bit5 set) and AZ (ext[4]>>1 top 7
     // bits = 0x7F i.e. ext[4]=0xFF, ext[5] bits7:6 set -> AZ<2:1>=3).
-    uint8_t ext[6] = {
+    const auto ext = Bytes(
         0x00, 0x00,       // SX, SY (irrelevant here)
         0xAA,              // AX<9:2>
         0x55,              // AY<9:2>
         0xFF,              // AZ<9:3> in bits7:1, bit0 = extension_connected
-        uint8_t(0xC0 | 0x20 | 0x10), // AZ<2:1>=11 (bits7:6), AY<1>=1 (bit5), AX<1>=1 (bit4)
-    };
-    auto n = Decode::NunchukViaMotionPlus(ext, 6);
+        0xC0 | 0x20 | 0x10 // AZ<2:1>=11 (bits7:6), AY<1>=1 (bit5), AX<1>=1 (bit4)
+    );
+    auto n = Decode::NunchukViaMotionPlus(ext);
     EXPECT_EQ(n.accel_x, (uint16_t(0xAA) << 2) | 0x02);
     EXPECT_EQ(n.accel_y, (uint16_t(0x55) << 2) | 0x02);
     EXPECT_EQ(n.accel_z, (uint16_t(0xFF >> 1) << 3) | 0x06);
@@ -450,14 +466,14 @@ TEST(WiimoteDecoder, NunchukViaMotionPlusAccelReconstructsWithLsbZero) {
 TEST(WiimoteDecoder, NunchukViaMotionPlusButtonsAtRelocatedBits) {
     // C = ext[5] bit3, Z = ext[5] bit2 (moved from the non-passthrough
     // format's bit1/bit0), both active-low.
-    uint8_t ext[6] = {0, 0, 0, 0, 0, uint8_t(0xFF & ~0x08)}; // C pressed, Z released
-    auto n = Decode::NunchukViaMotionPlus(ext, 6);
+    const auto ext = Bytes(0, 0, 0, 0, 0, uint8_t(0xFF & ~0x08)); // C pressed, Z released
+    auto n = Decode::NunchukViaMotionPlus(ext);
     EXPECT_TRUE(n.button_c);
     EXPECT_FALSE(n.button_z);
 }
 
 TEST(WiimoteDecoder, NunchukViaMotionPlusDisconnectedWithInsufficientData) {
-    auto n = Decode::NunchukViaMotionPlus(nullptr, 0);
+    auto n = Decode::NunchukViaMotionPlus(std::span<const std::byte>{});
     EXPECT_FALSE(n.connected);
 }
 
@@ -465,14 +481,14 @@ TEST(WiimoteDecoder, ClassicViaMotionPlusSticksLoseLsbAndDpadMoves) {
     // LX = 0x3F (all 6 bits set) with BDU pressed -> byte0 = 0x3F & ~0x01
     // active-low means BDU pressed = bit0 clear, so byte0 = 0x3E.
     // Reconstructed left_x should read back 0x3E (LSB forced 0), not 0x3F.
-    uint8_t ext[6] = {
+    const auto ext = Bytes(
         0x3E, // LX<5:1>=0x1F, bit0=0 -> BDU pressed
         0x3E, // LY<5:1>=0x1F, bit0=0 -> BDL pressed
         0x00, 0x00,
         0xFF, // all of BDR/BDD/BLT/-/H/+/RT released (active-low, all 1)
-        0xFF, // all of ZL/B/Y/A/X/ZR released
-    };
-    auto c = Decode::ClassicViaMotionPlus(ext, 6, false);
+        0xFF // all of ZL/B/Y/A/X/ZR released
+    );
+    auto c = Decode::ClassicViaMotionPlus(ext, false);
     ASSERT_TRUE(c.connected);
     EXPECT_EQ(c.left_x, 0x3E);
     EXPECT_EQ(c.left_y, 0x3E);
@@ -485,24 +501,24 @@ TEST(WiimoteDecoder, ClassicViaMotionPlusReservedBitsDontLookLikeDpad) {
     // 0 in a real passthrough report) - the plain Classic() decoder would
     // misread these as dpad_left/dpad_up permanently pressed (active-low);
     // the *ViaMotionPlus decoder must not.
-    uint8_t ext[6] = {0x00, 0x00, 0x00, 0x00, 0xFF, 0x00}; // BDU/BDL released via bit0=1 below
-    ext[0] = 0x01; // BDU bit set = released
-    ext[1] = 0x01; // BDL bit set = released
-    auto c = Decode::ClassicViaMotionPlus(ext, 6, false);
+    auto ext = Bytes(0x00, 0x00, 0x00, 0x00, 0xFF, 0x00); // BDU/BDL released via bit0=1 below
+    ext[0] = 0x01_b; // BDU bit set = released
+    ext[1] = 0x01_b; // BDL bit set = released
+    auto c = Decode::ClassicViaMotionPlus(ext, false);
     EXPECT_FALSE(c.dpad_up);
     EXPECT_FALSE(c.dpad_left);
 }
 
 TEST(WiimoteDecoder, ClassicViaMotionPlusFaceButtonsUnaffected) {
     // A = byte5 bit4, same position as the non-passthrough format.
-    uint8_t ext[6] = {0x01, 0x01, 0x00, 0x00, 0xFF, uint8_t(0xFF & ~0x10)};
-    auto c = Decode::ClassicViaMotionPlus(ext, 6, false);
+    const auto ext = Bytes(0x01, 0x01, 0x00, 0x00, 0xFF, uint8_t(0xFF & ~0x10));
+    auto c = Decode::ClassicViaMotionPlus(ext, false);
     EXPECT_TRUE(c.a);
     EXPECT_FALSE(c.b);
 }
 
 TEST(WiimoteDecoder, ClassicViaMotionPlusDisconnectedWithInsufficientData) {
-    auto c = Decode::ClassicViaMotionPlus(nullptr, 0, false);
+    auto c = Decode::ClassicViaMotionPlus(std::span<const std::byte>{}, false);
     EXPECT_FALSE(c.connected);
 }
 
@@ -510,9 +526,9 @@ TEST(WiimoteDecoder, GuitarFromClassicMatchesGuitarMapping) {
     // GuitarFromClassic() should reproduce exactly what Guitar() computes
     // when fed the same (non-passthrough) Classic-shaped bytes, since
     // Guitar() is now implemented in terms of it.
-    uint8_t ext[6] = {0x3F, 0x00, 0x00, uint8_t(0x1F), 0xFF, uint8_t(0xFF & ~0x40)}; // B (green fret) pressed
-    auto direct = Decode::Guitar(ext, 6, false);
-    auto viaHelper = Decode::GuitarFromClassic(Decode::Classic(ext, 6, false), false);
+    const auto ext = Bytes(0x3F, 0x00, 0x00, uint8_t(0x1F), 0xFF, uint8_t(0xFF & ~0x40)); // B (green fret) pressed
+    auto direct = Decode::Guitar(ext, false);
+    auto viaHelper = Decode::GuitarFromClassic(Decode::Classic(ext, false), false);
     EXPECT_EQ(direct.fret_green, viaHelper.fret_green);
     EXPECT_EQ(direct.stick_x, viaHelper.stick_x);
     EXPECT_EQ(direct.whammy_bar, viaHelper.whammy_bar);

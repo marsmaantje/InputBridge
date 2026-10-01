@@ -22,15 +22,15 @@ std::string HidrawNodeName(const std::string &hidraw_path) {
 }
 } // namespace
 
-std::optional<std::array<uint8_t, 6>> ParseBluetoothAddress(const std::string &text) {
+std::optional<std::array<std::byte, 6>> ParseBluetoothAddress(const std::string &text) {
     unsigned b[6];
     // "AA:BB:CC:DD:EE:FF" - exactly 17 chars, 6 hex pairs separated by ':'.
     if (text.size() != 17) return std::nullopt;
     const int n = std::sscanf(text.c_str(), "%2x:%2x:%2x:%2x:%2x:%2x",
                                &b[0], &b[1], &b[2], &b[3], &b[4], &b[5]);
     if (n != 6) return std::nullopt;
-    std::array<uint8_t, 6> out{};
-    for (int i = 0; i < 6; ++i) out[i] = uint8_t(b[i]);
+    std::array<std::byte, 6> out{};
+    for (std::size_t i = 0; i < out.size(); ++i) out[i] = static_cast<std::byte>(b[i]);
     return out;
 }
 

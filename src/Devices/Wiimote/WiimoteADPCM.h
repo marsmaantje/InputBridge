@@ -16,6 +16,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace InputBridge::Wiimote {
@@ -31,28 +32,28 @@ public:
 
     // Encodes `count` signed 16-bit samples into `out`, 2 nibbles/byte
     // (low then high). An odd trailing sample is held until Flush().
-    void Encode(const int16_t *pcm16, size_t count, std::vector<uint8_t> &out);
+    void Encode(const int16_t *pcm16, size_t count, std::vector<std::byte> &out);
 
     // Emits a held odd trailing nibble (high nibble padded 0). No-op if
     // nothing is pending.
-    void Flush(std::vector<uint8_t> &out);
+    void Flush(std::vector<std::byte> &out);
 
 private:
-    void EncodeSample(int16_t sample, std::vector<uint8_t> &out);
+    void EncodeSample(int16_t sample, std::vector<std::byte> &out);
 
     int32_t m_Predictor = 0;
     int32_t m_Step = 0; // 0 == "not yet started", see Reset()
     bool m_HasPendingNibble = false;
-    uint8_t m_PendingNibble = 0;
+    uint8_t m_PendingNibble = 0; // 4-bit code (table index), not wire data - packed into std::byte on emit
 };
 
 // One-shot: encodes a full buffer (odd trailing sample auto-flushed) from
 // a clean Reset() state. For incremental streams, use
 // YamahaAdpcm4Encoder directly so state carries over between calls.
-std::vector<uint8_t> EncodeYamahaAdpcm4(const int16_t *pcm16, size_t count);
+std::vector<std::byte> EncodeYamahaAdpcm4(const int16_t *pcm16, size_t count);
 
 // Decodes a packed nibble stream back to 16-bit PCM, from a clean Reset()
 // state. Used by this file's round-trip unit tests.
-std::vector<int16_t> DecodeYamahaAdpcm4(const uint8_t *packed, size_t byte_count);
+std::vector<int16_t> DecodeYamahaAdpcm4(std::span<const std::byte> packed);
 
 } // namespace InputBridge::Wiimote

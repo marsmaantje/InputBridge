@@ -92,17 +92,23 @@ tests/test_wiimote_decoder.cpp
 (`WiimoteDecoder.cpp` has no SDL dependency, so it links straight into the
 test binary without pulling in real HID I/O.)
 
-## Known gaps / before you ship this
+## Known gaps and ToDo's
 
-- **`ReadRegister()`'s inline report-draining** (in the "wait for 0x21"
-  loop) only refreshes buttons for reports it swallows during a register
-  read; accel/IR/extension updates are briefly stalled during any read
-  (~ms-scale, only matters for very read-heavy code paths like the initial
-  handshake).
-- No tests exist yet for `WiimoteDevice`/`WiimoteManager` themselves (they
-  need a fake `SDL_hid_device*` / injectable transport to be testable
-  without hardware - e.g. a thin interface wrapping `SDL_hid_write`/
-  `SDL_hid_read` that a test can substitute with canned byte sequences).
+- `WiimoteDevice`'s wire format and report handling are covered by
+  `tests/test_wiimote_device.cpp` through a scripted `IWiimoteTransport`
+  mock. `WiimoteManager` (device discovery/pairing) and the real HID/L2CAP
+  transports still have no automated tests - they need hardware or a fake
+  OS Bluetooth/HID stack.
+
+## Byte handling
+
+Raw wire data (report IDs, register payloads, extension bytes, Bluetooth
+addresses) is `std::byte` throughout - `std::span<const std::byte>` for
+inputs, fixed extents where the layout is fixed. Use the `0x16_b` literal and
+`LowByte()`/`ToU16BE()` from `WiimoteProtocol.h` instead of casts. Plain
+integers are for decoded values only (stick positions, LED mask, volume).
+The only `unsigned char*` conversion is at the SDL_hid boundary in
+`WiimoteHidTransport.cpp`.
 
 ## IR camera doesn't work while Steam is running
 

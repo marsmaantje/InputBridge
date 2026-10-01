@@ -7,7 +7,7 @@
 #ifdef __linux__
 
 #include <array>
-#include <cstdint>
+#include <cstddef>
 #include <optional>
 #include <string>
 
@@ -17,7 +17,7 @@ namespace InputBridge::Wiimote {
 // human-reading order (out[0] == 0xAA) - NOT the little-endian order the
 // kernel's L2CAP sockaddr wants; WiimoteL2CAPTransport::Connect() converts
 // that itself. Returns nullopt if malformed.
-std::optional<std::array<uint8_t, 6>> ParseBluetoothAddress(const std::string &text);
+std::optional<std::array<std::byte, 6>> ParseBluetoothAddress(const std::string &text);
 
 // Given a hidraw path (e.g. "/dev/hidraw3"), resolves the remote Bluetooth
 // address via that node's sysfs `uevent` HID_UNIQ field - populated by the

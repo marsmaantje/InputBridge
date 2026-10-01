@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "Devices/Wiimote/WiimoteADPCM.h"
 #include <cmath>
+#include <cstddef>
 #include <vector>
 
 using namespace InputBridge::Wiimote;
@@ -47,7 +48,7 @@ TEST(WiimoteAdpcm, IncrementalCallsMatchOneShot) {
     auto one_shot = EncodeYamahaAdpcm4(pcm.data(), pcm.size());
 
     YamahaAdpcm4Encoder enc;
-    std::vector<uint8_t> incremental;
+    std::vector<std::byte> incremental;
     // Feed it in ragged chunks (odd sizes on purpose) to exercise the
     // pending-nibble carry across Encode() calls.
     size_t pos = 0;
@@ -76,7 +77,7 @@ TEST(WiimoteAdpcm, RoundTripTracksInputSign) {
     auto pcm = MakeSine(220.0f, rate, 400, 10000.0f);
 
     auto packed = EncodeYamahaAdpcm4(pcm.data(), pcm.size());
-    auto decoded = DecodeYamahaAdpcm4(packed.data(), packed.size());
+    auto decoded = DecodeYamahaAdpcm4(packed);
 
     ASSERT_EQ(decoded.size(), pcm.size());
 
@@ -93,7 +94,7 @@ TEST(WiimoteAdpcm, RoundTripTracksInputSign) {
 TEST(WiimoteAdpcm, SilenceRoundTripsToNearZero) {
     std::vector<int16_t> pcm(64, 0);
     auto packed = EncodeYamahaAdpcm4(pcm.data(), pcm.size());
-    auto decoded = DecodeYamahaAdpcm4(packed.data(), packed.size());
+    auto decoded = DecodeYamahaAdpcm4(packed);
 
     ASSERT_EQ(decoded.size(), pcm.size());
     for (int16_t s : decoded) {
@@ -102,7 +103,7 @@ TEST(WiimoteAdpcm, SilenceRoundTripsToNearZero) {
 }
 
 TEST(WiimoteAdpcm, DecodeEmptyProducesNoOutput) {
-    auto decoded = DecodeYamahaAdpcm4(nullptr, 0);
+    auto decoded = DecodeYamahaAdpcm4({});
     EXPECT_TRUE(decoded.empty());
 }
 
@@ -114,12 +115,12 @@ TEST(WiimoteAdpcm, ResetMatchesFreshEncoder) {
     auto pcm = MakeSine(440.0f, 3000, 50);
 
     YamahaAdpcm4Encoder enc;
-    std::vector<uint8_t> garbage;
+    std::vector<std::byte> garbage;
     enc.Encode(pcm.data(), pcm.size(), garbage); // dirty the state
     enc.Flush(garbage);
     enc.Reset();
 
-    std::vector<uint8_t> after_reset;
+    std::vector<std::byte> after_reset;
     enc.Encode(pcm.data(), pcm.size(), after_reset);
     enc.Flush(after_reset);
 

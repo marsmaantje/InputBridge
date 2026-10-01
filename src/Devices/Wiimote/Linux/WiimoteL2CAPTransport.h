@@ -22,7 +22,7 @@
 
 #include "Devices/Wiimote/WiimoteTransport.h"
 #include <array>
-#include <cstdint>
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -37,7 +37,7 @@ public:
     // those PSMs for this device - see
     // WiimoteBluetoothUtil::DisconnectExistingHidConnection(), which
     // callers should try first).
-    static std::unique_ptr<WiimoteL2CAPTransport> Connect(const std::array<uint8_t, 6> &bdaddr);
+    static std::unique_ptr<WiimoteL2CAPTransport> Connect(const std::array<std::byte, 6> &bdaddr);
 
     ~WiimoteL2CAPTransport() override;
 
@@ -45,8 +45,8 @@ public:
     WiimoteL2CAPTransport &operator=(const WiimoteL2CAPTransport &) = delete;
 
     bool IsOpen() const override { return m_InterruptFd >= 0; }
-    int Write(const uint8_t *data, size_t len) override;
-    int Read(uint8_t *buf, size_t bufsize) override;
+    int Write(std::span<const std::byte> data) override;
+    int Read(std::span<std::byte> buf) override;
     void Close() override;
 
 private:

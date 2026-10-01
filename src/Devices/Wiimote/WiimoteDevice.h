@@ -17,7 +17,9 @@
 #include "WiimoteState.h"
 #include "WiimoteTransport.h"
 #include <SDL3/SDL_stdinc.h>
+#include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <optional>
 #include <memory>
@@ -241,11 +243,12 @@ public:
     // -- Low-level register access (exposed for advanced/experimental use,
     //    same rationale as WiimoteLib exposing raw read/write) ------------
     // Synchronous: blocks (bounded, ~200ms timeout) waiting for the 0x21
-    // reply. Returns false on timeout/error. `out` needs room for `size`
-    // bytes (this helper loops internally past WiiBrew's 16-byte-per-
-    // packet read limit).
-    bool ReadRegister(uint32_t address, uint16_t size, uint8_t *out);
-    bool WriteRegister(uint32_t address, const uint8_t *data, uint8_t size /* <=16 */);
+    // reply. Returns false on timeout/error. Reads `out.size()` bytes (this
+    // helper loops internally past WiiBrew's 16-byte-per-packet read limit).
+    bool ReadRegister(uint32_t address, std::span<std::byte> out);
+    // Writes `data` (at most 16 bytes - WiiBrew's per-packet limit; more
+    // returns false without sending anything).
+    bool WriteRegister(uint32_t address, std::span<const std::byte> data);
 
     // -- Balance Board tare/zero --------------------------------------------
     // Captures the four corners' current (pre-tare, factory-calibrated)
@@ -301,15 +304,17 @@ public:
     bool IsIRExtendedModeActive() const { return m_Snapshot.ir_extended_mode; }
 
 private:
-    void HandleReport(const uint8_t *buf, int len);
-    void HandleStatusReport(const uint8_t *buf);
+    // `report` is one whole input report, report ID first (exactly what
+    // IWiimoteTransport::Read() returned, trimmed to the byte count read).
+    void HandleReport(std::span<const std::byte> report);
+    void HandleStatusReport(std::span<const std::byte> report);
     void HandleExtensionChanged();
-    void DecodeCoreAccelIR10Ext6(const uint8_t *buf); // report 0x37, Wiimote steady-state mode
-    void DecodeCoreAccelIR12(const uint8_t *buf);      // report 0x33, Extended IR mode (adds dot size)
-    void DecodeCoreExt19(const uint8_t *buf);          // report 0x34, Balance Board steady-state mode
-    void DecodeInterleavedIR(const uint8_t *buf);      // reports 0x3e/0x3f, Full IR mode (adds bbox+intensity)
+    void DecodeCoreAccelIR10Ext6(std::span<const std::byte> report); // report 0x37, Wiimote steady-state mode
+    void DecodeCoreAccelIR12(std::span<const std::byte> report);      // report 0x33, Extended IR mode (adds dot size)
+    void DecodeCoreExt19(std::span<const std::byte> report);          // report 0x34, Balance Board steady-state mode
+    void DecodeInterleavedIR(std::span<const std::byte> report);      // reports 0x3e/0x3f, Full IR mode (adds bbox+intensity)
 
-    uint8_t PreferredReportMode() const;
+    std::byte PreferredReportMode() const;
 
     // EnableIRCamera() runs EnableIRCameraOnce() + VerifyIRCameraEnabled()
     // in a bounded retry loop - WiiBrew documents the raw init sequence as
@@ -411,7 +416,7 @@ private:
     uint32_t m_SpeakerSampleRateHz = 0; // rate last passed to EnableSpeaker(), 0 = never enabled
     uint8_t  m_SpeakerVolume = 0;       // volume last passed to EnableSpeaker() (see PlayBeep())
     SpeakerAudioFormat m_SpeakerFormat = SpeakerAudioFormat::PCM8; // format last passed to EnableSpeaker()
-    std::vector<int8_t> m_SpeakerQueue;
+    std::vector<std::byte> m_SpeakerQueue;
     size_t m_SpeakerQueuePos = 0;
     Uint64 m_SpeakerNextChunkAtMs = 0;
     Uint32 m_SpeakerChunkIntervalMs = 10; // recomputed by EnableSpeaker() from sample_rate_hz/format

@@ -1,8 +1,11 @@
 // src/Devices/Wiimote/Linux/WiimoteL2CAPTransport.cpp
 #ifdef __linux__
 #include "WiimoteL2CAPTransport.h"
+#include "Devices/Wiimote/WiimoteProtocol.h"
 #include "App/Log.h"
 
+#include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cstring>
 #include <sys/socket.h>
@@ -28,7 +31,7 @@ constexpr int kBtProtoL2CAP = 0; // BTPROTO_L2CAP, per the kernel's bluetooth.h 
 // kernel's expectation with no compiler-inserted padding.
 #pragma pack(push, 1)
 struct RawBdaddr {
-    uint8_t b[6];
+    std::array<std::byte, 6> b;
 };
 
 struct SockaddrL2 {
@@ -47,9 +50,9 @@ constexpr uint16_t kPsmInterrupt = 0x0013;
 // ParseBluetoothAddress() (WiimoteBluetoothUtil.h) hands back bytes in
 // human-reading order (b[0] == the "AA" in "AA:BB:CC:DD:EE:FF"); the
 // kernel's sockaddr_l2 wants the reverse of that.
-RawBdaddr ToRawBdaddr(const std::array<uint8_t, 6> &human_order) {
+RawBdaddr ToRawBdaddr(const std::array<std::byte, 6> &human_order) {
     RawBdaddr r{};
-    for (int i = 0; i < 6; ++i) r.b[i] = human_order[5 - i];
+    for (std::size_t i = 0; i < r.b.size(); ++i) r.b[i] = human_order[r.b.size() - 1 - i];
     return r;
 }
 
@@ -58,7 +61,7 @@ RawBdaddr ToRawBdaddr(const std::array<uint8_t, 6> &human_order) {
 // seconds is reasonable rather than blocking forever on a dead remote).
 // Returns -1 on any failure, having already closed the fd - no cleanup
 // needed by the caller.
-int OpenL2CAPChannel(const std::array<uint8_t, 6> &bdaddr, uint16_t psm) {
+int OpenL2CAPChannel(const std::array<std::byte, 6> &bdaddr, uint16_t psm) {
     const int fd = ::socket(AF_BLUETOOTH, SOCK_SEQPACKET, kBtProtoL2CAP);
     if (fd < 0) {
         LOG_WARN(kTag, "socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP) failed: %s", std::strerror(errno));
@@ -122,7 +125,7 @@ int OpenL2CAPChannel(const std::array<uint8_t, 6> &bdaddr, uint16_t psm) {
 }
 } // namespace
 
-std::unique_ptr<WiimoteL2CAPTransport> WiimoteL2CAPTransport::Connect(const std::array<uint8_t, 6> &bdaddr) {
+std::unique_ptr<WiimoteL2CAPTransport> WiimoteL2CAPTransport::Connect(const std::array<std::byte, 6> &bdaddr) {
     // Control channel first, then interrupt - same order Dolphin and
     // every other open-source Wiimote driver uses; some Wiimote firmware
     // revisions are documented as rejecting the interrupt connection if
@@ -145,26 +148,26 @@ WiimoteL2CAPTransport::WiimoteL2CAPTransport(int control_fd, int interrupt_fd)
 
 WiimoteL2CAPTransport::~WiimoteL2CAPTransport() { Close(); }
 
-int WiimoteL2CAPTransport::Write(const uint8_t *data, size_t len) {
-    if (m_InterruptFd < 0 || len == 0) return -1;
+int WiimoteL2CAPTransport::Write(std::span<const std::byte> data) {
+    if (m_InterruptFd < 0 || data.empty()) return -1;
     // WiiBrew Bluetooth HID framing: output reports go out on the
     // interrupt channel prefixed with 0xA2 ("HID DATA, Output report").
     // `data[0]` is already the Wiimote report ID (e.g. 0x13, 0x16) per
     // IWiimoteTransport's contract - it becomes the second byte on the
     // wire, right after the 0xA2 prefix.
-    uint8_t framed[64];
-    if (len + 1 > sizeof(framed)) return -1; // no real Wiimote report is this large
-    framed[0] = 0xA2;
-    std::memcpy(framed + 1, data, len);
-    const ssize_t n = ::send(m_InterruptFd, framed, len + 1, MSG_NOSIGNAL);
+    std::array<std::byte, 64> framed{};
+    if (data.size() + 1 > framed.size()) return -1; // no real Wiimote report is this large
+    framed[0] = 0xA2_b;
+    std::ranges::copy(data, framed.begin() + 1);
+    const ssize_t n = ::send(m_InterruptFd, framed.data(), data.size() + 1, MSG_NOSIGNAL);
     if (n < 0) return -1;
-    return int(n) - 1; // report the same "payload bytes written" count SDL_hid_write would
+    return static_cast<int>(n) - 1; // report the same "payload bytes written" count SDL_hid_write would
 }
 
-int WiimoteL2CAPTransport::Read(uint8_t *buf, size_t bufsize) {
+int WiimoteL2CAPTransport::Read(std::span<std::byte> buf) {
     if (m_InterruptFd < 0) return -1;
-    uint8_t framed[64];
-    const ssize_t n = ::recv(m_InterruptFd, framed, sizeof(framed), 0);
+    std::array<std::byte, 64> framed{};
+    const ssize_t n = ::recv(m_InterruptFd, framed.data(), framed.size(), 0);
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0; // nothing pending right now
         return -1;
@@ -174,10 +177,10 @@ int WiimoteL2CAPTransport::Read(uint8_t *buf, size_t bufsize) {
     // exactly the same report-ID-first bytes WiimoteHidTransport hands
     // them (the kernel's hid-generic driver does this same stripping,
     // invisibly, for the hidraw path).
-    if (framed[0] != 0xA1 || n < 2) return 0; // not a data-input frame we understand; ignore
-    const size_t payload_len = std::min<size_t>(size_t(n) - 1, bufsize);
-    std::memcpy(buf, framed + 1, payload_len);
-    return int(payload_len);
+    if (framed[0] != 0xA1_b || n < 2) return 0; // not a data-input frame we understand; ignore
+    const auto payload_len = std::min(static_cast<std::size_t>(n) - 1, buf.size());
+    std::copy_n(framed.begin() + 1, payload_len, buf.begin());
+    return static_cast<int>(payload_len);
 }
 
 void WiimoteL2CAPTransport::Close() {

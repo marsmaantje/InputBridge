@@ -1,6 +1,9 @@
 // src/Devices/Wiimote/WiimoteDecoder.cpp
 #include "WiimoteDecoder.h"
-#include <cstring>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
 
 namespace InputBridge::Wiimote::Decode {
 
@@ -10,10 +13,10 @@ namespace {
 // so this file stays free of any zlib/external dependency. Only used for
 // Balance Board calibration verification below; not performance-sensitive
 // (28 bytes, once per calibration load), so no lookup table.
-uint32_t Crc32(const uint8_t *data, size_t len) {
+uint32_t Crc32(std::span<const std::byte> data) {
     uint32_t crc = 0xFFFFFFFFu;
-    for (size_t i = 0; i < len; ++i) {
-        crc ^= data[i];
+    for (const std::byte byte : data) {
+        crc ^= std::to_integer<uint32_t>(byte);
         for (int bit = 0; bit < 8; ++bit) {
             const uint32_t mask = -(crc & 1u);
             crc = (crc >> 1) ^ (0xEDB88320u & mask);
@@ -21,21 +24,31 @@ uint32_t Crc32(const uint8_t *data, size_t len) {
     }
     return ~crc;
 }
+
+// Raw wire byte -> unsigned integer for shift/mask arithmetic. Everything is
+// done on `unsigned` (so no integer-promotion surprises) and narrowed back
+// with an explicit Narrow<> at the point a decoded field is stored.
+constexpr unsigned U(std::byte b) { return std::to_integer<unsigned>(b); }
+
+template <typename T>
+constexpr T Narrow(unsigned value) { return static_cast<T>(value); }
+
+constexpr bool Bit(std::byte b, unsigned mask) { return (U(b) & mask) != 0u; }
 } // namespace
 
-CoreButtons Buttons(const uint8_t bb[2]) {
+CoreButtons Buttons(std::span<const std::byte, 2> bb) {
     CoreButtons s;
-    s.left  = bb[0] & 0x01;
-    s.right = bb[0] & 0x02;
-    s.down  = bb[0] & 0x04;
-    s.up    = bb[0] & 0x08;
-    s.plus  = bb[0] & 0x10;
-    s.two   = bb[1] & 0x01;
-    s.one   = bb[1] & 0x02;
-    s.b     = bb[1] & 0x04;
-    s.a     = bb[1] & 0x08;
-    s.minus = bb[1] & 0x10;
-    s.home  = bb[1] & 0x80;
+    s.left  = Bit(bb[0], 0x01);
+    s.right = Bit(bb[0], 0x02);
+    s.down  = Bit(bb[0], 0x04);
+    s.up    = Bit(bb[0], 0x08);
+    s.plus  = Bit(bb[0], 0x10);
+    s.two   = Bit(bb[1], 0x01);
+    s.one   = Bit(bb[1], 0x02);
+    s.b     = Bit(bb[1], 0x04);
+    s.a     = Bit(bb[1], 0x08);
+    s.minus = Bit(bb[1], 0x10);
+    s.home  = Bit(bb[1], 0x80);
     return s;
 }
 
@@ -44,41 +57,40 @@ CoreButtons Buttons(const uint8_t bb[2]) {
 // driver ecosystem (wiiuse, cwiid, WiimoteLib); WiiBrew's own bit table for
 // this section is not fully column-aligned in its wiki markup, so treat this
 // as the community-verified reference rather than a literal wiki transcription.
-AccelState Accel(const uint8_t bb[2], const uint8_t aa[3]) {
+AccelState Accel(std::span<const std::byte, 2> bb, std::span<const std::byte, 3> aa) {
     AccelState s;
-    s.raw_x = (uint16_t(aa[0]) << 2) | ((bb[0] >> 5) & 0x03);
-    s.raw_y = (uint16_t(aa[1]) << 2) | ((bb[1] >> 4) & 0x02);
-    s.raw_z = (uint16_t(aa[2]) << 2) | ((bb[1] >> 5) & 0x02);
+    s.raw_x = Narrow<uint16_t>((U(aa[0]) << 2) | ((U(bb[0]) >> 5) & 0x03u));
+    s.raw_y = Narrow<uint16_t>((U(aa[1]) << 2) | ((U(bb[1]) >> 4) & 0x02u));
+    s.raw_z = Narrow<uint16_t>((U(aa[2]) << 2) | ((U(bb[1]) >> 5) & 0x02u));
 
     // Nominal (uncalibrated) conversion: 0g ~= 512, 1g ~= 512 + 128 = 640,
     // per WiiBrew's accelerometer overview. For precise work, read the
     // per-device calibration block from EEPROM (WiimoteDevice::ReadAccelCalibration)
     // and use the real 0g/1g offsets instead of these nominal values.
-    constexpr float kZeroG = 512.f, kOneGCounts = 128.f;
-    s.g_x = (float(s.raw_x) - kZeroG) / kOneGCounts;
-    s.g_y = (float(s.raw_y) - kZeroG) / kOneGCounts;
-    s.g_z = (float(s.raw_z) - kZeroG) / kOneGCounts;
+    constexpr float kZeroG = 512.f;
+    constexpr float kOneGCounts = 128.f;
+    s.g_x = (static_cast<float>(s.raw_x) - kZeroG) / kOneGCounts;
+    s.g_y = (static_cast<float>(s.raw_y) - kZeroG) / kOneGCounts;
+    s.g_z = (static_cast<float>(s.raw_z) - kZeroG) / kOneGCounts;
     return s;
 }
 
-IRState IRBasic(const uint8_t ir[10]) {
+IRState IRBasic(std::span<const std::byte, 10> ir) {
     IRState out{};
-    auto decodePair = [](const uint8_t *p, IRDot &d0, IRDot &d1) {
-        const uint16_t x0 = p[0] | (uint16_t(p[2] & 0x30) << 4);
-        const uint16_t y0 = p[1] | (uint16_t(p[2] & 0xC0) << 2);
-        const uint16_t x1 = p[3] | (uint16_t(p[2] & 0x03) << 8);
-        const uint16_t y1 = p[4] | (uint16_t(p[2] & 0x0C) << 6);
-        d0.visible = !(p[0] == 0xFF && p[1] == 0xFF);
-        d1.visible = !(p[3] == 0xFF && p[4] == 0xFF);
-        d0.x = x0; d0.y = y0;
-        d1.x = x1; d1.y = y1;
+    auto decodePair = [](std::span<const std::byte, 5> p, IRDot &d0, IRDot &d1) {
+        d0.x = Narrow<uint16_t>(U(p[0]) | ((U(p[2]) & 0x30u) << 4));
+        d0.y = Narrow<uint16_t>(U(p[1]) | ((U(p[2]) & 0xC0u) << 2));
+        d1.x = Narrow<uint16_t>(U(p[3]) | ((U(p[2]) & 0x03u) << 8));
+        d1.y = Narrow<uint16_t>(U(p[4]) | ((U(p[2]) & 0x0Cu) << 6));
+        d0.visible = !(p[0] == 0xFF_b && p[1] == 0xFF_b);
+        d1.visible = !(p[3] == 0xFF_b && p[4] == 0xFF_b);
     };
-    decodePair(ir + 0, out[0], out[1]);
-    decodePair(ir + 5, out[2], out[3]);
+    decodePair(ir.subspan<0, 5>(), out[0], out[1]);
+    decodePair(ir.subspan<5, 5>(), out[2], out[3]);
     return out;
 }
 
-IRState IRExtended(const uint8_t ir[12]) {
+IRState IRExtended(std::span<const std::byte, 12> ir) {
     IRState out{};
     // Per dot: byte0 = X low 8 bits, byte1 = Y low 8 bits, byte2 = Y-high
     // (bits 7:6), X-high (bits 5:4), size (bits 3:0) - same Y-before-X
@@ -87,82 +99,84 @@ IRState IRExtended(const uint8_t ir[12]) {
     // full), so the visibility check must cover the X/Y high-bit nibble
     // too, not just the size nibble - checking only bits 3:0 would
     // misclassify a real dot with size==15 as invisible.
-    for (int i = 0; i < 4; ++i) {
-        const uint8_t *p = ir + (i * 3);
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        const auto p = ir.subspan(i * 3, 3);
         IRDot &d = out[i];
-        d.x    = uint16_t(p[0]) | (uint16_t(p[2] & 0x30) << 4);
-        d.y    = uint16_t(p[1]) | (uint16_t(p[2] & 0xC0) << 2);
-        d.size = p[2] & 0x0F;
-        d.visible = !(p[0] == 0xFF && p[1] == 0xFF && p[2] == 0xFF);
+        d.x    = Narrow<uint16_t>(U(p[0]) | ((U(p[2]) & 0x30u) << 4));
+        d.y    = Narrow<uint16_t>(U(p[1]) | ((U(p[2]) & 0xC0u) << 2));
+        d.size = Narrow<uint8_t>(U(p[2]) & 0x0Fu);
+        d.visible = !(p[0] == 0xFF_b && p[1] == 0xFF_b && p[2] == 0xFF_b);
     }
     return out;
 }
 
-IRDot IRFullDot(const uint8_t nine_bytes[9]) {
+IRDot IRFullDot(std::span<const std::byte, 9> p) {
     IRDot d{};
     // Per WiiBrew "IR Camera#Full Mode": byte0/1/2 are the same X/Y/size
     // packing as Extended mode. Bytes 3-6 are the bounding box (each only
     // 7 bits wide - bit 7 is always 0, so no masking beyond & 0x7F is
     // needed), byte 7 is unused/reserved, byte 8 is intensity.
-    const uint8_t *p = nine_bytes;
-    d.x    = uint16_t(p[0]) | (uint16_t(p[2] & 0x30) << 4);
-    d.y    = uint16_t(p[1]) | (uint16_t(p[2] & 0xC0) << 2);
-    d.size = p[2] & 0x0F;
-    d.visible = !(p[0] == 0xFF && p[1] == 0xFF && p[2] == 0xFF);
-    d.bbox_min_x = p[3] & 0x7F;
-    d.bbox_min_y = p[4] & 0x7F;
-    d.bbox_max_x = p[5] & 0x7F;
-    d.bbox_max_y = p[6] & 0x7F;
-    d.intensity  = p[8];
+    d.x    = Narrow<uint16_t>(U(p[0]) | ((U(p[2]) & 0x30u) << 4));
+    d.y    = Narrow<uint16_t>(U(p[1]) | ((U(p[2]) & 0xC0u) << 2));
+    d.size = Narrow<uint8_t>(U(p[2]) & 0x0Fu);
+    d.visible = !(p[0] == 0xFF_b && p[1] == 0xFF_b && p[2] == 0xFF_b);
+    d.bbox_min_x = Narrow<uint8_t>(U(p[3]) & 0x7Fu);
+    d.bbox_min_y = Narrow<uint8_t>(U(p[4]) & 0x7Fu);
+    d.bbox_max_x = Narrow<uint8_t>(U(p[5]) & 0x7Fu);
+    d.bbox_max_y = Narrow<uint8_t>(U(p[6]) & 0x7Fu);
+    d.intensity  = Narrow<uint8_t>(U(p[8]));
     return d;
 }
 
-NunchukState Nunchuk(const uint8_t *ext, size_t len) {
+NunchukState Nunchuk(std::span<const std::byte> ext) {
     NunchukState s;
-    if (len < 6) return s; // disconnected/insufficient data
+    if (ext.size() < 6) return s; // disconnected/insufficient data
     s.connected = true;
-    s.stick_x = ext[0];
-    s.stick_y = ext[1];
-    s.accel_x = (uint16_t(ext[2]) << 2) | ((ext[5] >> 2) & 0x03);
-    s.accel_y = (uint16_t(ext[3]) << 2) | ((ext[5] >> 4) & 0x03);
-    s.accel_z = (uint16_t(ext[4]) << 2) | ((ext[5] >> 6) & 0x03);
-    s.button_c = !(ext[5] & 0x02); // 0 = pressed
-    s.button_z = !(ext[5] & 0x01);
+    s.stick_x = Narrow<uint8_t>(U(ext[0]));
+    s.stick_y = Narrow<uint8_t>(U(ext[1]));
+    s.accel_x = Narrow<uint16_t>((U(ext[2]) << 2) | ((U(ext[5]) >> 2) & 0x03u));
+    s.accel_y = Narrow<uint16_t>((U(ext[3]) << 2) | ((U(ext[5]) >> 4) & 0x03u));
+    s.accel_z = Narrow<uint16_t>((U(ext[4]) << 2) | ((U(ext[5]) >> 6) & 0x03u));
+    s.button_c = !Bit(ext[5], 0x02); // 0 = pressed
+    s.button_z = !Bit(ext[5], 0x01);
     return s;
 }
 
-ClassicControllerState Classic(const uint8_t *ext, size_t len, bool is_pro) {
+ClassicControllerState Classic(std::span<const std::byte> ext, bool is_pro) {
     ClassicControllerState s;
-    if (len < 6) return s;
+    if (ext.size() < 6) return s;
     s.connected = true;
     s.is_pro = is_pro;
 
-    const uint8_t b0 = ext[0], b1 = ext[1], b2 = ext[2], b3 = ext[3], b4 = ext[4], b5 = ext[5];
+    const unsigned b0 = U(ext[0]);
+    const unsigned b1 = U(ext[1]);
+    const unsigned b2 = U(ext[2]);
+    const unsigned b3 = U(ext[3]);
 
-    s.left_x  = b0 & 0x3F;
-    s.left_y  = b1 & 0x3F;
-    s.right_x = uint16_t(((b0 >> 6) & 0x03) << 3 | ((b1 >> 6) & 0x03) << 1 | ((b2 >> 7) & 0x01));
-    s.right_y = b2 & 0x1F;
-    s.left_trigger  = uint16_t(((b2 >> 5) & 0x03) << 3 | ((b3 >> 5) & 0x07));
-    s.right_trigger = b3 & 0x1F;
+    s.left_x  = Narrow<uint16_t>(b0 & 0x3Fu);
+    s.left_y  = Narrow<uint16_t>(b1 & 0x3Fu);
+    s.right_x = Narrow<uint8_t>((((b0 >> 6) & 0x03u) << 3) | (((b1 >> 6) & 0x03u) << 1) | ((b2 >> 7) & 0x01u));
+    s.right_y = Narrow<uint8_t>(b2 & 0x1Fu);
+    s.left_trigger  = Narrow<uint8_t>((((b2 >> 5) & 0x03u) << 3) | ((b3 >> 5) & 0x07u));
+    s.right_trigger = Narrow<uint8_t>(b3 & 0x1Fu);
 
     // All buttons are active-low (0 = pressed) on the wire.
-    s.dpad_right = !(b4 & 0x80);
-    s.dpad_down  = !(b4 & 0x40);
-    s.l          = !(b4 & 0x20);
-    s.minus      = !(b4 & 0x10);
-    s.home       = !(b4 & 0x08);
-    s.plus       = !(b4 & 0x04);
-    s.r          = !(b4 & 0x02);
+    s.dpad_right = !Bit(ext[4], 0x80);
+    s.dpad_down  = !Bit(ext[4], 0x40);
+    s.l          = !Bit(ext[4], 0x20);
+    s.minus      = !Bit(ext[4], 0x10);
+    s.home       = !Bit(ext[4], 0x08);
+    s.plus       = !Bit(ext[4], 0x04);
+    s.r          = !Bit(ext[4], 0x02);
 
-    s.zl    = !(b5 & 0x80);
-    s.b     = !(b5 & 0x40);
-    s.y     = !(b5 & 0x20);
-    s.a     = !(b5 & 0x10);
-    s.x     = !(b5 & 0x08);
-    s.zr    = !(b5 & 0x04);
-    s.dpad_left = !(b5 & 0x02);
-    s.dpad_up   = !(b5 & 0x01);
+    s.zl    = !Bit(ext[5], 0x80);
+    s.b     = !Bit(ext[5], 0x40);
+    s.y     = !Bit(ext[5], 0x20);
+    s.a     = !Bit(ext[5], 0x10);
+    s.x     = !Bit(ext[5], 0x08);
+    s.zr    = !Bit(ext[5], 0x04);
+    s.dpad_left = !Bit(ext[5], 0x02);
+    s.dpad_up   = !Bit(ext[5], 0x01);
 
     return s;
 }
@@ -180,27 +194,27 @@ GuitarHeroState GuitarFromClassic(const ClassicControllerState &cc, bool is_drum
     s.strum_down  = cc.dpad_down;
     s.plus        = cc.plus;
     s.minus       = cc.minus;
-    s.stick_x     = uint8_t(cc.left_x * 4); // rescale 0-63 -> ~0-252
-    s.whammy_bar  = uint8_t(cc.right_trigger * 8); // rescale 0-31 -> ~0-248
+    s.stick_x     = Narrow<uint8_t>(cc.left_x * 4u); // rescale 0-63 -> ~0-252
+    s.whammy_bar  = Narrow<uint8_t>(cc.right_trigger * 8u); // rescale 0-31 -> ~0-248
 
     // Drum pad velocities aren't covered by this Classic-shaped decode;
     // GHWT Drums needs extra bytes/mode not modeled here yet.
     return s;
 }
 
-GuitarHeroState Guitar(const uint8_t *ext, size_t len, bool is_drums) {
+GuitarHeroState Guitar(std::span<const std::byte> ext, bool is_drums) {
     // GH guitars/drums stream fret/strum/whammy in the same 6-byte layout
     // as a stock Classic Controller (format 0x01), just with different
     // physical labels - same approach wiiuse's classic_ctrl.c takes.
     // WiiBrew notes the guitar actually advertises format 0x03 (8-bit,
     // 8-byte layout); if real hardware sends 8 bytes this mapping is wrong
     // and needs reworking against a real capture. Unverified on hardware.
-    if (len < 6) return GuitarHeroState{};
-    return GuitarFromClassic(Classic(ext, len, /*is_pro=*/false), is_drums);
+    if (ext.size() < 6) return GuitarHeroState{};
+    return GuitarFromClassic(Classic(ext, /*is_pro=*/false), is_drums);
 }
 
-BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32],
-                                                      const uint8_t ref_temp2[2]) {
+BalanceBoardCalibration ParseBalanceBoardCalibration(std::span<const std::byte, 32> block32,
+                                                      std::span<const std::byte, 2> ref_temp2) {
     BalanceBoardCalibration c;
 
     // Checksum input, built in the exact (non-contiguous) order WiiBrew
@@ -208,18 +222,18 @@ BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32],
     // Reference Temperature bytes at 0x60-0x61 (2 bytes) - 28 bytes total.
     // block32[] is register-relative to 0x20, so 0x24-0x3B is block32[4..27]
     // and 0x20-0x21 is block32[0..1].
-    uint8_t crc_input[28];
-    std::memcpy(crc_input, block32 + 4, 24);
+    std::array<std::byte, 28> crc_input{};
+    std::ranges::copy(block32.subspan<4, 24>(), crc_input.begin());
     crc_input[24] = block32[0];
     crc_input[25] = block32[1];
     crc_input[26] = ref_temp2[0];
     crc_input[27] = ref_temp2[1];
 
-    const uint32_t computed = Crc32(crc_input, sizeof(crc_input));
-    const uint32_t stored = (uint32_t(block32[0x3C - 0x20]) << 24) |
-                             (uint32_t(block32[0x3D - 0x20]) << 16) |
-                             (uint32_t(block32[0x3E - 0x20]) << 8) |
-                             uint32_t(block32[0x3F - 0x20]);
+    const uint32_t computed = Crc32(crc_input);
+    const uint32_t stored = (std::to_integer<uint32_t>(block32[0x3C - 0x20]) << 24) |
+                             (std::to_integer<uint32_t>(block32[0x3D - 0x20]) << 16) |
+                             (std::to_integer<uint32_t>(block32[0x3E - 0x20]) << 8) |
+                             std::to_integer<uint32_t>(block32[0x3F - 0x20]);
     if (computed != stored) {
         // Corrupted/torn read: don't hand back numbers that look plausible
         // but aren't verified - leave `valid` false (all-zero arrays) so
@@ -228,9 +242,7 @@ BalanceBoardCalibration ParseBalanceBoardCalibration(const uint8_t block32[32],
         return c;
     }
 
-    auto be16 = [&](int off) -> uint16_t {
-        return (uint16_t(block32[off]) << 8) | block32[off + 1];
-    };
+    auto be16 = [&](std::size_t off) { return ToU16BE(block32[off], block32[off + 1]); };
     // Layout starts at register 0x20 == block32[0]; offsets below are
     // (register - 0x20).
     // 0kg:  TR=0x24 BR=0x26 TL=0x28 BL=0x2A
@@ -258,22 +270,22 @@ float InterpolateWeight(uint16_t raw, uint16_t c0, uint16_t c17, uint16_t c34) {
     // unloaded" reading, not a fault. Callers can clamp for display.
     if (raw <= c17) {
         if (c17 == c0) return 0.f;
-        return 17.f * (float(raw) - float(c0)) / float(c17 - c0);
+        return 17.f * (static_cast<float>(raw) - static_cast<float>(c0)) / static_cast<float>(c17 - c0);
     }
     if (c34 == c17) return 17.f;
     return 17.f + 17.f * (float(raw) - float(c17)) / float(c34 - c17);
 }
 } // namespace
 
-BalanceBoardState BalanceBoard(const uint8_t ext[11], const BalanceBoardCalibration &cal) {
+BalanceBoardState BalanceBoard(std::span<const std::byte, 11> ext, const BalanceBoardCalibration &cal) {
     BalanceBoardState s;
     s.connected = true;
-    s.raw_top_right    = (uint16_t(ext[0]) << 8) | ext[1];
-    s.raw_bottom_right = (uint16_t(ext[2]) << 8) | ext[3];
-    s.raw_top_left     = (uint16_t(ext[4]) << 8) | ext[5];
-    s.raw_bottom_left  = (uint16_t(ext[6]) << 8) | ext[7];
-    s.temperature_raw  = ext[8];
-    s.battery_raw       = ext[10];
+    s.raw_top_right    = ToU16BE(ext[0], ext[1]);
+    s.raw_bottom_right = ToU16BE(ext[2], ext[3]);
+    s.raw_top_left     = ToU16BE(ext[4], ext[5]);
+    s.raw_bottom_left  = ToU16BE(ext[6], ext[7]);
+    s.temperature_raw  = Narrow<uint8_t>(U(ext[8]));
+    s.battery_raw      = Narrow<uint8_t>(U(ext[10]));
 
     if (cal.valid) {
         s.kg_top_right    = InterpolateWeight(s.raw_top_right,    cal.kg0[0], cal.kg17[0], cal.kg34[0]);
@@ -297,7 +309,7 @@ BalanceBoardState BalanceBoard(const uint8_t ext[11], const BalanceBoardCalibrat
     return s;
 }
 
-MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
+MotionPlusState MotionPlus(std::span<const std::byte> ext) {
     // Byte layout (cross-checked against FreeIMU and Adafruit reference
     // implementations, since WiiBrew's own bit table is easy to mistranscribe):
     //   ext[0/1/2] = Yaw/Roll/Pitch low 8 bits
@@ -307,18 +319,18 @@ MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
     //   ext[5] bit 1 = report-type discriminator (1 = MotionPlus data) -
     //     WiimoteDevice checks this before calling here, not re-checked.
     MotionPlusState s;
-    if (len < 6) return s; // disconnected/insufficient data
+    if (ext.size() < 6) return s; // disconnected/insufficient data
     s.connected = true;
 
-    s.raw_yaw   = uint16_t(ext[0]) | (uint16_t(ext[3] & 0xFC) << 6);
-    s.raw_roll  = uint16_t(ext[1]) | (uint16_t(ext[4] & 0xFC) << 6);
-    s.raw_pitch = uint16_t(ext[2]) | (uint16_t(ext[5] & 0xFC) << 6);
+    s.raw_yaw   = Narrow<uint16_t>(U(ext[0]) | ((U(ext[3]) & 0xFCu) << 6));
+    s.raw_roll  = Narrow<uint16_t>(U(ext[1]) | ((U(ext[4]) & 0xFCu) << 6));
+    s.raw_pitch = Narrow<uint16_t>(U(ext[2]) | ((U(ext[5]) & 0xFCu) << 6));
 
-    s.slow_yaw   = ext[3] & 0x02;
-    s.slow_pitch = ext[3] & 0x01;
-    s.slow_roll  = ext[4] & 0x02;
+    s.slow_yaw   = Bit(ext[3], 0x02);
+    s.slow_pitch = Bit(ext[3], 0x01);
+    s.slow_roll  = Bit(ext[4], 0x02);
 
-    s.extension_connected = ext[4] & 0x01;
+    s.extension_connected = Bit(ext[4], 0x01);
 
     // Nominal conversion: zero-rate offset 8192 (14-bit centre; real
     // hardware idles closer to ~8063, so recalibrate at startup for
@@ -329,7 +341,7 @@ MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
     constexpr float kFastCountsPerDegS = kSlowCountsPerDegS * 440.f / 2000.f;
     auto toDegS = [&](uint16_t raw, bool slow) {
         const float countsPerDegS = slow ? kSlowCountsPerDegS : kFastCountsPerDegS;
-        return (float(raw) - kZero) / countsPerDegS;
+        return (static_cast<float>(raw) - kZero) / countsPerDegS;
     };
     s.deg_s_yaw   = toDegS(s.raw_yaw,   s.slow_yaw);
     s.deg_s_pitch = toDegS(s.raw_pitch, s.slow_pitch);
@@ -338,7 +350,7 @@ MotionPlusState MotionPlus(const uint8_t *ext, size_t len) {
     return s;
 }
 
-NunchukState NunchukViaMotionPlus(const uint8_t *ext, size_t len) {
+NunchukState NunchukViaMotionPlus(std::span<const std::byte> ext) {
     // Per WiiBrew "Nunchuck pass-through mode": SX/SY untouched; each accel
     // axis loses its LSB (always 0 here) to make room for bookkeeping bits
     // relocated into ext[5]:
@@ -347,19 +359,19 @@ NunchukState NunchukViaMotionPlus(const uint8_t *ext, size_t len) {
     // AZ's top 7 bits stay in ext[4] bits 7:1; ext[4] bit 0 becomes
     // "extension connected".
     NunchukState s;
-    if (len < 6) return s; // disconnected/insufficient data
+    if (ext.size() < 6) return s; // disconnected/insufficient data
     s.connected = true;
-    s.stick_x = ext[0];
-    s.stick_y = ext[1];
-    s.accel_x = (uint16_t(ext[2]) << 2) | uint16_t(((ext[5] >> 4) & 0x01) << 1);
-    s.accel_y = (uint16_t(ext[3]) << 2) | uint16_t(((ext[5] >> 5) & 0x01) << 1);
-    s.accel_z = (uint16_t(ext[4] >> 1) << 3) | uint16_t(((ext[5] >> 6) & 0x03) << 1);
-    s.button_c = !(ext[5] & 0x08);
-    s.button_z = !(ext[5] & 0x04);
+    s.stick_x = Narrow<uint8_t>(U(ext[0]));
+    s.stick_y = Narrow<uint8_t>(U(ext[1]));
+    s.accel_x = Narrow<uint16_t>((U(ext[2]) << 2) | (((U(ext[5]) >> 4) & 0x01u) << 1));
+    s.accel_y = Narrow<uint16_t>((U(ext[3]) << 2) | (((U(ext[5]) >> 5) & 0x01u) << 1));
+    s.accel_z = Narrow<uint16_t>(((U(ext[4]) >> 1) << 3) | (((U(ext[5]) >> 6) & 0x03u) << 1));
+    s.button_c = !Bit(ext[5], 0x08);
+    s.button_z = !Bit(ext[5], 0x04);
     return s;
 }
 
-ClassicControllerState ClassicViaMotionPlus(const uint8_t *ext, size_t len, bool is_pro) {
+ClassicControllerState ClassicViaMotionPlus(std::span<const std::byte> ext, bool is_pro) {
     // Per WiiBrew "Classic Controller pass-through mode": RX/RY/LT/RT and
     // all buttons except the D-pad sit at the same bits as Classic() above.
     // What differs: left stick X/Y each lose their LSB to make room for
@@ -368,38 +380,41 @@ ClassicControllerState ClassicViaMotionPlus(const uint8_t *ext, size_t len, bool
     // discriminator/reserved bits instead of dpad_left/up (reading them as
     // buttons, as plain Classic() would, misreports both as held).
     ClassicControllerState s;
-    if (len < 6) return s;
+    if (ext.size() < 6) return s;
     s.connected = true;
     s.is_pro = is_pro;
 
-    const uint8_t b0 = ext[0], b1 = ext[1], b2 = ext[2], b3 = ext[3], b4 = ext[4], b5 = ext[5];
+    const unsigned b0 = U(ext[0]);
+    const unsigned b1 = U(ext[1]);
+    const unsigned b2 = U(ext[2]);
+    const unsigned b3 = U(ext[3]);
 
-    s.left_x  = b0 & 0x3E; // LX<5:1>, bit 0 forced to 0 (stolen for BDU)
-    s.left_y  = b1 & 0x3E; // LY<5:1>, bit 0 forced to 0 (stolen for BDL)
-    s.right_x = uint16_t(((b0 >> 6) & 0x03) << 3 | ((b1 >> 6) & 0x03) << 1 | ((b2 >> 7) & 0x01));
-    s.right_y = b2 & 0x1F;
-    s.left_trigger  = uint16_t(((b2 >> 5) & 0x03) << 3 | ((b3 >> 5) & 0x07));
-    s.right_trigger = b3 & 0x1F;
+    s.left_x  = Narrow<uint16_t>(b0 & 0x3Eu); // LX<5:1>, bit 0 forced to 0 (stolen for BDU)
+    s.left_y  = Narrow<uint16_t>(b1 & 0x3Eu); // LY<5:1>, bit 0 forced to 0 (stolen for BDL)
+    s.right_x = Narrow<uint8_t>((((b0 >> 6) & 0x03u) << 3) | (((b1 >> 6) & 0x03u) << 1) | ((b2 >> 7) & 0x01u));
+    s.right_y = Narrow<uint8_t>(b2 & 0x1Fu);
+    s.left_trigger  = Narrow<uint8_t>((((b2 >> 5) & 0x03u) << 3) | ((b3 >> 5) & 0x07u));
+    s.right_trigger = Narrow<uint8_t>(b3 & 0x1Fu);
 
-    s.dpad_right = !(b4 & 0x80);
-    s.dpad_down  = !(b4 & 0x40);
-    s.l          = !(b4 & 0x20);
-    s.minus      = !(b4 & 0x10);
-    s.home       = !(b4 & 0x08);
-    s.plus       = !(b4 & 0x04);
-    s.r          = !(b4 & 0x02);
-    // b4 bit 0 here is "extension connected", not a button.
+    s.dpad_right = !Bit(ext[4], 0x80);
+    s.dpad_down  = !Bit(ext[4], 0x40);
+    s.l          = !Bit(ext[4], 0x20);
+    s.minus      = !Bit(ext[4], 0x10);
+    s.home       = !Bit(ext[4], 0x08);
+    s.plus       = !Bit(ext[4], 0x04);
+    s.r          = !Bit(ext[4], 0x02);
+    // ext[4] bit 0 here is "extension connected", not a button.
 
-    s.zl    = !(b5 & 0x80);
-    s.b     = !(b5 & 0x40);
-    s.y     = !(b5 & 0x20);
-    s.a     = !(b5 & 0x10);
-    s.x     = !(b5 & 0x08);
-    s.zr    = !(b5 & 0x04);
-    // b5 bits 1:0 are the discriminator/reserved bits, not dpad_left/up.
+    s.zl    = !Bit(ext[5], 0x80);
+    s.b     = !Bit(ext[5], 0x40);
+    s.y     = !Bit(ext[5], 0x20);
+    s.a     = !Bit(ext[5], 0x10);
+    s.x     = !Bit(ext[5], 0x08);
+    s.zr    = !Bit(ext[5], 0x04);
+    // ext[5] bits 1:0 are the discriminator/reserved bits, not dpad_left/up.
 
-    s.dpad_up   = !(b0 & 0x01);
-    s.dpad_left = !(b1 & 0x01);
+    s.dpad_up   = !Bit(ext[0], 0x01);
+    s.dpad_left = !Bit(ext[1], 0x01);
 
     return s;
 }
