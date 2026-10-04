@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <stdexcept>
 
 namespace InputBridge::Wiimote {
 
@@ -22,7 +23,7 @@ namespace InputBridge::Wiimote {
 // at every use site; consteval, so an out-of-range value (e.g. 0x1FF_b) is a
 // compile error rather than a silent truncation.
 consteval std::byte operator""_b(unsigned long long value) {
-    if (value > 0xFFull) throw "std::byte literal out of range (> 0xFF)";
+    if (value > 0xFFull) throw std::out_of_range("std::byte literal out of range (> 0xFF)");
     return static_cast<std::byte>(value);
 }
 

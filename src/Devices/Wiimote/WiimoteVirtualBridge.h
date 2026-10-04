@@ -12,6 +12,7 @@
 #include <SDL3/SDL.h>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <memory>
 
 namespace InputBridge::Wiimote {
@@ -27,7 +28,7 @@ namespace InputBridge::Wiimote {
 // new axes at the end, never insert. (Axis_IRX/Y were renamed to
 // Axis_IR1X/Y in place, same slot, to preserve old saved profiles.)
 constexpr int kWiimoteNumAxes = 30;
-enum WiimoteAxis {
+enum class WiimoteAxis {
     Axis_AccelX = 0, Axis_AccelY, Axis_AccelZ,
     Axis_IR1X, Axis_IR1Y, Axis_IR2X, Axis_IR2Y,
     Axis_IR3X, Axis_IR3Y, Axis_IR4X, Axis_IR4Y,
@@ -39,6 +40,8 @@ enum WiimoteAxis {
     Axis_ClassicLX, Axis_ClassicLY, Axis_ClassicRX, Axis_ClassicRY,
     Axis_ClassicLTrigger, Axis_ClassicRTrigger,
 };
+static_assert(static_cast<int>(WiimoteAxis::Axis_ClassicRTrigger) + 1 == kWiimoteNumAxes,
+              "kWiimoteNumAxes out of sync with WiimoteAxis");
 
 // Both D-Pads are hats (not buttons) so they map/display like a regular
 // gamepad's D-Pad - InputMapper already understands hats generically
@@ -47,10 +50,12 @@ enum WiimoteAxis {
 // MappingProfileStore persists bindings by raw hat index, so an index
 // already in use must never shift.
 constexpr int kWiimoteNumHats = 2;
-enum WiimoteHat { Hat_DPad = 0, Hat_ClassicDPad };
+enum class WiimoteHat { Hat_DPad = 0, Hat_ClassicDPad };
+static_assert(static_cast<int>(WiimoteHat::Hat_ClassicDPad) + 1 == kWiimoteNumHats,
+              "kWiimoteNumHats out of sync with WiimoteHat");
 
 constexpr int kWiimoteNumButtons = 24;
-enum WiimoteButton {
+enum class WiimoteButton {
     Btn_A = 0, Btn_B, Btn_One, Btn_Two, Btn_Plus, Btn_Minus, Btn_Home,
     Btn_NunchukC, Btn_NunchukZ,
     Btn_ClassicA, Btn_ClassicB, Btn_ClassicX, Btn_ClassicY,
@@ -58,17 +63,21 @@ enum WiimoteButton {
     Btn_ClassicUp, Btn_ClassicDown, Btn_ClassicLeft, Btn_ClassicRight,
     Btn_ClassicPlus, Btn_ClassicMinus, Btn_ClassicHome
 };
+static_assert(static_cast<int>(WiimoteButton::Btn_ClassicHome) + 1 == kWiimoteNumButtons,
+              "kWiimoteNumButtons out of sync with WiimoteButton");
 
 // Same append-only rule as WiimoteAxis - BAxis_Battery was appended after
 // the original 7-axis layout rather than inserted inline.
 constexpr int kBalanceNumAxes = 8;
-enum BalanceAxis {
+enum class BalanceAxis {
     BAxis_TopLeft = 0, BAxis_TopRight, BAxis_BottomLeft, BAxis_BottomRight,
     BAxis_Total, BAxis_CoGX, BAxis_CoGY,
     BAxis_Battery,
 };
+static_assert(static_cast<int>(BalanceAxis::BAxis_Battery) + 1 == kBalanceNumAxes,
+              "kBalanceNumAxes out of sync with BalanceAxis");
 constexpr int kBalanceNumButtons = 1;
-enum BalanceButton { BBtn_A = 0 };
+enum class BalanceButton { BBtn_A = 0 };
 
 // Device names Attach() gives the two bridge joystick kinds -
 // InputLabelProvider exact-matches on these to pick these tables over
@@ -87,10 +96,14 @@ constexpr const char *kBalanceBoardBridgeDeviceName  = "Wii Balance Board (Mappe
 // so it's unit-testable in isolation.
 constexpr bool IsClassicDPadButtonIndex(int button)
 {
-    return button == WiimoteButton::Btn_ClassicUp   ||
-           button == WiimoteButton::Btn_ClassicDown ||
-           button == WiimoteButton::Btn_ClassicLeft ||
-           button == WiimoteButton::Btn_ClassicRight;
+        return button == static_cast<int>(WiimoteButton::Btn_ClassicUp)   ||
+            button == static_cast<int>(WiimoteButton::Btn_ClassicDown) ||
+            button == static_cast<int>(WiimoteButton::Btn_ClassicLeft) ||
+            button == static_cast<int>(WiimoteButton::Btn_ClassicRight);
+}
+constexpr bool IsClassicDPadButtonIndex(WiimoteButton button)
+{
+    return IsClassicDPadButtonIndex(static_cast<int>(button));
 }
 
 // Whether GenericVisualizer's "Buttons" section should skip drawing this raw
@@ -99,9 +112,13 @@ constexpr bool IsClassicDPadButtonIndex(int button)
 // device/button combination is drawn as before, including the Balance Board
 // bridge (which has no D-Pad of any kind) and the Wiimote bridge's own
 // non-Classic buttons.
-inline bool ShouldSkipButtonInButtonsSection(const std::string &deviceName, int button)
+inline bool ShouldSkipButtonInButtonsSection(std::string_view deviceName, int button)
 {
     return deviceName == kWiimoteBridgeDeviceName && IsClassicDPadButtonIndex(button);
+}
+inline bool ShouldSkipButtonInButtonsSection(std::string_view deviceName, WiimoteButton button)
+{
+    return ShouldSkipButtonInButtonsSection(deviceName, static_cast<int>(button));
 }
 
 // Human-readable names for the layouts above, in index order. Returns

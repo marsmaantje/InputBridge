@@ -26,41 +26,41 @@ using namespace InputBridge::Wiimote;
 // ═════════════════════════════════════════════════════════════════════════════
 
 TEST(IsClassicDPadButtonIndex, TrueForAllFourClassicDPadDirections) {
-    EXPECT_TRUE(IsClassicDPadButtonIndex(Btn_ClassicUp));
-    EXPECT_TRUE(IsClassicDPadButtonIndex(Btn_ClassicDown));
-    EXPECT_TRUE(IsClassicDPadButtonIndex(Btn_ClassicLeft));
-    EXPECT_TRUE(IsClassicDPadButtonIndex(Btn_ClassicRight));
+    EXPECT_TRUE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicUp));
+    EXPECT_TRUE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicDown));
+    EXPECT_TRUE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicLeft));
+    EXPECT_TRUE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicRight));
 }
 
 TEST(IsClassicDPadButtonIndex, FalseForClassicFaceAndShoulderButtons) {
     // Only the D-Pad directions should match - every other Classic Controller
     // button (face buttons, shoulders, triggers, system buttons) must still
     // be drawn normally.
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicA));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicB));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicX));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicY));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicL));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicR));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicZL));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicZR));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicPlus));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicMinus));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_ClassicHome));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicA));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicB));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicX));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicY));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicL));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicR));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicZL));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicZR));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicPlus));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicMinus));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_ClassicHome));
 }
 
 TEST(IsClassicDPadButtonIndex, FalseForNonClassicWiimoteButtons) {
     // The plain Wiimote's own buttons (including its own D-Pad, which is a
     // hat with no Btn_* equivalent at all) must be unaffected.
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_A));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_B));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_One));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_Two));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_Plus));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_Minus));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_Home));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_NunchukC));
-    EXPECT_FALSE(IsClassicDPadButtonIndex(Btn_NunchukZ));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_A));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_B));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_One));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_Two));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_Plus));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_Minus));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_Home));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_NunchukC));
+    EXPECT_FALSE(IsClassicDPadButtonIndex(WiimoteButton::Btn_NunchukZ));
 }
 
 TEST(IsClassicDPadButtonIndex, FalseForOutOfRangeIndices) {
@@ -75,19 +75,19 @@ TEST(IsClassicDPadButtonIndex, FalseForOutOfRangeIndices) {
 
 TEST(ShouldSkipButtonInButtonsSection, SkipsClassicDPadOnWiimoteBridge) {
     const std::string dev = kWiimoteBridgeDeviceName;
-    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicUp));
-    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicDown));
-    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicLeft));
-    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicRight));
+    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicUp));
+    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicDown));
+    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicLeft));
+    EXPECT_TRUE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicRight));
 }
 
 TEST(ShouldSkipButtonInButtonsSection, DoesNotSkipOtherButtonsOnWiimoteBridge) {
     const std::string dev = kWiimoteBridgeDeviceName;
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_A));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_Home));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicA));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicPlus));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicHome));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_A));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_Home));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicA));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicPlus));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicHome));
 }
 
 TEST(ShouldSkipButtonInButtonsSection, NeverSkipsOnBalanceBoardBridge) {
@@ -98,11 +98,11 @@ TEST(ShouldSkipButtonInButtonsSection, NeverSkipsOnBalanceBoardBridge) {
     // even if asked about indices that happen to numerically match a
     // Classic D-Pad direction on the other bridge.
     const std::string dev = kBalanceBoardBridgeDeviceName;
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, BBtn_A));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicUp));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicDown));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicLeft));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicRight));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, static_cast<int>(BalanceButton::BBtn_A)));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicUp));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicDown));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicLeft));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicRight));
 }
 
 TEST(ShouldSkipButtonInButtonsSection, NeverSkipsOnUnrelatedDevices) {
@@ -110,13 +110,13 @@ TEST(ShouldSkipButtonInButtonsSection, NeverSkipsOnUnrelatedDevices) {
     // two bridge constants) must never have any of its buttons skipped,
     // even if the raw index happens to equal one of the Btn_Classic* values.
     const std::string dev = "Xbox Wireless Controller";
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicUp));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicDown));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicLeft));
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, Btn_ClassicRight));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicUp));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicDown));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicLeft));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, WiimoteButton::Btn_ClassicRight));
     EXPECT_FALSE(ShouldSkipButtonInButtonsSection(dev, 0));
 }
 
 TEST(ShouldSkipButtonInButtonsSection, EmptyDeviceNameNeverSkips) {
-    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(std::string(), Btn_ClassicUp));
+    EXPECT_FALSE(ShouldSkipButtonInButtonsSection(std::string(), WiimoteButton::Btn_ClassicUp));
 }

@@ -24,12 +24,12 @@ unsigned char *AsUChar(std::span<std::byte> data) {
 
 int WiimoteHidTransport::Write(std::span<const std::byte> data) {
     if (!m_Dev) return -1;
-    return static_cast<int>(SDL_hid_write(m_Dev, AsUChar(data), data.size()));
+    return SDL_hid_write(m_Dev, AsUChar(data), data.size());
 }
 
 int WiimoteHidTransport::Read(std::span<std::byte> buf) {
     if (!m_Dev) return -1;
-    return static_cast<int>(SDL_hid_read(m_Dev, AsUChar(buf), buf.size()));
+    return SDL_hid_read(m_Dev, AsUChar(buf), buf.size());
 }
 
 void WiimoteHidTransport::Close() {

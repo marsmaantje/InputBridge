@@ -69,103 +69,104 @@ float NormSymmetric(float v, float maxAbs) {
 // Wiimote's own accel), so apply the same nominal 0g/1g conversion
 // WiimoteDecoder::Accel() uses before feeding NormSymmetric/kAccelMaxG.
 float NunchukAccelRawToG(uint16_t raw) {
-    constexpr float kZeroG = 512.f, kOneGCounts = 128.f;
+    constexpr float kZeroG = 512.f;
+    constexpr float kOneGCounts = 128.f;
     return (float(raw) - kZeroG) / kOneGCounts;
 }
 } // namespace
 
 // -- Name lookups (declared in the header, shared with InputLabelProvider) --
 const char *WiimoteBridgeAxisName(int axis) {
-    switch (axis) {
-        case Axis_AccelX:         return "Accel X";
-        case Axis_AccelY:         return "Accel Y";
-        case Axis_AccelZ:         return "Accel Z";
-        case Axis_IR1X:           return "IR Dot 1 X";
-        case Axis_IR1Y:           return "IR Dot 1 Y";
-        case Axis_IR2X:           return "IR Dot 2 X";
-        case Axis_IR2Y:           return "IR Dot 2 Y";
-        case Axis_IR3X:           return "IR Dot 3 X";
-        case Axis_IR3Y:           return "IR Dot 3 Y";
-        case Axis_IR4X:           return "IR Dot 4 X";
-        case Axis_IR4Y:           return "IR Dot 4 Y";
-        case Axis_IR1Size:        return "IR Dot 1 Size";
-        case Axis_IR2Size:        return "IR Dot 2 Size";
-        case Axis_IR3Size:        return "IR Dot 3 Size";
-        case Axis_IR4Size:        return "IR Dot 4 Size";
-        case Axis_NunchukX:       return "Nunchuk Stick X";
-        case Axis_NunchukY:       return "Nunchuk Stick Y";
-        case Axis_NunchukAccelX:  return "Nunchuk Accel X";
-        case Axis_NunchukAccelY:  return "Nunchuk Accel Y";
-        case Axis_NunchukAccelZ:  return "Nunchuk Accel Z";
-        case Axis_ClassicLX:      return "Classic Left Stick X";
-        case Axis_ClassicLY:      return "Classic Left Stick Y";
-        case Axis_ClassicRX:      return "Classic Right Stick X";
-        case Axis_ClassicRY:      return "Classic Right Stick Y";
-        case Axis_ClassicLTrigger: return "Classic Left Trigger";
-        case Axis_ClassicRTrigger: return "Classic Right Trigger";
-        case Axis_MotionPlusYaw:  return "Motion Plus Yaw";
-        case Axis_MotionPlusPitch: return "Motion Plus Pitch";
-        case Axis_MotionPlusRoll: return "Motion Plus Roll";
-        case Axis_Battery:        return "Battery Level";
+    switch (static_cast<WiimoteAxis>(axis)) {
+        case WiimoteAxis::Axis_AccelX:         return "Accel X";
+        case WiimoteAxis::Axis_AccelY:         return "Accel Y";
+        case WiimoteAxis::Axis_AccelZ:         return "Accel Z";
+        case WiimoteAxis::Axis_IR1X:           return "IR Dot 1 X";
+        case WiimoteAxis::Axis_IR1Y:           return "IR Dot 1 Y";
+        case WiimoteAxis::Axis_IR2X:           return "IR Dot 2 X";
+        case WiimoteAxis::Axis_IR2Y:           return "IR Dot 2 Y";
+        case WiimoteAxis::Axis_IR3X:           return "IR Dot 3 X";
+        case WiimoteAxis::Axis_IR3Y:           return "IR Dot 3 Y";
+        case WiimoteAxis::Axis_IR4X:           return "IR Dot 4 X";
+        case WiimoteAxis::Axis_IR4Y:           return "IR Dot 4 Y";
+        case WiimoteAxis::Axis_IR1Size:        return "IR Dot 1 Size";
+        case WiimoteAxis::Axis_IR2Size:        return "IR Dot 2 Size";
+        case WiimoteAxis::Axis_IR3Size:        return "IR Dot 3 Size";
+        case WiimoteAxis::Axis_IR4Size:        return "IR Dot 4 Size";
+        case WiimoteAxis::Axis_NunchukX:       return "Nunchuk Stick X";
+        case WiimoteAxis::Axis_NunchukY:       return "Nunchuk Stick Y";
+        case WiimoteAxis::Axis_NunchukAccelX:  return "Nunchuk Accel X";
+        case WiimoteAxis::Axis_NunchukAccelY:  return "Nunchuk Accel Y";
+        case WiimoteAxis::Axis_NunchukAccelZ:  return "Nunchuk Accel Z";
+        case WiimoteAxis::Axis_ClassicLX:      return "Classic Left Stick X";
+        case WiimoteAxis::Axis_ClassicLY:      return "Classic Left Stick Y";
+        case WiimoteAxis::Axis_ClassicRX:      return "Classic Right Stick X";
+        case WiimoteAxis::Axis_ClassicRY:      return "Classic Right Stick Y";
+        case WiimoteAxis::Axis_ClassicLTrigger: return "Classic Left Trigger";
+        case WiimoteAxis::Axis_ClassicRTrigger: return "Classic Right Trigger";
+        case WiimoteAxis::Axis_MotionPlusYaw:  return "Motion Plus Yaw";
+        case WiimoteAxis::Axis_MotionPlusPitch: return "Motion Plus Pitch";
+        case WiimoteAxis::Axis_MotionPlusRoll: return "Motion Plus Roll";
+        case WiimoteAxis::Axis_Battery:        return "Battery Level";
         default: return nullptr;
     }
 }
 
 const char *WiimoteBridgeButtonName(int button) {
-    switch (button) {
-        case Btn_A:            return "A";
-        case Btn_B:            return "B";
-        case Btn_One:          return "1";
-        case Btn_Two:          return "2";
-        case Btn_Plus:         return "+";
-        case Btn_Minus:        return "-";
-        case Btn_Home:         return "Home";
-        case Btn_NunchukC:     return "Nunchuk C";
-        case Btn_NunchukZ:     return "Nunchuk Z";
-        case Btn_ClassicA:     return "Classic A";
-        case Btn_ClassicB:     return "Classic B";
-        case Btn_ClassicX:     return "Classic X";
-        case Btn_ClassicY:     return "Classic Y";
-        case Btn_ClassicL:     return "Classic L";
-        case Btn_ClassicR:     return "Classic R";
-        case Btn_ClassicZL:    return "Classic ZL";
-        case Btn_ClassicZR:    return "Classic ZR";
-        case Btn_ClassicUp:    return "Classic D-Pad Up";
-        case Btn_ClassicDown:  return "Classic D-Pad Down";
-        case Btn_ClassicLeft:  return "Classic D-Pad Left";
-        case Btn_ClassicRight: return "Classic D-Pad Right";
-        case Btn_ClassicPlus:  return "Classic +";
-        case Btn_ClassicMinus: return "Classic -";
-        case Btn_ClassicHome:  return "Classic Home";
+    switch (static_cast<WiimoteButton>(button)) {
+        case WiimoteButton::Btn_A:            return "A";
+        case WiimoteButton::Btn_B:            return "B";
+        case WiimoteButton::Btn_One:          return "1";
+        case WiimoteButton::Btn_Two:          return "2";
+        case WiimoteButton::Btn_Plus:         return "+";
+        case WiimoteButton::Btn_Minus:        return "-";
+        case WiimoteButton::Btn_Home:         return "Home";
+        case WiimoteButton::Btn_NunchukC:     return "Nunchuk C";
+        case WiimoteButton::Btn_NunchukZ:     return "Nunchuk Z";
+        case WiimoteButton::Btn_ClassicA:     return "Classic A";
+        case WiimoteButton::Btn_ClassicB:     return "Classic B";
+        case WiimoteButton::Btn_ClassicX:     return "Classic X";
+        case WiimoteButton::Btn_ClassicY:     return "Classic Y";
+        case WiimoteButton::Btn_ClassicL:     return "Classic L";
+        case WiimoteButton::Btn_ClassicR:     return "Classic R";
+        case WiimoteButton::Btn_ClassicZL:    return "Classic ZL";
+        case WiimoteButton::Btn_ClassicZR:    return "Classic ZR";
+        case WiimoteButton::Btn_ClassicUp:    return "Classic D-Pad Up";
+        case WiimoteButton::Btn_ClassicDown:  return "Classic D-Pad Down";
+        case WiimoteButton::Btn_ClassicLeft:  return "Classic D-Pad Left";
+        case WiimoteButton::Btn_ClassicRight: return "Classic D-Pad Right";
+        case WiimoteButton::Btn_ClassicPlus:  return "Classic +";
+        case WiimoteButton::Btn_ClassicMinus: return "Classic -";
+        case WiimoteButton::Btn_ClassicHome:  return "Classic Home";
         default: return nullptr;
     }
 }
 
 const char *WiimoteBridgeHatName(int hat) {
-    switch (hat) {
-        case Hat_DPad:        return "D-Pad";
-        case Hat_ClassicDPad: return "Classic D-Pad";
+    switch (static_cast<WiimoteHat>(hat)) {
+        case WiimoteHat::Hat_DPad:        return "D-Pad";
+        case WiimoteHat::Hat_ClassicDPad: return "Classic D-Pad";
         default: return nullptr;
     }
 }
 
 const char *BalanceBoardBridgeAxisName(int axis) {
-    switch (axis) {
-        case BAxis_TopLeft:     return "Top Left";
-        case BAxis_TopRight:    return "Top Right";
-        case BAxis_BottomLeft:  return "Bottom Left";
-        case BAxis_BottomRight: return "Bottom Right";
-        case BAxis_Total:       return "Total Weight";
-        case BAxis_CoGX:        return "Center of Gravity X";
-        case BAxis_CoGY:        return "Center of Gravity Y";
-        case BAxis_Battery:     return "Battery Level";
+    switch (static_cast<BalanceAxis>(axis)) {
+        case BalanceAxis::BAxis_TopLeft:     return "Top Left";
+        case BalanceAxis::BAxis_TopRight:    return "Top Right";
+        case BalanceAxis::BAxis_BottomLeft:  return "Bottom Left";
+        case BalanceAxis::BAxis_BottomRight: return "Bottom Right";
+        case BalanceAxis::BAxis_Total:       return "Total Weight";
+        case BalanceAxis::BAxis_CoGX:        return "Center of Gravity X";
+        case BalanceAxis::BAxis_CoGY:        return "Center of Gravity Y";
+        case BalanceAxis::BAxis_Battery:     return "Battery Level";
         default: return nullptr;
     }
 }
 
 const char *BalanceBoardBridgeButtonName(int button) {
-    switch (button) {
-        case BBtn_A: return "A";
+    switch (static_cast<BalanceButton>(button)) {
+        case BalanceButton::BBtn_A: return "A";
         default: return nullptr;
     }
 }
@@ -326,39 +327,44 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         if (!e || !e->joystick) continue;
         const auto &snap = dev->Snapshot();
 
-        auto setAxis = [&](int idx, float bipolar) {
+        // Generic so they take WiimoteAxis/BalanceAxis (resp. WiimoteButton/
+        // BalanceButton); the enum -> SDL int index conversion lives here only.
+        auto setAxis = [&](auto id, float bipolar) {
             const Sint16 raw = static_cast<Sint16>(std::clamp(bipolar, -1.f, 1.f) * 32767.0f);
-            SDL_SetJoystickVirtualAxis(e->joystick, idx, raw);
+            SDL_SetJoystickVirtualAxis(e->joystick, static_cast<int>(id), raw);
         };
-        auto setBtn = [&](int idx, bool v) {
-            SDL_SetJoystickVirtualButton(e->joystick, idx, v);
+        auto setBtn = [&](auto id, bool v) {
+            SDL_SetJoystickVirtualButton(e->joystick, static_cast<int>(id), v);
+        };
+        auto setHat = [&](WiimoteHat id, Uint8 v) {
+            SDL_SetJoystickVirtualHat(e->joystick, static_cast<int>(id), v);
         };
         if (snap.is_balance_board) {
             const auto &bb = snap.balance_board;
-            setAxis(BAxis_TopLeft,     Norm01ToBipolar(bb.kg_top_left,     0.f, kBalanceMaxKgPerCorner));
-            setAxis(BAxis_TopRight,    Norm01ToBipolar(bb.kg_top_right,    0.f, kBalanceMaxKgPerCorner));
-            setAxis(BAxis_BottomLeft,  Norm01ToBipolar(bb.kg_bottom_left,  0.f, kBalanceMaxKgPerCorner));
-            setAxis(BAxis_BottomRight, Norm01ToBipolar(bb.kg_bottom_right, 0.f, kBalanceMaxKgPerCorner));
-            setAxis(BAxis_Total,       Norm01ToBipolar(bb.kg_total,        0.f, kBalanceMaxTotalKg));
-            setAxis(BAxis_CoGX, std::clamp(bb.cog_x, -1.f, 1.f));
-            setAxis(BAxis_CoGY, std::clamp(bb.cog_y, -1.f, 1.f));
+            setAxis(BalanceAxis::BAxis_TopLeft,     Norm01ToBipolar(bb.kg_top_left,     0.f, kBalanceMaxKgPerCorner));
+            setAxis(BalanceAxis::BAxis_TopRight,    Norm01ToBipolar(bb.kg_top_right,    0.f, kBalanceMaxKgPerCorner));
+            setAxis(BalanceAxis::BAxis_BottomLeft,  Norm01ToBipolar(bb.kg_bottom_left,  0.f, kBalanceMaxKgPerCorner));
+            setAxis(BalanceAxis::BAxis_BottomRight, Norm01ToBipolar(bb.kg_bottom_right, 0.f, kBalanceMaxKgPerCorner));
+            setAxis(BalanceAxis::BAxis_Total,       Norm01ToBipolar(bb.kg_total,        0.f, kBalanceMaxTotalKg));
+            setAxis(BalanceAxis::BAxis_CoGX, std::clamp(bb.cog_x, -1.f, 1.f));
+            setAxis(BalanceAxis::BAxis_CoGY, std::clamp(bb.cog_y, -1.f, 1.f));
             // Balance Board keeps its own raw battery byte (unlike a
             // handheld Wiimote), so use it directly for finer resolution.
-            setAxis(BAxis_Battery, Norm01ToBipolar(float(bb.battery_raw), 0.f, kBatteryRawMax));
-            setBtn(BBtn_A, bb.button_a);
+            setAxis(BalanceAxis::BAxis_Battery, Norm01ToBipolar(float(bb.battery_raw), 0.f, kBatteryRawMax));
+            setBtn(BalanceButton::BBtn_A, bb.button_a);
             continue;
         }
 
-        setAxis(Axis_AccelX, NormSymmetric(snap.accel.g_x, kAccelMaxG));
-        setAxis(Axis_AccelY, NormSymmetric(snap.accel.g_y, kAccelMaxG));
-        setAxis(Axis_AccelZ, NormSymmetric(snap.accel.g_z, kAccelMaxG));
+        setAxis(WiimoteAxis::Axis_AccelX, NormSymmetric(snap.accel.g_x, kAccelMaxG));
+        setAxis(WiimoteAxis::Axis_AccelY, NormSymmetric(snap.accel.g_y, kAccelMaxG));
+        setAxis(WiimoteAxis::Axis_AccelZ, NormSymmetric(snap.accel.g_z, kAccelMaxG));
 
         // IR: all 4 points bridged as X/Y axis pairs, in report slot order
         // - "dot 1" just means "whatever is in ir[0] right now", no
         // persistent identity across frames. Rests at center (0), not a
         // rail, when its slot isn't visible.
-        static constexpr std::array<int, 4> kIRAxisX = {Axis_IR1X, Axis_IR2X, Axis_IR3X, Axis_IR4X};
-        static constexpr std::array<int, 4> kIRAxisY = {Axis_IR1Y, Axis_IR2Y, Axis_IR3Y, Axis_IR4Y};
+        static constexpr std::array<WiimoteAxis, 4> kIRAxisX = {WiimoteAxis::Axis_IR1X, WiimoteAxis::Axis_IR2X, WiimoteAxis::Axis_IR3X, WiimoteAxis::Axis_IR4X};
+        static constexpr std::array<WiimoteAxis, 4> kIRAxisY = {WiimoteAxis::Axis_IR1Y, WiimoteAxis::Axis_IR2Y, WiimoteAxis::Axis_IR3Y, WiimoteAxis::Axis_IR4Y};
         for (std::size_t i = 0; i < kIRAxisX.size(); ++i) {
             const auto &dot = snap.ir[i];
             setAxis(kIRAxisX[i], dot.visible ? (float(dot.x) / 1023.0f) * 2.f - 1.f : 0.f);
@@ -369,7 +375,7 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         // (WiimoteDevice::SetIRMode; stays 0 in Basic mode). Magnitude
         // with no natural sign, so uses the "rest = -1" convention like
         // the Balance Board weight axes: 0/not-visible -> -1, 15 -> +1.
-        static constexpr std::array<int, 4> kIRAxisSize = {Axis_IR1Size, Axis_IR2Size, Axis_IR3Size, Axis_IR4Size};
+        static constexpr std::array<WiimoteAxis, 4> kIRAxisSize = {WiimoteAxis::Axis_IR1Size, WiimoteAxis::Axis_IR2Size, WiimoteAxis::Axis_IR3Size, WiimoteAxis::Axis_IR4Size};
         for (std::size_t i = 0; i < kIRAxisSize.size(); ++i) {
             const auto &dot = snap.ir[i];
             setAxis(kIRAxisSize[i], dot.visible ? Norm01ToBipolar(float(dot.size), 0.f, 15.f) : -1.f);
@@ -377,41 +383,41 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
 
         // Nunchuk stick: 8-bit, center ~128, physical range roughly
         // 35-228 - ±100 half-range avoids needing per-device calibration.
-        setAxis(Axis_NunchukX, (float(snap.nunchuk.stick_x) - 128.f) / 100.f);
-        setAxis(Axis_NunchukY, (float(snap.nunchuk.stick_y) - 128.f) / 100.f);
+        setAxis(WiimoteAxis::Axis_NunchukX, (float(snap.nunchuk.stick_x) - 128.f) / 100.f);
+        setAxis(WiimoteAxis::Axis_NunchukY, (float(snap.nunchuk.stick_y) - 128.f) / 100.f);
 
         // Nunchuk accel: same nominal 0g/1g scale as the Wiimote's own
         // (NunchukAccelRawToG above), so reuse kAccelMaxG.
-        setAxis(Axis_NunchukAccelX, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_x), kAccelMaxG));
-        setAxis(Axis_NunchukAccelY, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_y), kAccelMaxG));
-        setAxis(Axis_NunchukAccelZ, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_z), kAccelMaxG));
+        setAxis(WiimoteAxis::Axis_NunchukAccelX, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_x), kAccelMaxG));
+        setAxis(WiimoteAxis::Axis_NunchukAccelY, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_y), kAccelMaxG));
+        setAxis(WiimoteAxis::Axis_NunchukAccelZ, NormSymmetric(NunchukAccelRawToG(snap.nunchuk.accel_z), kAccelMaxG));
 
         // Classic Controller sticks: 6-bit (0-63, center 32) left, 5-bit
         // (0-31, center 16) right - see ClassicControllerState/Decode::Classic.
-        setAxis(Axis_ClassicLX, (float(snap.classic.left_x)  - 32.f) / 32.f);
-        setAxis(Axis_ClassicLY, (float(snap.classic.left_y)  - 32.f) / 32.f);
-        setAxis(Axis_ClassicRX, (float(snap.classic.right_x) - 16.f) / 16.f);
-        setAxis(Axis_ClassicRY, (float(snap.classic.right_y) - 16.f) / 16.f);
+        setAxis(WiimoteAxis::Axis_ClassicLX, (float(snap.classic.left_x)  - 32.f) / 32.f);
+        setAxis(WiimoteAxis::Axis_ClassicLY, (float(snap.classic.left_y)  - 32.f) / 32.f);
+        setAxis(WiimoteAxis::Axis_ClassicRX, (float(snap.classic.right_x) - 16.f) / 16.f);
+        setAxis(WiimoteAxis::Axis_ClassicRY, (float(snap.classic.right_y) - 16.f) / 16.f);
 
         // Classic Controller triggers: 5-bit analog (0-31), digital 0/31 on
         // Pro - see ClassicControllerState's comment. Same "rest = -1, full
         // = +1" convention as the other one-directional analogs above
         // (IR dot size, Balance Board weight).
-        setAxis(Axis_ClassicLTrigger, Norm01ToBipolar(float(snap.classic.left_trigger),  0.f, 31.f));
-        setAxis(Axis_ClassicRTrigger, Norm01ToBipolar(float(snap.classic.right_trigger), 0.f, 31.f));
+        setAxis(WiimoteAxis::Axis_ClassicLTrigger, Norm01ToBipolar(float(snap.classic.left_trigger),  0.f, 31.f));
+        setAxis(WiimoteAxis::Axis_ClassicRTrigger, Norm01ToBipolar(float(snap.classic.right_trigger), 0.f, 31.f));
 
-        setAxis(Axis_MotionPlusYaw,   NormSymmetric(snap.motion_plus.deg_s_yaw,   kMotionPlusMaxDegPerSec));
-        setAxis(Axis_MotionPlusPitch, NormSymmetric(snap.motion_plus.deg_s_pitch, kMotionPlusMaxDegPerSec));
-        setAxis(Axis_MotionPlusRoll,  NormSymmetric(snap.motion_plus.deg_s_roll,  kMotionPlusMaxDegPerSec));
+        setAxis(WiimoteAxis::Axis_MotionPlusYaw,   NormSymmetric(snap.motion_plus.deg_s_yaw,   kMotionPlusMaxDegPerSec));
+        setAxis(WiimoteAxis::Axis_MotionPlusPitch, NormSymmetric(snap.motion_plus.deg_s_pitch, kMotionPlusMaxDegPerSec));
+        setAxis(WiimoteAxis::Axis_MotionPlusRoll,  NormSymmetric(snap.motion_plus.deg_s_roll,  kMotionPlusMaxDegPerSec));
 
         // Battery: -1 = empty, +1 = full, same "rest = -1" magnitude
         // convention as the IR dot-size axes above (see their comment).
-        setAxis(Axis_Battery, BatteryBarsToRaw01(snap.battery) * 2.f - 1.f);
+        setAxis(WiimoteAxis::Axis_Battery, BatteryBarsToRaw01(snap.battery) * 2.f - 1.f);
 
-        setBtn(Btn_A, snap.core.a);         setBtn(Btn_B, snap.core.b);
-        setBtn(Btn_One, snap.core.one);     setBtn(Btn_Two, snap.core.two);
-        setBtn(Btn_Plus, snap.core.plus);   setBtn(Btn_Minus, snap.core.minus);
-        setBtn(Btn_Home, snap.core.home);
+        setBtn(WiimoteButton::Btn_A, snap.core.a);         setBtn(WiimoteButton::Btn_B, snap.core.b);
+        setBtn(WiimoteButton::Btn_One, snap.core.one);     setBtn(WiimoteButton::Btn_Two, snap.core.two);
+        setBtn(WiimoteButton::Btn_Plus, snap.core.plus);   setBtn(WiimoteButton::Btn_Minus, snap.core.minus);
+        setBtn(WiimoteButton::Btn_Home, snap.core.home);
 
         // D-Pad as a hat (see WiimoteHat) - bits OR directly into SDL's
         // hat bitmask, so a diagonal reads as e.g. SDL_HAT_LEFTUP for free.
@@ -420,15 +426,15 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         if (snap.core.down)  dpad_hat |= SDL_HAT_DOWN;
         if (snap.core.left)  dpad_hat |= SDL_HAT_LEFT;
         if (snap.core.right) dpad_hat |= SDL_HAT_RIGHT;
-        SDL_SetJoystickVirtualHat(e->joystick, Hat_DPad, dpad_hat);
+        setHat(WiimoteHat::Hat_DPad, dpad_hat);
 
-        setBtn(Btn_NunchukC, snap.nunchuk.button_c);
-        setBtn(Btn_NunchukZ, snap.nunchuk.button_z);
+        setBtn(WiimoteButton::Btn_NunchukC, snap.nunchuk.button_c);
+        setBtn(WiimoteButton::Btn_NunchukZ, snap.nunchuk.button_z);
 
-        setBtn(Btn_ClassicA, snap.classic.a); setBtn(Btn_ClassicB, snap.classic.b);
-        setBtn(Btn_ClassicX, snap.classic.x); setBtn(Btn_ClassicY, snap.classic.y);
-        setBtn(Btn_ClassicL, snap.classic.l); setBtn(Btn_ClassicR, snap.classic.r);
-        setBtn(Btn_ClassicZL, snap.classic.zl); setBtn(Btn_ClassicZR, snap.classic.zr);
+        setBtn(WiimoteButton::Btn_ClassicA, snap.classic.a); setBtn(WiimoteButton::Btn_ClassicB, snap.classic.b);
+        setBtn(WiimoteButton::Btn_ClassicX, snap.classic.x); setBtn(WiimoteButton::Btn_ClassicY, snap.classic.y);
+        setBtn(WiimoteButton::Btn_ClassicL, snap.classic.l); setBtn(WiimoteButton::Btn_ClassicR, snap.classic.r);
+        setBtn(WiimoteButton::Btn_ClassicZL, snap.classic.zl); setBtn(WiimoteButton::Btn_ClassicZR, snap.classic.zr);
 
         // Classic Controller D-Pad as a hat (see WiimoteHat)
         Uint8 classic_dpad_hat = SDL_HAT_CENTERED;
@@ -436,15 +442,15 @@ void WiimoteVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Wiimo
         if (snap.classic.dpad_down)  classic_dpad_hat |= SDL_HAT_DOWN;
         if (snap.classic.dpad_left)  classic_dpad_hat |= SDL_HAT_LEFT;
         if (snap.classic.dpad_right) classic_dpad_hat |= SDL_HAT_RIGHT;
-        SDL_SetJoystickVirtualHat(e->joystick, Hat_ClassicDPad, classic_dpad_hat);
+        setHat(WiimoteHat::Hat_ClassicDPad, classic_dpad_hat);
 
-        setBtn(Btn_ClassicUp, snap.classic.dpad_up);
-        setBtn(Btn_ClassicDown, snap.classic.dpad_down);
-        setBtn(Btn_ClassicLeft, snap.classic.dpad_left);
-        setBtn(Btn_ClassicRight, snap.classic.dpad_right);
-        setBtn(Btn_ClassicPlus, snap.classic.plus);
-        setBtn(Btn_ClassicMinus, snap.classic.minus);
-        setBtn(Btn_ClassicHome, snap.classic.home);
+        setBtn(WiimoteButton::Btn_ClassicUp, snap.classic.dpad_up);
+        setBtn(WiimoteButton::Btn_ClassicDown, snap.classic.dpad_down);
+        setBtn(WiimoteButton::Btn_ClassicLeft, snap.classic.dpad_left);
+        setBtn(WiimoteButton::Btn_ClassicRight, snap.classic.dpad_right);
+        setBtn(WiimoteButton::Btn_ClassicPlus, snap.classic.plus);
+        setBtn(WiimoteButton::Btn_ClassicMinus, snap.classic.minus);
+        setBtn(WiimoteButton::Btn_ClassicHome, snap.classic.home);
     }
 }
 

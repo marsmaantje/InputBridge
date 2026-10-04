@@ -79,13 +79,18 @@ bool LogLinuxOpenDiagnostics(const char *path) {
         ::close(fd);
         return false;
     }
-    const char *meaning =
-        (open_errno == EACCES) ? "permission denied - check the hidraw udev rule/group for this device" :
-        (open_errno == EBUSY)  ? "device busy - something else has it open with an exclusivity flag "
-                                  "hidraw doesn't normally require" :
-        (open_errno == ENOENT) ? "no such device - node disappeared between enumerate() and open() "
-                                  "(likely a reconnect/rebind in progress)" :
-                                  "see errno";
+    const char *meaning;
+    if (open_errno == EACCES) {
+        meaning = "permission denied - check the hidraw udev rule/group for this device";
+    } else if (open_errno == EBUSY) {
+        meaning = "device busy - something else has it open with an exclusivity flag "
+                  "hidraw doesn't normally require";
+    } else if (open_errno == ENOENT) {
+        meaning = "no such device - node disappeared between enumerate() and open() "
+                  "(likely a reconnect/rebind in progress)";
+    } else {
+        meaning = "see errno";
+    }
     LOG_WARN("WiimoteManager", "  diagnostic: plain open() of '%s' failed too: errno=%d (%s) - %s",
              path, open_errno, std::strerror(open_errno), meaning);
     if (stat_ok) {
@@ -187,13 +192,13 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
 
         // wchar_t* product_string from hidapi; convert defensively.
         bool is_balance_board = false;
-        char product_utf8[64] = {};
+        std::string product_utf8;
         if (d->product_string) {
-            size_t i = 0;
-            for (; d->product_string[i] && i < sizeof(product_utf8) - 1; ++i)
-                product_utf8[i] = char(d->product_string[i]);
-            is_balance_board = IsWiimoteProductString(product_utf8) &&
-                                std::strstr(product_utf8, "WBC") != nullptr;
+            for (const wchar_t *p = d->product_string; *p != L'\0'; ++p) {
+                product_utf8.push_back(static_cast<char>(*p));
+            }
+            is_balance_board = IsWiimoteProductString(product_utf8.c_str()) &&
+                                product_utf8.find("WBC") != std::string::npos;
         }
 
         // WiimoteDevice's constructor defers Init() to its first Poll()
@@ -220,8 +225,7 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
     SDL_hid_free_enumeration(devs);
 
 #if defined(__linux__)
-    s_had_recent_linux_permission_error.store(saw_permission_error_this_scan,
-                                               std::memory_order_relaxed);
+    s_had_recent_linux_permission_error.store(saw_permission_error_this_scan,std::memory_order::seq_cst);
 #endif
 
     return out;
@@ -229,7 +233,7 @@ std::vector<std::unique_ptr<WiimoteDevice>> WiimoteManager::Scan(
 
 #if defined(__linux__)
 bool WiimoteManager::HadRecentLinuxPermissionError() {
-    return s_had_recent_linux_permission_error.load(std::memory_order_relaxed);
+    return s_had_recent_linux_permission_error.load(std::memory_order::seq_cst);
 }
 #endif
 

@@ -16,9 +16,17 @@ namespace InputBridge::Wiimote {
 using TimestampMs = uint64_t;
 
 struct CoreButtons {
-    bool left = false, right = false, down = false, up = false;
-    bool plus = false, minus = false, home = false;
-    bool one = false, two = false, a = false, b = false;
+    bool left = false;
+    bool right = false;
+    bool down = false;
+    bool up = false;
+    bool plus = false;
+    bool minus = false;
+    bool home = false;
+    bool one = false;
+    bool two = false;
+    bool a = false;
+    bool b = false;
 };
 
 // Raw accel bytes are 0-1023 (10-bit), ~0x200 (512) at 0g. We expose both
@@ -26,8 +34,12 @@ struct CoreButtons {
 // midpoint (WiiBrew). For precise work, read the EEPROM calibration block
 // instead (WiimoteDevice::ReadAccelCalibration()).
 struct AccelState {
-    uint16_t raw_x = 512, raw_y = 512, raw_z = 512; // 10-bit
-    float g_x = 0.f, g_y = 0.f, g_z = 1.f;
+    uint16_t raw_x = 512; // 10-bit
+    uint16_t raw_y = 512; // 10-bit
+    uint16_t raw_z = 512; // 10-bit
+    float g_x = 0.f;
+    float g_y = 0.f;
+    float g_z = 1.f;
 };
 
 // One tracked IR point. Basic mode gives 10-bit X (0-1023) / Y (0-767); an
@@ -39,14 +51,19 @@ struct AccelState {
 // four fields stay 0 outside Full mode.
 struct IRDot {
     bool visible = false;
-    uint16_t x = 0, y = 0;
+    uint16_t x = 0;
+    uint16_t y = 0;
     uint8_t size = 0; // 0-15, extended and full mode only
     uint8_t intensity = 0; // 0-255, full mode only - roughly the dot's peak brightness
     // Pixel-space bounding box of the blob the camera tracked as this dot,
     // full mode only. Independent of x/y (the reported centroid) - a bright
     // or elongated source can have a wide box around a centroid that isn't
     // its midpoint. All zero outside full mode.
-    uint8_t bbox_min_x = 0, bbox_min_y = 0, bbox_max_x = 0, bbox_max_y = 0;
+    uint8_t bbox_min_x = 0;
+    uint8_t bbox_min_y = 0;
+    uint8_t bbox_max_x = 0;
+    uint8_t bbox_min_z = 0;
+    uint8_t bbox_max_y = 0;
 };
 using IRState = std::array<IRDot, 4>;
 
@@ -61,22 +78,39 @@ enum class IRCameraMode : uint8_t { Basic, Extended, Full };
 
 struct NunchukState {
     bool connected = false;
-    uint8_t stick_x = 128, stick_y = 128;   // ~35-228 / ~27-220 range, 128 center
-    uint16_t accel_x = 512, accel_y = 512, accel_z = 512; // 10-bit, same scale as Wiimote accel
-    bool button_c = false, button_z = false;
+    uint8_t stick_x = 128;
+    uint8_t stick_y = 128;   // ~35-228 / ~27-220 range, 128 center
+    uint16_t accel_x = 512;
+    uint16_t accel_y = 512;
+    uint16_t accel_z = 512; // 10-bit, same scale as Wiimote accel
+    bool button_c = false;
+    bool button_z = false;
 };
 
 struct ClassicControllerState {
     bool connected = false;
     bool is_pro = false; // Classic Controller Pro (digital-only triggers)
-    uint16_t left_x = 32, left_y = 32;   // 0-63 (format 0x01)
-    uint8_t  right_x = 16, right_y = 16; // 0-31 (format 0x01)
-    uint8_t  left_trigger = 0, right_trigger = 0; // 0-31 analog, or digital 0/31 on Pro
-    bool dpad_up = false, dpad_down = false, dpad_left = false, dpad_right = false;
-    bool a = false, b = false, x = false, y = false;
-    bool l = false, r = false;        // digital click of triggers
-    bool zl = false, zr = false;
-    bool plus = false, minus = false, home = false;
+    uint16_t left_x = 32;
+    uint16_t left_y = 32;   // 0-63 (format 0x01)
+    uint8_t  right_x = 16;
+    uint8_t  right_y = 16; // 0-31 (format 0x01)
+    uint8_t  left_trigger = 0;
+    uint8_t  right_trigger = 0; // 0-31 analog, or digital 0/31 on Pro
+    bool dpad_up = false;
+    bool dpad_down = false;
+    bool dpad_left = false;
+    bool dpad_right = false;
+    bool a = false;
+    bool b = false;
+    bool x = false;
+    bool y = false;
+    bool l = false;
+    bool r = false;        // digital click of triggers
+    bool zl = false;
+    bool zr = false;
+    bool plus = false;
+    bool minus = false;
+    bool home = false;
 };
 
 // Guitar Hero (Wii) Guitar / Drums, decoded via the Classic-Controller-shaped
@@ -87,10 +121,15 @@ struct ClassicControllerState {
 struct GuitarHeroState {
     bool connected = false;
     bool is_drums = false;
-    bool fret_green = false, fret_red = false, fret_yellow = false;
-    bool fret_blue = false, fret_orange = false;
-    bool strum_up = false, strum_down = false;
-    bool plus = false, minus = false;
+    bool fret_green = false;
+    bool fret_red = false;
+    bool fret_yellow = false;
+    bool fret_blue = false;
+    bool fret_orange = false;
+    bool strum_up = false;
+    bool strum_down = false;
+    bool plus = false;
+    bool minus = false;
     uint8_t whammy_bar = 0;  // 0 (released) - ~255 (fully depressed), raw analog
     uint8_t stick_x = 128;   // analog "joystick" nub on the guitar neck
 
@@ -106,13 +145,20 @@ struct GuitarHeroState {
 struct BalanceBoardState {
     bool connected = false; // always true for a device identified as a Balance Board
     bool button_a = false;  // the board's single physical button
-    uint16_t raw_top_right = 0, raw_bottom_right = 0, raw_top_left = 0, raw_bottom_left = 0;
-    float kg_top_right = 0.f, kg_bottom_right = 0.f, kg_top_left = 0.f, kg_bottom_left = 0.f;
+    uint16_t raw_top_right = 0;
+    uint16_t raw_bottom_right = 0;
+    uint16_t raw_top_left = 0;
+    uint16_t raw_bottom_left = 0;
+    float kg_top_right = 0.f;
+    float kg_bottom_right = 0.f;
+    float kg_top_left = 0.f;
+    float kg_bottom_left = 0.f;
     float kg_total = 0.f;
     // Center of gravity in board-relative coordinates, [-1, 1] each axis
     // (0,0 = center), computed as the weighted average of the four corners
     // (same approach as WimoteLib/Wii Fit).
-    float cog_x = 0.f, cog_y = 0.f;
+    float cog_x = 0.f;
+    float cog_y = 0.f;
     uint8_t battery_raw = 0; // see WiiBrew battery-level thresholds
     uint8_t temperature_raw = 0;
 };
@@ -124,9 +170,9 @@ struct BalanceBoardCalibration {
     // this false so BalanceBoard() zeroes the kg fields rather than
     // returning corrupted numbers.
     bool valid = false;
-    uint16_t kg0[4]  = {0, 0, 0, 0}; // order: TR, BR, TL, BL
-    uint16_t kg17[4] = {0, 0, 0, 0};
-    uint16_t kg34[4] = {0, 0, 0, 0};
+    std::array<uint16_t, 4> kg0  = {0, 0, 0, 0}; // order: TR, BR, TL, BL
+    std::array<uint16_t, 4> kg17 = {0, 0, 0, 0};
+    std::array<uint16_t, 4> kg34 = {0, 0, 0, 0};
 };
 
 // Wii Motion Plus, read via its 6-byte extension-format passthrough report
@@ -141,15 +187,21 @@ struct MotionPlusState {
     bool is_classic_passthrough = false;  // MotionPlus + Classic Controller daisy-chained
     bool extension_connected = false;     // bit reported by MotionPlus itself (byte 4 bit 0)
 
-    uint16_t raw_yaw = 8192, raw_pitch = 8192, raw_roll = 8192; // 14-bit, ~8192 = 0 deg/s
-    bool slow_yaw = false, slow_pitch = false, slow_roll = false;
+    uint16_t raw_yaw = 8192; // 14-bit, ~8192 = 0 deg/s
+    uint16_t raw_pitch = 8192;
+    uint16_t raw_roll = 8192;
+    bool slow_yaw = false;
+    bool slow_pitch = false;
+    bool slow_roll = false;
 
     // Best-effort deg/s conversion using WiiBrew's nominal zero-offset
     // (8192; real hardware idles closer to ~8063, worth a runtime
     // calibration pass) and voltage-derived scale (~13.768 counts/deg/s in
     // the slow range, scaled by 2000/440 for fast). Per-device calibration
     // lives at 0xA60020 if precise drift-free readings are needed.
-    float deg_s_yaw = 0.f, deg_s_pitch = 0.f, deg_s_roll = 0.f;
+    float deg_s_yaw = 0.f;
+    float deg_s_pitch = 0.f;
+    float deg_s_roll = 0.f;
 };
 
 enum class BatteryBars { Empty, One, Two, Three, Four };

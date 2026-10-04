@@ -483,7 +483,8 @@ using InputBridge::Wiimote::BalanceButton;
 
 ImWchar WiimoteBridgeAxisIcon(int axis)
 {
-    switch (axis) {
+    // Scoped enum: cast the raw SDL index (out-of-range falls to default).
+    switch (static_cast<WiimoteAxis>(axis)) {
     case WiimoteAxis::Axis_NunchukX:  return KENNEY_WII_STICK_HORIZONTAL_CP;
     case WiimoteAxis::Axis_NunchukY:  return KENNEY_WII_STICK_VERTICAL_CP;
     case WiimoteAxis::Axis_ClassicLX: return KENNEY_WII_STICK_L_HORIZONTAL_CP;
@@ -501,7 +502,8 @@ ImWchar WiimoteBridgeAxisIcon(int axis)
 
 ImWchar WiimoteBridgeButtonIcon(int button)
 {
-    switch (button) {
+    // Scoped enum: cast the raw SDL index (out-of-range falls to default).
+    switch (static_cast<WiimoteButton>(button)) {
     case WiimoteButton::Btn_A:            return KENNEY_WII_BUTTON_A_CP;
     case WiimoteButton::Btn_B:            return KENNEY_WII_BUTTON_B_CP;
     case WiimoteButton::Btn_One:          return KENNEY_WII_BUTTON_1_CP;
@@ -532,7 +534,8 @@ ImWchar WiimoteBridgeButtonIcon(int button)
 
 ImWchar BalanceBoardBridgeButtonIcon(int button)
 {
-    switch (button) {
+    // Scoped enum: cast the raw SDL index (out-of-range falls to default).
+    switch (static_cast<BalanceButton>(button)) {
     // The Balance Board's single physical button is silkscreened "A" on
     // the hardware - reuse that glyph.
     case BalanceButton::BBtn_A: return KENNEY_WII_BUTTON_A_CP;
