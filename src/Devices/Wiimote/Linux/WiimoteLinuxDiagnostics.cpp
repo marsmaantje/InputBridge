@@ -13,6 +13,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <fstream>
+#include <format>
 #include <grp.h>
 #include <string>
 #include <sys/stat.h>
@@ -173,13 +174,11 @@ CheckResult CheckUdevRule() {
     // not granting the access they appear to.
     std::string legacy_note;
     if (!legacy_present.empty()) {
-        legacy_note = " Also found " + std::to_string(legacy_present.size()) +
-            " leftover rule file(s) from an older InputBridge version at a "
-            "priority (>= " + std::to_string(kUaccessGrantRulePriorityThreshold) +
-            ") too late for systemd's uaccess ACL grant to reliably apply: " +
-            JoinPaths(legacy_present) +
-            ". Reinstall from Settings > Linux Permissions to remove "
-            "these automatically, or delete them manually.";
+        legacy_note = std::format(
+            R"( Also found {} leftover rule file(s) from an older InputBridge version at a priority (>= {}) too late for systemd's uaccess ACL grant to reliably apply: {}. Reinstall from Settings > Linux Permissions to remove these automatically, or delete them manually.)",
+            legacy_present.size(),
+            kUaccessGrantRulePriorityThreshold,
+            JoinPaths(legacy_present));
     }
 
     if (current_present) {
@@ -192,26 +191,26 @@ CheckResult CheckUdevRule() {
             // time before - surface it loudly rather than silently
             // reporting Ok for a rule whose ACL grant may not apply.
             return {Status::Warning, "Permission rule",
-                    std::string("Installed at ") + kUdevRulesPath +
-                    ", but its filename priority doesn't sort before systemd's "
-                    "own uaccess-granting rule (priority " +
-                    std::to_string(kUaccessGrantRulePriorityThreshold) +
-                    "). The tag will show up in `udevadm info` but the actual "
-                    "ACL grant may silently never apply. This shouldn't happen "
-                    "with a stock InputBridge install - please report it." + legacy_note};
+                    std::format("Installed at {}, but its filename priority doesn't sort before systemd's own uaccess-granting rule (priority {})."
+                                "The tag will show up in `udevadm info` but the actual ACL grant may silently never apply."
+                                "Please report this bug to the InputBridge developers."
+                                "This shouldn't happen with a stock InputBridge install - please report it.{}",
+                                kUdevRulesPath,
+                                kUaccessGrantRulePriorityThreshold,
+                                legacy_note)};
         }
         if (RulesFileHasCombinedUaccessGroupLine(kUdevRulesPath)) {
             return {Status::Warning, "Permission rule",
                     std::string("Installed at ") + kUdevRulesPath +
-                    ", but at least one rule line combines TAG+=\"uaccess\" "
-                    "with GROUP=\"plugdev\" on the same line. On a system "
-                    "with no 'plugdev' group, some udevd versions fail the "
-                    "*entire* line when GROUP can't be resolved - silently "
-                    "dropping the uaccess grant too, even though Device "
-                    "access below reports EACCES. Reinstall the current "
-                    "permission rule from Settings > Linux Permissions to "
-                    "get the fixed version, which splits these onto "
-                    "separate lines." + legacy_note};
+                    R"(, but at least one rule line combines TAG+="uaccess" 
+                    with GROUP="plugdev" on the same line. On a system 
+                    with no 'plugdev' group, some udevd versions fail the 
+                    *entire* line when GROUP can't be resolved - silently 
+                    dropping the uaccess grant too, even though Device 
+                    access below reports EACCES. Reinstall the current 
+                    permission rule from Settings > Linux Permissions to 
+                    get the fixed version, which splits these onto 
+                    separate lines.)" + legacy_note};
         }
         return {Status::Ok, "Permission rule",
                 std::string("Installed at ") + kUdevRulesPath + "." + legacy_note};
@@ -225,14 +224,13 @@ CheckResult CheckUdevRule() {
         // case below, since a user hitting this has already tried to
         // fix it and reasonably believes it's done.
         return {Status::Warning, "Permission rule",
-                std::string("No rule found at the current expected location (") +
-                kUdevRulesPath + "), but found " + std::to_string(legacy_present.size()) +
-                " file(s) installed under an old, too-late priority that cannot "
-                "grant the uaccess ACL (systemd's own grant at priority " +
-                std::to_string(kUaccessGrantRulePriorityThreshold) +
-                " already runs before it takes effect): " + JoinPaths(legacy_present) +
-                ". Reinstall from Settings > Linux Permissions to replace it with "
-                "the current, correctly-numbered rule."};
+                std::format("No rule found at the current expected location ({}), but found {} "
+                            "file(s) installed under an old, too-late priority that cannot "
+                            "grant the uaccess ACL (systemd's own grant at priority {} "
+                            "already runs before it takes effect): {}. Reinstall from Settings > "
+                            "Linux Permissions to replace it with the current, correctly-numbered rule.",
+                            kUdevRulesPath, legacy_present.size(),
+                            kUaccessGrantRulePriorityThreshold, JoinPaths(legacy_present))};
     }
 
     return {Status::Warning, "Permission rule",
@@ -267,9 +265,9 @@ CheckResult CheckHidrawAccess() {
             ::close(fd);
         } else {
             if (!problems.empty()) problems += " ";
-            problems += path + ": " +
-                (open_errno == EACCES ? std::string("permission denied (EACCES).")
-                                       : "errno " + std::to_string(open_errno) + ".");
+            problems += std::format("{}: {}", path,
+                open_errno == EACCES ? "permission denied (EACCES)."
+                                     : std::format("errno {}.", open_errno));
         }
     }
     SDL_hid_free_enumeration(devs);
@@ -282,11 +280,11 @@ CheckResult CheckHidrawAccess() {
     }
     if (openable == matched) {
         return {Status::Ok, "Device access",
-                std::to_string(matched) + " device(s) found, all openable."};
+                std::format("{} device(s) found, all openable.", matched)};
     }
     return {Status::Warning, "Device access",
-            std::to_string(matched - openable) + " of " + std::to_string(matched) +
-            " device(s) found couldn't be opened: " + problems};
+            std::format("{} of {} device(s) found couldn't be opened: {}",
+                        matched - openable, matched, problems)};
 }
 
 // Checks whether 'plugdev' is active for THIS process right now (not just
@@ -295,13 +293,22 @@ CheckResult CheckHidrawAccess() {
 // /etc/group after install-udev-rules.sh adds you doesn't take effect
 // until the next login, which is exactly the case this needs to catch.
 CheckResult CheckPlugdevMembership() {
-    struct group *plugdev = ::getgrnam("plugdev");
-    if (!plugdev) {
+    const long getgr_size = ::sysconf(_SC_GETGR_R_SIZE_MAX);
+    const size_t buf_size = getgr_size > 0 ? static_cast<size_t>(getgr_size) : 4096u;
+    std::vector<char> buffer(buf_size);
+    struct group grbuf{};
+    struct group *result = nullptr;
+
+    errno = 0;
+    const int getgrnam_r_rc = ::getgrnam_r("plugdev", &grbuf, buffer.data(), buffer.size(), &result);
+    if (getgrnam_r_rc != 0 || !result) {
         return {Status::Info, "'plugdev' group",
                 "This system doesn't have a 'plugdev' group - it likely "
                 "relies on udev's uaccess/logind ACL tagging instead, so "
                 "this check doesn't apply here."};
     }
+
+    const struct group *plugdev = result;
     const gid_t plugdev_gid = plugdev->gr_gid;
 
     if (::getgid() == plugdev_gid || ::getegid() == plugdev_gid) {
@@ -353,7 +360,7 @@ CheckResult CheckUdevadm() {
 CheckResult CheckBluetoothAdapter() {
     bool adapter_present = false;
     if (DIR *d = ::opendir("/sys/class/bluetooth")) {
-        while (struct dirent *entry = ::readdir(d)) {
+        while (const struct dirent *entry = ::readdir(d)) {
             const std::string name = entry->d_name;
             if (name != "." && name != "..") {
                 adapter_present = true;
@@ -388,7 +395,7 @@ CheckResult CheckBluetoothAdapter() {
 CheckResult CheckSteamRunning() {
     bool steam_running = false;
     if (DIR *d = ::opendir("/proc")) {
-        while (struct dirent *entry = ::readdir(d)) {
+        while (const struct dirent *entry = ::readdir(d)) {
             if (entry->d_type != DT_DIR) continue;
             const std::string name = entry->d_name;
             if (name.empty() || !std::isdigit(static_cast<unsigned char>(name[0])))

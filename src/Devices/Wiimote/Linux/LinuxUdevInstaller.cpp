@@ -109,6 +109,92 @@ std::string StageScriptForHostSpawn(const std::string &sandboxed_script_path) {
     return staged_script_path;
 }
 
+namespace {
+std::string TailOutput(const std::string &all_output, const size_t max_len) {
+    return all_output.size() > max_len ? all_output.substr(all_output.size() - max_len)
+                                       : all_output;
+}
+
+bool CreatePipePair(std::array<int, 2> &pipe_fds) {
+    return ::pipe(pipe_fds.data()) == 0;
+}
+
+void ClosePipePair(const std::array<int, 2> &pipe_fds) {
+    for (const int fd : pipe_fds) {
+        if (fd >= 0) ::close(fd);
+    }
+}
+
+bool ConfigureSpawnFileActions(posix_spawn_file_actions_t *actions,
+                               const std::array<int, 2> &stdout_pipe,
+                               const std::array<int, 2> &stderr_pipe) {
+    if (posix_spawn_file_actions_init(actions) != 0) return false;
+
+    // Child's stdout/stderr -> write end of the respective pipe; child
+    // doesn't need the read ends.
+    if (posix_spawn_file_actions_adddup2(actions, stdout_pipe[1], STDOUT_FILENO) != 0 ||
+        posix_spawn_file_actions_adddup2(actions, stderr_pipe[1], STDERR_FILENO) != 0 ||
+        posix_spawn_file_actions_addclose(actions, stdout_pipe[0]) != 0 ||
+        posix_spawn_file_actions_addclose(actions, stdout_pipe[1]) != 0 ||
+        posix_spawn_file_actions_addclose(actions, stderr_pipe[0]) != 0 ||
+        posix_spawn_file_actions_addclose(actions, stderr_pipe[1]) != 0) {
+        posix_spawn_file_actions_destroy(actions);
+        return false;
+    }
+    return true;
+}
+
+void DrainSpawnedOutput(const std::array<int, 2> &stdout_pipe,
+                       const std::array<int, 2> &stderr_pipe,
+                       std::string &stdout_all,
+                       std::string &stderr_all) {
+    // Drain both pipes as we go (rather than after waitpid()) so the child
+    // can't block forever writing to a full pipe while we're not reading -
+    // and use poll() to read whichever pipe has data rather than reading
+    // stderr to EOF first, which would deadlock if the child fills the
+    // stdout pipe (e.g. the "Next steps" block) before it closes stderr.
+    std::array<pollfd, 2> fds{{
+        {stdout_pipe[0], POLLIN, 0},
+        {stderr_pipe[0], POLLIN, 0},
+    }};
+    int open_fds = 2;
+    std::array<char, 512> buf{};
+    while (open_fds > 0) {
+        const int ready = ::poll(fds.data(), fds.size(), -1);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        for (auto &pfd : fds) {
+            if (pfd.fd == -1 || !(pfd.revents & (POLLIN | POLLHUP | POLLERR))) continue;
+            const ssize_t n = ::read(pfd.fd, buf.data(), buf.size());
+            if (n > 0) {
+                std::string &current_output = (pfd.fd == stdout_pipe[0]) ? stdout_all : stderr_all;
+                current_output.append(buf.data(), static_cast<size_t>(n));
+                continue;
+            }
+
+            // EOF or error on this fd - stop polling it.
+            ::close(pfd.fd);
+            pfd.fd = -1;
+            --open_fds;
+        }
+    }
+}
+
+LinuxUdevInstaller::Result ClassifySpawnResult(const int exit_code) {
+    if (exit_code == 0) return LinuxUdevInstaller::Result::Success;
+    if (exit_code == 126 || exit_code == 127) {
+        // pkexec's own documented exit codes: 126 = auth dialog dismissed/
+        // declined, 127 = the requested command itself couldn't be run.
+        // We only distinguish "the user said no" here since that's the
+        // one the UI should word differently from a generic failure.
+        return LinuxUdevInstaller::Result::UserCancelled;
+    }
+    return LinuxUdevInstaller::Result::Failed;
+}
+} // namespace
+
 // Runs argv via posix_spawn (no shell involved - argv entries are passed
 // exactly as given, so a path containing spaces or other characters that
 // would need shell-escaping is still handled correctly), waits for it,
@@ -131,29 +217,28 @@ std::string StageScriptForHostSpawn(const std::string &sandboxed_script_path) {
 LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv_strings) {
     LinuxUdevInstaller::RunOutcome outcome;
 
-    int stdout_pipe[2] = {-1, -1};
-    int stderr_pipe[2] = {-1, -1};
-    if (::pipe(stdout_pipe) != 0 || ::pipe(stderr_pipe) != 0) {
+    std::array<int, 2> stdout_pipe{{-1, -1}};
+    std::array<int, 2> stderr_pipe{{-1, -1}};
+    if (!CreatePipePair(stdout_pipe) || !CreatePipePair(stderr_pipe)) {
         LOG_ERROR(kTag, "pipe() failed: %s", std::strerror(errno));
         outcome.result = LinuxUdevInstaller::Result::Failed;
         return outcome;
     }
 
+    std::vector<std::string> argv_storage(argv_strings.begin(), argv_strings.end());
     std::vector<char *> argv;
-    argv.reserve(argv_strings.size() + 1);
-    for (const auto &s : argv_strings) argv.push_back(const_cast<char *>(s.c_str()));
+    argv.reserve(argv_storage.size() + 1);
+    for (auto &s : argv_storage) argv.push_back(s.data());
     argv.push_back(nullptr);
 
     posix_spawn_file_actions_t actions;
-    posix_spawn_file_actions_init(&actions);
-    // Child's stdout/stderr -> write end of the respective pipe; child
-    // doesn't need the read ends.
-    posix_spawn_file_actions_adddup2(&actions, stdout_pipe[1], STDOUT_FILENO);
-    posix_spawn_file_actions_adddup2(&actions, stderr_pipe[1], STDERR_FILENO);
-    posix_spawn_file_actions_addclose(&actions, stdout_pipe[0]);
-    posix_spawn_file_actions_addclose(&actions, stdout_pipe[1]);
-    posix_spawn_file_actions_addclose(&actions, stderr_pipe[0]);
-    posix_spawn_file_actions_addclose(&actions, stderr_pipe[1]);
+    if (!ConfigureSpawnFileActions(&actions, stdout_pipe, stderr_pipe)) {
+        ClosePipePair(stdout_pipe);
+        ClosePipePair(stderr_pipe);
+        LOG_ERROR(kTag, "posix_spawn_file_actions_init()/add... failed: %s", std::strerror(errno));
+        outcome.result = LinuxUdevInstaller::Result::Failed;
+        return outcome;
+    }
 
     pid_t pid = -1;
     const int spawn_rc = posix_spawnp(&pid, argv[0], &actions, nullptr, argv.data(), environ);
@@ -170,41 +255,9 @@ LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv
         return outcome;
     }
 
-    // Drain both pipes as we go (rather than after waitpid()) so the child
-    // can't block forever writing to a full pipe while we're not reading -
-    // and use poll() to read whichever pipe has data rather than reading
-    // stderr to EOF first, which would deadlock if the child fills the
-    // stdout pipe (e.g. the "Next steps" block) before it closes stderr.
     std::string stdout_all;
     std::string stderr_all;
-    {
-        std::array<pollfd, 2> fds{{
-            {stdout_pipe[0], POLLIN, 0},
-            {stderr_pipe[0], POLLIN, 0},
-        }};
-        int open_fds = 2;
-        std::array<char, 512> buf{};
-        while (open_fds > 0) {
-            const int ready = ::poll(fds.data(), fds.size(), -1);
-            if (ready < 0) {
-                if (errno == EINTR) continue;
-                break;
-            }
-            for (auto &pfd : fds) {
-                if (pfd.fd == -1 || !(pfd.revents & (POLLIN | POLLHUP | POLLERR))) continue;
-                ssize_t n = ::read(pfd.fd, buf.data(), buf.size());
-                if (n > 0) {
-                    (pfd.fd == stdout_pipe[0] ? stdout_all : stderr_all)
-                        .append(buf.data(), static_cast<size_t>(n));
-                } else {
-                    // EOF or error on this fd - stop polling it.
-                    ::close(pfd.fd);
-                    pfd.fd = -1;
-                    --open_fds;
-                }
-            }
-        }
-    }
+    DrainSpawnedOutput(stdout_pipe, stderr_pipe, stdout_all, stderr_all);
 
     int status = 0;
     if (::waitpid(pid, &status, 0) < 0) {
@@ -220,25 +273,13 @@ LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv
     // used for a one-line error message.
     constexpr size_t kStdoutTailLen = 4096;
     constexpr size_t kStderrTailLen = 1024;
-    outcome.stdout_tail = stdout_all.size() > kStdoutTailLen
-        ? stdout_all.substr(stdout_all.size() - kStdoutTailLen)
-        : stdout_all;
-    outcome.stderr_tail = stderr_all.size() > kStderrTailLen
-        ? stderr_all.substr(stderr_all.size() - kStderrTailLen)
-        : stderr_all;
+    outcome.stdout_tail = TailOutput(stdout_all, kStdoutTailLen);
+    outcome.stderr_tail = TailOutput(stderr_all, kStderrTailLen);
 
     if (!WIFEXITED(status)) {
         outcome.result = LinuxUdevInstaller::Result::Failed;
-    } else if (outcome.exit_code == 0) {
-        outcome.result = LinuxUdevInstaller::Result::Success;
-    } else if (outcome.exit_code == 126 || outcome.exit_code == 127) {
-        // pkexec's own documented exit codes: 126 = auth dialog dismissed/
-        // declined, 127 = the requested command itself couldn't be run.
-        // We only distinguish "the user said no" here since that's the
-        // one the UI should word differently from a generic failure.
-        outcome.result = LinuxUdevInstaller::Result::UserCancelled;
     } else {
-        outcome.result = LinuxUdevInstaller::Result::Failed;
+        outcome.result = ClassifySpawnResult(outcome.exit_code);
     }
     return outcome;
 }

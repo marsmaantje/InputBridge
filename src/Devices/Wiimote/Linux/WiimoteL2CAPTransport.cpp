@@ -75,7 +75,7 @@ int OpenL2CAPChannel(const std::array<std::byte, 6> &bdaddr, uint16_t psm) {
     local.l2_family = AF_BLUETOOTH;
     local.l2_psm = 0;
     local.l2_bdaddr_type = kBdaddrTypeBrEdr;
-    if (::bind(fd, reinterpret_cast<sockaddr *>(&local), sizeof(local)) < 0) {
+    if (::bind(fd, static_cast<const sockaddr *>(static_cast<const void *>(&local)), sizeof(local)) < 0) {
         LOG_WARN(kTag, "bind() on local L2CAP socket failed: %s", std::strerror(errno));
         ::close(fd);
         return -1;
@@ -92,7 +92,7 @@ int OpenL2CAPChannel(const std::array<std::byte, 6> &bdaddr, uint16_t psm) {
     remote.l2_bdaddr = ToRawBdaddr(bdaddr);
     remote.l2_bdaddr_type = kBdaddrTypeBrEdr;
 
-    const int rc = ::connect(fd, reinterpret_cast<sockaddr *>(&remote), sizeof(remote));
+    const int rc = ::connect(fd, static_cast<sockaddr *>(static_cast<void *>(&remote)), sizeof(remote));
     if (rc < 0 && errno != EINPROGRESS) {
         LOG_WARN(kTag, "connect() to PSM 0x%02x failed: %s (device may already be connected "
                         "to the OS's own Bluetooth HID service - see "

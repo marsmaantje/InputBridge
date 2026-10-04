@@ -44,22 +44,27 @@ void YamahaAdpcm4Encoder::EncodeSample(int16_t sample, std::vector<std::byte> &o
     }
 
     int32_t delta = static_cast<int32_t>(sample) - m_Predictor;
-    uint8_t nibble = delta < 0 ? 0x8 : 0x0;
-    if (nibble) delta = -delta;
+    std::byte nibble = delta < 0 ? std::byte{0x8} : std::byte{0x0};
+    if (std::to_integer<unsigned>(nibble)) delta = -delta;
     // 3-bit magnitude: quarter-steps the delta spans, capped at 7 (this
     // cap is the codec's lossy part - standard ADPCM slope overload).
-    nibble = static_cast<uint8_t>(nibble | std::min(7, (delta * 4) / m_Step));
+    nibble = static_cast<std::byte>(std::to_integer<unsigned>(nibble) | std::min(7, (delta * 4) / m_Step));
 
     // Update from the emitted CODE, not the raw delta, to stay in lockstep
     // with a decoder that only ever sees 4-bit codes.
-    m_Predictor = static_cast<int16_t>(ClipInt16(m_Predictor + (m_Step * kDiffLookup[nibble]) / 8));
-    m_Step = ClipStep((m_Step * kIndexScale[nibble]) >> 8);
+    const auto code = static_cast<uint8_t>(std::to_integer<unsigned>(nibble));
+    const auto code_index = static_cast<size_t>(code);
+    m_Predictor = static_cast<int16_t>(ClipInt16(m_Predictor + (m_Step * kDiffLookup[code_index]) / 8));
+    m_Step = ClipStep((m_Step * kIndexScale[code_index]) >> 8);
 
     if (m_HasPendingNibble) {
-        out.push_back(static_cast<std::byte>(m_PendingNibble | (nibble << 4)));
+        const auto pending = static_cast<std::byte>(m_PendingNibble);
+        const auto combined = static_cast<std::byte>(
+            static_cast<unsigned>(pending) | (static_cast<unsigned>(nibble) << 4));
+        out.push_back(combined);
         m_HasPendingNibble = false;
     } else {
-        m_PendingNibble = nibble;
+        m_PendingNibble = static_cast<uint8_t>(std::to_integer<unsigned>(nibble));
         m_HasPendingNibble = true;
     }
 }
@@ -100,15 +105,18 @@ std::vector<int16_t> DecodeYamahaAdpcm4(std::span<const std::byte> packed) {
             predictor = 0;
             step = 127;
         }
-        predictor = ClipInt16(predictor + (step * kDiffLookup[nibble & 0xF]) / 8);
-        step = ClipStep((step * kIndexScale[nibble & 0xF]) >> 8);
+        const auto code = static_cast<std::byte>(nibble) & std::byte{0x0F};
+        const auto code_value = std::to_integer<unsigned>(code);
+        predictor = ClipInt16(predictor + (step * kDiffLookup[code_value]) / 8);
+        step = ClipStep((step * kIndexScale[code_value]) >> 8);
         out.push_back(static_cast<int16_t>(predictor));
     };
 
     for (const std::byte b : packed) {
-        const auto value = std::to_integer<unsigned>(b);
-        decode_nibble(static_cast<uint8_t>(value & 0x0Fu));        // low nibble first
-        decode_nibble(static_cast<uint8_t>((value >> 4) & 0x0Fu)); // then high nibble
+        const std::byte low_nibble = b & std::byte{0x0Fu};
+        const std::byte high_nibble = (b >> 4) & std::byte{0x0Fu};
+        decode_nibble(static_cast<uint8_t>(std::to_integer<unsigned>(low_nibble)));  // low nibble first
+        decode_nibble(static_cast<uint8_t>(std::to_integer<unsigned>(high_nibble))); // then high nibble
     }
     return out;
 }

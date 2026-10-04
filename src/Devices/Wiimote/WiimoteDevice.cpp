@@ -809,7 +809,7 @@ void WiimoteDevice::PlayBeep(float freq_hz, uint32_t duration_ms, uint32_t sampl
         if (!EnableSpeaker(sample_rate_hz, volume, format)) return;
     }
 
-    const size_t sample_count = size_t((uint64_t(sample_rate_hz) * duration_ms) / 1000);
+    const auto sample_count = size_t((uint64_t(sample_rate_hz) * duration_ms) / 1000);
     const size_t fade_samples = std::min(sample_count / 10, size_t(sample_rate_hz) * 5 / 1000);
 
     if (format == SpeakerAudioFormat::ADPCM4) {

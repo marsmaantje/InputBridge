@@ -23,7 +23,7 @@ std::string HidrawNodeName(const std::string &hidraw_path) {
 } // namespace
 
 std::optional<std::array<std::byte, 6>> ParseBluetoothAddress(const std::string &text) {
-    unsigned b[6];
+    std::array<unsigned, 6> b{};
     // "AA:BB:CC:DD:EE:FF" - exactly 17 chars, 6 hex pairs separated by ':'.
     if (text.size() != 17) return std::nullopt;
     const int n = std::sscanf(text.c_str(), "%2x:%2x:%2x:%2x:%2x:%2x",

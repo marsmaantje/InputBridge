@@ -18,7 +18,7 @@ uint32_t Crc32(std::span<const std::byte> data) {
     for (const std::byte byte : data) {
         crc ^= std::to_integer<uint32_t>(byte);
         for (int bit = 0; bit < 8; ++bit) {
-            const uint32_t mask = -(crc & 1u);
+            const uint32_t mask = (crc & 1u) != 0u ? 0xFFFFFFFFu : 0u;
             crc = (crc >> 1) ^ (0xEDB88320u & mask);
         }
     }
@@ -231,8 +231,8 @@ BalanceBoardCalibration ParseBalanceBoardCalibration(std::span<const std::byte, 
 
     const uint32_t computed = Crc32(crc_input);
     const uint32_t stored = (std::to_integer<uint32_t>(block32[0x3C - 0x20]) << 24) |
-                             (std::to_integer<uint32_t>(block32[0x3D - 0x20]) << 16) |
-                             (std::to_integer<uint32_t>(block32[0x3E - 0x20]) << 8) |
+                            (std::to_integer<uint32_t>(block32[0x3D - 0x20]) << 16) |
+                            (std::to_integer<uint32_t>(block32[0x3E - 0x20]) << 8) |
                              std::to_integer<uint32_t>(block32[0x3F - 0x20]);
     if (computed != stored) {
         // Corrupted/torn read: don't hand back numbers that look plausible
