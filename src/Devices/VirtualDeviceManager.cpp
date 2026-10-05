@@ -1,6 +1,7 @@
 #include "App/Log.h"
 #include "VirtualDeviceManager.h"
 #include <algorithm>
+#include <array>
 
 static constexpr const char* kTag = "VirtualDeviceManager";
 
@@ -10,63 +11,71 @@ static constexpr const char* kTag = "VirtualDeviceManager";
 namespace {
 
 struct Preset {
-    SDL_JoystickType sdlType;
-    int              naxes;
-    int              nbuttons;
-    VirtualAxisInfo  axisInfo[8]; // generous upper bound
-    const char*      buttonLabels[16];
+    SDL_JoystickType          sdlType;
+    int                       naxes;
+    int                       nbuttons;
+    std::array<VirtualAxisInfo, 8> axisInfo; // generous upper bound
+    std::array<const char*, 16>    buttonLabels;
 };
 
-static const Preset kGamepadPreset = {
+const Preset kGamepadPreset = {
     SDL_JOYSTICK_TYPE_GAMEPAD, 6, 15,
-    {
+    {{
         { "Left X",     0.0f },
         { "Left Y",     0.0f },
         { "Right X",    0.0f },
         { "Right Y",    0.0f },
         { "L Trigger",  -1.0f }, // SDL reports at -32768 when fully released
         { "R Trigger",  -1.0f },
-    },
-    { "South","East","West","North","Back","Guide","Start",
-      "L Stick","R Stick","L Shoulder","R Shoulder",
-      "D-Up","D-Down","D-Left","D-Right" }
+    }},
+    {{
+        "South","East","West","North","Back","Guide","Start",
+        "L Stick","R Stick","L Shoulder","R Shoulder",
+        "D-Up","D-Down","D-Left","D-Right"
+    }}
 };
 
-static const Preset kWheelPreset = {
+const Preset kWheelPreset = {
     SDL_JOYSTICK_TYPE_WHEEL, 4, 12,
-    {
+    {{
         { "Steering",  0.0f },
         { "Throttle", -1.0f },
         { "Brake",    -1.0f },
         { "Clutch",   -1.0f },
-    },
-    { "Btn 0","Btn 1","Btn 2","Btn 3","Btn 4","Btn 5",
-      "Btn 6","Btn 7","Btn 8","Btn 9","Btn 10","Btn 11" }
+    }},
+    {{
+        "Btn 0","Btn 1","Btn 2","Btn 3","Btn 4","Btn 5",
+        "Btn 6","Btn 7","Btn 8","Btn 9","Btn 10","Btn 11"
+    }}
 };
 
-static const Preset kFlightPreset = {
+const Preset kFlightPreset = {
     SDL_JOYSTICK_TYPE_FLIGHT_STICK, 6, 12,
-    {
+    {{
         { "Pitch (X)",  0.0f },
         { "Roll (Y)",   0.0f },
         { "Yaw (Z)",    0.0f },
         { "Trim X",     0.0f },
         { "Trim Y",     0.0f },
         { "Throttle",  -1.0f },
-    },
-    { "Trigger","Btn 1","Btn 2","Btn 3","Btn 4","Btn 5",
-      "Btn 6","Btn 7","Btn 8","Btn 9","Btn 10","Btn 11" }
+    }},
+    {{
+        "Trigger","Btn 1","Btn 2","Btn 3","Btn 4","Btn 5",
+        "Btn 6","Btn 7","Btn 8","Btn 9","Btn 10","Btn 11"
+    }}
 };
 
-static const Preset kGenericPreset = {
+const Preset kGenericPreset = {
     SDL_JOYSTICK_TYPE_UNKNOWN, 4, 8,
-    {
+    {{
         { "Axis 0", 0.0f },
         { "Axis 1", 0.0f },
         { "Axis 2", 0.0f },
         { "Axis 3", 0.0f },
-    },
-    { "Btn 0","Btn 1","Btn 2","Btn 3","Btn 4","Btn 5","Btn 6","Btn 7" }
+    }},
+    {{
+        "Btn 0","Btn 1","Btn 2","Btn 3","Btn 4","Btn 5","Btn 6","Btn 7"
+    }}
 };
 
 const Preset& GetPreset(VirtualDeviceType t) {
@@ -160,7 +169,7 @@ SDL_JoystickID VirtualDeviceManager::AddDevice(VirtualDeviceType type,
 // RemoveDevice
 // -----------------------------------------------------------------------------
 void VirtualDeviceManager::RemoveDevice(SDL_JoystickID id) {
-    auto it = std::find_if(m_Devices.begin(), m_Devices.end(),
+    auto it = std::ranges::find_if(m_Devices,
         [id](const auto& s) { return s->joystick_id == id; });
 
     if (it == m_Devices.end()) return;
@@ -172,8 +181,7 @@ void VirtualDeviceManager::RemoveDevice(SDL_JoystickID id) {
     SDL_DetachVirtualJoystick(id);
 
     m_Devices.erase(it);
-    LOG_INFO(kTag, "removed virtual device id=%u",
-            static_cast<unsigned>(id));
+    LOG_INFO(kTag, "removed virtual device id=%u", static_cast<unsigned>(id));
 }
 
 // -----------------------------------------------------------------------------
@@ -186,7 +194,7 @@ void VirtualDeviceManager::PushState(SDL_JoystickID id) {
 
     for (int i = 0; i < static_cast<int>(s->axes.size()); ++i) {
         float  v   = s->axes[i];
-        Sint16 raw = static_cast<Sint16>(v * 32767.0f);
+        auto raw = static_cast<Sint16>(v * 32767.0f);
         SDL_SetJoystickVirtualAxis(s->joystick, i, raw);
     }
 
@@ -205,7 +213,7 @@ void VirtualDeviceManager::PushAllStates() {
 // Accessors
 // -----------------------------------------------------------------------------
 VirtualDeviceState* VirtualDeviceManager::GetState(SDL_JoystickID id) {
-    for (auto& s : m_Devices)
+    for (const auto& s : m_Devices)
         if (s->joystick_id == id) return s.get();
     return nullptr;
 }

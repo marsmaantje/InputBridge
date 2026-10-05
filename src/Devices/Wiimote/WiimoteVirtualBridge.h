@@ -179,7 +179,7 @@ private:
 
     Entry *Find(const std::string &hid_path);
     void Attach(const WiimoteDevice &dev);
-    void Detach(Entry &entry);
+    void Detach(Entry &entry) const;
 };
 
 } // namespace InputBridge::Wiimote
