@@ -336,6 +336,7 @@ bool Application::Init()
         return false;
 
     SetupImGui();
+    DeviceManager::GetInstance().SetSpaceMouseEnabled(m_prefs.GetBool("SpaceMouseSupport", true));
     InitialDeviceScan();
     MigrateUserData();
     RestorePreferences();

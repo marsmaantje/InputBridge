@@ -3,6 +3,7 @@
 #include "App/Log.h"
 #include "Devices/DeviceManager.h"
 #include "Devices/Wiimote/WiimoteVirtualBridge.h"
+#include "Devices/SpaceMouse/SpaceMouseVirtualBridge.h"
 #include "Mappers/OutputMapper.h"
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
@@ -532,6 +533,13 @@ void MappingProfileStore::HandleDeviceConnectionChange() {
     // and silently appear unbound after every profile activation, device
     // (re)connect, or app relaunch.
     for (SDL_JoystickID id : InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().GetAllJoystickIds()) {
+        DeviceState fake;
+        fake.instance_id = id;
+        guidMap[DeviceManager::GetDeviceGUIDString(fake)] = id;
+    }
+
+    // Same for 3Dconnexion bridge joysticks (never in GetDevices()).
+    for (SDL_JoystickID id : InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().GetAllJoystickIds()) {
         DeviceState fake;
         fake.instance_id = id;
         guidMap[DeviceManager::GetDeviceGUIDString(fake)] = id;

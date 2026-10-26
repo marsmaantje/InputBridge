@@ -2,6 +2,7 @@
 
 #include "Devices/DeviceState.h"
 #include "Devices/Wiimote/WiimoteVirtualBridge.h"
+#include "Devices/SpaceMouse/SpaceMouseVirtualBridge.h"
 #include "SDL3/SDL_gamepad.h"
 #include "UI/DeviceIconProvider.h"
 #include "UI/KenneyIcons.h"
@@ -553,6 +554,14 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
 {
     InputLabel result;
 
+    // 3Dconnexion bridge joystick: named 6-DOF axes, no Kenney glyphs exist.
+    if (InputBridge::SpaceMouse::IsBridgeDeviceName(dev.name))
+    {
+        const char* n = InputBridge::SpaceMouse::BridgeAxisName(axis);
+        result.name = n ? n : ("Axis " + std::to_string(axis));
+        return result;
+    }
+
     bool isBalance = false;
     if (IsWiimoteBridgeDevice(dev, &isBalance))
     {
@@ -624,6 +633,12 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
 InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button)
 {
     InputLabel result;
+
+    if (InputBridge::SpaceMouse::IsBridgeDeviceName(dev.name))
+    {
+        result.name = InputBridge::SpaceMouse::BridgeButtonName(dev.name, button);
+        return result;
+    }
 
     bool isBalance = false;
     if (IsWiimoteBridgeDevice(dev, &isBalance))

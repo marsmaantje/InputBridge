@@ -287,6 +287,23 @@ void DrawSettingsContent(float&              user_ui_scale,
         prefs.Save();
     }
 
+    {
+        bool spaceMouse = deviceManager.IsSpaceMouseEnabled();
+        if (ImGui::Checkbox("3Dconnexion Device Support", &spaceMouse)) {
+            deviceManager.SetSpaceMouseEnabled(spaceMouse);
+            prefs.SetBool("SpaceMouseSupport", spaceMouse);
+            prefs.Save();
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Reads SpaceNavigator / SpaceMouse devices over shared, read-only HID.\n"
+                "Never writes to the device and never opens it exclusively, so 3DxWare\n"
+                "or spacenavd keep working alongside InputBridge.\n"
+                "Turn off to stop InputBridge from opening these devices at all.\n"
+                "Takes effect immediately; SDL's own generic entry for the device\n"
+                "only returns after an app restart.");
+    }
+
     if (ImGui::Checkbox("Disable Gamepad / Steering Wheel UI Navigation", &disable_gamepad_nav)) {
         prefs.SetBool("DisableGamepadNavigation", disable_gamepad_nav);
         prefs.Save();
