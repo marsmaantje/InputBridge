@@ -653,9 +653,9 @@ void ProtocolEditorWindow::DrawContent() {
     }
 
     // -- Keyboard Shortcuts ---------------------------------------------------
-    if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Z))
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z))
         s_undoManager.Undo();
-    if (ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiKey_Y) || ImGui::Shortcut(ImGuiMod_Shortcut | ImGuiMod_Shift | ImGuiKey_Z))
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))
         s_undoManager.Redo();
 
     // Handle drag-and-drop of .json files onto the window
