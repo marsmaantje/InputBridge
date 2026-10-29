@@ -636,8 +636,13 @@ if(UNIX AND NOT APPLE)
         "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-wiimote.rules"
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-3dconnexion.rules"
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
         "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev/"
+        # copy_if_different drops the exec bit; restore it so the in-app
+        # "Fix permissions" button can run the script directly (it falls back
+        # to /bin/bash otherwise, but logs a note about it).
+        COMMAND chmod +x "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev/install-udev-rules.sh"
         COMMENT "Copying udev installer assets to build output directory"
     )
 endif()

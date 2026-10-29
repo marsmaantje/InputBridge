@@ -80,6 +80,12 @@ TEST(SpaceMouseIdentify, KnownModel) {
     EXPECT_EQ(m->buttons, 2);
 }
 
+TEST(SpaceMouseIdentify, NuLOOQNavigatorRecognised) {
+    auto m = IdentifyDevice(0x046D, 0xC640, 0x01, 0x08);
+    ASSERT_TRUE(m.has_value());
+    EXPECT_STREQ(m->name, "NuLOOQ navigator");
+}
+
 TEST(SpaceMouseIdentify, KnownModelNonMotionInterfaceRejected) {
     EXPECT_FALSE(IdentifyDevice(0x256F, 0xC62E, 0xFF00, 0x01).has_value());
     EXPECT_TRUE(IdentifyDevice(0x256F, 0xC62E, 0x01, 0x08).has_value());

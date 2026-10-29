@@ -22,6 +22,16 @@ public:
     // device exclusively) is logged once per path and retried on later scans;
     // it is never treated as fatal.
     static ScanResult Scan(const std::vector<std::string> &already_open_paths);
+
+#if defined(__linux__)
+    // True if the most recent Scan() found a 3Dconnexion interface it could
+    // not open because of file permissions (EACCES on the hidraw node).
+    // Cleared by the first Scan() in which no such failure occurs, so it
+    // also goes away on its own once a udev rule is in place and the retry
+    // succeeds. Safe to poll from the UI thread. Drives the "Fix
+    // permissions" banner in the Devices tab.
+    static bool HadRecentLinuxPermissionError();
+#endif
 };
 
 } // namespace InputBridge::SpaceMouse

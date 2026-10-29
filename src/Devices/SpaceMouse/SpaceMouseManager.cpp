@@ -3,6 +3,7 @@
 #include "App/Log.h"
 #include <SDL3/SDL_hidapi.h>
 #include <algorithm>
+#include <atomic>
 #include <set>
 #include <string>
 
@@ -34,19 +35,17 @@ std::set<std::string> &FailedPaths() {
 }
 
 #if defined(__linux__)
-// Read-only diagnostic, fd closed immediately. Tells a udev permission
-// problem apart from "busy"/"gone".
-void LogLinuxOpenHint(const char *path) {
+// Published by Scan(), read by HadRecentLinuxPermissionError() from the UI.
+std::atomic<bool> s_had_recent_linux_permission_error{false};
+
+// Read-only diagnostic open (fd closed immediately): returns the errno a
+// plain open of the hidraw node gives, so a udev permission problem (EACCES)
+// can be told apart from "busy"/"gone". 0 if the node opened fine.
+int ProbeOpenErrno(const char *path) {
     const int fd = ::open(path, O_RDONLY | O_NONBLOCK);
     const int e = errno;
-    if (fd >= 0) { ::close(fd); return; }
-    if (e == EACCES) {
-        LOG_WARN(kTag, "  permission denied opening '%s'. Install the 3Dconnexion udev rule "
-                       "(packaging/linux/udev/71-inputbridge-3dconnexion.rules) and replug the device.",
-                 path);
-    } else {
-        LOG_WARN(kTag, "  open() errno=%d (%s)", e, std::strerror(e));
-    }
+    if (fd >= 0) { ::close(fd); return 0; }
+    return e;
 }
 #endif
 } // namespace
@@ -54,6 +53,9 @@ void LogLinuxOpenHint(const char *path) {
 SpaceMouseManager::ScanResult SpaceMouseManager::Scan(const std::vector<std::string> &already_open_paths) {
     ScanResult result;
     std::set<std::string> seen;
+#if defined(__linux__)
+    bool saw_permission_error = false;
+#endif
 
     // Enumerate only the two 3Dconnexion vendor IDs - never the whole HID
     // tree - so unrelated devices are never even looked at.
@@ -79,18 +81,33 @@ SpaceMouseManager::ScanResult SpaceMouseManager::Scan(const std::vector<std::str
                     result.opened.push_back(std::make_unique<SpaceMouseDevice>(
                         retry, path, WideToUtf8Lossy(d->serial_number), *model));
                 }
+#if defined(__linux__)
+                else if (ProbeOpenErrno(path.c_str()) == EACCES) {
+                    saw_permission_error = true; // keep the banner up
+                }
+#endif
                 continue;
             }
 
             SDL_hid_device *hdev = SDL_hid_open_path(path.c_str());
             if (!hdev) {
                 FailedPaths().insert(path);
-                LOG_WARN(kTag, "Found %s (%04x:%04x) at '%s' but could not open it - "
-                               "another driver may hold it exclusively. Will retry quietly.",
-                         model->name, d->vendor_id, d->product_id, path.c_str());
 #if defined(__linux__)
-                LogLinuxOpenHint(path.c_str());
+                const int err = ProbeOpenErrno(path.c_str());
+                if (err == EACCES) {
+                    saw_permission_error = true;
+                    LOG_WARN(kTag, "Found %s (%04x:%04x) at '%s' but permission was denied. "
+                                   "Use \"Fix permissions\" in the Devices tab, or install "
+                                   "packaging/linux/udev/71-inputbridge-3dconnexion.rules. "
+                                   "Will retry automatically.",
+                             model->name, d->vendor_id, d->product_id, path.c_str());
+                } else
 #endif
+                {
+                    LOG_WARN(kTag, "Found %s (%04x:%04x) at '%s' but could not open it - "
+                                   "another driver may hold it exclusively. Will retry quietly.",
+                             model->name, d->vendor_id, d->product_id, path.c_str());
+                }
                 continue;
             }
             LOG_INFO(kTag, "Opened %s (%04x:%04x) read-only at '%s'", model->name,
@@ -105,7 +122,16 @@ SpaceMouseManager::ScanResult SpaceMouseManager::Scan(const std::vector<std::str
     for (auto it = FailedPaths().begin(); it != FailedPaths().end();)
         it = seen.count(*it) ? std::next(it) : FailedPaths().erase(it);
 
+#if defined(__linux__)
+    s_had_recent_linux_permission_error.store(saw_permission_error, std::memory_order_relaxed);
+#endif
     return result;
 }
+
+#if defined(__linux__)
+bool SpaceMouseManager::HadRecentLinuxPermissionError() {
+    return s_had_recent_linux_permission_error.load(std::memory_order_relaxed);
+}
+#endif
 
 } // namespace InputBridge::SpaceMouse

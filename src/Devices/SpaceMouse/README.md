@@ -27,9 +27,13 @@ Buttons: one per physical button, count depends on the model.
 
 ## Linux
 
-Install `packaging/linux/udev/71-inputbridge-3dconnexion.rules` (copy to
-`/etc/udev/rules.d/`, reload, replug). The in-app "Fix permissions" button
-only handles the Wii rules.
+If the hidraw node is not readable, the Devices tab shows a "Fix permissions"
+banner (same pkexec flow as the Wii one). It runs
+`install-udev-rules.sh --3dconnexion`, which installs only
+`71-inputbridge-3dconnexion.rules`; the Wii rule is untouched. The scan
+retries every few seconds, so the device normally appears without a replug.
+Manual alternative: `sudo ./packaging/linux/install-udev-rules.sh --3dconnexion`
+(add `--uninstall` to remove).
 
 ## Known limits
 

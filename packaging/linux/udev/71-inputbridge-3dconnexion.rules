@@ -11,17 +11,24 @@
 # full explanation. TAG and GROUP are separate lines for the same reason as
 # there: a missing "plugdev" group invalidates only the GROUP line.
 #
-# Install manually (the in-app "Fix permissions" button only handles the
-# Wii rules file):
+# Install via the in-app "Fix permissions" banner (Devices tab), or:
+#   sudo ./install-udev-rules.sh --3dconnexion
+# or by hand:
 #   sudo cp 71-inputbridge-3dconnexion.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=hidraw
-# then replug the device.
 
 # 3Dconnexion vendor ID
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="256f", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="256f", GROUP="plugdev", MODE="0660"
 
+# Same vendor over Bluetooth (e.g. SpaceMouse Wireless BT, 256f:c63a). A
+# Bluetooth hidraw node has no USB parent, so ATTRS{idVendor} above can never
+# match it; match the HID parent device name instead (bus 0005 = Bluetooth,
+# kernel name "0005:256F:C63A.xxxx"), the same technique the Wii rule uses.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:256F:*", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:256F:*", GROUP="plugdev", MODE="0660"
+
 # Logitech-era 3Dconnexion devices: matched by PID only (never the whole
-# Logitech vendor): c603 c605 c606 c621 c623 c625 c626 c627 c628 c629 c62b
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c603|c605|c606|c621|c623|c625|c626|c627|c628|c629|c62b", TAG+="uaccess"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c603|c605|c606|c621|c623|c625|c626|c627|c628|c629|c62b", GROUP="plugdev", MODE="0660"
+# Logitech vendor): c603 c605 c606 c621 c623 c625 c626 c627 c628 c629 c62b c640
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c603|c605|c606|c621|c623|c625|c626|c627|c628|c629|c62b|c640", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c603|c605|c606|c621|c623|c625|c626|c627|c628|c629|c62b|c640", GROUP="plugdev", MODE="0660"

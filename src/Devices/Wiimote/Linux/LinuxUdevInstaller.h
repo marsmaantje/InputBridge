@@ -2,6 +2,7 @@
 #ifdef __linux__
 
 #include <string>
+#include <vector>
 
 namespace InputBridge::Wiimote {
 
@@ -49,6 +50,12 @@ public:
     // Same, but runs "install-udev-rules.sh --uninstall".
     static RunOutcome UninstallRules();
 
+    // 3Dconnexion (SpaceMouse/SpaceNavigator) variants: same script with
+    // "--3dconnexion", which installs/removes only the 3Dconnexion rule file
+    // and leaves the Wii one untouched.
+    static RunOutcome InstallRules3Dconnexion();
+    static RunOutcome UninstallRules3Dconnexion();
+
     // True if a pkexec binary is on PATH. Cheap to call from the UI thread
     // to decide whether to show the "Fix permissions" button at all versus
     // falling back to just printing the manual command.
@@ -62,7 +69,7 @@ public:
     static std::string ResolveScriptPath();
 
 private:
-    static RunOutcome RunScript(const std::string &script_path, const char *arg);
+    static RunOutcome RunScript(const std::string &script_path, const std::vector<std::string> &args);
 };
 
 } // namespace InputBridge::Wiimote

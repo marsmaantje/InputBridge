@@ -10,7 +10,7 @@ constexpr ModelInfo kModels[] = {
     {kVendorLogitech, 0xC603, "SpaceMouse Plus XT",            21},
     {kVendorLogitech, 0xC605, "CadMan",                        2},
     {kVendorLogitech, 0xC606, "SpaceMouse Classic",            12},
-    {kVendorLogitech, 0xC621, "Spaceball 5000",                12},
+    {kVendorLogitech, 0xC621, "SpaceBall 5000 USB",            12},
     {kVendorLogitech, 0xC623, "SpaceTraveler",                 8},
     {kVendorLogitech, 0xC625, "SpacePilot",                    21},
     {kVendorLogitech, 0xC626, "SpaceNavigator",                2},
@@ -18,6 +18,7 @@ constexpr ModelInfo kModels[] = {
     {kVendorLogitech, 0xC628, "SpaceNavigator for Notebooks",  2},
     {kVendorLogitech, 0xC629, "SpacePilot Pro",                31},
     {kVendorLogitech, 0xC62B, "SpaceMouse Pro",                15},
+    {kVendorLogitech, 0xC640, "NuLOOQ navigator",              kMaxButtons}, // button count unverified
     // 3Dconnexion-era devices
     {kVendor3Dconnexion, 0xC62E, "SpaceMouse Wireless",               2},
     {kVendor3Dconnexion, 0xC62F, "SpaceMouse Wireless Receiver",      2},
