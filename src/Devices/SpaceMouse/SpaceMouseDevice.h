@@ -41,6 +41,7 @@ public:
 
 private:
     void Close();
+    void ReleaseInputs();
 
     SDL_hid_device    *m_Dev;
     SpaceMouseSnapshot m_Snap;

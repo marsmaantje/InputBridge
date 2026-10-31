@@ -113,3 +113,12 @@ TEST(SpaceMouseButtonName, TwoButtonModelsNamed) {
     auto p = *IdentifyDevice(0x046D, 0xC62B, 0, 0);
     EXPECT_EQ(ButtonName(p, 3), "Button 3");
 }
+
+TEST(SpaceMouseModelLookup, FindModelByNameAcceptsStdStringAndLiteral) {
+    const std::string name = "SpaceNavigator";
+    const ModelInfo *m = FindModelByName(name);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->product_id, 0xC626);
+    EXPECT_NE(FindModelByName("SpaceMouse Pro"), nullptr);
+    EXPECT_EQ(FindModelByName("Nope"), nullptr);
+}

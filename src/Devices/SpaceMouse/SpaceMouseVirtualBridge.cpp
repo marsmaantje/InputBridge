@@ -3,12 +3,14 @@
 #include "App/Log.h"
 #include <algorithm>
 #include <functional>
+#include <iterator>
+#include <string_view>
 
 namespace InputBridge::SpaceMouse {
 
 namespace { constexpr const char *kTag = "SpaceMouseVirtualBridge"; }
 
-bool IsBridgeDeviceName(const std::string &name) {
+bool IsBridgeDeviceName(std::string_view name) {
     const std::string p = kBridgeNamePrefix, s = kBridgeNameSuffix;
     return name.size() > p.size() + s.size() &&
            name.compare(0, p.size(), p) == 0 &&
@@ -42,7 +44,7 @@ SpaceMouseVirtualBridge &SpaceMouseVirtualBridge::GetInstance() {
     return instance;
 }
 
-SpaceMouseVirtualBridge::Entry *SpaceMouseVirtualBridge::Find(const std::string &hid_path) {
+SpaceMouseVirtualBridge::Entry *SpaceMouseVirtualBridge::Find(std::string_view hid_path) {
     for (auto &e : m_Entries)
         if (e.hid_path == hid_path) return &e;
     return nullptr;
@@ -84,7 +86,7 @@ void SpaceMouseVirtualBridge::Attach(const SpaceMouseDevice &dev) {
              static_cast<unsigned>(id), name.c_str());
 }
 
-void SpaceMouseVirtualBridge::Detach(Entry &entry) {
+void SpaceMouseVirtualBridge::Detach(const Entry &entry) const {
     // SDL_EVENT_JOYSTICK_REMOVED makes DeviceManager close the handle; don't
     // close it here too (same rule as WiimoteVirtualBridge::Detach).
     SDL_DetachVirtualJoystick(entry.joystick_id);
@@ -95,18 +97,19 @@ void SpaceMouseVirtualBridge::Sync(const std::vector<std::unique_ptr<SpaceMouseD
         if (!Find(dev->Snapshot().hid_path)) Attach(*dev);
 
     auto present = [&](const std::string &path) {
-        return std::any_of(devices.begin(), devices.end(),
-                           [&](const auto &d) { return d->Snapshot().hid_path == path; });
+        return std::ranges::any_of(devices,
+                       [&](const auto &d) { return d->Snapshot().hid_path == path; });
     };
-    auto it = std::remove_if(m_Entries.begin(), m_Entries.end(), [&](Entry &e) {
+    auto removed = std::ranges::remove_if(m_Entries, [&](Entry &e) {
         if (present(e.hid_path)) return false;
         Detach(e);
         return true;
     });
-    if (it != m_Entries.end())
+    if (removed.begin() != removed.end()) {
         LOG_INFO(kTag, "Removing %td bridge joystick(s) for disconnected 3D mice",
-                 std::distance(it, m_Entries.end()));
-    m_Entries.erase(it, m_Entries.end());
+                 std::distance(removed.begin(), removed.end()));
+    }
+    m_Entries.erase(removed.begin(), removed.end());
 }
 
 void SpaceMouseVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<SpaceMouseDevice>> &devices) {
@@ -123,6 +126,7 @@ void SpaceMouseVirtualBridge::PushAllStates(const std::vector<std::unique_ptr<Sp
         const float bat = snap.state.battery_percent < 0
             ? -1.f : (snap.state.battery_percent / 100.f) * 2.f - 1.f;
         SDL_SetJoystickVirtualAxis(e->joystick, Axis_Battery, static_cast<Sint16>(bat * 32767.0f));
+        e->battery_percent = snap.state.battery_percent;
 
         const int nbuttons = std::clamp(snap.model.buttons, 0, kMaxButtons);
         for (int b = 0; b < nbuttons; ++b)
@@ -137,8 +141,13 @@ std::vector<SDL_JoystickID> SpaceMouseVirtualBridge::GetAllJoystickIds() const {
 }
 
 bool SpaceMouseVirtualBridge::IsBridgeJoystick(SDL_JoystickID id) const {
-    return std::any_of(m_Entries.begin(), m_Entries.end(),
-                       [&](const Entry &e) { return e.joystick_id == id; });
+    return std::ranges::any_of(m_Entries, [&](const Entry &e) { return e.joystick_id == id; });
+}
+
+std::optional<int> SpaceMouseVirtualBridge::GetBatteryPercent(SDL_JoystickID id) const {
+    for (const auto &e : m_Entries)
+        if (e.joystick_id == id) return e.battery_percent;
+    return std::nullopt;
 }
 
 std::optional<std::string> SpaceMouseVirtualBridge::GetGuidSuffix(SDL_JoystickID id) const {
@@ -146,9 +155,12 @@ std::optional<std::string> SpaceMouseVirtualBridge::GetGuidSuffix(SDL_JoystickID
     for (const auto &e : m_Entries) if (e.joystick_id == id) { self = &e; break; }
     if (!self) return std::nullopt;
 
-    const auto twins = std::count_if(m_Entries.begin(), m_Entries.end(),
+    const auto twins = std::ranges::count_if(m_Entries,
         [&](const Entry &e) { return e.joystick_name == self->joystick_name; });
-    if (twins > 1) return std::to_string(std::hash<std::string>{}(self->hid_path));
+    
+    if (twins > 1) {
+        return std::to_string(std::hash<std::string>{}(self->hid_path));
+    }
     return std::string(); // single device: plain, port-independent GUID
 }
 

@@ -20,10 +20,12 @@
 // the SpaceMouse module ever writes an output/feature report (LEDs, mode
 // switches, LCD, ...), which is what lets it coexist with 3DxWare/spacenavd.
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace InputBridge::SpaceMouse {
 
@@ -55,7 +57,7 @@ struct ModelInfo {
 // up via IdentifyDevice()'s usage-based path.
 const ModelInfo *FindKnownModel(uint16_t vid, uint16_t pid);
 // Lookup by short model name ("SpaceNavigator"); nullptr if unknown.
-const ModelInfo *FindModelByName(const std::string &name);
+const ModelInfo *FindModelByName(std::string_view name);
 
 // Decides whether a HID interface is a 3D mouse motion interface.
 // `usage_page`/`usage` are 0 when the HID backend could not report them.
@@ -71,9 +73,9 @@ std::string ButtonName(const ModelInfo &model, int button);
 
 // -- Decoder -----------------------------------------------------------------
 struct State {
-    int16_t  raw[kNumMotionAxes] = {};   // TX,TY,TZ,RX,RY,RZ as reported
-    uint32_t buttons             = 0;    // bit n == button n pressed
-    int      battery_percent     = -1;   // -1 unknown
+    std::array<int16_t, kNumMotionAxes> raw{};  // TX,TY,TZ,RX,RY,RZ as reported
+    uint32_t buttons = 0;                       // bit n == button n pressed
+    int      battery_percent = -1;              // -1 unknown
 };
 
 enum class ReportKind { Ignored, Translation, Rotation, Combined, Buttons, Battery };

@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <iterator>
+#include <utility>
 
 static constexpr const char* kTag = "DeviceManager";
 
@@ -31,9 +33,12 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
         return "00000000000000000000000000000000";
     }
     SDL_GUID guid = SDL_GetJoystickGUID(joystick);
-    char guidStr[33];
-    SDL_GUIDToString(guid, guidStr, sizeof(guidStr));
-    std::string guidString(guidStr);
+    std::string guidString(33, '\0');
+    SDL_GUIDToString(guid, guidString.data(), static_cast<int>(guidString.size()));
+    const auto terminator = guidString.find('\0');
+    if (terminator != std::string::npos) {
+        guidString.resize(terminator);
+    }
 
     // Every WiimoteVirtualBridge joystick of a given kind (Wii Remote vs
     // Balance Board) is attached with the exact same SDL_VirtualJoystickDesc
@@ -238,7 +243,7 @@ void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
         m_HapticDevices.erase(haptic_it);
     }
     
-    auto it = std::remove_if(m_Devices.begin(), m_Devices.end(), [instance_id](const DeviceState &dev) {
+    auto it = std::ranges::remove_if(m_Devices, [instance_id](const DeviceState &dev) {
         if (dev.instance_id == instance_id) {
             if (dev.gamepad)
                 SDL_CloseGamepad(dev.gamepad);
@@ -249,25 +254,17 @@ void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
         return false;
     });
 
-    if (it != m_Devices.end()) {
-        m_Devices.erase(it, m_Devices.end());
+    if (it.begin() != m_Devices.end()) {
+        m_Devices.erase(it.begin(), it.end());
     }
 
-    // If no steering wheels remain, clear the device list.
-    bool anyWheelLeft = false;
-    for (const auto& dev : m_Devices) {
-        if (SDL_GetJoystickTypeForID(dev.instance_id) == SDL_JOYSTICK_TYPE_WHEEL) {
-            anyWheelLeft = true;
-            break;
-        }
-    }
 }
 
 void DeviceManager::CloseAllDevices() {
     // Close haptic devices first (before their joysticks are closed)
-    for (auto& pair : m_HapticDevices) {
-        if (pair.second) {
-            pair.second->Close();
+    for (const auto& [_, hapticDevice] : m_HapticDevices) {
+        if (hapticDevice) {
+            hapticDevice->Close();
         }
     }
     m_HapticDevices.clear();
@@ -308,13 +305,13 @@ void DeviceManager::ScanWiimotes() {
     // out of Scan() by its own stale ghost entry until the next cycle.
     constexpr Uint64 kStaleTimeoutMs = 5000;
     const Uint64 now = SDL_GetTicks();
-    auto stale_it = std::remove_if(m_Wiimotes.begin(), m_Wiimotes.end(), [&](const auto &dev) {
+    auto stale_it = std::ranges::remove_if(m_Wiimotes, [&](const auto &dev) {
         const auto &snap = dev->Snapshot();
         return snap.last_report_ms != 0 && (now - snap.last_report_ms) > kStaleTimeoutMs;
     });
-    if (stale_it != m_Wiimotes.end()) {
-        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(stale_it, m_Wiimotes.end()));
-        m_Wiimotes.erase(stale_it, m_Wiimotes.end());
+    if (stale_it.begin() != stale_it.end()) {
+        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(stale_it.begin(), stale_it.end()));
+        m_Wiimotes.erase(stale_it.begin(), stale_it.end());
     }
 
     // Tell Scan() which HID paths we already have open, so it never opens a
@@ -324,7 +321,9 @@ void DeviceManager::ScanWiimotes() {
     // can crash rather than just misbehave on some Bluetooth HID stacks).
     std::vector<std::string> already_open;
     already_open.reserve(m_Wiimotes.size());
-    for (auto &dev : m_Wiimotes) already_open.push_back(dev->Snapshot().hid_path);
+    for (auto &dev : m_Wiimotes) {
+        already_open.push_back(dev->Snapshot().hid_path);
+    }
 
     auto found = InputBridge::Wiimote::WiimoteManager::Scan(already_open);
     for (auto &dev : found) {
@@ -357,24 +356,36 @@ InputBridge::Wiimote::WiimoteDevice* DeviceManager::GetWiimoteForBridgeJoystick(
 void DeviceManager::ScanSpaceMice() {
     if (!m_SpaceMouseEnabled) return;
 
+    // Drop devices whose read already failed BEFORE scanning: their handle is
+    // closed, and leaving their path in `already_open` would stop Scan() from
+    // reopening a quickly re-plugged device until the following scan.
+    // Unlike a Bluetooth Wiimote, an idle 3D mouse sends NO reports, so report
+    // staleness must never be used as a disconnect signal here.
+    auto dead = std::ranges::remove_if(m_SpaceMice, [](const auto &dev) {
+        return !dev->Snapshot().connected;
+    });
+    if (dead.begin() != dead.end()) {
+        LOG_INFO(kTag, "3D mouse(s) disconnected: %td", std::distance(dead.begin(), dead.end()));
+        m_SpaceMice.erase(dead.begin(), dead.end());
+    }
+
     std::vector<std::string> already_open;
     already_open.reserve(m_SpaceMice.size());
-    for (auto &dev : m_SpaceMice) already_open.push_back(dev->Snapshot().hid_path);
+    for (auto &dev : m_SpaceMice) {
+        already_open.push_back(dev->Snapshot().hid_path);
+    }
 
     auto result = InputBridge::SpaceMouse::SpaceMouseManager::Scan(already_open);
 
-    // Prune devices that read-failed or are no longer enumerated. Unlike a
-    // Bluetooth Wiimote, an idle 3D mouse sends NO reports, so report
-    // staleness must never be used as a disconnect signal here.
-    auto gone = std::remove_if(m_SpaceMice.begin(), m_SpaceMice.end(), [&](const auto &dev) {
-        const auto &snap = dev->Snapshot();
-        const bool listed = std::find(result.present_paths.begin(), result.present_paths.end(),
-                                      snap.hid_path) != result.present_paths.end();
-        return !snap.connected || !listed;
+    // Prune devices that are no longer enumerated (unplugged but never
+    // produced a read error).
+    auto gone = std::ranges::remove_if(m_SpaceMice, [&](const auto &dev) {
+        return std::ranges::find(result.present_paths, dev->Snapshot().hid_path) ==
+               result.present_paths.end();
     });
-    if (gone != m_SpaceMice.end()) {
-        LOG_INFO(kTag, "3D mouse(s) removed: %td", std::distance(gone, m_SpaceMice.end()));
-        m_SpaceMice.erase(gone, m_SpaceMice.end());
+    if (gone.begin() != gone.end()) {
+        LOG_INFO(kTag, "3D mouse(s) removed: %td", std::distance(gone.begin(), gone.end()));
+        m_SpaceMice.erase(gone.begin(), gone.end());
     }
     for (auto &dev : result.opened) {
         LOG_INFO(kTag, "3D mouse found: %s (%s)", dev->Snapshot().model.name,
@@ -451,7 +462,9 @@ void DeviceManager::Update(bool isMinimized) {
         ScanSpaceMice();
         m_LastSpaceMouseScanMs = now;
     }
-    for (auto &dev : m_SpaceMice) dev->Poll();
+    for (auto &dev : m_SpaceMice) {
+        dev->Poll();
+    }
     InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().Sync(m_SpaceMice);
     InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().PushAllStates(m_SpaceMice);
     // -- End 3Dconnexion polling ------------------------------------------
@@ -554,7 +567,17 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
         // -- End Left Joy-Con battery --------------------------------------
     } else if (dev.joystick) {
         int percent = 0;
-        dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
+        // 3Dconnexion bridge joysticks are virtual, so SDL can't report a
+        // battery for them; use the level decoded from the device's own
+        // 0x17 battery reports instead. -1 (wired / not yet reported) leaves
+        // the state UNKNOWN so no icon is drawn.
+        if (const auto bridgePct =
+                InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().GetBatteryPercent(dev.instance_id)) {
+            percent = *bridgePct;
+            dev.battery_state = percent >= 0 ? SDL_POWERSTATE_ON_BATTERY : SDL_POWERSTATE_UNKNOWN;
+        } else {
+            dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
+        }
         dev.battery_percent = percent;
 
         bool state_changed   = (old_state != dev.battery_state);

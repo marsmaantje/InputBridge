@@ -2,6 +2,8 @@
 #include "SpaceMouseDevice.h"
 #include "App/Log.h"
 #include <SDL3/SDL_timer.h>
+#include <array>
+#include <utility>
 
 namespace InputBridge::SpaceMouse {
 
@@ -31,24 +33,34 @@ void SpaceMouseDevice::Close() {
     }
 }
 
+// A vanished device sends no "released" report, so without this the bridge
+// joystick would keep the last deflection / pressed buttons until it is pruned.
+void SpaceMouseDevice::ReleaseInputs() {
+    m_Snap.state.raw.fill(0);
+    m_Snap.state.buttons = 0;
+}
+
 void SpaceMouseDevice::Poll() {
     if (!m_Dev) {
         m_Snap.connected = false;
+        ReleaseInputs();
         return;
     }
-    uint8_t buf[kReadBufSize];
+    std::array<uint8_t, kReadBufSize> buf{};
     for (int i = 0; i < kMaxReportsPerPoll; ++i) {
-        const int n = SDL_hid_read(m_Dev, buf, sizeof buf);
+        const int n = SDL_hid_read(m_Dev, buf.data(), static_cast<int>(buf.size()));
         if (n < 0) {
             LOG_INFO(kTag, "Read failed on '%s' - treating device as disconnected",
                      m_Snap.hid_path.c_str());
             m_Snap.connected = false;
+            ReleaseInputs();
             Close();
             return;
         }
         if (n == 0) return; // nothing pending
-        if (DecodeReport(buf, static_cast<size_t>(n), m_Snap.state) != ReportKind::Ignored)
+        if (DecodeReport(buf.data(), static_cast<size_t>(n), m_Snap.state) != ReportKind::Ignored) {
             m_Snap.last_report_ms = SDL_GetTicks();
+        }
     }
 }
 

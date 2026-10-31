@@ -1,6 +1,7 @@
 // src/Devices/SpaceMouse/SpaceMouseProtocol.cpp
 #include "SpaceMouseProtocol.h"
 #include <algorithm>
+#include <string_view>
 
 namespace InputBridge::SpaceMouse {
 
@@ -43,7 +44,7 @@ const ModelInfo *FindKnownModel(uint16_t vid, uint16_t pid) {
     return nullptr;
 }
 
-const ModelInfo *FindModelByName(const std::string &name) {
+const ModelInfo *FindModelByName(std::string_view name) {
     for (const auto &m : kModels)
         if (name == m.name) return &m;
     return nullptr;

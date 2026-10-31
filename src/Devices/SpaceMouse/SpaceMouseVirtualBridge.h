@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace InputBridge::SpaceMouse {
@@ -29,7 +30,7 @@ constexpr const char *kBridgeNameSuffix = " (Mapped Inputs)";
 // True for names produced by the bridge. Lets DeviceManager tell the bridge's
 // own virtual joysticks apart from real ones, and InputLabelProvider pick the
 // right label tables.
-bool IsBridgeDeviceName(const std::string &name);
+bool IsBridgeDeviceName(std::string_view name);
 
 const char *BridgeAxisName(int axis); // nullptr out of range
 // Label for a button on the bridge joystick called `device_name`.
@@ -56,6 +57,12 @@ public:
     // across USB ports and replugs. nullopt if `id` isn't a bridge joystick.
     std::optional<std::string> GetGuidSuffix(SDL_JoystickID id) const;
 
+    // Battery percent (0-100) last pushed to the bridge joystick `id`, -1 if
+    // the device hasn't reported one (wired models). nullopt if `id` isn't a
+    // bridge joystick. SDL has no battery API for virtual joysticks, so
+    // DeviceManager reads it from here instead of SDL_GetJoystickPowerInfo.
+    std::optional<int> GetBatteryPercent(SDL_JoystickID id) const;
+
 private:
     SpaceMouseVirtualBridge() = default;
 
@@ -65,12 +72,13 @@ private:
         std::string    joystick_name;
         SDL_JoystickID joystick_id = 0;
         SDL_Joystick  *joystick    = nullptr;
+        int            battery_percent = -1;
     };
     std::vector<Entry> m_Entries;
 
-    Entry *Find(const std::string &hid_path);
+    Entry *Find(std::string_view hid_path);
     void   Attach(const SpaceMouseDevice &dev);
-    void   Detach(Entry &entry);
+    void   Detach(const Entry &entry) const;
 };
 
 } // namespace InputBridge::SpaceMouse
