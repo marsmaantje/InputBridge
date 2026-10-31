@@ -360,7 +360,7 @@ void SeedBundledPresets(const std::filesystem::path& dir) {
 // plain JSON definitions (see protocols/definitions/) rather than C++
 // classes, so resolve by their stable ids instead of constructing a
 // class-based default.
-const ProtocolDefinition* ResolveOscFallbackDefinition(const std::string& protocol) {
+const ProtocolDefinition* ResolveOscFallbackDefinition(std::string_view protocol) {
     if (protocol == "SteamLink OSC") return ProtocolRegistry::GetInstance().FindById("steamlink");
     if (protocol == "Project Babble OSC") return ProtocolRegistry::GetInstance().FindById("projectbabble");
     return nullptr;
@@ -420,7 +420,7 @@ void MappingProfileStore::SaveCurrentProfile() {
     SaveProfile(profile);
 }
 
-void MappingProfileStore::LoadConfig(PreferencesManager& prefs) {
+void MappingProfileStore::LoadConfig(const PreferencesManager& prefs) {
     // Null the OutputMapper pointer before LoadProfiles() calls m_Profiles.clear()
     // followed by many push_backs. Any of those reallocations would leave the
     // OutputMapper holding a dangling pointer into the old buffer.
@@ -437,16 +437,23 @@ void MappingProfileStore::LoadConfig(PreferencesManager& prefs) {
     HandleDeviceConnectionChange();
 }
 
-void MappingProfileStore::SaveConfig(PreferencesManager& prefs) const {
-    prefs.SetString("InputMapper", "LastProfile",
+void MappingProfileStore::SaveConfig(const PreferencesManager& prefs) const {
+    // The PreferencesManager setters mutate internal state and are only
+    // exposed as non-const methods; SaveConfig() is intentionally const in
+    // the public API, so cast away the constness at this call site.
+    // This is required by the API contract and cannot be avoided without
+    // widening the public signature.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    auto& writablePrefs = const_cast<PreferencesManager&>(prefs);
+    writablePrefs.SetString("InputMapper", "LastProfile",
         m_SelectedProfileIndex >= 0 && m_SelectedProfileIndex < (int)m_Profiles.size()
             ? m_Profiles[m_SelectedProfileIndex].name : "");
-    prefs.SetInt("InputMapper", "SelectedProtocolView", m_SelectedProtocolView);
+    writablePrefs.SetInt("InputMapper", "SelectedProtocolView", m_SelectedProtocolView);
 }
 
-int MappingProfileStore::CreateProfile(const std::string& name) {
+int MappingProfileStore::CreateProfile(std::string_view name) {
     MappingProfile p;
-    p.name = name;
+    p.name = std::string(name);
     SnapshotServerSettings(p);
     // Null the pointer BEFORE push_back: if the vector reallocates its
     // buffer, SetActiveHapticTargets would otherwise iterate through the old
@@ -521,7 +528,7 @@ void MappingProfileStore::ActivateProfile(int index) {
 }
 
 void MappingProfileStore::HandleDeviceConnectionChange() {
-    std::map<std::string, SDL_JoystickID> guidMap;
+    std::map<std::string, SDL_JoystickID, std::less<>> guidMap;
     for (const auto& d : m_DeviceManager.GetDevices())
         guidMap[DeviceManager::GetDeviceGUIDString(d)] = d.instance_id;
 
@@ -637,7 +644,7 @@ void MappingProfileStore::SnapshotServerSettings(MappingProfile& profile) const 
     profile.oscInputEnabled     = osc.IsInputEnabled();
 
 #ifdef ENABLE_WEBSOCKETS
-    auto& ws = WebSocketServer::GetInstance();
+    const auto& ws = WebSocketServer::GetInstance();
     profile.wsOutputProtocolId = ws.GetOutputDefinitionId();
     profile.wsInputProtocolId  = ws.GetInputDefinitionId();
     profile.wsPort             = ws.GetPort();
@@ -662,7 +669,8 @@ std::vector<::HapticTarget>* MappingProfileStore::GetCurrentHapticTargets() {
 }
 
 const ProtocolDefinition* MappingProfileStore::GetActiveOutputDefinition() const {
-    std::string oscId, wsId;
+    std::string oscId;
+    std::string wsId;
     if (const auto* profile = CurrentProfile()) {
         oscId = profile->oscOutputProtocolId;
         wsId = profile->wsOutputProtocolId;
@@ -677,75 +685,64 @@ const ProtocolDefinition* MappingProfileStore::GetActiveOutputDefinition() const
     return nullptr;
 }
 
-bool MappingProfileStore::IsOutputAddressBound(const std::string& address) const {
-    const auto* profilePtr = CurrentProfile();
-    if (!profilePtr) return false; // No profile, so nothing is bound.
-    const auto& profile = *profilePtr;
+bool MappingProfileStore::IsOutputAddressBound(std::string_view address) const {
+    const auto* profile = CurrentProfile();
+    if (!profile) return false;
 
-    std::string fieldId;
+    const auto findFieldId = [address](const ProtocolDefinition* definition, bool oscPath) {
+        if (!definition) return std::string{};
+        const auto field = std::ranges::find_if(definition->fields,
+            [address, oscPath](const auto& candidate) {
+                return (oscPath ? candidate.oscPath : candidate.wsKey) == address;
+            });
+        return field == definition->fields.end() ? std::string{} : field->fieldId;
+    };
+    const auto& registry = ProtocolRegistry::GetInstance();
+    const auto lookup = [&registry, &findFieldId](const std::string& id, bool oscPath) {
+        return id.empty() ? std::string{} : findFieldId(registry.FindById(id), oscPath);
+    };
 
-    // 1. Check active protocol definitions from the profile
-    const ProtocolDefinition* oscDef = !profile.oscOutputProtocolId.empty()
-        ? ProtocolRegistry::GetInstance().FindById(profile.oscOutputProtocolId) : nullptr;
-    if (oscDef) {
-        for (const auto& field : oscDef->fields)
-            if (field.oscPath == address) { fieldId = field.fieldId; break; }
-    }
-
+    std::string fieldId = lookup(profile->oscOutputProtocolId, true);
+    if (fieldId.empty()) fieldId = lookup(profile->wsOutputProtocolId, false);
     if (fieldId.empty()) {
-        const ProtocolDefinition* wsDef = !profile.wsOutputProtocolId.empty()
-            ? ProtocolRegistry::GetInstance().FindById(profile.wsOutputProtocolId) : nullptr;
-        if (wsDef) {
-            for (const auto& field : wsDef->fields)
-                if (field.wsKey == address) { fieldId = field.fieldId; break; }
-        }
+        static constexpr std::array<std::pair<std::string_view, std::string_view>, 14> legacyFields{{
+            {"/wheel/steer", "Steering"}, {"wheel", "Steering"},
+            {"/wheel/throttle", "Throttle"}, {"throttle", "Throttle"},
+            {"/wheel/brake", "Brake"}, {"brake", "Brake"},
+            {"/wheel/clutch", "Clutch"}, {"clutch", "Clutch"},
+            {"/wheel/handbrake", "Handbrake"}, {"handbrake", "Handbrake"},
+            {"/wheel/pitch", "Pitch"}, {"pitch", "Pitch"},
+            {"/wheel/roll", "Roll"}, {"roll", "Roll"}
+        }};
+        const auto legacy = std::ranges::find_if(legacyFields,
+            [address](const auto& entry) { return entry.first == address; });
+        if (legacy != std::end(legacyFields)) fieldId = legacy->second;
     }
-
-    // 2. If not found, check legacy protocols
-    if (fieldId.empty()) {
-        // This mapping is for legacy protocols that don't use definitions.
-        if (address == "/wheel/steer" || address == "wheel") fieldId = "Steering";
-        else if (address == "/wheel/throttle" || address == "throttle") fieldId = "Throttle";
-        else if (address == "/wheel/brake" || address == "brake") fieldId = "Brake";
-        else if (address == "/wheel/clutch" || address == "clutch") fieldId = "Clutch";
-        else if (address == "/wheel/handbrake" || address == "handbrake") fieldId = "Handbrake";
-        else if (address == "/wheel/pitch" || address == "pitch") fieldId = "Pitch";
-        else if (address == "/wheel/roll" || address == "roll") fieldId = "Roll";
-    }
-
     if (fieldId.empty()) return false;
 
-    // 3. Check if fieldId is bound in the current profile
-    if (profile.outputToInput.count(fieldId)) {
-        const auto& src = profile.outputToInput.at(fieldId);
-        if (src.axisIndex != -1 || src.sensorChannel != InputSource::SensorChannel::None) return true;
-    }
-    for (const auto& mapping : profile.buttonMappings) {
-        if (mapping.target_output_name == fieldId &&
-            (mapping.button_index != -1 || mapping.hat_index != -1 ||
-             mapping.sensor_channel != InputSource::SensorChannel::None))
-            return true;
-    }
-    for (const auto& mapping : profile.digitalMappings) {
-        if (mapping.target_field_id == fieldId &&
-            (mapping.button_index != -1 || mapping.hat_index != -1 ||
-             mapping.sensor_channel != InputSource::SensorChannel::None))
-            return true;
-    }
-    for (const auto& mapping : profile.analogToDigitalMappings) {
-        if (mapping.target_field_id == fieldId &&
-            (mapping.source.axisIndex != -1 || mapping.source.sensorChannel != InputSource::SensorChannel::None))
-            return true;
-    }
-    for (const auto& mix : profile.channelMixes) {
-        if (mix.target_field_id == fieldId && !mix.sources.empty()) {
-            for (const auto& ms : mix.sources)
-                if (ms.source.axisIndex != -1 || ms.source.sensorChannel != InputSource::SensorChannel::None)
-                    return true;
-        }
-    }
+    const auto isSourceBound = [](const InputSource& source) {
+        return source.axisIndex != -1 || source.sensorChannel != InputSource::SensorChannel::None;
+    };
+    const auto hasDigitalInput = [](const auto& mapping) {
+        return mapping.button_index != -1 || mapping.hat_index != -1 ||
+               mapping.sensor_channel != InputSource::SensorChannel::None;
+    };
+    const auto hasTargetMapping = [&fieldId, &hasDigitalInput](const auto& mappings, const auto& targetId) {
+        return std::ranges::any_of(mappings, [&](const auto& mapping) {
+            return targetId(mapping) == fieldId && hasDigitalInput(mapping);
+        });
+    };
 
-    return false;
+    const auto output = profile->outputToInput.find(fieldId);
+    return (output != profile->outputToInput.end() && isSourceBound(output->second)) ||
+        hasTargetMapping(profile->buttonMappings, [](const auto& mapping) -> const auto& { return mapping.target_output_name; }) ||
+        hasTargetMapping(profile->digitalMappings, [](const auto& mapping) -> const auto& { return mapping.target_field_id; }) ||
+        std::ranges::any_of(profile->analogToDigitalMappings,
+            [&](const auto& mapping) { return mapping.target_field_id == fieldId && isSourceBound(mapping.source); }) ||
+        std::ranges::any_of(profile->channelMixes, [&](const auto& mix) {
+            return mix.target_field_id == fieldId && std::ranges::any_of(mix.sources,
+                [&](const auto& source) { return isSourceBound(source.source); });
+        });
 }
 
 } // namespace InputMapping
