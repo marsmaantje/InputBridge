@@ -206,7 +206,17 @@ fi
 migrate_away_from_legacy_filenames
 check_preexisting_wii_rules
 
-install -D -m 0644 -- "${SOURCE_RULES_PATH}" "${DEST_RULES_PATH}"
+if getent group plugdev >/dev/null 2>&1; then
+    install -D -m 0644 -- "${SOURCE_RULES_PATH}" "${DEST_RULES_PATH}"
+else
+    # No 'plugdev' group (Arch/CachyOS/Fedora...): the GROUP="plugdev" fallback
+    # lines can't resolve and only make systemd-udevd log warnings. Access is
+    # granted by the TAG+="uaccess" lines, so install without the fallback.
+    install -d -m 0755 -- "$(dirname -- "${DEST_RULES_PATH}")"
+    grep -v 'GROUP="plugdev"' -- "${SOURCE_RULES_PATH}" > "${DEST_RULES_PATH}"
+    chmod 0644 -- "${DEST_RULES_PATH}"
+    echo "No 'plugdev' group on this system; omitted the plugdev fallback lines (uaccess still applies)."
+fi
 echo "Installed ${DEST_RULES_PATH}"
 
 reload_udev
