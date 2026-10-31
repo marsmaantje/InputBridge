@@ -318,10 +318,16 @@ jobs:
             if: ${{ github.event.inputs.smoke_test == 'yes' }}
             run: |
                 chmod +x InputBridge.AppImage
+                Xvfb :99 -screen 0 1280x720x24 >/tmp/xvfb.log 2>&1 &
+                XVFB_PID=$!
+                export DISPLAY=:99
+                sleep 2
                 set +e
-                APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run --auto-servernum timeout 5s ./InputBridge.AppImage
+                APPIMAGE_EXTRACT_AND_RUN=1 timeout 5s ./InputBridge.AppImage
                 CODE=$?
                 set -e
+                kill "$XVFB_PID" 2>/dev/null || true
+                wait "$XVFB_PID" 2>/dev/null || true
                 echo "Exit code: $CODE"
                 # 124 = timeout (still running) - pass.
                 # 0/1 = clean or handled exit - pass.
@@ -585,6 +591,14 @@ jobs:
               if: runner.os == 'Windows'
               run: echo "C:/Program Files/OpenSSL/bin" >> $env:GITHUB_PATH
 
+            - name: Set up MSVC developer environment (Windows)
+              # Without this, Ninja picks the MinGW gcc that sits first on
+              # PATH on windows-latest, whose <intrin.h>/<cpuid.h> clash
+              # (__cpuid macro vs function). The release build-windows job
+              # already uses MSVC, so tests should too.
+              if: runner.os == 'Windows'
+              uses: ilammy/msvc-dev-cmd@v1
+
             - name: Set up ccache
               uses: hendrikmuhs/ccache-action@v1.2.22
               with:
@@ -624,9 +638,13 @@ jobs:
             - name: Generate Coverage Report
               if: runner.os == 'Linux'
               run: |
-                  lcov --capture --ignore-errors mismatch --rc geninfo_unexecuted_blocks=1 --directory build --output-file coverage.info
-                  lcov --remove coverage.info '/usr/*' '*/tests/*' '*/lib/*' --output-file coverage.info
-                  genhtml coverage.info --output-directory coverage-report
+                  # lcov 2.x is strict about gcov data that GoogleTest macros
+                  # produce (e.g. TestBody() end-line 8 -> 16), so tolerate
+                  # "inconsistent" and "mismatch" instead of failing the job.
+                  IGN="--ignore-errors mismatch,inconsistent,unused"
+                  lcov --capture $IGN --rc geninfo_unexecuted_blocks=1 --directory build --output-file coverage.info
+                  lcov --remove coverage.info '/usr/*' '*/tests/*' '*/lib/*' $IGN --output-file coverage.info
+                  genhtml coverage.info --ignore-errors inconsistent,mismatch,unmapped --output-directory coverage-report
 
             - name: Upload Coverage Report
               if: runner.os == 'Linux'
