@@ -9,7 +9,6 @@
 
 #if defined(__linux__)
 #include <cerrno>
-#include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
 #endif
@@ -22,15 +21,17 @@ constexpr const char *kTag = "SpaceMouseManager";
 std::string WideToUtf8Lossy(const wchar_t *w) {
     std::string out;
     if (!w) return out;
-    for (; *w && out.size() < 128; ++w)
+    while (*w != L'\0' && out.size() < 128) {
         out.push_back(*w < 0x80 ? static_cast<char>(*w) : '?');
+        ++w;
+    }
     return out;
 }
 
 // Paths we've already reported a failed open for, so the periodic rescan
 // doesn't repeat the same warning every few seconds.
-std::set<std::string> &FailedPaths() {
-    static std::set<std::string> s;
+std::set<std::string, std::less<>> &FailedPaths() {
+    static std::set<std::string, std::less<>> s;
     return s;
 }
 
@@ -52,7 +53,7 @@ int ProbeOpenErrno(const char *path) {
 
 SpaceMouseManager::ScanResult SpaceMouseManager::Scan(const std::vector<std::string> &already_open_paths) {
     ScanResult result;
-    std::set<std::string> seen;
+    std::set<std::string, std::less<>> seen;
 #if defined(__linux__)
     bool saw_permission_error = false;
 #endif
@@ -70,10 +71,9 @@ SpaceMouseManager::ScanResult SpaceMouseManager::Scan(const std::vector<std::str
             result.present_paths.push_back(path);
             seen.insert(path);
 
-            if (std::find(already_open_paths.begin(), already_open_paths.end(), path)
-                != already_open_paths.end())
+            if (std::ranges::find(already_open_paths, path) != already_open_paths.end())
                 continue;
-            if (FailedPaths().count(path)) {
+            if (FailedPaths().contains(path)) {
                 // Retry quietly; only the first failure is logged.
                 if (SDL_hid_device *retry = SDL_hid_open_path(path.c_str())) {
                     FailedPaths().erase(path);
@@ -119,18 +119,19 @@ SpaceMouseManager::ScanResult SpaceMouseManager::Scan(const std::vector<std::str
     }
 
     // Forget failures for paths that vanished so a re-plug logs afresh.
-    for (auto it = FailedPaths().begin(); it != FailedPaths().end();)
-        it = seen.count(*it) ? std::next(it) : FailedPaths().erase(it);
+    for (auto it = FailedPaths().begin(); it != FailedPaths().end();) {
+        it = seen.contains(*it) ? std::next(it) : FailedPaths().erase(it);
+    }
 
 #if defined(__linux__)
-    s_had_recent_linux_permission_error.store(saw_permission_error, std::memory_order_relaxed);
+    s_had_recent_linux_permission_error = saw_permission_error;
 #endif
     return result;
 }
 
 #if defined(__linux__)
 bool SpaceMouseManager::HadRecentLinuxPermissionError() {
-    return s_had_recent_linux_permission_error.load(std::memory_order_relaxed);
+    return s_had_recent_linux_permission_error.load(std::memory_order::seq_cst);
 }
 #endif
 

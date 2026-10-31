@@ -11,7 +11,8 @@ namespace InputBridge::SpaceMouse {
 namespace { constexpr const char *kTag = "SpaceMouseVirtualBridge"; }
 
 bool IsBridgeDeviceName(std::string_view name) {
-    const std::string p = kBridgeNamePrefix, s = kBridgeNameSuffix;
+    const std::string p = kBridgeNamePrefix;
+    const std::string s = kBridgeNameSuffix;
     return name.size() > p.size() + s.size() &&
            name.compare(0, p.size(), p) == 0 &&
            name.compare(name.size() - s.size(), s.size(), s) == 0;
@@ -32,7 +33,8 @@ const char *BridgeAxisName(int axis) {
 
 std::string BridgeButtonName(const std::string &device_name, int button) {
     if (IsBridgeDeviceName(device_name)) {
-        const std::string p = kBridgeNamePrefix, s = kBridgeNameSuffix;
+        const std::string p = kBridgeNamePrefix;
+        const std::string s = kBridgeNameSuffix;
         const std::string model = device_name.substr(p.size(), device_name.size() - p.size() - s.size());
         if (const ModelInfo *m = FindModelByName(model)) return ButtonName(*m, button);
     }

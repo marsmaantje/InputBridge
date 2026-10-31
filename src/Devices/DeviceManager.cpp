@@ -19,8 +19,7 @@ DeviceManager &DeviceManager::GetInstance() {
     return instance;
 }
 
-DeviceManager::DeviceManager() {
-}
+DeviceManager::DeviceManager() = default;
 
 DeviceManager::~DeviceManager() { CloseAllDevices(); }
 
@@ -321,7 +320,7 @@ void DeviceManager::ScanWiimotes() {
     // can crash rather than just misbehave on some Bluetooth HID stacks).
     std::vector<std::string> already_open;
     already_open.reserve(m_Wiimotes.size());
-    for (auto &dev : m_Wiimotes) {
+    for (const auto &dev : m_Wiimotes) {
         already_open.push_back(dev->Snapshot().hid_path);
     }
 
@@ -371,7 +370,7 @@ void DeviceManager::ScanSpaceMice() {
 
     std::vector<std::string> already_open;
     already_open.reserve(m_SpaceMice.size());
-    for (auto &dev : m_SpaceMice) {
+    for (const auto &dev : m_SpaceMice) {
         already_open.push_back(dev->Snapshot().hid_path);
     }
 
@@ -440,7 +439,7 @@ void DeviceManager::Update(bool isMinimized) {
         ScanWiimotes();
         m_LastWiimoteScanMs = now;
     }
-    for (auto &dev : m_Wiimotes) {
+    for (const auto &dev : m_Wiimotes) {
         dev->Poll();
     }
 
@@ -462,7 +461,7 @@ void DeviceManager::Update(bool isMinimized) {
         ScanSpaceMice();
         m_LastSpaceMouseScanMs = now;
     }
-    for (auto &dev : m_SpaceMice) {
+    for (const auto &dev : m_SpaceMice) {
         dev->Poll();
     }
     InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().Sync(m_SpaceMice);
@@ -572,7 +571,8 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
         // 0x17 battery reports instead. -1 (wired / not yet reported) leaves
         // the state UNKNOWN so no icon is drawn.
         if (const auto bridgePct =
-                InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().GetBatteryPercent(dev.instance_id)) {
+            InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().GetBatteryPercent(dev.instance_id);
+            bridgePct.has_value()) {
             percent = *bridgePct;
             dev.battery_state = percent >= 0 ? SDL_POWERSTATE_ON_BATTERY : SDL_POWERSTATE_UNKNOWN;
         } else {
@@ -621,12 +621,12 @@ bool DeviceManager::IsHideAvailable() const {
 
 bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
 #ifdef ENABLE_EXCLUSIVE_INPUT
-    SDL_Joystick* joy = dev.joystick
-                         ? dev.joystick
-                         : (dev.gamepad ? SDL_GetGamepadJoystick(dev.gamepad) : nullptr);
+    SDL_Joystick* joy = dev.joystick;
+    if (!joy && dev.gamepad) {
+        joy = SDL_GetGamepadJoystick(dev.gamepad);
+    }
     if (!joy) {
-        LOG_WARN(kTag, "SetDeviceHidden: no joystick handle for '%s'.",
-                dev.name.c_str());
+        LOG_WARN(kTag, "SetDeviceHidden: no joystick handle for '%s'.", dev.name.c_str());
         return false;
     }
 

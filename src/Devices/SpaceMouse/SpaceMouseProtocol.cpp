@@ -1,12 +1,13 @@
 // src/Devices/SpaceMouse/SpaceMouseProtocol.cpp
 #include "SpaceMouseProtocol.h"
 #include <algorithm>
+#include <array>
 #include <string_view>
 
 namespace InputBridge::SpaceMouse {
 
 namespace {
-constexpr ModelInfo kModels[] = {
+constexpr std::array<ModelInfo, 20> kModels{{
     // Logitech-era devices
     {kVendorLogitech, 0xC603, "SpaceMouse Plus XT",            21},
     {kVendorLogitech, 0xC605, "CadMan",                        2},
@@ -29,7 +30,7 @@ constexpr ModelInfo kModels[] = {
     {kVendor3Dconnexion, 0xC635, "SpaceMouse Compact",                2},
     {kVendor3Dconnexion, 0xC636, "SpaceMouse Module",                 32},
     {kVendor3Dconnexion, 0xC652, "Universal Receiver",                32},
-};
+}};
 
 constexpr ModelInfo kGenericModel = {kVendor3Dconnexion, 0, "3D Mouse", kMaxButtons};
 
