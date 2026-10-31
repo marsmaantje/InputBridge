@@ -336,9 +336,15 @@ bool Application::Init()
         return false;
 
     SetupImGui();
+    // Migrate legacy pref files first, then load prefs so the 3Dconnexion
+    // toggle is read from disk. It must be applied BEFORE InitialDeviceScan():
+    // the scan's pre-open filter only hides SDL's duplicate generic joystick
+    // for 3D mice while support is enabled, and previously this was read
+    // before m_prefs.Load() ran, so it always saw the default (true).
+    MigrateUserData();
+    m_prefs.Load();
     DeviceManager::GetInstance().SetSpaceMouseEnabled(m_prefs.GetBool("SpaceMouseSupport", true));
     InitialDeviceScan();
-    MigrateUserData();
     RestorePreferences();
 
     SDL_SetRenderVSync(m_renderer, 1);
