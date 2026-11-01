@@ -6,6 +6,7 @@
 #include "ProtocolFieldUtils.h"
 
 #include "Devices/DeviceManager.h"
+#include "Devices/SpaceMouse/SpaceMouseVirtualBridge.h"
 #include "Network/OSCServer.h"
 #include "Network/WebSocketServer.h"
 #include "Protocols/ProtocolDefinition.h"
@@ -25,6 +26,21 @@ namespace InputMapping {
 namespace {
 
 using SC = InputSource::SensorChannel;
+
+// Axis/button text for the source pickers. Only the 3Dconnexion bridge has
+// real names; every other device keeps the plain numbered label.
+std::string AxisDisplayName(const std::string& deviceName, int axis) {
+    if (InputBridge::SpaceMouse::IsBridgeDeviceName(deviceName))
+        if (const char* n = InputBridge::SpaceMouse::BridgeAxisName(axis))
+            return n;
+    return "Axis " + std::to_string(axis);
+}
+
+std::string ButtonDisplayName(const std::string& deviceName, int button) {
+    if (InputBridge::SpaceMouse::IsBridgeDeviceName(deviceName))
+        return InputBridge::SpaceMouse::BridgeButtonName(deviceName, button);
+    return "Button " + std::to_string(button);
+}
 
 struct SensorEntry {
     SC channel;
@@ -356,7 +372,7 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
     } else if (src.instance_id != 0) {
         for (const auto& d : m_DeviceManager.GetDevices())
             if (d.instance_id == src.instance_id) {
-                preview = d.name + " - Axis " + std::to_string(src.axisIndex);
+                preview = d.name + " - " + AxisDisplayName(d.name, src.axisIndex);
                 break;
             }
     }
@@ -383,7 +399,7 @@ void InputMapperUI::DrawAxisCombo(const std::string& id, InputSource& src, const
         // -- Regular device axes -----------------------------------------
         for (const auto& dev : m_DeviceManager.GetDevices())
             for (int i = 0; i < dev.num_axes; ++i) {
-                std::string lbl = dev.name + " - Axis " + std::to_string(i);
+                std::string lbl = dev.name + " - " + AxisDisplayName(dev.name, i);
                 bool sel = src.sensorChannel == SC::None && src.instance_id == dev.instance_id && src.axisIndex == i;
                 if (ImGui::Selectable(lbl.c_str(), sel)) {
                     src.deviceGuid = DeviceManager::GetDeviceGUIDString(dev);
@@ -521,6 +537,8 @@ void InputMapperUI::DrawButtonInputCombo(const char* comboId, SDL_JoystickID ins
     if (instance_id != 0) {
         if (button_index != -1) {
             preview = "Button " + std::to_string(button_index);
+            for (const auto& d : m_DeviceManager.GetDevices())
+                if (d.instance_id == instance_id) { preview = ButtonDisplayName(d.name, button_index); break; }
         } else if (hat_index && *hat_index != -1 && hat_mask) {
             preview = "Hat " + std::to_string(*hat_index);
             if (*hat_mask & SDL_HAT_UP) preview += " Up";
@@ -551,7 +569,7 @@ void InputMapperUI::DrawButtonInputCombo(const char* comboId, SDL_JoystickID ins
             if (dev && dev->joystick) {
                 for (int i = 0; i < dev->num_buttons; ++i) {
                     bool sel = (button_index == i);
-                    if (ImGui::Selectable(("Button " + std::to_string(i)).c_str(), sel)) {
+                    if (ImGui::Selectable(ButtonDisplayName(dev->name, i).c_str(), sel)) {
                         button_index = i;
                         if (hat_index) *hat_index = -1;
                         if (hat_mask) *hat_mask = 0;
