@@ -3,11 +3,14 @@
 #include "DeviceFactory.h"
 #include "SensorReader.h"
 #include "Devices/Wiimote/WiimoteVirtualBridge.h"
+#include "Devices/SpaceMouse/SpaceMouseVirtualBridge.h"
 #include "SDL3/SDL_joystick.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <iterator>
+#include <utility>
 
 static constexpr const char* kTag = "DeviceManager";
 
@@ -16,8 +19,7 @@ DeviceManager &DeviceManager::GetInstance() {
     return instance;
 }
 
-DeviceManager::DeviceManager() {
-}
+DeviceManager::DeviceManager() = default;
 
 DeviceManager::~DeviceManager() { CloseAllDevices(); }
 
@@ -30,9 +32,12 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
         return "00000000000000000000000000000000";
     }
     SDL_GUID guid = SDL_GetJoystickGUID(joystick);
-    char guidStr[33];
-    SDL_GUIDToString(guid, guidStr, sizeof(guidStr));
-    std::string guidString(guidStr);
+    std::string guidString(33, '\0');
+    SDL_GUIDToString(guid, guidString.data(), static_cast<int>(guidString.size()));
+    const auto terminator = guidString.find('\0');
+    if (terminator != std::string::npos) {
+        guidString.resize(terminator);
+    }
 
     // Every WiimoteVirtualBridge joystick of a given kind (Wii Remote vs
     // Balance Board) is attached with the exact same SDL_VirtualJoystickDesc
@@ -52,6 +57,13 @@ std::string DeviceManager::GetDeviceGUIDString(const DeviceState &dev) {
     if (const std::string* hid_path = InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance()
             .FindHidPathForJoystick(dev.instance_id, &is_balance_board)) {
         guidString += "-" + std::to_string(std::hash<std::string>{}(*hid_path));
+    }
+    // 3Dconnexion bridge joysticks: the SDL GUID already encodes the model
+    // name; only add a suffix when two of the same model are attached.
+    if (auto suffix = InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance()
+                          .GetGuidSuffix(dev.instance_id);
+        suffix && !suffix->empty()) {
+        guidString += "-" + *suffix;
     }
     return guidString;
 }
@@ -117,6 +129,37 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
         ScanWiimotes();
         m_LastWiimoteScanMs = SDL_GetTicks();
         return;
+    }
+
+    // 3Dconnexion 6-DOF devices are read natively (SpaceMouseManager) and
+    // bridged as virtual joysticks, so SDL's own generic joystick entry for
+    // the same hardware would just be a duplicate. Skipped BEFORE opening it,
+    // so this filter itself never touches the device. Our own bridge
+    // joysticks are virtual and must pass through.
+    if (m_SpaceMouseEnabled && !SDL_IsJoystickVirtual(instance_id)) {
+        const char* sm_name = SDL_GetJoystickNameForID(instance_id);
+        const std::string sm_lower = [&] {
+            std::string l = sm_name ? sm_name : "";
+            for (char& c : l) c = (char)SDL_tolower(c);
+            return l;
+        }();
+        const bool sm_vidpid = InputBridge::SpaceMouse::FindKnownModel(vendor, product) != nullptr;
+        const bool sm_name_match =
+            sm_lower.find("3dconnexion")   != std::string::npos ||
+            sm_lower.find("spacenavigator") != std::string::npos ||
+            sm_lower.find("spacemouse")    != std::string::npos ||
+            sm_lower.find("space mouse")   != std::string::npos ||
+            sm_lower.find("spacepilot")    != std::string::npos ||
+            sm_lower.find("spaceexplorer") != std::string::npos ||
+            sm_lower.find("spacetraveler") != std::string::npos ||
+            sm_lower.find("spaceball")     != std::string::npos;
+        if (sm_vidpid || sm_name_match) {
+            LOG_INFO(kTag, "Ignoring SDL joystick %d '%s' (vendor=0x%04x product=0x%04x) - handled by SpaceMouseManager",
+                     instance_id, sm_name ? sm_name : "(null)", vendor, product);
+            ScanSpaceMice();
+            m_LastSpaceMouseScanMs = SDL_GetTicks();
+            return;
+        }
     }
 
     auto result = InputBridge::DeviceFactory::CreateDevice(instance_id);
@@ -199,7 +242,7 @@ void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
         m_HapticDevices.erase(haptic_it);
     }
     
-    auto it = std::remove_if(m_Devices.begin(), m_Devices.end(), [instance_id](const DeviceState &dev) {
+    auto it = std::ranges::remove_if(m_Devices, [instance_id](const DeviceState &dev) {
         if (dev.instance_id == instance_id) {
             if (dev.gamepad)
                 SDL_CloseGamepad(dev.gamepad);
@@ -210,25 +253,17 @@ void DeviceManager::HandleDeviceRemoved(SDL_JoystickID instance_id) {
         return false;
     });
 
-    if (it != m_Devices.end()) {
-        m_Devices.erase(it, m_Devices.end());
+    if (it.begin() != m_Devices.end()) {
+        m_Devices.erase(it.begin(), it.end());
     }
 
-    // If no steering wheels remain, clear the device list.
-    bool anyWheelLeft = false;
-    for (const auto& dev : m_Devices) {
-        if (SDL_GetJoystickTypeForID(dev.instance_id) == SDL_JOYSTICK_TYPE_WHEEL) {
-            anyWheelLeft = true;
-            break;
-        }
-    }
 }
 
 void DeviceManager::CloseAllDevices() {
     // Close haptic devices first (before their joysticks are closed)
-    for (auto& pair : m_HapticDevices) {
-        if (pair.second) {
-            pair.second->Close();
+    for (const auto& [_, hapticDevice] : m_HapticDevices) {
+        if (hapticDevice) {
+            hapticDevice->Close();
         }
     }
     m_HapticDevices.clear();
@@ -245,6 +280,8 @@ void DeviceManager::CloseAllDevices() {
 
     // Release Wiimotes (each destructor closes its HID handle)
     m_Wiimotes.clear();
+    // Release 3D mice (each destructor closes its shared, read-only handle)
+    m_SpaceMice.clear();
 
     // Now close SDL devices
     for (auto &dev : m_Devices) {
@@ -267,13 +304,13 @@ void DeviceManager::ScanWiimotes() {
     // out of Scan() by its own stale ghost entry until the next cycle.
     constexpr Uint64 kStaleTimeoutMs = 5000;
     const Uint64 now = SDL_GetTicks();
-    auto stale_it = std::remove_if(m_Wiimotes.begin(), m_Wiimotes.end(), [&](const auto &dev) {
+    auto stale_it = std::ranges::remove_if(m_Wiimotes, [&](const auto &dev) {
         const auto &snap = dev->Snapshot();
         return snap.last_report_ms != 0 && (now - snap.last_report_ms) > kStaleTimeoutMs;
     });
-    if (stale_it != m_Wiimotes.end()) {
-        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(stale_it, m_Wiimotes.end()));
-        m_Wiimotes.erase(stale_it, m_Wiimotes.end());
+    if (stale_it.begin() != stale_it.end()) {
+        LOG_INFO(kTag, "Wiimote(s) went stale, removing %td", std::distance(stale_it.begin(), stale_it.end()));
+        m_Wiimotes.erase(stale_it.begin(), stale_it.end());
     }
 
     // Tell Scan() which HID paths we already have open, so it never opens a
@@ -283,7 +320,9 @@ void DeviceManager::ScanWiimotes() {
     // can crash rather than just misbehave on some Bluetooth HID stacks).
     std::vector<std::string> already_open;
     already_open.reserve(m_Wiimotes.size());
-    for (auto &dev : m_Wiimotes) already_open.push_back(dev->Snapshot().hid_path);
+    for (const auto &dev : m_Wiimotes) {
+        already_open.push_back(dev->Snapshot().hid_path);
+    }
 
     auto found = InputBridge::Wiimote::WiimoteManager::Scan(already_open);
     for (auto &dev : found) {
@@ -307,6 +346,68 @@ InputBridge::Wiimote::WiimoteDevice* DeviceManager::GetWiimoteForBridgeJoystick(
         if (dev->Snapshot().hid_path == *hid_path) return dev.get();
     }
     return nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// 3Dconnexion 6-DOF devices
+// ---------------------------------------------------------------------------
+
+void DeviceManager::ScanSpaceMice() {
+    if (!m_SpaceMouseEnabled) return;
+
+    // Drop devices whose read already failed BEFORE scanning: their handle is
+    // closed, and leaving their path in `already_open` would stop Scan() from
+    // reopening a quickly re-plugged device until the following scan.
+    // Unlike a Bluetooth Wiimote, an idle 3D mouse sends NO reports, so report
+    // staleness must never be used as a disconnect signal here.
+    auto dead = std::ranges::remove_if(m_SpaceMice, [](const auto &dev) {
+        return !dev->Snapshot().connected;
+    });
+    if (dead.begin() != dead.end()) {
+        LOG_INFO(kTag, "3D mouse(s) disconnected: %td", std::distance(dead.begin(), dead.end()));
+        m_SpaceMice.erase(dead.begin(), dead.end());
+    }
+
+    std::vector<std::string> already_open;
+    already_open.reserve(m_SpaceMice.size());
+    for (const auto &dev : m_SpaceMice) {
+        already_open.push_back(dev->Snapshot().hid_path);
+    }
+
+    auto result = InputBridge::SpaceMouse::SpaceMouseManager::Scan(already_open);
+
+    // Prune devices that are no longer enumerated (unplugged but never
+    // produced a read error).
+    auto gone = std::ranges::remove_if(m_SpaceMice, [&](const auto &dev) {
+        return std::ranges::find(result.present_paths, dev->Snapshot().hid_path) ==
+               result.present_paths.end();
+    });
+    if (gone.begin() != gone.end()) {
+        LOG_INFO(kTag, "3D mouse(s) removed: %td", std::distance(gone.begin(), gone.end()));
+        m_SpaceMice.erase(gone.begin(), gone.end());
+    }
+    for (auto &dev : result.opened) {
+        LOG_INFO(kTag, "3D mouse found: %s (%s)", dev->Snapshot().model.name,
+                 dev->Snapshot().hid_path.c_str());
+        m_SpaceMice.push_back(std::move(dev));
+    }
+}
+
+const std::vector<std::unique_ptr<InputBridge::SpaceMouse::SpaceMouseDevice>>&
+DeviceManager::GetSpaceMice() const {
+    return m_SpaceMice;
+}
+
+void DeviceManager::SetSpaceMouseEnabled(bool enabled) {
+    if (m_SpaceMouseEnabled == enabled) return;
+    m_SpaceMouseEnabled = enabled;
+    if (!enabled) {
+        // Release every handle; the next Update() detaches the bridge joysticks.
+        m_SpaceMice.clear();
+        LOG_INFO(kTag, "3Dconnexion support disabled - released all 3D mouse handles");
+    } else {
+        m_LastSpaceMouseScanMs = 0; // scan on the next Update()
+    }
 }
 
 void DeviceManager::Update(bool isMinimized) {
@@ -338,7 +439,7 @@ void DeviceManager::Update(bool isMinimized) {
         ScanWiimotes();
         m_LastWiimoteScanMs = now;
     }
-    for (auto &dev : m_Wiimotes) {
+    for (const auto &dev : m_Wiimotes) {
         dev->Poll();
     }
 
@@ -351,6 +452,21 @@ void DeviceManager::Update(bool isMinimized) {
     InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().Sync(m_Wiimotes);
     InputBridge::Wiimote::WiimoteVirtualBridge::GetInstance().PushAllStates(m_Wiimotes);
     // -- End Wiimote polling ----------------------------------------------
+
+    // -- 3Dconnexion polling ----------------------------------------------
+    // Passive reads only. Sync()/PushAllStates() run even when disabled so
+    // that turning the feature off detaches the bridge joysticks.
+    if (m_SpaceMouseEnabled &&
+        (m_LastSpaceMouseScanMs == 0 || now - m_LastSpaceMouseScanMs > kSpaceMouseScanIntervalMs)) {
+        ScanSpaceMice();
+        m_LastSpaceMouseScanMs = now;
+    }
+    for (const auto &dev : m_SpaceMice) {
+        dev->Poll();
+    }
+    InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().Sync(m_SpaceMice);
+    InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().PushAllStates(m_SpaceMice);
+    // -- End 3Dconnexion polling ------------------------------------------
 }
 
 HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
@@ -450,7 +566,18 @@ void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
         // -- End Left Joy-Con battery --------------------------------------
     } else if (dev.joystick) {
         int percent = 0;
-        dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
+        // 3Dconnexion bridge joysticks are virtual, so SDL can't report a
+        // battery for them; use the level decoded from the device's own
+        // 0x17 battery reports instead. -1 (wired / not yet reported) leaves
+        // the state UNKNOWN so no icon is drawn.
+        if (const auto bridgePct =
+            InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().GetBatteryPercent(dev.instance_id);
+            bridgePct.has_value()) {
+            percent = *bridgePct;
+            dev.battery_state = percent >= 0 ? SDL_POWERSTATE_ON_BATTERY : SDL_POWERSTATE_UNKNOWN;
+        } else {
+            dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
+        }
         dev.battery_percent = percent;
 
         bool state_changed   = (old_state != dev.battery_state);
@@ -494,12 +621,12 @@ bool DeviceManager::IsHideAvailable() const {
 
 bool DeviceManager::SetDeviceHidden(DeviceState& dev, bool hidden) {
 #ifdef ENABLE_EXCLUSIVE_INPUT
-    SDL_Joystick* joy = dev.joystick
-                         ? dev.joystick
-                         : (dev.gamepad ? SDL_GetGamepadJoystick(dev.gamepad) : nullptr);
+    SDL_Joystick* joy = dev.joystick;
+    if (!joy && dev.gamepad) {
+        joy = SDL_GetGamepadJoystick(dev.gamepad);
+    }
     if (!joy) {
-        LOG_WARN(kTag, "SetDeviceHidden: no joystick handle for '%s'.",
-                dev.name.c_str());
+        LOG_WARN(kTag, "SetDeviceHidden: no joystick handle for '%s'.", dev.name.c_str());
         return false;
     }
 

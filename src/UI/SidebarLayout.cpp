@@ -18,6 +18,7 @@
 #if defined(__linux__)
 #include "Devices/Wiimote/WiimoteManager.h"
 #include "Devices/Wiimote/Linux/LinuxUdevInstaller.h"
+#include "Devices/SpaceMouse/SpaceMouseManager.h"
 #include <chrono>
 #include <future>
 #endif
@@ -54,6 +55,8 @@ namespace {
 struct UdevInstallUiState {
     std::future<InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome> pending;
     bool has_result = false;
+    bool dismissed  = false;   // user closed the success note
+    double done_time = 0.0;    // ImGui time the last run finished
     InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome last_result;
 
     bool IsRunning() const {
@@ -66,67 +69,82 @@ struct UdevInstallUiState {
         if (pending.valid() && pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             last_result = pending.get();
             has_result = true;
+            dismissed = false;
+            done_time = ImGui::GetTime();
         }
     }
 };
-UdevInstallUiState s_UdevInstallUi;
+UdevInstallUiState s_UdevInstallUi;     // Wii rule
+UdevInstallUiState s_UdevInstall3DxUi;  // 3Dconnexion rule
 } // namespace
 
-// Panel-wide (not per-device) banner offering to fix the udev rule when
-// the most recent WiimoteManager::Scan() hit EACCES opening a hidraw
-// node - see WiimoteManager.h's HadRecentLinuxPermissionError() doc
-// comment for why this only reflects the latest scan.
-static void DrawLinuxUdevPermissionBanner() {
+// Panel-wide (not per-device) banner offering to fix a udev rule when the
+// most recent scan hit EACCES opening a hidraw node. Shared by the Wii and
+// 3Dconnexion paths: each has its own state, flag, headline and installer
+// entry point, since they install different rule files. See
+// WiimoteManager.h's HadRecentLinuxPermissionError() doc comment for why
+// the flags only reflect the latest scan.
+struct UdevBannerSpec {
+    const char *child_id;
+    const char *headline;
+    const char *detail;
+    const char *manual_cmd;
+    const char *done_fallback;
+    bool        needed;
+    InputBridge::Wiimote::LinuxUdevInstaller::RunOutcome (*install)();
+};
+
+static void DrawUdevBanner(UdevInstallUiState &state, const UdevBannerSpec &spec) {
     using InputBridge::Wiimote::LinuxUdevInstaller;
-    using InputBridge::Wiimote::WiimoteManager;
 
-    s_UdevInstallUi.Poll();
+    state.Poll();
 
-    // Once installed successfully, stop nagging even if the device hasn't
-    // been replugged yet this session - the flag itself will clear on its
-    // own the next time a scan actually succeeds in opening the device.
-    if (s_UdevInstallUi.has_result &&
-        s_UdevInstallUi.last_result.result == LinuxUdevInstaller::Result::Success &&
-        !s_UdevInstallUi.IsRunning()) {
+    // After a successful install, show the script's "next steps" note until
+    // it has served its purpose: hidden once the user dismisses it, or once
+    // the permission problem is gone (spec.needed false = the next scan
+    // opened the device) a few seconds after the install finished. While the
+    // problem persists (e.g. a plugdev change that needs a re-login) it stays,
+    // so the instructions aren't lost.
+    constexpr double kSuccessNoteMinSeconds = 3.0;
+    if (state.has_result &&
+        state.last_result.result == LinuxUdevInstaller::Result::Success &&
+        !state.IsRunning()) {
+        if (state.dismissed ||
+            (!spec.needed && ImGui::GetTime() - state.done_time > kSuccessNoteMinSeconds))
+            return;
+        ImGui::PushID(spec.child_id);
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), ICON_FA_CHECK " Permissions installed.");
-        // Show the script's own "Next steps" block (unplug/replug, log out
-        // if it added the user to plugdev, relaunch) rather than a
-        // hardcoded summary - those steps only exist in the script's
-        // stdout, so if the UI doesn't surface it here the user never
-        // sees them (they'd otherwise only end up wherever the process's
-        // stdout happens to go, not in the app itself).
-        if (!s_UdevInstallUi.last_result.stdout_tail.empty()) {
-            ImGui::TextWrapped("%s", s_UdevInstallUi.last_result.stdout_tail.c_str());
-        } else {
-            // Fallback for an older/customized script that prints nothing
-            // to stdout - still give the user something actionable.
-            ImGui::TextWrapped("Unplug and replug the Wiimote/Balance Board (or its "
-                                "Bluetooth dongle) to finish.");
-        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Dismiss"))
+            state.dismissed = true;
+        ImGui::PopID();
+        // Show the script's own "Next steps" block - those steps only exist
+        // in its stdout, so the UI must surface them.
+        if (!state.last_result.stdout_tail.empty())
+            ImGui::TextWrapped("%s", state.last_result.stdout_tail.c_str());
+        else
+            ImGui::TextWrapped("%s", spec.done_fallback);
         return;
     }
 
-    if (!WiimoteManager::HadRecentLinuxPermissionError() && !s_UdevInstallUi.IsRunning())
+    if (!spec.needed && !state.IsRunning())
         return;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.35f, 0.25f, 0.05f, 0.35f));
-    ImGui::BeginChild("##udev_permission_banner", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY,
+    ImGui::BeginChild(spec.child_id, ImVec2(0, 0), ImGuiChildFlags_AutoResizeY,
                        ImGuiWindowFlags_NoScrollbar);
-    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
-                        "! A Wiimote or Balance Board was found but couldn't be opened "
-                        "(permission denied).");
-    ImGui::TextWrapped("This is common when connecting through a USB Bluetooth dongle: "
-                        "the device needs a one-time permission rule installed.");
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s", spec.headline);
+    ImGui::TextWrapped("%s", spec.detail);
 
-    if (s_UdevInstallUi.IsRunning()) {
+    if (state.IsRunning()) {
         ImGui::TextDisabled("Waiting for authentication...");
     } else {
         const bool pkexec_available = LinuxUdevInstaller::IsPkexecAvailable();
         ImGui::BeginDisabled(!pkexec_available);
         if (ImGui::Button("Fix permissions...")) {
-            s_UdevInstallUi.has_result = false;
-            s_UdevInstallUi.pending = std::async(std::launch::async,
-                                                  &LinuxUdevInstaller::InstallRules);
+            state.has_result = false;
+            state.dismissed = false;
+            state.pending = std::async(std::launch::async, spec.install);
         }
         ImGui::EndDisabled();
         if (!pkexec_available) {
@@ -135,26 +153,54 @@ static void DrawLinuxUdevPermissionBanner() {
         }
 
         ImGui::SameLine();
-        ImGui::TextDisabled("or run: sudo ./packaging/linux/install-udev-rules.sh");
+        ImGui::TextDisabled("or run: %s", spec.manual_cmd);
 
-        if (s_UdevInstallUi.has_result &&
-            s_UdevInstallUi.last_result.result != LinuxUdevInstaller::Result::Success) {
+        if (state.has_result &&
+            state.last_result.result != LinuxUdevInstaller::Result::Success) {
             using Result = LinuxUdevInstaller::Result;
             const char *why =
-                s_UdevInstallUi.last_result.result == Result::UserCancelled  ? "Authentication was cancelled." :
-                s_UdevInstallUi.last_result.result == Result::ScriptNotFound ? "install-udev-rules.sh wasn't found "
-                                                                                "next to the InputBridge binary." :
-                s_UdevInstallUi.last_result.result == Result::PkexecNotFound ? "pkexec isn't available on this system." :
-                                                                                "The installer script failed.";
+                state.last_result.result == Result::UserCancelled  ? "Authentication was cancelled." :
+                state.last_result.result == Result::ScriptNotFound ? "install-udev-rules.sh wasn't found "
+                                                                      "next to the InputBridge binary." :
+                state.last_result.result == Result::PkexecNotFound ? "pkexec isn't available on this system." :
+                                                                      "The installer script failed.";
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", why);
-            if (!s_UdevInstallUi.last_result.stderr_tail.empty() &&
-                s_UdevInstallUi.last_result.result == Result::Failed) {
-                ImGui::TextWrapped("%s", s_UdevInstallUi.last_result.stderr_tail.c_str());
+            if (!state.last_result.stderr_tail.empty() &&
+                state.last_result.result == Result::Failed) {
+                ImGui::TextWrapped("%s", state.last_result.stderr_tail.c_str());
             }
         }
     }
     ImGui::EndChild();
     ImGui::PopStyleColor();
+}
+
+static void DrawLinuxUdevPermissionBanner() {
+    using InputBridge::Wiimote::LinuxUdevInstaller;
+    using InputBridge::Wiimote::WiimoteManager;
+    using InputBridge::SpaceMouse::SpaceMouseManager;
+
+    DrawUdevBanner(s_UdevInstallUi, UdevBannerSpec{
+        "##udev_permission_banner",
+        "! A Wiimote or Balance Board was found but couldn't be opened (permission denied).",
+        "This is common when connecting through a USB Bluetooth dongle: "
+        "the device needs a one-time permission rule installed.",
+        "sudo ./packaging/linux/install-udev-rules.sh",
+        "Unplug and replug the Wiimote/Balance Board (or its Bluetooth dongle) to finish.",
+        WiimoteManager::HadRecentLinuxPermissionError(),
+        &LinuxUdevInstaller::InstallRules});
+
+    DrawUdevBanner(s_UdevInstall3DxUi, UdevBannerSpec{
+        "##udev_permission_banner_3dx",
+        "! A 3Dconnexion device (SpaceMouse/SpaceNavigator) was found but couldn't be opened "
+        "(permission denied).",
+        "It needs a one-time read-permission rule. The rule only grants access; it does not "
+        "affect 3DxWare or spacenavd, which keep working alongside InputBridge.",
+        "sudo ./packaging/linux/install-udev-rules.sh --3dconnexion",
+        "InputBridge will pick the device up automatically; replug it if it doesn't appear "
+        "within a few seconds.",
+        SpaceMouseManager::HadRecentLinuxPermissionError(),
+        &LinuxUdevInstaller::InstallRules3Dconnexion});
 }
 #endif // __linux__
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(InputBridge VERSION 0.12.0)
+project(InputBridge VERSION 0.13.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -272,6 +272,13 @@ add_executable(InputBridge
     # in Settings > Linux Permissions - same #ifdef __linux__-wrapped
     # empty-translation-unit convention as the files above.
     src/Devices/Wiimote/Linux/WiimoteLinuxDiagnostics.cpp
+    # 3Dconnexion 6-DOF devices (SpaceNavigator / SpaceMouse): passive,
+    # read-only HID reader bridged into virtual joysticks - see
+    # src/Devices/SpaceMouse/README.md
+    src/Devices/SpaceMouse/SpaceMouseProtocol.cpp
+    src/Devices/SpaceMouse/SpaceMouseDevice.cpp
+    src/Devices/SpaceMouse/SpaceMouseManager.cpp
+    src/Devices/SpaceMouse/SpaceMouseVirtualBridge.cpp
     # Haptic and force feedback
     src/Haptics/HapticDevice.cpp
     src/Haptics/GamepadHaptics.cpp
@@ -615,6 +622,7 @@ if(UNIX AND NOT APPLE)
     # share/inputbridge/udev so packagers/users can apply it explicitly:
     #   sudo <prefix>/share/inputbridge/udev/install-udev-rules.sh
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-wiimote.rules"
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-3dconnexion.rules"
         DESTINATION share/inputbridge/udev)
     install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
         DESTINATION share/inputbridge/udev)
@@ -628,8 +636,13 @@ if(UNIX AND NOT APPLE)
         "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-wiimote.rules"
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/udev/71-inputbridge-3dconnexion.rules"
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/install-udev-rules.sh"
         "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev/"
+        # copy_if_different drops the exec bit; restore it so the in-app
+        # "Fix permissions" button can run the script directly (it falls back
+        # to /bin/bash otherwise, but logs a note about it).
+        COMMAND chmod +x "$<TARGET_FILE_DIR:InputBridge>/share/inputbridge/udev/install-udev-rules.sh"
         COMMENT "Copying udev installer assets to build output directory"
     )
 endif()

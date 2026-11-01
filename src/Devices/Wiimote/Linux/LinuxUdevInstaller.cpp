@@ -30,6 +30,9 @@ constexpr const char *kScriptRelativeToBinDir = "share/inputbridge/udev/install-
 // script (see StageScriptForHostSpawn below), not the full install
 // destination.
 constexpr const char *kUdevRulesFilename = "71-inputbridge-wiimote.rules";
+// Optional second rules file, staged too when present so the flatpak path
+// can run the script with --3dconnexion.
+constexpr const char *kUdevRules3DxFilename = "71-inputbridge-3dconnexion.rules";
 
 bool FileExists(const std::string &path) {
     return ::access(path.c_str(), F_OK) == 0;
@@ -105,6 +108,13 @@ std::string StageScriptForHostSpawn(const std::string &sandboxed_script_path) {
     }
     ::chmod(staged_script_path.c_str(), 0700);
     ::chmod(staged_rules_path.c_str(), 0644);
+
+    // Best effort: an older package without the 3Dconnexion rule must not
+    // break the Wii path.
+    const std::string sandboxed_3dx = sandboxed_dir + "/" + kUdevRules3DxFilename;
+    const std::string staged_3dx    = stage_dir + "/" + kUdevRules3DxFilename;
+    if (FileExists(sandboxed_3dx) && CopyFile(sandboxed_3dx, staged_3dx))
+        ::chmod(staged_3dx.c_str(), 0644);
 
     return staged_script_path;
 }
@@ -231,11 +241,13 @@ LinuxUdevInstaller::RunOutcome SpawnAndWait(const std::vector<std::string> &argv
         outcome.result = LinuxUdevInstaller::Result::Failed;
     } else if (outcome.exit_code == 0) {
         outcome.result = LinuxUdevInstaller::Result::Success;
-    } else if (outcome.exit_code == 126 || outcome.exit_code == 127) {
-        // pkexec's own documented exit codes: 126 = auth dialog dismissed/
-        // declined, 127 = the requested command itself couldn't be run.
-        // We only distinguish "the user said no" here since that's the
-        // one the UI should word differently from a generic failure.
+    } else if (outcome.exit_code == 126) {
+        // pkexec: 126 = auth dialog dismissed. Only this is "the user said
+        // no". 127 (not authorized / the command couldn't be executed, e.g.
+        // missing exec bit or a CRLF shebang) used to be folded in here too,
+        // which showed "Authentication was cancelled" after a successful
+        // password entry; it is now a plain Failed so pkexec's own message
+        // (stderr_tail) reaches the UI.
         outcome.result = LinuxUdevInstaller::Result::UserCancelled;
     } else {
         outcome.result = LinuxUdevInstaller::Result::Failed;
@@ -294,7 +306,7 @@ std::string LinuxUdevInstaller::ResolveScriptPath() {
 }
 
 LinuxUdevInstaller::RunOutcome LinuxUdevInstaller::RunScript(const std::string &script_path,
-                                                              const char *arg) {
+                                                              const std::vector<std::string> &args) {
     RunOutcome outcome;
     outcome.script_path = script_path;
 
@@ -321,10 +333,16 @@ LinuxUdevInstaller::RunOutcome LinuxUdevInstaller::RunScript(const std::string &
             return outcome;
         }
         argv = {"flatpak-spawn", "--host", "pkexec", staged_script_path};
-    } else {
+    } else if (::access(script_path.c_str(), X_OK) == 0) {
         argv = {"pkexec", script_path};
+    } else {
+        // Zip/Windows checkouts drop the exec bit; pkexec would then fail
+        // with 127 after the user already authenticated. Run it through
+        // bash explicitly instead.
+        LOG_INFO(kTag, "'%s' is not executable - running it via /bin/bash", script_path.c_str());
+        argv = {"pkexec", "/bin/bash", script_path};
     }
-    if (arg) argv.emplace_back(arg);
+    for (const auto &a : args) argv.push_back(a);
 
     outcome = SpawnAndWait(argv);
     outcome.script_path = script_path;
@@ -335,14 +353,28 @@ LinuxUdevInstaller::RunOutcome LinuxUdevInstaller::InstallRules() {
     const std::string script_path = ResolveScriptPath();
     LOG_INFO(kTag, "Requesting elevated privileges via pkexec to install the Wiimote/"
               "Balance Board udev rule from '%s'", script_path.c_str());
-    return RunScript(script_path, nullptr);
+    return RunScript(script_path, {});
 }
 
 LinuxUdevInstaller::RunOutcome LinuxUdevInstaller::UninstallRules() {
     const std::string script_path = ResolveScriptPath();
     LOG_INFO(kTag, "Requesting elevated privileges via pkexec to remove the Wiimote/"
               "Balance Board udev rule from '%s'", script_path.c_str());
-    return RunScript(script_path, "--uninstall");
+    return RunScript(script_path, {"--uninstall"});
+}
+
+LinuxUdevInstaller::RunOutcome LinuxUdevInstaller::InstallRules3Dconnexion() {
+    const std::string script_path = ResolveScriptPath();
+    LOG_INFO(kTag, "Requesting elevated privileges via pkexec to install the 3Dconnexion "
+              "udev rule from '%s'", script_path.c_str());
+    return RunScript(script_path, {"--3dconnexion"});
+}
+
+LinuxUdevInstaller::RunOutcome LinuxUdevInstaller::UninstallRules3Dconnexion() {
+    const std::string script_path = ResolveScriptPath();
+    LOG_INFO(kTag, "Requesting elevated privileges via pkexec to remove the 3Dconnexion "
+              "udev rule from '%s'", script_path.c_str());
+    return RunScript(script_path, {"--3dconnexion", "--uninstall"});
 }
 
 } // namespace InputBridge::Wiimote

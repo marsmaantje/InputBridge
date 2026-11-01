@@ -26,13 +26,13 @@ class MappingProfileStore {
     void SaveProfile(const MappingProfile& profile) const;
     void SaveCurrentProfile();
 
-    void LoadConfig(PreferencesManager& prefs);
-    void SaveConfig(PreferencesManager& prefs) const;
+    void LoadConfig(const PreferencesManager& prefs);
+    void SaveConfig(const PreferencesManager& prefs) const;
 
     // -- Profile lifecycle ------------------------------------------------
     // Creates a new profile named `name`, snapshots current server settings
     // into it, persists it, and activates it. Returns its index.
-    int CreateProfile(const std::string& name);
+    int CreateProfile(std::string_view name);
     // Renames the given profile on disk and in memory. No-op if newName is
     // empty, unchanged, or index is out of range.
     bool RenameProfile(int index, const std::string& newName);
@@ -87,7 +87,7 @@ class MappingProfileStore {
 
     // True if `address` (an OSC path or WebSocket key) is bound to a device
     // input anywhere in the active profile.
-    bool IsOutputAddressBound(const std::string& address) const;
+    bool IsOutputAddressBound(std::string_view address) const;
 
   private:
     const DeviceManager& m_DeviceManager;

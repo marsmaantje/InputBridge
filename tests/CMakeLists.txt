@@ -195,3 +195,14 @@ add_executable(test_classic_dpad_button_skip
 target_include_directories(test_classic_dpad_button_skip PRIVATE ${IB_SRC})
 target_link_libraries(test_classic_dpad_button_skip PRIVATE GTest::gtest_main SDL3::SDL3)
 gtest_discover_tests(test_classic_dpad_button_skip)
+# 15. test_spacemouse_protocol ──────────────────────────────────────────────────
+# Tests the pure report decoder and device-identification logic in
+# Devices/SpaceMouse/SpaceMouseProtocol.* (3Dconnexion 6-DOF devices). No SDL
+# or HID I/O involved.
+add_executable(test_spacemouse_protocol
+    test_spacemouse_protocol.cpp
+    ${IB_SRC}/Devices/SpaceMouse/SpaceMouseProtocol.cpp
+)
+target_include_directories(test_spacemouse_protocol PRIVATE ${IB_SRC})
+target_link_libraries(test_spacemouse_protocol PRIVATE GTest::gtest_main)
+gtest_discover_tests(test_spacemouse_protocol)

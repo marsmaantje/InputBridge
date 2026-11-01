@@ -1,7 +1,8 @@
-#include "InputLabelProvider.h"
+#include "UI/InputLabelProvider.h"
 
 #include "Devices/DeviceState.h"
 #include "Devices/Wiimote/WiimoteVirtualBridge.h"
+#include "Devices/SpaceMouse/SpaceMouseVirtualBridge.h"
 #include "SDL3/SDL_gamepad.h"
 #include "UI/DeviceIconProvider.h"
 #include "UI/KenneyIcons.h"
@@ -14,7 +15,7 @@
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-namespace {
+namespace InputLabelProviderDetail {
 
 // Identifies which Kenney font family the device uses so per-input codepoints
 // can be chosen from the same sheet.  SteamControllerV2 is split out from
@@ -22,6 +23,7 @@ namespace {
 // for ones with no equivalent glyph in the Steam Controller font - those are
 // resolved from the Steam Deck font instead (see AxisInfoFor/ButtonInfoFor).
 enum class FontFamily { Xbox, PlayStation, Switch, SteamDeck, SteamController, SteamControllerV2, Wii, Generic, Unknown };
+using enum FontFamily;
 
 FontFamily GetFontFamily(const DeviceState& dev)
 {
@@ -32,27 +34,27 @@ FontFamily GetFontFamily(const DeviceState& dev)
     // fall into the "Unknown" bucket below with no per-input icons at all.
     if (dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName ||
         dev.name == InputBridge::Wiimote::kBalanceBoardBridgeDeviceName)
-        return FontFamily::Wii;
+        return Wii;
 
     std::string lower = dev.name;
     for (char& c : lower) c = (char)SDL_tolower(c);
 
     if (lower.find("xbox")        != std::string::npos ||
-        lower.find("xinput")      != std::string::npos) return FontFamily::Xbox;
+        lower.find("xinput")      != std::string::npos) return Xbox;
 
     if (lower.find("dualsense")   != std::string::npos ||
         lower.find("dualshock")   != std::string::npos ||
         lower.find("playstation") != std::string::npos ||
         lower.find("ps3")         != std::string::npos ||
         lower.find("ps4")         != std::string::npos ||
-        lower.find("ps5")         != std::string::npos) return FontFamily::PlayStation;
+        lower.find("ps5")         != std::string::npos) return PlayStation;
 
     if (lower.find("switch")      != std::string::npos ||
         lower.find("joy-con")     != std::string::npos ||
-        lower.find("joycon")      != std::string::npos) return FontFamily::Switch;
+        lower.find("joycon")      != std::string::npos) return Switch;
 
     if (lower.find("steam deck")  != std::string::npos ||
-        lower.find("steamdeck")   != std::string::npos) return FontFamily::SteamDeck;
+        lower.find("steamdeck")   != std::string::npos) return SteamDeck;
 
     if (lower.find("steam controller") != std::string::npos ||
         lower.find("steam ctrl")       != std::string::npos)
@@ -60,11 +62,11 @@ FontFamily GetFontFamily(const DeviceState& dev)
         // "steam controller v2" → canonical name set by DeviceFactory for V2
         // (HEADCRAB) hardware - same check DeviceIconProvider.cpp uses for
         // the device-header icon.
-        if (lower.find("v2") != std::string::npos) return FontFamily::SteamControllerV2;
-        return FontFamily::SteamController;
+        if (lower.find("v2") != std::string::npos) return SteamControllerV2;
+        return SteamController;
     }
 
-    return FontFamily::Unknown;
+    return Unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +79,7 @@ FontFamily GetFontFamily(const DeviceState& dev)
 // the generic catch-all below never gets rendered with the wrong font (the
 // Kenney fonts share overlapping codepoints, so doing that draws whatever
 // unrelated glyph happens to live at that slot in the device's own font).
-struct AxisInfo { const char* name; ImWchar cp; FontFamily fam = FontFamily::Unknown; };
+struct AxisInfo { const char* name; ImWchar cp; FontFamily fam = Unknown; };
 
 AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
 {
@@ -86,7 +88,7 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
 
     switch (fam)
     {
-    case FontFamily::Xbox:
+    case Xbox:
         switch (ga) {
         case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE051); // xbox_stick_l_horizontal
         case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE056); // xbox_stick_l_vertical
@@ -98,7 +100,7 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
         }
         break;
 
-    case FontFamily::PlayStation:
+    case PlayStation:
         switch (ga) {
         case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE066); // playstation_stick_l_horizontal
         case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE06B); // playstation_stick_l_vertical
@@ -110,7 +112,7 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
         }
         break;
 
-    case FontFamily::Switch:
+    case Switch:
         switch (ga) {
         case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE05C); // switch_stick_l_horizontal
         case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE061); // switch_stick_l_vertical
@@ -122,7 +124,7 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
         }
         break;
 
-    case FontFamily::SteamDeck:
+    case SteamDeck:
         switch (ga) {
         case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE032); // steamdeck_stick_l_horizontal
         case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE037); // steamdeck_stick_l_vertical
@@ -134,25 +136,25 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
         }
         break;
 
-    case FontFamily::SteamControllerV2:
+    case SteamControllerV2:
         // V2 (HEADCRAB) replaced the trackpad-as-stick compatibility mapping
         // with a real right stick, and both sticks now use the Steam Deck
         // font's stick icons rather than the original Steam Controller font's.
         switch (ga) {
-        case SDL_GAMEPAD_AXIS_LEFTX:  return { "Left Stick X",  0xE032, FontFamily::SteamDeck }; // steamdeck_stick_l_horizontal
-        case SDL_GAMEPAD_AXIS_LEFTY:  return { "Left Stick Y",  0xE037, FontFamily::SteamDeck }; // steamdeck_stick_l_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX: return { "Right Stick X", 0xE03A, FontFamily::SteamDeck }; // steamdeck_stick_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY: return { "Right Stick Y", 0xE03F, FontFamily::SteamDeck }; // steamdeck_stick_r_vertical
+        case SDL_GAMEPAD_AXIS_LEFTX:  return { "Left Stick X",  0xE032, SteamDeck }; // steamdeck_stick_l_horizontal
+        case SDL_GAMEPAD_AXIS_LEFTY:  return { "Left Stick Y",  0xE037, SteamDeck }; // steamdeck_stick_l_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX: return { "Right Stick X", 0xE03A, SteamDeck }; // steamdeck_stick_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY: return { "Right Stick Y", 0xE03F, SteamDeck }; // steamdeck_stick_r_vertical
         default: break; // triggers etc. fall through to the V1 table below
         }
         [[fallthrough]];
 
-    case FontFamily::SteamController:
+    case SteamController:
         switch (ga) {
         case SDL_GAMEPAD_AXIS_LEFTX:         return withFam("Left Stick X",      0xE05D); // steam_stick_horizontal
         case SDL_GAMEPAD_AXIS_LEFTY:         return withFam("Left Stick Y",      0xE063); // steam_stick_vertical
-        case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Pad X", 0xE063, FontFamily::SteamDeck }; // steamdeck_trackpad_r_horizontal
-        case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Pad Y", 0xE06C, FontFamily::SteamDeck }; // steamdeck_trackpad_r_vertical
+        case SDL_GAMEPAD_AXIS_RIGHTX:        return { "Right Pad X", 0xE063, SteamDeck }; // steamdeck_trackpad_r_horizontal
+        case SDL_GAMEPAD_AXIS_RIGHTY:        return { "Right Pad Y", 0xE06C, SteamDeck }; // steamdeck_trackpad_r_vertical
         case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:  return withFam("Left Trigger",      0xE04D); // steam_lt
         case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return withFam("Right Trigger",     0xE059); // steam_rt
         default: break;
@@ -180,7 +182,7 @@ AxisInfo AxisInfoFor(SDL_GamepadAxis ga, FontFamily fam)
 // ---------------------------------------------------------------------------
 // SDL_GamepadButton → human name + codepoint for each supported font family.
 // ---------------------------------------------------------------------------
-struct ButtonInfo { const char* name; ImWchar cp; FontFamily fam = FontFamily::Unknown; };
+struct ButtonInfo { const char* name; ImWchar cp; FontFamily fam = Unknown; };
 
 ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
 {
@@ -189,7 +191,7 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
 
     switch (fam)
     {
-    case FontFamily::Xbox:
+    case Xbox:
         switch (gb) {
         case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("A",             0xE004); // xbox_button_a
         case SDL_GAMEPAD_BUTTON_EAST:            return withFam("B",             0xE006); // xbox_button_b
@@ -210,7 +212,7 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         }
         break;
 
-    case FontFamily::PlayStation:
+    case PlayStation:
         switch (gb) {
         case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("Cross",         0xE04B); // playstation_button_cross
         case SDL_GAMEPAD_BUTTON_EAST:            return withFam("Circle",        0xE041); // playstation_button_circle
@@ -233,7 +235,7 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         }
         break;
 
-    case FontFamily::Switch:
+    case Switch:
         switch (gb) {
         case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("B",             0xE006); // switch_button_b
         case SDL_GAMEPAD_BUTTON_EAST:            return withFam("A",             0xE004); // switch_button_a
@@ -254,7 +256,7 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         }
         break;
 
-    case FontFamily::SteamDeck:
+    case SteamDeck:
         switch (gb) {
         case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("A",             0xE001); // steamdeck_button_a
         case SDL_GAMEPAD_BUTTON_EAST:            return withFam("B",             0xE003); // steamdeck_button_b
@@ -275,27 +277,27 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         }
         break;
 
-    case FontFamily::SteamControllerV2:
+    case SteamControllerV2:
         // V2 swaps the trackpad-click compatibility outputs for real stick
         // clicks, and repurposes the TOUCHPAD/MISC2 outputs as a left/right
         // touchpad pair - all rendered with the Steam Deck font's icons
         // (matching the stick-axis change in AxisInfoFor).
         switch (gb) {
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK:   return { "L Stick",     0xE034, FontFamily::SteamDeck }; // steamdeck_stick_l_press
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:  return { "R Stick",     0xE03C, FontFamily::SteamDeck }; // steamdeck_stick_r_press
-        case SDL_GAMEPAD_BUTTON_TOUCHPAD:     return { "L Touchpad",  0xE04B, FontFamily::SteamDeck }; // steamdeck_trackpad_l
-        case SDL_GAMEPAD_BUTTON_MISC2:        return { "R Touchpad",  0xE05E, FontFamily::SteamDeck }; // steamdeck_trackpad_r
-        case SDL_GAMEPAD_BUTTON_BACK:         return { "Back",        0xE01B, FontFamily::SteamDeck }; // steamdeck_button_view
-        case SDL_GAMEPAD_BUTTON_START:        return { "Start",       0xE00F, FontFamily::SteamDeck }; // steamdeck_button_options
-        case SDL_GAMEPAD_BUTTON_DPAD_UP:      return { "D-Pad Up",    0xE02C, FontFamily::SteamDeck }; // steamdeck_dpad_up
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:    return { "D-Pad Down",  0xE023, FontFamily::SteamDeck }; // steamdeck_dpad_down
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:    return { "D-Pad Left",  0xE027, FontFamily::SteamDeck }; // steamdeck_dpad_left
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:   return { "D-Pad Right", 0xE02A, FontFamily::SteamDeck }; // steamdeck_dpad_right
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:   return { "L Stick",     0xE034, SteamDeck }; // steamdeck_stick_l_press
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:  return { "R Stick",     0xE03C, SteamDeck }; // steamdeck_stick_r_press
+        case SDL_GAMEPAD_BUTTON_TOUCHPAD:     return { "L Touchpad",  0xE04B, SteamDeck }; // steamdeck_trackpad_l
+        case SDL_GAMEPAD_BUTTON_MISC2:        return { "R Touchpad",  0xE05E, SteamDeck }; // steamdeck_trackpad_r
+        case SDL_GAMEPAD_BUTTON_BACK:         return { "Back",        0xE01B, SteamDeck }; // steamdeck_button_view
+        case SDL_GAMEPAD_BUTTON_START:        return { "Start",       0xE00F, SteamDeck }; // steamdeck_button_options
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:      return { "D-Pad Up",    0xE02C, SteamDeck }; // steamdeck_dpad_up
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:    return { "D-Pad Down",  0xE023, SteamDeck }; // steamdeck_dpad_down
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:    return { "D-Pad Left",  0xE027, SteamDeck }; // steamdeck_dpad_left
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:   return { "D-Pad Right", 0xE02A, SteamDeck }; // steamdeck_dpad_right
         default: break; // A/B/X/Y, paddles, quick-access, etc. fall through to the V1 table
         }
         [[fallthrough]];
 
-    case FontFamily::SteamController:
+    case SteamController:
         switch (gb) {
         case SDL_GAMEPAD_BUTTON_SOUTH:           return withFam("A",             0xE022); // steam_button_a
         case SDL_GAMEPAD_BUTTON_EAST:            return withFam("B",             0xE024); // steam_button_b
@@ -320,15 +322,15 @@ ButtonInfo ButtonInfoFor(SDL_GamepadButton gb, FontFamily fam)
         case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2:    return withFam("L5",           0xE006); // controller_button_l5
         case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1:   return withFam("R4",           0xE010); // controller_button_r4
         case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2:   return withFam("R5",           0xE012); // controller_button_r5
-        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return { "Touchpad",     0xE045, FontFamily::SteamDeck }; // steamdeck_trackpad_all (V1 only)
+        case SDL_GAMEPAD_BUTTON_TOUCHPAD:        return { "Touchpad",     0xE045, SteamDeck }; // steamdeck_trackpad_all (V1 only)
         case SDL_GAMEPAD_BUTTON_MISC1:           return withFam("Quick Access", 0xE00A); // controller_button_quickaccess
         default: break;
         }
         break;
 
-    case FontFamily::Wii:
+    case Wii:
         // Only the D-Pad directions are needed here: GetHatLabel() is the
-        // only caller that reaches this table for FontFamily::Wii (via the
+        // only caller that reaches this table for Wii (via the
         // SDL_GamepadButton translation below), since GetAxisLabel/
         // GetButtonLabel resolve Wiimote face buttons directly by raw
         // bridge index instead (see WiimoteBridgeButtonIcon() below) - this
@@ -411,21 +413,21 @@ DeviceIcon MakeIcon(ImFont* font, ImWchar cp)
 // belongs to, and that tag is not always the same as the device's own
 // detected family - e.g. the Steam Controller V2's back-grip paddles are
 // rendered using the Steam Deck font (steam_controller.ttf has no glyphs
-// for them), even though the device itself is FontFamily::SteamController.
+// for them), even though the device itself is SteamController.
 ImFont* FontForFamily(FontFamily fam)
 {
     KenneyFonts& fonts = KenneyFonts::Get();
     switch (fam)
     {
-    case FontFamily::Xbox:            return fonts.xbox;
-    case FontFamily::PlayStation:     return fonts.playstation;
-    case FontFamily::Switch:          return fonts.nintendoSwitch;
-    case FontFamily::SteamDeck:       return fonts.steamDeck;
-    case FontFamily::SteamController:
-    case FontFamily::SteamControllerV2: return fonts.steamController;
-    case FontFamily::Wii:              return fonts.nintendoWii;
-    case FontFamily::Generic:
-    case FontFamily::Unknown:
+    case Xbox:            return fonts.xbox;
+    case PlayStation:     return fonts.playstation;
+    case Switch:          return fonts.nintendoSwitch;
+    case SteamDeck:       return fonts.steamDeck;
+    case SteamController:
+    case SteamControllerV2: return fonts.steamController;
+    case Wii:              return fonts.nintendoWii;
+    case Generic:
+    case Unknown:
     default:                          return fonts.generic;
     }
 }
@@ -441,7 +443,9 @@ ImFont* InputFont(const DeviceState& dev, FontFamily fam)
     return f ? f : KenneyFonts::Get().generic;
 }
 
-} // anonymous namespace
+} // namespace InputLabelProviderDetail
+
+using namespace InputLabelProviderDetail;
 
 // ---------------------------------------------------------------------------
 // Wiimote virtual-bridge naming
@@ -455,12 +459,31 @@ ImFont* InputFont(const DeviceState& dev, FontFamily fam)
 // null here and this never collides with the SDL_GamepadBinding path below
 // - but the exact-name match is checked first regardless, so this stays
 // correct even if that ever changes.
-namespace {
+namespace InputLabelProviderDetail {
 bool IsWiimoteBridgeDevice(const DeviceState& dev, bool* isBalance)
 {
     if (dev.name == InputBridge::Wiimote::kWiimoteBridgeDeviceName) { *isBalance = false; return true; }
     if (dev.name == InputBridge::Wiimote::kBalanceBoardBridgeDeviceName) { *isBalance = true; return true; }
     return false;
+}
+
+// -- 3Dconnexion bridge icon lookup -----------------------------------------
+// Only the shared generic Kenney font has anything usable (no 6-DOF glyphs
+// exist). Translation X/Y reuse the horizontal/vertical stick glyphs, Z
+// (push/pull) the stick-press glyph, and the rotations the plain stick
+// glyph. Battery has no icon, so it stays text-only.
+ImWchar SpaceMouseBridgeAxisIcon(int axis)
+{
+    using namespace InputBridge::SpaceMouse;
+    switch (axis) {
+    case Axis_TX: return KENNEY_GENERIC_STICK_HORIZONTAL_CP;
+    case Axis_TY: return KENNEY_GENERIC_STICK_VERTICAL_CP;
+    case Axis_TZ: return KENNEY_GENERIC_STICK_PRESS_CP;
+    case Axis_RX:
+    case Axis_RY:
+    case Axis_RZ: return KENNEY_GENERIC_STICK_CP;
+    default:      return 0;
+    }
 }
 
 // -- Wiimote bridge icon lookup ---------------------------------------------
@@ -543,7 +566,7 @@ ImWchar BalanceBoardBridgeButtonIcon(int button)
 // weights, total, center of gravity) has no Wii-font equivalent, so it
 // would just be "default: return 0;" for every case.
 
-} // anonymous namespace
+} // namespace InputLabelProviderDetail
 
 // ---------------------------------------------------------------------------
 // InputLabelProvider - public API
@@ -552,6 +575,15 @@ ImWchar BalanceBoardBridgeButtonIcon(int button)
 InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
 {
     InputLabel result;
+
+    // 3Dconnexion bridge joystick: named 6-DOF axes, no Kenney glyphs exist.
+    if (InputBridge::SpaceMouse::IsBridgeDeviceName(dev.name))
+    {
+        const char* n = InputBridge::SpaceMouse::BridgeAxisName(axis);
+        result.name = n ? n : ("Axis " + std::to_string(axis));
+        result.icon = MakeIcon(KenneyFonts::Get().generic, SpaceMouseBridgeAxisIcon(axis));
+        return result;
+    }
 
     bool isBalance = false;
     if (IsWiimoteBridgeDevice(dev, &isBalance))
@@ -624,6 +656,13 @@ InputLabel InputLabelProvider::GetAxisLabel(const DeviceState& dev, int axis)
 InputLabel InputLabelProvider::GetButtonLabel(const DeviceState& dev, int button)
 {
     InputLabel result;
+
+    if (InputBridge::SpaceMouse::IsBridgeDeviceName(dev.name))
+    {
+        result.name = InputBridge::SpaceMouse::BridgeButtonName(dev.name, button);
+        result.icon = MakeIcon(KenneyFonts::Get().generic, KENNEY_GENERIC_BUTTON_CP);
+        return result;
+    }
 
     bool isBalance = false;
     if (IsWiimoteBridgeDevice(dev, &isBalance))

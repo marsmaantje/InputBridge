@@ -92,10 +92,10 @@ class PreferencesManager {
     void ClearAppliedPreference(SDL_JoystickID instance_id);
 
   private:
-    std::map<std::string, std::map<std::string, std::string>> m_Sections;
+    std::map<std::string, std::map<std::string, std::string, std::less<>>, std::less<>> m_Sections;
     std::set<SDL_JoystickID> m_AppliedPreferences;
     const char *CONFIG_FILENAME = "visualizer_prefs.toml";
-    std::string GetConfigFilePath();
+    std::string GetConfigFilePath() const;
 
     // Constants for sections and keys
     static constexpr const char* kGeneralSection = "General";

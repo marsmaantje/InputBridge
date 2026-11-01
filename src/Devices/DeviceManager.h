@@ -8,6 +8,7 @@
 
 #include "Haptics/HapticDevice.h"
 #include "Devices/Wiimote/WiimoteManager.h"
+#include "Devices/SpaceMouse/SpaceMouseManager.h"
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
 #include "ExclusiveMode/InputExclusiveMode.h"
@@ -54,6 +55,18 @@ class DeviceManager {
     // Balance Board (which has no rumble motor).
     InputBridge::Wiimote::WiimoteDevice* GetWiimoteForBridgeJoystick(SDL_JoystickID instance_id) const;
 
+    // -- 3Dconnexion 6-DOF devices (SpaceNavigator, SpaceMouse, ...) ---------
+    // Read passively over shared HID (see Devices/SpaceMouse/README.md) and
+    // bridged into virtual SDL joysticks. Never opens a device exclusively,
+    // never writes to it, so 3DxWare / spacenavd keep working alongside.
+    // ScanSpaceMice() is idempotent and also prunes devices that went away.
+    void ScanSpaceMice();
+    const std::vector<std::unique_ptr<InputBridge::SpaceMouse::SpaceMouseDevice>>& GetSpaceMice() const;
+    // Master switch (Settings). When off, no 3Dconnexion HID interface is
+    // opened and SDL's own generic handling of these devices is left alone.
+    void SetSpaceMouseEnabled(bool enabled);
+    bool IsSpaceMouseEnabled() const { return m_SpaceMouseEnabled; }
+
     // -- Device hide (HidHide / evdev grab / IOKit seize) ---------------------
     // Toggle the hide state for a single device.  Updates dev.hide_from_other_apps
     // and calls through to the platform backend.
@@ -78,6 +91,11 @@ class DeviceManager {
     std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>> m_Wiimotes;
     Uint64 m_LastWiimoteScanMs = 0;
     static constexpr Uint64 kWiimoteScanIntervalMs = 3000; // BT pairing happens outside SDL's joystick events
+
+    std::vector<std::unique_ptr<InputBridge::SpaceMouse::SpaceMouseDevice>> m_SpaceMice;
+    Uint64 m_LastSpaceMouseScanMs = 0;
+    bool   m_SpaceMouseEnabled = true;
+    static constexpr Uint64 kSpaceMouseScanIntervalMs = 3000; // hotplug without SDL events
 
 #ifdef ENABLE_EXCLUSIVE_INPUT
     InputExclusiveMode m_HideManager;
