@@ -412,6 +412,8 @@ void DeviceManager::SetSpaceMouseEnabled(bool enabled) {
 void DeviceManager::Update(bool isMinimized) {
     m_Battery.Update(m_Devices, isMinimized);
 
+    const Uint64 now = SDL_GetTicks();
+
     // -- Wiimote polling --------------------------------------------------
     // Unlike SDL_Joystick devices, Wiimotes pair over Bluetooth outside
     // SDL's own joystick hotplug events, so we periodically re-scan for new
