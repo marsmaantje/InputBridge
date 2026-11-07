@@ -278,11 +278,11 @@ void DrawSettingsContent(float&              user_ui_scale,
         prefs.Save();
     }
 
-    int batteryInterval = deviceManager.GetBatteryUpdateInterval();
+    int batteryInterval = deviceManager.GetBatteryMonitor().GetUpdateInterval();
     ImGui::SetNextItemWidth(200.0f);
     if (UI::SliderInt("Battery Poll Interval (ms)", &batteryInterval, 1000, 60000, "%d",
                        "How often to query battery status from the OS.\nIncreasing this saves CPU but makes indicators laggier.")) {
-        deviceManager.SetBatteryUpdateInterval(batteryInterval);
+        deviceManager.GetBatteryMonitor().SetUpdateInterval(batteryInterval);
         prefs.SetInt("BatteryUpdateIntervalMs", batteryInterval);
         prefs.Save();
     }

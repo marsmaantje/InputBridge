@@ -211,7 +211,7 @@ void DeviceManager::HandleDeviceAdded(SDL_JoystickID instance_id) {
     m_Devices.push_back(std::move(result->state));
     
     // Initialize battery info for the new device
-    UpdateBatteryInfo(m_Devices.back());
+    m_Battery.UpdateDevice(m_Devices.back());
     
     // -- Enable all IMU sensors at connect-time ------------------------------
     // SDL3 requires sensors to be enabled before the first read. For a combined
@@ -379,8 +379,7 @@ void DeviceManager::ScanSpaceMice() {
     // Prune devices that are no longer enumerated (unplugged but never
     // produced a read error).
     auto gone = std::ranges::remove_if(m_SpaceMice, [&](const auto &dev) {
-        return std::ranges::find(result.present_paths, dev->Snapshot().hid_path) ==
-               result.present_paths.end();
+        return std::ranges::find(result.present_paths, dev->Snapshot().hid_path) == result.present_paths.end();
     });
     if (gone.begin() != gone.end()) {
         LOG_INFO(kTag, "3D mouse(s) removed: %td", std::distance(gone.begin(), gone.end()));
@@ -411,23 +410,7 @@ void DeviceManager::SetSpaceMouseEnabled(bool enabled) {
 }
 
 void DeviceManager::Update(bool isMinimized) {
-    // Refresh battery info every 5 seconds when active,
-    // or every 30 seconds when minimized.
-    // Controller battery levels change very slowly, so high-frequency
-    // polling is unnecessary and CPU-intensive on some platforms.
-    static Uint64 lastBatteryUpdate = 0;
-    Uint64 now = SDL_GetTicks();
-
-    // If minimized, we multiply the interval by 6 (e.g. 5s -> 30s)
-    // to further reduce background overhead.
-    Uint64 interval = isMinimized ? (m_BatteryUpdateIntervalMs * 6) : m_BatteryUpdateIntervalMs;
-
-    if (now - lastBatteryUpdate > interval) {
-        for (auto &dev : m_Devices) {
-            UpdateBatteryInfo(dev);
-        }
-        lastBatteryUpdate = now;
-    }
+    m_Battery.Update(m_Devices, isMinimized);
 
     // -- Wiimote polling --------------------------------------------------
     // Unlike SDL_Joystick devices, Wiimotes pair over Bluetooth outside
@@ -477,136 +460,11 @@ HapticDevice *DeviceManager::GetHapticDevice(SDL_JoystickID instance_id) const {
     return nullptr;
 }
 
-void DeviceManager::SetDeviceKeepalive(SDL_JoystickID instance_id, bool enable) {
+void DeviceManager::SetDeviceKeepalive(SDL_JoystickID instance_id, bool enable) const {
     HapticDevice* haptic = GetHapticDevice(instance_id);
     if (haptic) haptic->EnableKeepalive(enable);
 }
 
-void DeviceManager::UpdateBatteryInfo(DeviceState &dev) {
-    SDL_PowerState old_state = dev.battery_state;
-    int old_percent = dev.battery_percent;
-
-    if (dev.gamepad) {
-        int percent = 0;
-        dev.battery_state = SDL_GetGamepadPowerInfo(dev.gamepad, &percent);
-        dev.battery_percent = percent;
-
-        bool state_changed   = (old_state != dev.battery_state);
-        // Only compare percents when both readings are valid numbers.
-        bool percent_changed = (dev.battery_percent >= 0 && old_percent >= 0 &&
-                                abs(old_percent - dev.battery_percent) >= 5);
-
-        if (!dev.battery_initialized || state_changed || percent_changed) {
-            dev.battery_initialized = true;
-
-            const char* state_str;
-            switch (dev.battery_state) {
-                case SDL_POWERSTATE_UNKNOWN:    state_str = "UNKNOWN";    break;
-                case SDL_POWERSTATE_ON_BATTERY: state_str = "ON_BATTERY"; break;
-                case SDL_POWERSTATE_NO_BATTERY: state_str = "NO_BATTERY"; break;
-                case SDL_POWERSTATE_CHARGING:   state_str = "CHARGING";   break;
-                case SDL_POWERSTATE_CHARGED:    state_str = "CHARGED";    break;
-                default:                        state_str = "INVALID";    break;
-            }
-
-            if (dev.battery_state == SDL_POWERSTATE_UNKNOWN) {
-                LOG_WARN(kTag, "Battery [%s]: State=%s (battery info not available)",
-                        dev.name.c_str(), state_str);
-                LOG_WARN(kTag, "Possible causes: hid_playstation not loaded, missing udev rules, or SDL can't read battery");
-            } else if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY) {
-                LOG_DEBUG(kTag, "Battery [%s]: State=%s, Percent=%d%%",
-                        dev.name.c_str(), state_str, percent);
-            }
-        }
-
-        // -- Left Joy-Con battery (combined pair only) ---------------------
-        // When two Joy-Cons are merged into one virtual gamepad, SDL exposes
-        // SDL_SENSOR_GYRO_L on the combined handle.  In that case we find the
-        // left Joy-Con's physical joystick by scanning all connected joystick
-        // IDs for the sibling that SDL merged into this gamepad.
-        // SDL_GetGamepadID() returns the instance_id of the *right* Joy-Con
-        // (the primary half); the left half is the other HIDAPI joystick whose
-        // type is GAMEPAD and whose instance_id differs from dev.instance_id.
-        if (SDL_GamepadHasSensor(dev.gamepad, SDL_SENSOR_GYRO_L)) {
-            dev.battery_state_L   = SDL_POWERSTATE_UNKNOWN;
-            dev.battery_percent_L = -1;
-
-            int joystick_count = 0;
-            SDL_JoystickID* joystick_ids = SDL_GetJoysticks(&joystick_count);
-            if (joystick_ids) {
-                for (int i = 0; i < joystick_count; ++i) {
-                    SDL_JoystickID jid = joystick_ids[i];
-                    if (jid == dev.instance_id) continue;
-                    if (SDL_GetJoystickTypeForID(jid) != SDL_JOYSTICK_TYPE_GAMEPAD) continue;
-
-                    // Open transiently just to read battery; SDL ref-counts opens.
-                    SDL_Joystick* joy = SDL_OpenJoystick(jid);
-                    if (!joy) continue;
-
-                    int leftPercent = 0;
-                    SDL_PowerState leftState = SDL_GetJoystickPowerInfo(joy, &leftPercent);
-
-                    if (leftState != SDL_POWERSTATE_NO_BATTERY) {
-                        dev.battery_state_L   = leftState;
-                        dev.battery_percent_L = leftPercent;
-                        LOG_DEBUG(kTag, "Battery L [%s]: Percent=%d%%", dev.name.c_str(), leftPercent);
-                        SDL_CloseJoystick(joy);
-                        break;
-                    }
-
-                    SDL_CloseJoystick(joy);
-                }
-                SDL_free(joystick_ids);
-            }
-        } else {
-            // Not a combined pair - clear the left-side fields.
-            dev.battery_state_L   = SDL_POWERSTATE_UNKNOWN;
-            dev.battery_percent_L = -1;
-        }
-        // -- End Left Joy-Con battery --------------------------------------
-    } else if (dev.joystick) {
-        int percent = 0;
-        // 3Dconnexion bridge joysticks are virtual, so SDL can't report a
-        // battery for them; use the level decoded from the device's own
-        // 0x17 battery reports instead. -1 (wired / not yet reported) leaves
-        // the state UNKNOWN so no icon is drawn.
-        if (const auto bridgePct =
-            InputBridge::SpaceMouse::SpaceMouseVirtualBridge::GetInstance().GetBatteryPercent(dev.instance_id);
-            bridgePct.has_value()) {
-            percent = *bridgePct;
-            dev.battery_state = percent >= 0 ? SDL_POWERSTATE_ON_BATTERY : SDL_POWERSTATE_UNKNOWN;
-        } else {
-            dev.battery_state = SDL_GetJoystickPowerInfo(dev.joystick, &percent);
-        }
-        dev.battery_percent = percent;
-
-        bool state_changed   = (old_state != dev.battery_state);
-        bool percent_changed = (dev.battery_percent >= 0 && old_percent >= 0 &&
-                                abs(old_percent - dev.battery_percent) >= 5);
-
-        if (!dev.battery_initialized || state_changed || percent_changed) {
-            dev.battery_initialized = true;
-
-            const char* state_str;
-            switch (dev.battery_state) {
-                case SDL_POWERSTATE_UNKNOWN:    state_str = "UNKNOWN";    break;
-                case SDL_POWERSTATE_ON_BATTERY: state_str = "ON_BATTERY"; break;
-                case SDL_POWERSTATE_NO_BATTERY: state_str = "NO_BATTERY"; break;
-                case SDL_POWERSTATE_CHARGING:   state_str = "CHARGING";   break;
-                case SDL_POWERSTATE_CHARGED:    state_str = "CHARGED";    break;
-                default:                        state_str = "INVALID";    break;
-            }
-
-            if (dev.battery_state != SDL_POWERSTATE_NO_BATTERY && dev.battery_state != SDL_POWERSTATE_UNKNOWN) {
-                LOG_DEBUG(kTag, "Battery (Joystick) [%s]: State=%s, Percent=%d%%",
-                        dev.name.c_str(), state_str, percent);
-            }
-        }
-    } else {
-        dev.battery_state   = SDL_POWERSTATE_UNKNOWN;
-        dev.battery_percent = -1;
-    }
-}
 // ---------------------------------------------------------------------------
 // Device hide support
 // ---------------------------------------------------------------------------

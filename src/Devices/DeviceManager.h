@@ -1,5 +1,6 @@
 #pragma once
 #include "DeviceState.h"
+#include "BatteryMonitor.h"
 #include <SDL3/SDL.h>
 #include <string>
 #include <vector>
@@ -24,17 +25,16 @@ class DeviceManager {
     void HandleDeviceRemoved(SDL_JoystickID instance_id);
     void CloseAllDevices();
     void Update(bool isMinimized = false);
-    void SetBatteryUpdateInterval(int ms) { m_BatteryUpdateIntervalMs = (Uint64)ms; }
-    int  GetBatteryUpdateInterval() const { return (int)m_BatteryUpdateIntervalMs; }
 
     const std::vector<DeviceState>& GetDevices() const;
     std::vector<DeviceState>&       GetDevices();
     static std::string GetDeviceGUIDString(const DeviceState& dev);
 
     HapticDevice* GetHapticDevice(SDL_JoystickID instance_id) const;
-    void SetDeviceKeepalive(SDL_JoystickID instance_id, bool enable);
+    void SetDeviceKeepalive(SDL_JoystickID instance_id, bool enable) const;
 
-    void UpdateBatteryInfo(DeviceState& dev);
+    BatteryMonitor&       GetBatteryMonitor()       { return m_Battery; }
+    const BatteryMonitor& GetBatteryMonitor() const { return m_Battery; }
 
     // -- Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero --
     // Driven directly over raw HID (see Devices/Wiimote/README.md) - these
@@ -86,7 +86,7 @@ class DeviceManager {
 
     std::vector<DeviceState> m_Devices;
     std::map<SDL_JoystickID, std::unique_ptr<HapticDevice>> m_HapticDevices;
-    Uint64 m_BatteryUpdateIntervalMs = 5000;
+    BatteryMonitor m_Battery;
 
     std::vector<std::unique_ptr<InputBridge::Wiimote::WiimoteDevice>> m_Wiimotes;
     Uint64 m_LastWiimoteScanMs = 0;

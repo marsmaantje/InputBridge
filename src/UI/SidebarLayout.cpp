@@ -621,7 +621,7 @@ void DrawSidebarLayout(SidebarContext& ctx)
         case 5: // -- Settings ---------------------------------------------
             if (!s_BatteryIntervalLoaded) {
                 int interval = ctx.prefs.GetInt("BatteryUpdateIntervalMs", 5000);
-                ctx.deviceManager.SetBatteryUpdateInterval(interval);
+                ctx.deviceManager.GetBatteryMonitor().SetUpdateInterval(interval);
                 s_BatteryIntervalLoaded = true;
             }
             DrawSettingsContent(

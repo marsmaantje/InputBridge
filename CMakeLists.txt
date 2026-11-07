@@ -243,6 +243,7 @@ add_executable(InputBridge
     src/Core/ProtocolValidator.cpp
     # Device management
     src/Devices/DeviceManager.cpp
+    src/Devices/BatteryMonitor.cpp
     src/Devices/DeviceFactory.cpp
     src/Devices/VirtualDeviceManager.cpp
     # Wiimote / Balance Board / Nunchuk / Classic Controller / Guitar Hero
