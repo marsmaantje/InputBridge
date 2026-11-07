@@ -128,6 +128,16 @@ DeviceIcon DeviceIconProvider::IconFromName(const std::string& lower)
         return { fonts.nintendoSwitch, KENNEY_SWITCH_CONTROLLER, KENNEY_SWITCH_CONTROLLER_CP };
     }
 
+    // -- 3Dconnexion 6-DOF devices ------------------------------------------
+    // Must precede the "mouse" check below: a SpaceMouse is not a pointer.
+    // No dedicated glyph exists, so use the generic joystick icon.
+    if (lower.find("3dconnexion") != std::string::npos
+        || lower.find("spacemouse") != std::string::npos
+        || lower.find("spacenavigator") != std::string::npos)
+    {
+        return { fonts.generic, KENNEY_GENERIC_JOYSTICK, KENNEY_GENERIC_JOYSTICK_CP };
+    }
+
     // -- Keyboard -----------------------------------------------------------
     if (lower.find("keyboard") != std::string::npos)
     {

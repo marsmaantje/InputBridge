@@ -52,10 +52,20 @@ runs:
       run: |
           BIN="package/bin/InputBridge"
           test -f "$BIN" || { echo "Binary not found: $BIN"; exit 1; }
+          # Start Xvfb directly instead of via xvfb-run: xvfb-run's own
+          # cleanup step ("problem while cleaning up temporary directory")
+          # returns exit code 5, which was being mistaken for a crash of
+          # the binary.
+          Xvfb :99 -screen 0 1280x720x24 >/tmp/xvfb.log 2>&1 &
+          XVFB_PID=$!
+          export DISPLAY=:99
+          sleep 2
           set +e
-          xvfb-run --auto-servernum timeout 5s "$BIN"
+          timeout 5s "$BIN"
           CODE=$?
           set -e
+          kill "$XVFB_PID" 2>/dev/null || true
+          wait "$XVFB_PID" 2>/dev/null || true
           echo "Exit code: $CODE"
           if [ "$CODE" -eq 124 ] || [ "$CODE" -le 1 ]; then
               echo "Smoke test passed (exit $CODE)."

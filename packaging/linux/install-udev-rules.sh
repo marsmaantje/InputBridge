@@ -17,7 +17,20 @@
 
 set -euo pipefail
 
-RULES_FILENAME="71-inputbridge-wiimote.rules"
+# --3dconnexion selects the SpaceMouse/SpaceNavigator rule instead of the
+# default Wii one. Everything below is keyed off PROFILE so the two rules
+# stay independent (installing one never touches the other).
+PROFILE="wii"
+for arg in "$@"; do
+    [[ "$arg" == "--3dconnexion" ]] && PROFILE="3dconnexion"
+done
+if [[ "${PROFILE}" == "3dconnexion" ]]; then
+    RULES_FILENAME="71-inputbridge-3dconnexion.rules"
+    DEVICE_DESC="3Dconnexion device (SpaceMouse/SpaceNavigator)"
+else
+    RULES_FILENAME="71-inputbridge-wiimote.rules"
+    DEVICE_DESC="Wiimote/Balance Board (or its Bluetooth dongle)"
+fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DEST_RULES_PATH="/etc/udev/rules.d/${RULES_FILENAME}"
 
@@ -37,6 +50,7 @@ DEST_RULES_PATH="/etc/udev/rules.d/${RULES_FILENAME}"
 # shadowed by installing this one alongside it - see
 # migrate_away_from_legacy_filenames() below.
 LEGACY_RULES_FILENAMES=("99-inputbridge-wiimote.rules")
+[[ "${PROFILE}" == "wii" ]] || LEGACY_RULES_FILENAMES=()
 
 # Installed layout (CMake `install()`) puts the rules file next to this
 # script (share/inputbridge/udev/); the source tree keeps it one level
@@ -51,6 +65,7 @@ UNINSTALL=0
 for arg in "$@"; do
     case "$arg" in
         --uninstall) UNINSTALL=1 ;;
+        --3dconnexion) ;; # handled above
         -h|--help)
             sed -n '2,18p' "${BASH_SOURCE[0]}"
             exit 0
@@ -100,6 +115,7 @@ reload_udev() {
 # same file name assumption, or if the pre-existing rule is stricter/looser
 # than ours, it's worth surfacing rather than staying silent.
 check_preexisting_wii_rules() {
+    [[ "${PROFILE}" == "wii" ]] || return 0
     local rules_dir="/etc/udev/rules.d"
     local match_pattern='057e|0306|0330|RVL-CNT-01|RVL-CNT-01-TR|RVL-WBC-01'
     local found=()
@@ -178,7 +194,7 @@ if [[ "${UNINSTALL}" -eq 1 ]]; then
     migrate_away_from_legacy_filenames
     reload_udev
     check_preexisting_wii_rules
-    echo "Done. Unplug and replug the Wiimote/Balance Board (or its Bluetooth dongle) to apply."
+    echo "Done. Unplug and replug the ${DEVICE_DESC} to apply."
     exit 0
 fi
 
@@ -190,7 +206,17 @@ fi
 migrate_away_from_legacy_filenames
 check_preexisting_wii_rules
 
-install -D -m 0644 -- "${SOURCE_RULES_PATH}" "${DEST_RULES_PATH}"
+if getent group plugdev >/dev/null 2>&1; then
+    install -D -m 0644 -- "${SOURCE_RULES_PATH}" "${DEST_RULES_PATH}"
+else
+    # No 'plugdev' group (Arch/CachyOS/Fedora...): the GROUP="plugdev" fallback
+    # lines can't resolve and only make systemd-udevd log warnings. Access is
+    # granted by the TAG+="uaccess" lines, so install without the fallback.
+    install -d -m 0755 -- "$(dirname -- "${DEST_RULES_PATH}")"
+    grep -v 'GROUP="plugdev"' -- "${SOURCE_RULES_PATH}" > "${DEST_RULES_PATH}"
+    chmod 0644 -- "${DEST_RULES_PATH}"
+    echo "No 'plugdev' group on this system; omitted the plugdev fallback lines (uaccess still applies)."
+fi
 echo "Installed ${DEST_RULES_PATH}"
 
 reload_udev
@@ -204,6 +230,21 @@ if [[ -n "${INVOKING_USER}" ]] && getent group plugdev >/dev/null 2>&1; then
         usermod -aG plugdev "${INVOKING_USER}"
         echo "Added user '${INVOKING_USER}' to the 'plugdev' group (log out/in to take effect)."
     fi
+fi
+
+if [[ "${PROFILE}" == "3dconnexion" ]]; then
+cat <<EOF
+
+Done. Next steps:
+  1. InputBridge retries automatically within a few seconds. If the device
+     is still not picked up, unplug and replug it.
+  2. If you were just added to the 'plugdev' group, log out and back in
+     (group membership changes do not apply to already-open sessions).
+
+This rule only grants read access; it does not affect 3DxWare / spacenavd.
+To remove it later: ./install-udev-rules.sh --3dconnexion --uninstall
+EOF
+exit 0
 fi
 
 cat <<'EOF'

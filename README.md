@@ -17,6 +17,7 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 | Nintendo Joy-Con (L/R pair) | Axes, buttons, independent per-side gyro & accelerometer                  | Rumble                                                                             |
 | Sony DualSense (PS5)        | Axes, buttons, touchpad (2-finger), gyro, accelerometer                   | Rumble, LED control - USB & Bluetooth                                              |
 | Wii Remote / Remote Plus, Balance Board | Buttons, accelerometer, 4-point IR camera, Nunchuk & Classic Controller extension inputs, Balance Board per-sensor and total weight with center of gravity, battery | Rumble (in-app test panel; not yet dispatched over OSC/WebSocket) |
+| 3Dconnexion SpaceMouse / SpaceNavigator | 6-DOF translation + rotation axes, buttons, battery (wireless) | None (read-only; coexists with 3DxWare / spacenavd) |
 | Steering Wheel              | Axes, buttons                                                             | Constant force, periodic, condition effects (Spring / Damper / Inertia / Friction) |
 | Flight Stick / Throttle     | Axes, buttons                                                             | Constant force, periodic, condition on both pitch and roll axes                    |
 
@@ -32,7 +33,7 @@ InputBridge reads joystick, gamepad, steering wheel, and flight stick input and 
 
 See the [Wiki](../../wiki) for a full step-by-step guide and reference documentation.
 
-> **Linux + Wii Remote/Balance Board via a Bluetooth dongle:** if the device doesn't show up or fails to open, InputBridge will show a **Fix permissions** button that runs the udev install script for you through a polkit prompt, no terminal needed. To do it manually instead, run `sudo ./packaging/linux/install-udev-rules.sh` (or the copy under `share/inputbridge/udev/` if you installed a package) to grant hidraw permissions, then replug the device. See [`packaging/linux/README.md`](packaging/linux/README.md) for details.
+> **Linux + Wii Remote/Balance Board (Bluetooth dongle) or 3Dconnexion devices:** if the device doesn't show up or fails to open, InputBridge will show a **Fix permissions** button that runs the udev install script for you through a polkit prompt, no terminal needed. To do it manually instead, run `sudo ./packaging/linux/install-udev-rules.sh` for Wii devices, or `sudo ./packaging/linux/install-udev-rules.sh --3dconnexion` for SpaceMouse/SpaceNavigator devices (or use the copy under `share/inputbridge/udev/` if you installed a package), then replug the device if it isn't picked up within a few seconds. The two rules are installed independently. See [`packaging/linux/README.md`](packaging/linux/README.md) for details.
 
 ---
 
@@ -43,8 +44,9 @@ See the [Wiki](../../wiki) for a full step-by-step guide and reference documenta
 * **Enhanced Deadzone Controls** - Deadzone limit expanded to `1.0` with dedicated deadzone indicator markers, improved analog value visualization, and separate dual-direction and single-direction value bars where appropriate.
 * **Kenney Input Prompts Integration** - Integrated Kenney Input Prompts icon font (v1.5) provides controller-aware device, button, axis, and input icons throughout the UI. Includes configurable toggles for device icons and icon-based input labels.
 * **Gyro, Accelerometer & Touchpad Mapping** - map gyroscope rates, accelerometer axes, and touchpad position/pressure directly to output protocol fields, just like regular axes. Split L/R sensors on Joy-Con and Steam Controller are each independently mappable.
-* **Battery Level Output** - battery percentage and charging state are available as mappable analog sources for any connected device, including separate Left Joy-Con battery for split pairs.
+* **Battery Level Output** - battery percentage and charging state are available as mappable analog sources for any connected device, including separate Left Joy-Con battery for split pairs and wireless 3Dconnexion devices.
 * **Wii Remote & Balance Board Support** - talks to Wii Remotes, Wii Remote Plus, Nunchuk, Classic Controller, and Balance Boards directly over raw HID rather than SDL's built-in Wii driver, so IR camera data, extension controller inputs, and full Balance Board weight sensing all show up as regular mappable inputs alongside your other devices. Pair via your OS's Bluetooth settings; on Linux, InputBridge offers a one-click hidraw permission fix if the device doesn't open.
+* **3Dconnexion Support** - SpaceNavigator, SpaceExplorer, SpaceMouse and other 6-DOF devices are read passively over shared HID and bridged to mappable virtual joysticks. Never writes to or exclusively opens the device, so an installed 3DxWare/spacenavd keeps working. Toggle in Settings (**3Dconnexion Device Support**). On Linux, InputBridge offers a one-click hidraw permission fix for these devices too. See [`src/Devices/SpaceMouse/README.md`](src/Devices/SpaceMouse/README.md).
 * **Protocol Editor** - define exactly which fields to send, with custom OSC paths and WebSocket keys. Import, export, duplicate, and version-control protocol files.
 * **Mapping Profiles** - multiple named profiles, each with independent analog mappings, digital mappings, analog-to-digital mappings, channel mixes, server settings, and protocol selections.
 * **Virtual Devices** - create simulated joysticks to test protocols without real hardware.
@@ -109,6 +111,8 @@ Protocols are JSON files in `protocols/definitions/` (on Linux, in the XDG confi
 ```
 
 Protocol fields support analog inputs, digital inputs, gyroscope data, accelerometer data, touchpad values, capacitive-touch sensors, battery status, analog-to-digital mappings, and channel-mixed outputs.
+
+The bundled Steam Link definition (`protocols/definitions/steamlink.json`) uses Steam Link's native OSC paths and covers 85 face and eye tracking fields. Mappings created against the older Steam Link definition need to be re-bound.
 
 Protocol previews display the currently resolved output values, including analog-to-digital mappings and channel-mixed outputs, making it easier to validate configurations before transmitting data.
 

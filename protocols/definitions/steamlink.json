@@ -1,62 +1,620 @@
 {
     "fields": [
         {
-            "fieldId": "ft_jaw_open",
-            "oscPath": "/avatar/parameters/JawOpen",
-            "wsKey": "JawOpen",
+            "fieldId": "et_left_eye_x",
+            "oscPath": "/avatar/parameters/LeftEyeX",
+            "wsKey": "LeftEyeX",
             "enabled": true,
-            "label": "Jaw Open",
+            "label": "Left Eye X",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_left_eye_y",
+            "oscPath": "/avatar/parameters/LeftEyeY",
+            "wsKey": "LeftEyeY",
+            "enabled": true,
+            "label": "Left Eye Y",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_right_eye_x",
+            "oscPath": "/avatar/parameters/RightEyeX",
+            "wsKey": "RightEyeX",
+            "enabled": true,
+            "label": "Right Eye X",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_right_eye_y",
+            "oscPath": "/avatar/parameters/RightEyeY",
+            "wsKey": "RightEyeY",
+            "enabled": true,
+            "label": "Right Eye Y",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_right_eye_lid",
+            "oscPath": "/avatar/parameters/RightEyeLid",
+            "wsKey": "RightEyeLid",
+            "enabled": true,
+            "label": "Right Eye Lid",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_right_eye_lid_expanded_squeeze",
+            "oscPath": "/avatar/parameters/RightEyeLidExpandedSqueeze",
+            "wsKey": "RightEyeLidExpandedSqueeze",
+            "enabled": true,
+            "label": "Right Eye Lid Expanded Squeeze",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_right_eye_squeeze_toggle",
+            "oscPath": "/avatar/parameters/RightEyeSqueezeToggle",
+            "wsKey": "RightEyeSqueezeToggle",
+            "enabled": true,
+            "label": "Right Eye Squeeze Toggle",
+            "category": "Steam Link Eye Tracking",
+            "type": "digital"
+        },
+        {
+            "fieldId": "et_right_eye_widen_toggle",
+            "oscPath": "/avatar/parameters/RightEyeWidenToggle",
+            "wsKey": "RightEyeWidenToggle",
+            "enabled": true,
+            "label": "Right Eye Widen Toggle",
+            "category": "Steam Link Eye Tracking",
+            "type": "digital"
+        },
+        {
+            "fieldId": "et_left_eye_lid",
+            "oscPath": "/avatar/parameters/LeftEyeLid",
+            "wsKey": "LeftEyeLid",
+            "enabled": true,
+            "label": "Left Eye Lid",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_left_eye_lid_expanded_squeeze",
+            "oscPath": "/avatar/parameters/LeftEyeLidExpandedSqueeze",
+            "wsKey": "LeftEyeLidExpandedSqueeze",
+            "enabled": true,
+            "label": "Left Eye Lid Expanded Squeeze",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "et_left_eye_squeeze_toggle",
+            "oscPath": "/avatar/parameters/LeftEyeSqueezeToggle",
+            "wsKey": "LeftEyeSqueezeToggle",
+            "enabled": true,
+            "label": "Left Eye Squeeze Toggle",
+            "category": "Steam Link Eye Tracking",
+            "type": "digital"
+        },
+        {
+            "fieldId": "et_left_eye_widen_toggle",
+            "oscPath": "/avatar/parameters/LeftEyeWidenToggle",
+            "wsKey": "LeftEyeWidenToggle",
+            "enabled": true,
+            "label": "Left Eye Widen Toggle",
+            "category": "Steam Link Eye Tracking",
+            "type": "digital"
+        },
+        {
+            "fieldId": "et_eyes_closed_amount",
+            "oscPath": "/tracking/eye/EyesClosedAmount",
+            "wsKey": "EyesClosedAmount",
+            "enabled": true,
+            "label": "Eyes Closed Amount",
+            "category": "Steam Link Eye Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lower_face",
+            "oscPath": "/sl/xrfb/facec/LowerFace",
+            "wsKey": "LowerFace",
+            "enabled": true,
+            "label": "Lower Face",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_mouth_pout",
-            "oscPath": "/avatar/parameters/MouthPout",
-            "wsKey": "MouthPout",
+            "fieldId": "ft_upper_face",
+            "oscPath": "/sl/xrfb/facec/UpperFace",
+            "wsKey": "UpperFace",
             "enabled": true,
-            "label": "Mouth Pout",
+            "label": "Upper Face",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_tongue_out",
-            "oscPath": "/avatar/parameters/TongueOut",
-            "wsKey": "TongueOut",
+            "fieldId": "ft_brow_lowerer_l",
+            "oscPath": "/sl/xrfb/facew/BrowLowererL",
+            "wsKey": "BrowLowererL",
             "enabled": true,
-            "label": "Tongue Out",
+            "label": "Brow Lowerer L",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_cheeks_puff",
-            "oscPath": "/avatar/parameters/CheeksPuff",
-            "wsKey": "CheeksPuff",
+            "fieldId": "ft_brow_lowerer_r",
+            "oscPath": "/sl/xrfb/facew/BrowLowererR",
+            "wsKey": "BrowLowererR",
             "enabled": true,
-            "label": "Cheeks Puff",
+            "label": "Brow Lowerer R",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_mouth_smile",
-            "oscPath": "/avatar/parameters/MouthSmile",
-            "wsKey": "MouthSmile",
+            "fieldId": "ft_cheek_puff_l",
+            "oscPath": "/sl/xrfb/facew/CheekPuffL",
+            "wsKey": "CheekPuffL",
             "enabled": true,
-            "label": "Mouth Smile",
+            "label": "Cheek Puff L",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_mouth_frown",
-            "oscPath": "/avatar/parameters/MouthFrown",
-            "wsKey": "MouthFrown",
+            "fieldId": "ft_cheek_puff_r",
+            "oscPath": "/sl/xrfb/facew/CheekPuffR",
+            "wsKey": "CheekPuffR",
             "enabled": true,
-            "label": "Mouth Frown",
+            "label": "Cheek Puff R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_cheek_raiser_l",
+            "oscPath": "/sl/xrfb/facew/CheekRaiserL",
+            "wsKey": "CheekRaiserL",
+            "enabled": true,
+            "label": "Cheek Raiser L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_cheek_raiser_r",
+            "oscPath": "/sl/xrfb/facew/CheekRaiserR",
+            "wsKey": "CheekRaiserR",
+            "enabled": true,
+            "label": "Cheek Raiser R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_cheek_suck_l",
+            "oscPath": "/sl/xrfb/facew/CheekSuckL",
+            "wsKey": "CheekSuckL",
+            "enabled": true,
+            "label": "Cheek Suck L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_cheek_suck_r",
+            "oscPath": "/sl/xrfb/facew/CheekSuckR",
+            "wsKey": "CheekSuckR",
+            "enabled": true,
+            "label": "Cheek Suck R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_chin_raiser_b",
+            "oscPath": "/sl/xrfb/facew/ChinRaiserB",
+            "wsKey": "ChinRaiserB",
+            "enabled": true,
+            "label": "Chin Raiser B",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_chin_raiser_t",
+            "oscPath": "/sl/xrfb/facew/ChinRaiserT",
+            "wsKey": "ChinRaiserT",
+            "enabled": true,
+            "label": "Chin Raiser T",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_dimpler_l",
+            "oscPath": "/sl/xrfb/facew/DimplerL",
+            "wsKey": "DimplerL",
+            "enabled": true,
+            "label": "Dimpler L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_dimpler_r",
+            "oscPath": "/sl/xrfb/facew/DimplerR",
+            "wsKey": "DimplerR",
+            "enabled": true,
+            "label": "Dimpler R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_closed_l",
+            "oscPath": "/sl/xrfb/facew/EyesClosedL",
+            "wsKey": "EyesClosedL",
+            "enabled": true,
+            "label": "Eyes Closed L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_closed_r",
+            "oscPath": "/sl/xrfb/facew/EyesClosedR",
+            "wsKey": "EyesClosedR",
+            "enabled": true,
+            "label": "Eyes Closed R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_down_l",
+            "oscPath": "/sl/xrfb/facew/EyesLookDownL",
+            "wsKey": "EyesLookDownL",
+            "enabled": true,
+            "label": "Eyes Look Down L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_down_r",
+            "oscPath": "/sl/xrfb/facew/EyesLookDownR",
+            "wsKey": "EyesLookDownR",
+            "enabled": true,
+            "label": "Eyes Look Down R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_left_l",
+            "oscPath": "/sl/xrfb/facew/EyesLookLeftL",
+            "wsKey": "EyesLookLeftL",
+            "enabled": true,
+            "label": "Eyes Look Left L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_left_r",
+            "oscPath": "/sl/xrfb/facew/EyesLookLeftR",
+            "wsKey": "EyesLookLeftR",
+            "enabled": true,
+            "label": "Eyes Look Left R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_right_l",
+            "oscPath": "/sl/xrfb/facew/EyesLookRightL",
+            "wsKey": "EyesLookRightL",
+            "enabled": true,
+            "label": "Eyes Look Right L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_right_r",
+            "oscPath": "/sl/xrfb/facew/EyesLookRightR",
+            "wsKey": "EyesLookRightR",
+            "enabled": true,
+            "label": "Eyes Look Right R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_up_l",
+            "oscPath": "/sl/xrfb/facew/EyesLookUpL",
+            "wsKey": "EyesLookUpL",
+            "enabled": true,
+            "label": "Eyes Look Up L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_eyes_look_up_r",
+            "oscPath": "/sl/xrfb/facew/EyesLookUpR",
+            "wsKey": "EyesLookUpR",
+            "enabled": true,
+            "label": "Eyes Look Up R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_inner_brow_raiser_l",
+            "oscPath": "/sl/xrfb/facew/InnerBrowRaiserL",
+            "wsKey": "InnerBrowRaiserL",
+            "enabled": true,
+            "label": "Inner Brow Raiser L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_inner_brow_raiser_r",
+            "oscPath": "/sl/xrfb/facew/InnerBrowRaiserR",
+            "wsKey": "InnerBrowRaiserR",
+            "enabled": true,
+            "label": "Inner Brow Raiser R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_jaw_drop",
+            "oscPath": "/sl/xrfb/facew/JawDrop",
+            "wsKey": "JawDrop",
+            "enabled": true,
+            "label": "Jaw Drop",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_jaw_sideways_left",
+            "oscPath": "/sl/xrfb/facew/JawSidewaysLeft",
+            "wsKey": "JawSidewaysLeft",
+            "enabled": true,
+            "label": "Jaw Sideways Left",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_jaw_sideways_right",
+            "oscPath": "/sl/xrfb/facew/JawSidewaysRight",
+            "wsKey": "JawSidewaysRight",
+            "enabled": true,
+            "label": "Jaw Sideways Right",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_jaw_thrust",
+            "oscPath": "/sl/xrfb/facew/JawThrust",
+            "wsKey": "JawThrust",
+            "enabled": true,
+            "label": "Jaw Thrust",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lid_tightener_l",
+            "oscPath": "/sl/xrfb/facew/LidTightenerL",
+            "wsKey": "LidTightenerL",
+            "enabled": true,
+            "label": "Lid Tightener L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lid_tightener_r",
+            "oscPath": "/sl/xrfb/facew/LidTightenerR",
+            "wsKey": "LidTightenerR",
+            "enabled": true,
+            "label": "Lid Tightener R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_corner_depressor_l",
+            "oscPath": "/sl/xrfb/facew/LipCornerDepressorL",
+            "wsKey": "LipCornerDepressorL",
+            "enabled": true,
+            "label": "Lip Corner Depressor L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_corner_depressor_r",
+            "oscPath": "/sl/xrfb/facew/LipCornerDepressorR",
+            "wsKey": "LipCornerDepressorR",
+            "enabled": true,
+            "label": "Lip Corner Depressor R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_corner_puller_l",
+            "oscPath": "/sl/xrfb/facew/LipCornerPullerL",
+            "wsKey": "LipCornerPullerL",
+            "enabled": true,
+            "label": "Lip Corner Puller L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_corner_puller_r",
+            "oscPath": "/sl/xrfb/facew/LipCornerPullerR",
+            "wsKey": "LipCornerPullerR",
+            "enabled": true,
+            "label": "Lip Corner Puller R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_funneler_lb",
+            "oscPath": "/sl/xrfb/facew/LipFunnelerLB",
+            "wsKey": "LipFunnelerLB",
+            "enabled": true,
+            "label": "Lip Funneler LB",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_funneler_lt",
+            "oscPath": "/sl/xrfb/facew/LipFunnelerLT",
+            "wsKey": "LipFunnelerLT",
+            "enabled": true,
+            "label": "Lip Funneler LT",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_funneler_rb",
+            "oscPath": "/sl/xrfb/facew/LipFunnelerRB",
+            "wsKey": "LipFunnelerRB",
+            "enabled": true,
+            "label": "Lip Funneler RB",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_funneler_rt",
+            "oscPath": "/sl/xrfb/facew/LipFunnelerRT",
+            "wsKey": "LipFunnelerRT",
+            "enabled": true,
+            "label": "Lip Funneler RT",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_pressor_l",
+            "oscPath": "/sl/xrfb/facew/LipPressorL",
+            "wsKey": "LipPressorL",
+            "enabled": true,
+            "label": "Lip Pressor L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_pressor_r",
+            "oscPath": "/sl/xrfb/facew/LipPressorR",
+            "wsKey": "LipPressorR",
+            "enabled": true,
+            "label": "Lip Pressor R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_pucker_l",
+            "oscPath": "/sl/xrfb/facew/LipPuckerL",
+            "wsKey": "LipPuckerL",
+            "enabled": true,
+            "label": "Lip Pucker L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_pucker_r",
+            "oscPath": "/sl/xrfb/facew/LipPuckerR",
+            "wsKey": "LipPuckerR",
+            "enabled": true,
+            "label": "Lip Pucker R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_stretcher_l",
+            "oscPath": "/sl/xrfb/facew/LipStretcherL",
+            "wsKey": "LipStretcherL",
+            "enabled": true,
+            "label": "Lip Stretcher L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_stretcher_r",
+            "oscPath": "/sl/xrfb/facew/LipStretcherR",
+            "wsKey": "LipStretcherR",
+            "enabled": true,
+            "label": "Lip Stretcher R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_suck_lb",
+            "oscPath": "/sl/xrfb/facew/LipSuckLB",
+            "wsKey": "LipSuckLB",
+            "enabled": true,
+            "label": "Lip Suck LB",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_suck_lt",
+            "oscPath": "/sl/xrfb/facew/LipSuckLT",
+            "wsKey": "LipSuckLT",
+            "enabled": true,
+            "label": "Lip Suck LT",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_suck_rb",
+            "oscPath": "/sl/xrfb/facew/LipSuckRB",
+            "wsKey": "LipSuckRB",
+            "enabled": true,
+            "label": "Lip Suck RB",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_suck_rt",
+            "oscPath": "/sl/xrfb/facew/LipSuckRT",
+            "wsKey": "LipSuckRT",
+            "enabled": true,
+            "label": "Lip Suck RT",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_tightener_l",
+            "oscPath": "/sl/xrfb/facew/LipTightenerL",
+            "wsKey": "LipTightenerL",
+            "enabled": true,
+            "label": "Lip Tightener L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lip_tightener_r",
+            "oscPath": "/sl/xrfb/facew/LipTightenerR",
+            "wsKey": "LipTightenerR",
+            "enabled": true,
+            "label": "Lip Tightener R",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lips_toward",
+            "oscPath": "/sl/xrfb/facew/LipsToward",
+            "wsKey": "LipsToward",
+            "enabled": true,
+            "label": "Lips Toward",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lower_lip_depressor_l",
+            "oscPath": "/sl/xrfb/facew/LowerLipDepressorL",
+            "wsKey": "LowerLipDepressorL",
+            "enabled": true,
+            "label": "Lower Lip Depressor L",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_lower_lip_depressor_r",
+            "oscPath": "/sl/xrfb/facew/LowerLipDepressorR",
+            "wsKey": "LowerLipDepressorR",
+            "enabled": true,
+            "label": "Lower Lip Depressor R",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
             "fieldId": "ft_mouth_left",
-            "oscPath": "/avatar/parameters/MouthLeft",
+            "oscPath": "/sl/xrfb/facew/MouthLeft",
             "wsKey": "MouthLeft",
             "enabled": true,
             "label": "Mouth Left",
@@ -65,7 +623,7 @@
         },
         {
             "fieldId": "ft_mouth_right",
-            "oscPath": "/avatar/parameters/MouthRight",
+            "oscPath": "/sl/xrfb/facew/MouthRight",
             "wsKey": "MouthRight",
             "enabled": true,
             "label": "Mouth Right",
@@ -73,129 +631,138 @@
             "type": "analog"
         },
         {
-            "fieldId": "ft_jaw_left",
-            "oscPath": "/avatar/parameters/JawLeft",
-            "wsKey": "JawLeft",
+            "fieldId": "ft_nose_wrinkler_l",
+            "oscPath": "/sl/xrfb/facew/NoseWrinklerL",
+            "wsKey": "NoseWrinklerL",
             "enabled": true,
-            "label": "Jaw Left",
+            "label": "Nose Wrinkler L",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_jaw_right",
-            "oscPath": "/avatar/parameters/JawRight",
-            "wsKey": "JawRight",
+            "fieldId": "ft_nose_wrinkler_r",
+            "oscPath": "/sl/xrfb/facew/NoseWrinklerR",
+            "wsKey": "NoseWrinklerR",
             "enabled": true,
-            "label": "Jaw Right",
+            "label": "Nose Wrinkler R",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_mouth_upper_up",
-            "oscPath": "/avatar/parameters/MouthUpperUp",
-            "wsKey": "MouthUpperUp",
+            "fieldId": "ft_outer_brow_raiser_l",
+            "oscPath": "/sl/xrfb/facew/OuterBrowRaiserL",
+            "wsKey": "OuterBrowRaiserL",
             "enabled": true,
-            "label": "Mouth Upper Up",
+            "label": "Outer Brow Raiser L",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_mouth_lower_down",
-            "oscPath": "/avatar/parameters/MouthLowerDown",
-            "wsKey": "MouthLowerDown",
+            "fieldId": "ft_outer_brow_raiser_r",
+            "oscPath": "/sl/xrfb/facew/OuterBrowRaiserR",
+            "wsKey": "OuterBrowRaiserR",
             "enabled": true,
-            "label": "Mouth Lower Down",
+            "label": "Outer Brow Raiser R",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_tongue_up",
-            "oscPath": "/avatar/parameters/TongueUp",
-            "wsKey": "TongueUp",
+            "fieldId": "ft_upper_lid_raiser_l",
+            "oscPath": "/sl/xrfb/facew/UpperLidRaiserL",
+            "wsKey": "UpperLidRaiserL",
             "enabled": true,
-            "label": "Tongue Up",
+            "label": "Upper Lid Raiser L",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_tongue_left",
-            "oscPath": "/avatar/parameters/TongueLeft",
-            "wsKey": "TongueLeft",
+            "fieldId": "ft_upper_lid_raiser_r",
+            "oscPath": "/sl/xrfb/facew/UpperLidRaiserR",
+            "wsKey": "UpperLidRaiserR",
             "enabled": true,
-            "label": "Tongue Left",
+            "label": "Upper Lid Raiser R",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_tongue_right",
-            "oscPath": "/avatar/parameters/TongueRight",
-            "wsKey": "TongueRight",
+            "fieldId": "ft_upper_lip_raiser_l",
+            "oscPath": "/sl/xrfb/facew/UpperLipRaiserL",
+            "wsKey": "UpperLipRaiserL",
             "enabled": true,
-            "label": "Tongue Right",
+            "label": "Upper Lip Raiser L",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "ft_tongue_roll",
-            "oscPath": "/avatar/parameters/TongueRoll",
-            "wsKey": "TongueRoll",
+            "fieldId": "ft_upper_lip_raiser_r",
+            "oscPath": "/sl/xrfb/facew/UpperLipRaiserR",
+            "wsKey": "UpperLipRaiserR",
             "enabled": true,
-            "label": "Tongue Roll",
+            "label": "Upper Lip Raiser R",
             "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "et_eye_left_x",
-            "oscPath": "/avatar/parameters/EyeLeftX",
-            "wsKey": "EyeLeftX",
+            "fieldId": "ft_tongue_tip_interdental",
+            "oscPath": "/sl/xrfb/facew/TongueTipInterdental",
+            "wsKey": "TongueTipInterdental",
             "enabled": true,
-            "label": "Eye Left X",
-            "category": "Steam Link Eye Tracking",
+            "label": "Tongue Tip Interdental",
+            "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "et_eye_left_y",
-            "oscPath": "/avatar/parameters/EyeLeftY",
-            "wsKey": "EyeLeftY",
+            "fieldId": "ft_tongue_tip_alveolar",
+            "oscPath": "/sl/xrfb/facew/TongueTipAlveolar",
+            "wsKey": "TongueTipAlveolar",
             "enabled": true,
-            "label": "Eye Left Y",
-            "category": "Steam Link Eye Tracking",
+            "label": "Tongue Tip Alveolar",
+            "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "et_eye_right_x",
-            "oscPath": "/avatar/parameters/EyeRightX",
-            "wsKey": "EyeRightX",
+            "fieldId": "ft_front_dorsal_palate",
+            "oscPath": "/sl/xrfb/facew/FrontDorsalPalate",
+            "wsKey": "FrontDorsalPalate",
             "enabled": true,
-            "label": "Eye Right X",
-            "category": "Steam Link Eye Tracking",
+            "label": "Front Dorsal Palate",
+            "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "et_eye_right_y",
-            "oscPath": "/avatar/parameters/EyeRightY",
-            "wsKey": "EyeRightY",
+            "fieldId": "ft_mid_dorsal_palate",
+            "oscPath": "/sl/xrfb/facew/MidDorsalPalate",
+            "wsKey": "MidDorsalPalate",
             "enabled": true,
-            "label": "Eye Right Y",
-            "category": "Steam Link Eye Tracking",
+            "label": "Mid Dorsal Palate",
+            "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "et_eyelid_left",
-            "oscPath": "/avatar/parameters/EyeLidLeft",
-            "wsKey": "EyeLidLeft",
+            "fieldId": "ft_back_dorsal_velar",
+            "oscPath": "/sl/xrfb/facew/BackDorsalVelar",
+            "wsKey": "BackDorsalVelar",
             "enabled": true,
-            "label": "Eye Lid Left",
-            "category": "Steam Link Eye Tracking",
+            "label": "Back Dorsal Velar",
+            "category": "Steam Link Face Tracking",
             "type": "analog"
         },
         {
-            "fieldId": "et_eyelid_right",
-            "oscPath": "/avatar/parameters/EyeLidRight",
-            "wsKey": "EyeLidRight",
+            "fieldId": "ft_tongue_out",
+            "oscPath": "/sl/xrfb/facew/TongueOut",
+            "wsKey": "TongueOut",
             "enabled": true,
-            "label": "Eye Lid Right",
-            "category": "Steam Link Eye Tracking",
+            "label": "Tongue Out",
+            "category": "Steam Link Face Tracking",
+            "type": "analog"
+        },
+        {
+            "fieldId": "ft_tongue_retreat",
+            "oscPath": "/sl/xrfb/facew/TongueRetreat",
+            "wsKey": "TongueRetreat",
+            "enabled": true,
+            "label": "Tongue Retreat",
+            "category": "Steam Link Face Tracking",
             "type": "analog"
         }
     ],
